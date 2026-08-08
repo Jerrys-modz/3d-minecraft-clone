@@ -20,9 +20,6 @@
         <lwjgl.version>3.3.3</lwjgl.version>
         <joml.version>1.10.5</joml.version>
 
-        <!-- Override with -Dlwjgl.natives=natives-windows / natives-macos / natives-macos-arm64 -->
-        <lwjgl.natives>natives-linux</lwjgl.natives>
-
         <main.class>com.minecraftclone.Main</main.class>
     </properties>
 
@@ -53,21 +50,71 @@
             <artifactId>lwjgl-opengl</artifactId>
         </dependency>
 
-        <!-- Natives -->
+        <!--
+          Natives for every desktop platform, bundled together so the packaged
+          jar runs as-is on Linux, Windows and macOS (Intel + Apple Silicon) -
+          LWJGL's native loader picks the right one for the current OS/arch at
+          startup.
+        -->
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
+            <classifier>natives-linux</classifier>
         </dependency>
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-glfw</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
+            <classifier>natives-linux</classifier>
         </dependency>
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-opengl</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
+            <classifier>natives-linux</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+            <classifier>natives-windows</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-glfw</artifactId>
+            <classifier>natives-windows</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opengl</artifactId>
+            <classifier>natives-windows</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+            <classifier>natives-macos</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-glfw</artifactId>
+            <classifier>natives-macos</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opengl</artifactId>
+            <classifier>natives-macos</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+            <classifier>natives-macos-arm64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-glfw</artifactId>
+            <classifier>natives-macos-arm64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opengl</artifactId>
+            <classifier>natives-macos-arm64</classifier>
         </dependency>
 
         <!-- Math library -->
@@ -116,25 +163,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <profiles>
-        <profile>
-            <id>windows</id>
-            <properties>
-                <lwjgl.natives>natives-windows</lwjgl.natives>
-            </properties>
-        </profile>
-        <profile>
-            <id>macos</id>
-            <properties>
-                <lwjgl.natives>natives-macos</lwjgl.natives>
-            </properties>
-        </profile>
-        <profile>
-            <id>macos-arm64</id>
-            <properties>
-                <lwjgl.natives>natives-macos-arm64</lwjgl.natives>
-            </properties>
-        </profile>
-    </profiles>
 </project>

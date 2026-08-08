@@ -32,13 +32,7 @@ mvn package
 java -jar target/minecraft-clone.jar
 ```
 
-By default the build pulls in Linux natives. If you're on another OS, activate the matching Maven profile:
-
-```bash
-mvn -Pwindows package      # Windows
-mvn -Pmacos package        # macOS (Intel)
-mvn -Pmacos-arm64 package  # macOS (Apple Silicon)
-```
+The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + Apple Silicon), so the one build works on any of them out of the box — just run `java -jar target/minecraft-clone.jar` (JDK 17+ required) wherever you copy it.
 
 ## Controls
 
