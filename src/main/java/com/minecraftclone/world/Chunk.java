@@ -2,6 +2,8 @@ package com.minecraftclone.world;
 
 import com.minecraftclone.engine.graphics.Mesh;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.util.FloatArray;
+import com.minecraftclone.util.IntArray;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -154,8 +156,8 @@ public class Chunk {
      */
     public void rebuildMesh(BlockAccessor world, TextureAtlas atlas, List<int[]> nearbyLights, boolean leavesTransparent) {
         this.leavesTransparent = leavesTransparent;
-        List<Float> vertices = new ArrayList<>(4096);
-        List<Integer> indices = new ArrayList<>(4096);
+        FloatArray vertices = new FloatArray(4096);
+        IntArray indices = new IntArray(4096);
         int[] vertexCounter = {0};
 
         int originX = getOriginX();
@@ -207,13 +209,8 @@ public class Chunk {
             }
         }
 
-        float[] vArray = new float[vertices.size()];
-        for (int i = 0; i < vArray.length; i++) vArray[i] = vertices.get(i);
-        int[] iArray = new int[indices.size()];
-        for (int i = 0; i < iArray.length; i++) iArray[i] = indices.get(i);
-
-        mesh.upload(vArray, iArray);
-        hasMeshData = iArray.length > 0;
+        mesh.upload(vertices.toArray(), indices.toArray());
+        hasMeshData = indices.size() > 0;
         dirty = false;
     }
 
@@ -259,7 +256,7 @@ public class Chunk {
 
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
 
-    private void emitFace(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
+    private void emitFace(FloatArray vertices, IntArray indices, int[] vertexCounter,
                            int wx, int wy, int wz, Face face, BlockType block, TextureAtlas atlas, float blockLight) {
         int tile = switch (face) {
             case TOP -> block.topTile;
@@ -305,7 +302,7 @@ public class Chunk {
      * drawn as two quads with opposite winding so it's visible from both sides
      * without needing to disable backface culling.
      */
-    private void emitCross(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
+    private void emitCross(FloatArray vertices, IntArray indices, int[] vertexCounter,
                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
         float[] uv = atlas.getUV(block.topTile);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
@@ -321,7 +318,7 @@ public class Chunk {
         emitQuadBothSides(vertices, indices, vertexCounter, planeB, uvs, light, blockLight);
     }
 
-    private void emitQuadBothSides(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
+    private void emitQuadBothSides(FloatArray vertices, IntArray indices, int[] vertexCounter,
                                     float[][] positions, float[][] uvs, float light, float blockLight) {
         emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
         float[][] reversed = {positions[3], positions[2], positions[1], positions[0]};
@@ -329,7 +326,7 @@ public class Chunk {
         emitQuad(vertices, indices, vertexCounter, reversed, uvsReversed, light, blockLight);
     }
 
-    private void emitQuad(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
+    private void emitQuad(FloatArray vertices, IntArray indices, int[] vertexCounter,
                            float[][] positions, float[][] uvs, float light, float blockLight) {
         int base = vertexCounter[0];
         for (int i = 0; i < 4; i++) {
