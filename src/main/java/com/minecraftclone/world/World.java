@@ -23,7 +23,10 @@ import java.util.Map;
  */
 public class World implements BlockAccessor {
 
-    private final Map<ChunkPos, Chunk> chunks = new HashMap<>();
+    // Chunks are keyed by a packed long (chunkX in the high 32 bits, chunkZ in the
+    // low 32) rather than a ChunkPos record, so the hot getBlock/setBlock lookups
+    // don't allocate a key object on every call.
+    private final Map<Long, Chunk> chunks = new HashMap<>();
     private final TerrainGenerator generator;
     private final TextureAtlas atlas;
     private final ChunkStorage storage;
@@ -37,6 +40,11 @@ public class World implements BlockAccessor {
         this.generator = new TerrainGenerator(seed);
         this.atlas = atlas;
         this.storage = new ChunkStorage(saveDir);
+    }
+
+    /** Packs chunk-grid coordinates into a single key. {@code chunkZ} is masked so negative coordinates stay unique. */
+    private static long key(int chunkX, int chunkZ) {
+        return ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
     }
 
     public void setRenderDistance(int renderDistance) {
@@ -70,7 +78,7 @@ public class World implements BlockAccessor {
     }
 
     private Chunk getChunk(int chunkX, int chunkZ) {
-        return chunks.get(new ChunkPos(chunkX, chunkZ));
+        return chunks.get(key(chunkX, chunkZ));
     }
 
     @Override
@@ -165,21 +173,21 @@ public class World implements BlockAccessor {
         for (int dx = -renderDistance; dx <= renderDistance && generated < MAX_GENERATE_PER_TICK; dx++) {
             for (int dz = -renderDistance; dz <= renderDistance && generated < MAX_GENERATE_PER_TICK; dz++) {
                 if (dx * dx + dz * dz > renderDistance * renderDistance) continue;
-                ChunkPos p = new ChunkPos(pcx + dx, pcz + dz);
-                if (!chunks.containsKey(p)) {
-                    Chunk chunk = new Chunk(p);
-                    chunks.put(p, chunk);
-                    if (storage.hasSavedChunk(p)) {
+                int cx = pcx + dx, cz = pcz + dz;
+                if (!chunks.containsKey(key(cx, cz))) {
+                    Chunk chunk = new Chunk(new ChunkPos(cx, cz));
+                    chunks.put(key(cx, cz), chunk);
+                    if (storage.hasSavedChunk(chunk.getPos())) {
                         // A previously-edited chunk: restore the player's changes
                         // instead of regenerating pristine terrain.
                         storage.load(chunk);
                     } else {
                         generator.generate(chunk);
                     }
-                    markNeighborDirty(p.x() - 1, p.z());
-                    markNeighborDirty(p.x() + 1, p.z());
-                    markNeighborDirty(p.x(), p.z() - 1);
-                    markNeighborDirty(p.x(), p.z() + 1);
+                    markNeighborDirty(cx - 1, cz);
+                    markNeighborDirty(cx + 1, cz);
+                    markNeighborDirty(cx, cz - 1);
+                    markNeighborDirty(cx, cz + 1);
                     generated++;
                 }
             }
@@ -187,20 +195,18 @@ public class World implements BlockAccessor {
 
         // Unload far chunks.
         int unloadRadius = renderDistance + 2;
-        List<ChunkPos> toRemove = new ArrayList<>();
-        for (ChunkPos p : chunks.keySet()) {
-            if (p.distanceSq(pcx, pcz) > (double) unloadRadius * unloadRadius) {
-                toRemove.add(p);
+        List<Chunk> toRemove = new ArrayList<>();
+        for (Chunk c : chunks.values()) {
+            if (c.getPos().distanceSq(pcx, pcz) > (double) unloadRadius * unloadRadius) {
+                toRemove.add(c);
             }
         }
-        for (ChunkPos p : toRemove) {
-            Chunk c = chunks.remove(p);
-            if (c != null) {
-                if (c.isModifiedByPlayer()) {
-                    storage.save(c);
-                }
-                c.destroy();
+        for (Chunk c : toRemove) {
+            chunks.remove(key(c.getPos().x(), c.getPos().z()));
+            if (c.isModifiedByPlayer()) {
+                storage.save(c);
             }
+            c.destroy();
         }
 
         // Remesh a limited number of dirty chunks per tick, nearest first.

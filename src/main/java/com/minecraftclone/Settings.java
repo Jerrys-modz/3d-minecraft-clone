@@ -1,10 +1,20 @@
 package com.minecraftclone;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Mutable graphics/game settings, edited in-game from the settings menu (Esc).
  * There are two row kinds: boolean toggles and numeric ranges. The menu
  * renders one row per setting from the static metadata below, and the game
  * reads the values via the getters (see {@code Main.applySettings}).
+ * <p>
+ * Settings are persisted to a small {@code key=value} text file via
+ * {@link #save(Path)} / {@link #load(Path)} and restored on the next launch.
  */
 public class Settings {
 
@@ -96,6 +106,69 @@ public class Settings {
 
     public boolean isLeavesTransparent() {
         return toggles[LEAVES_TRANSPARENT];
+    }
+
+    /**
+     * Writes all settings to {@code file} as simple {@code key=value} lines.
+     * Best-effort: failures are logged, not thrown, so a read-only directory
+     * never stops the game.
+     */
+    public void save(Path file) {
+        List<String> lines = new ArrayList<>();
+        lines.add("leaves_transparent=" + (toggles[LEAVES_TRANSPARENT] ? 1 : 0));
+        lines.add("render_distance=" + getRenderDistance());
+        lines.add("vsync=" + (toggles[VSYNC] ? 1 : 0));
+        lines.add("fov=" + Math.round(ranges[FOV]));
+        lines.add("mouse_sensitivity=" + ranges[SENSITIVITY]);
+        try {
+            if (file.getParent() != null) {
+                Files.createDirectories(file.getParent());
+            }
+            Files.write(file, lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            System.err.println("Could not save settings to " + file + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Loads settings from {@code file}, keeping defaults for any missing or
+     * malformed entries. Returns a fresh {@link Settings} with defaults if the
+     * file doesn't exist yet.
+     */
+    public static Settings load(Path file) {
+        Settings s = new Settings();
+        if (file == null || !Files.isRegularFile(file)) return s;
+        try {
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                int eq = line.indexOf('=');
+                if (eq <= 0) continue;
+                String key = line.substring(0, eq).trim();
+                String value = line.substring(eq + 1).trim();
+                try {
+                    switch (key) {
+                        case "leaves_transparent" -> s.toggles[LEAVES_TRANSPARENT] = parseBool(value);
+                        case "render_distance" -> s.ranges[RENDER_DISTANCE] = clamp(RENDER_DISTANCE, Float.parseFloat(value));
+                        case "vsync" -> s.toggles[VSYNC] = parseBool(value);
+                        case "fov" -> s.ranges[FOV] = clamp(FOV, Float.parseFloat(value));
+                        case "mouse_sensitivity" -> s.ranges[SENSITIVITY] = clamp(SENSITIVITY, Float.parseFloat(value));
+                        default -> { /* ignore unknown keys for forward compatibility */ }
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Malformed value: keep the default for that entry.
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Could not load settings from " + file + ": " + e.getMessage());
+        }
+        return s;
+    }
+
+    private static boolean parseBool(String value) {
+        return value.equals("1") || value.equalsIgnoreCase("true");
+    }
+
+    private static float clamp(int row, float value) {
+        return Math.max(minValue(row), Math.min(maxValue(row), value));
     }
 
     public int getRenderDistance() {

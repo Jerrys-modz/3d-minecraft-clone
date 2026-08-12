@@ -9,13 +9,14 @@ import com.minecraftclone.engine.graphics.TextRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.ToolDurability;
+import com.minecraftclone.util.FloatArray;
+import com.minecraftclone.util.IntArray;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Mining;
 import org.joml.Matrix4f;
 import org.joml.Vector3i;
 import org.joml.Vector4f;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.lwjgl.opengl.GL11.*;
@@ -62,6 +63,14 @@ public class Hud {
     private final LineMesh durabilityBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarFill = new LineMesh(GL_TRIANGLES);
     private final LineMesh settingsPanel = new LineMesh(GL_TRIANGLES);
+
+    // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
+    // so building the HUD doesn't allocate (or box) anything on the hot path.
+    private final FloatArray blockVertices = new FloatArray(1024);
+    private final IntArray blockIndices = new IntArray(1024);
+    private final FloatArray barCx = new FloatArray(16);
+    private final FloatArray barFrac = new FloatArray(16);
+    private int blockVertexCounter;
 
     private final Matrix4f identity = new Matrix4f();
     private final Matrix4f modelMatrix = new Matrix4f();
@@ -202,11 +211,11 @@ public class Hud {
         // batch together (one shared atlas), each item icon needs its own
         // individual bind+draw (its own PNG), and the count text batches
         // together again through the shared font atlas + TextRenderer.
-        List<Float> blockVertices = new ArrayList<>();
-        List<Integer> blockIndices = new ArrayList<>();
-        int[] blockVertexCounter = {0};
-
-        List<float[]> durabilityBars = new ArrayList<>(); // {cx, fraction} for worn tool slots only
+        blockVertices.clear();
+        blockIndices.clear();
+        blockVertexCounter = 0;
+        barCx.clear();
+        barFrac.clear();
 
         float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
 
@@ -234,15 +243,15 @@ public class Hud {
                 hotbarItemIcon.render();
                 hudShader.unbind();
             } else {
-                addQuad(blockVertices, blockIndices, blockVertexCounter,
-                        cx - iconHalf, centerY - iconHalf, cx + iconHalf, centerY + iconHalf,
+                addQuad(cx - iconHalf, centerY - iconHalf, cx + iconHalf, centerY + iconHalf,
                         atlas.getUV(type.topTile));
             }
 
             if (Mining.isTool(type)) {
                 float fraction = durability.fraction(type);
                 if (fraction < 1f) {
-                    durabilityBars.add(new float[]{cx, fraction});
+                    barCx.add(cx);
+                    barFrac.add(fraction);
                 }
             }
 
@@ -261,7 +270,7 @@ public class Hud {
         hudShader.setUniform("atlas", 0);
         hudShader.setUniform("color", WHITE);
 
-        hotbarBlockIcons.upload(toFloatArray(blockVertices), toIntArray(blockIndices));
+        hotbarBlockIcons.upload(blockVertices.toArray(), blockIndices.toArray());
         atlas.bind();
         hotbarBlockIcons.render();
 
@@ -269,15 +278,15 @@ public class Hud {
 
         text.render(hudTransform, WHITE);
 
-        if (!durabilityBars.isEmpty()) {
+        if (!barCx.isEmpty()) {
             lineShader.bind();
             lineShader.setUniform("projection", identity);
             lineShader.setUniform("view", identity);
             lineShader.setUniform("model", hudTransform);
             float barY1 = centerY - iconHalf;                 // icon's bottom edge
             float barY0 = barY1 - DURABILITY_BAR_HEIGHT;
-            for (float[] bar : durabilityBars) {
-                renderDurabilityBar(bar[0] - iconHalf, bar[0] + iconHalf, barY0, barY1, bar[1]);
+            for (int i = 0; i < barCx.size(); i++) {
+                renderDurabilityBar(barCx.get(i) - iconHalf, barCx.get(i) + iconHalf, barY0, barY1, barFrac.get(i));
             }
             lineShader.unbind();
         }
@@ -309,18 +318,6 @@ public class Hud {
     }
 
     private static final int[] QUAD_INDICES = {0, 1, 2, 0, 2, 3};
-
-    private static float[] toFloatArray(List<Float> values) {
-        float[] array = new float[values.size()];
-        for (int i = 0; i < array.length; i++) array[i] = values.get(i);
-        return array;
-    }
-
-    private static int[] toIntArray(List<Integer> values) {
-        int[] array = new int[values.size()];
-        for (int i = 0; i < array.length; i++) array[i] = values.get(i);
-        return array;
-    }
 
     /** Health (red), hunger (orange) and stamina (yellow) bars, stacked above the hotbar. */
     public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
@@ -515,17 +512,16 @@ public class Hud {
         text.render(hudTransform, color);
     }
 
-    private void addQuad(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
-                          float minX, float minY, float maxX, float maxY, float[] uv) {
+    private void addQuad(float minX, float minY, float maxX, float maxY, float[] uv) {
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
-        int base = vertexCounter[0];
-        vertices.add(minX); vertices.add(minY); vertices.add(u0); vertices.add(v1);
-        vertices.add(maxX); vertices.add(minY); vertices.add(u1); vertices.add(v1);
-        vertices.add(maxX); vertices.add(maxY); vertices.add(u1); vertices.add(v0);
-        vertices.add(minX); vertices.add(maxY); vertices.add(u0); vertices.add(v0);
-        indices.add(base); indices.add(base + 1); indices.add(base + 2);
-        indices.add(base); indices.add(base + 2); indices.add(base + 3);
-        vertexCounter[0] += 4;
+        int base = blockVertexCounter;
+        blockVertices.add(minX); blockVertices.add(minY); blockVertices.add(u0); blockVertices.add(v1);
+        blockVertices.add(maxX); blockVertices.add(minY); blockVertices.add(u1); blockVertices.add(v1);
+        blockVertices.add(maxX); blockVertices.add(maxY); blockVertices.add(u1); blockVertices.add(v0);
+        blockVertices.add(minX); blockVertices.add(maxY); blockVertices.add(u0); blockVertices.add(v0);
+        blockIndices.add(base); blockIndices.add(base + 1); blockIndices.add(base + 2);
+        blockIndices.add(base); blockIndices.add(base + 2); blockIndices.add(base + 3);
+        blockVertexCounter += 4;
     }
 
     public void destroy() {

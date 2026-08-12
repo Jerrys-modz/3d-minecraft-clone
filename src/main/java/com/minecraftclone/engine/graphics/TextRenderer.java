@@ -1,11 +1,10 @@
 package com.minecraftclone.engine.graphics;
 
 import com.minecraftclone.engine.Shader;
+import com.minecraftclone.util.FloatArray;
+import com.minecraftclone.util.IntArray;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Batches arbitrary printable-ASCII text into textured quads sampled from the
@@ -13,7 +12,9 @@ import java.util.List;
  * status messages, the F3 debug overlay). Uses the same "logical square"
  * coordinate space as the rest of the HUD: text is positioned by its
  * bottom-left corner, glyphs are {@code size} logical units tall, and a whole
- * batch is uploaded and drawn in a single call once per frame.
+ * batch is uploaded and drawn in a single call once per frame. Vertices/indexes
+ * accumulate into reusable primitive buffers (see {@link FloatArray}) to avoid
+ * per-frame boxing.
  */
 public class TextRenderer {
 
@@ -23,9 +24,9 @@ public class TextRenderer {
     private final Shader shader;
     private final IconMesh mesh = new IconMesh();
 
-    private final List<Float> vertices = new ArrayList<>();
-    private final List<Integer> indices = new ArrayList<>();
-    private final int[] vertexCounter = {0};
+    private final FloatArray vertices = new FloatArray(256);
+    private final IntArray indices = new IntArray(256);
+    private int vertexCounter;
 
     public TextRenderer(FontAtlas font, Shader shader) {
         this.font = font;
@@ -36,7 +37,7 @@ public class TextRenderer {
     public void begin() {
         vertices.clear();
         indices.clear();
-        vertexCounter[0] = 0;
+        vertexCounter = 0;
     }
 
     /** Width in logical units that {@code text} will occupy at the given glyph size. */
@@ -69,7 +70,7 @@ public class TextRenderer {
     /** Uploads the accumulated batch and draws it tinted {@code color} using the given HUD transform. */
     public void render(Matrix4f transform, Vector4f color) {
         if (vertices.isEmpty()) return;
-        mesh.upload(toFloatArray(vertices), toIntArray(indices));
+        mesh.upload(vertices.toArray(), indices.toArray());
         shader.bind();
         shader.setUniform("transform", transform);
         shader.setUniform("atlas", 0);
@@ -85,25 +86,13 @@ public class TextRenderer {
 
     private void addQuad(float minX, float minY, float maxX, float maxY, float[] uv) {
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
-        int base = vertexCounter[0];
+        int base = vertexCounter;
         vertices.add(minX); vertices.add(minY); vertices.add(u0); vertices.add(v1);
         vertices.add(maxX); vertices.add(minY); vertices.add(u1); vertices.add(v1);
         vertices.add(maxX); vertices.add(maxY); vertices.add(u1); vertices.add(v0);
         vertices.add(minX); vertices.add(maxY); vertices.add(u0); vertices.add(v0);
         indices.add(base); indices.add(base + 1); indices.add(base + 2);
         indices.add(base); indices.add(base + 2); indices.add(base + 3);
-        vertexCounter[0] += 4;
-    }
-
-    private static float[] toFloatArray(List<Float> values) {
-        float[] array = new float[values.size()];
-        for (int i = 0; i < array.length; i++) array[i] = values.get(i);
-        return array;
-    }
-
-    private static int[] toIntArray(List<Integer> values) {
-        int[] array = new int[values.size()];
-        for (int i = 0; i < array.length; i++) array[i] = values.get(i);
-        return array;
+        vertexCounter += 4;
     }
 }

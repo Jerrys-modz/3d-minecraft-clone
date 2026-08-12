@@ -111,10 +111,13 @@ public class Main {
         font.generate();
 
         Path saveDir = Paths.get(System.getenv().getOrDefault("MCCLONE_SAVE_DIR", "saves/world"));
+        Path settingsFile = saveDir.resolve("settings.txt");
         long seed = loadOrCreateSeed(saveDir);
+        Settings settings = Settings.load(settingsFile);
         System.out.println("World seed: " + seed + " (save directory: " + saveDir.toAbsolutePath() + ")");
         World world = new World(seed, atlas, saveDir);
-        world.setRenderDistance(6);
+        world.setRenderDistance(settings.getRenderDistance());
+        world.setLeavesTransparent(settings.isLeavesTransparent());
 
         // Warm up: generate/mesh the spawn area synchronously before the player drops in,
         // so they don't fall through an empty world.
@@ -128,13 +131,12 @@ public class Main {
         Hud hud = new Hud(lineShader, hudShader, font);
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
-        Settings settings = new Settings();
         boolean[] menuOpen = {false};
         int[] menuSelection = {0};
 
         window.setCursorCaptured(true);
 
-        // Ensure the renderer/player start consistent with the settings defaults.
+        // Ensure the renderer/player/window all match the loaded settings.
         applySettings(settings, world, player, window);
 
         int[] selectedSlot = {0};
@@ -194,14 +196,17 @@ public class Main {
                 if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
                     settings.adjust(menuSelection[0], -1);
                     applySettings(settings, world, player, window);
+                    settings.save(settingsFile);
                 }
                 if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
                     settings.adjust(menuSelection[0], +1);
                     applySettings(settings, world, player, window);
+                    settings.save(settingsFile);
                 }
                 if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
                     settings.adjust(menuSelection[0], +1);
                     applySettings(settings, world, player, window);
+                    settings.save(settingsFile);
                 }
             }
 
@@ -374,6 +379,7 @@ public class Main {
         }
 
         world.saveAllModified();
+        settings.save(settingsFile);
 
         hud.destroy();
         chunkShader.destroy();
