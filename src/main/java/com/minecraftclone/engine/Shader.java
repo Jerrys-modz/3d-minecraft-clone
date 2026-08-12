@@ -35,11 +35,6 @@ public class Shader {
         glDetachShader(programId, fragmentId);
         glDeleteShader(vertexId);
         glDeleteShader(fragmentId);
-
-        glValidateProgram(programId);
-        if (glGetProgrami(programId, GL_VALIDATE_STATUS) == 0) {
-            System.err.println("Warning validating shader: " + glGetProgramInfoLog(programId, 2048));
-        }
     }
 
     private int compile(int type, String source) {
