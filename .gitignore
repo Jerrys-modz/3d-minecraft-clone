@@ -10,3 +10,4 @@ target/
 /screenshot*.png
 .DS_Store
 dependency-reduced-pom.xml
+/saves/

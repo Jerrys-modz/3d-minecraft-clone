@@ -6,7 +6,7 @@ A voxel sandbox game inspired by Minecraft, written in Java on top of [LWJGL 3](
 
 ## Features
 
-- **Chunked, infinite-ish voxel world** streamed around the player (16×128×16 chunks, configurable render distance), loaded/meshed incrementally so the game never freezes while exploring.
+- **Infinite, persistent voxel world**: chunks (16×128×16) generate on demand from the seed as you explore in any direction with no boundary, streamed in/out around the player and loaded/meshed incrementally so the game never freezes. Memory stays bounded to render distance — only chunks you've actually edited are written to disk, and reloading one restores your edits instead of regenerating pristine terrain, even across a restart.
 - **Procedural terrain generation**: layered Perlin/fBm noise for rolling hills and mountains, a second noise channel for rough biomes (plains / desert / snowy peaks), cave carving, trees, and cacti.
 - **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom) and distance fog.
 - **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, sprinting, and a no-clip flight mode.
@@ -50,6 +50,10 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 | `F2` | Save a screenshot to `screenshot.png` |
 | `Esc` | Release/recapture the mouse cursor |
 
+## Saving
+
+The world is saved to `saves/world/` next to wherever you run the jar from (override with the `MCCLONE_SAVE_DIR` environment variable). The world seed is written there on first launch and reused on every subsequent launch, so it's the same world each time you start the game. Only chunks you've actually broken/placed blocks in are ever written to disk — untouched terrain is cheap to regenerate deterministically from the seed, which is what keeps disk and memory usage bounded no matter how far you explore. Edits autosave every 60 seconds and on a clean exit.
+
 ## Project Layout
 
 ```
@@ -72,6 +76,9 @@ This is a compact, from-scratch clone meant to be readable end-to-end, not a fea
 - No inventory/crafting/mobs — it's a "creative mode" walk-and-build sandbox.
 - Water and leaves are rendered as solid (opaque) blocks rather than alpha-blended, keeping the renderer single-pass.
 - Chunk meshing runs on the main thread with a per-frame budget, so there's no multithreading complexity, at the cost of a brief pause when flying very fast into unloaded terrain.
+- World height is capped (128 blocks, same idea as vanilla Minecraft's build limit) — it's the horizontal extent that's unbounded.
+- Chunk vertex positions are baked in absolute world-space `float`s rather than being camera-relative, so precision (and therefore visual stability) very gradually degrades if you travel extremely far (hundreds of thousands of blocks) from spawn — not something you'll hit in normal play.
+- A crash (as opposed to closing the game normally) can lose up to the last 60 seconds of edits, since that's the autosave interval.
 
 ## Automated smoke testing
 

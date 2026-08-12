@@ -4,25 +4,38 @@ import com.minecraftclone.engine.Shader;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.world.gen.TerrainGenerator;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Owns all loaded chunks: streaming (load/unload around the player), meshing, block access and raycasting. */
+/**
+ * Owns all loaded chunks: streaming (load/unload around the player), meshing,
+ * block access and raycasting.
+ * <p>
+ * The world itself is unbounded - chunks are generated on demand from the
+ * seed as the player approaches and released again once they're far enough
+ * away, so memory stays bounded to roughly {@code renderDistance} regardless
+ * of how far the player has cumulatively explored. Any chunk the player has
+ * edited is persisted to disk on unload (see {@link ChunkStorage}) and
+ * reloaded from there instead of being regenerated, so edits are never lost.
+ */
 public class World implements BlockAccessor {
 
     private final Map<ChunkPos, Chunk> chunks = new HashMap<>();
     private final TerrainGenerator generator;
     private final TextureAtlas atlas;
+    private final ChunkStorage storage;
 
     private int renderDistance = 6;
     private static final int MAX_GENERATE_PER_TICK = 4;
     private static final int MAX_MESH_PER_TICK = 4;
 
-    public World(long seed, TextureAtlas atlas) {
+    public World(long seed, TextureAtlas atlas, Path saveDir) {
         this.generator = new TerrainGenerator(seed);
         this.atlas = atlas;
+        this.storage = new ChunkStorage(saveDir);
     }
 
     public void setRenderDistance(int renderDistance) {
@@ -59,7 +72,7 @@ public class World implements BlockAccessor {
         if (chunk == null) return;
         int lx = Math.floorMod(worldX, Chunk.SIZE);
         int lz = Math.floorMod(worldZ, Chunk.SIZE);
-        chunk.setLocal(lx, worldY, lz, type);
+        chunk.setLocalFromPlayer(lx, worldY, lz, type);
 
         // If we touched a boundary column, the neighbor chunk's culled faces
         // there may now need to change too.
@@ -102,7 +115,13 @@ public class World implements BlockAccessor {
                 if (!chunks.containsKey(p)) {
                     Chunk chunk = new Chunk(p);
                     chunks.put(p, chunk);
-                    generator.generate(chunk);
+                    if (storage.hasSavedChunk(p)) {
+                        // A previously-edited chunk: restore the player's changes
+                        // instead of regenerating pristine terrain.
+                        storage.load(chunk);
+                    } else {
+                        generator.generate(chunk);
+                    }
                     markNeighborDirty(p.x() - 1, p.z());
                     markNeighborDirty(p.x() + 1, p.z());
                     markNeighborDirty(p.x(), p.z() - 1);
@@ -122,7 +141,12 @@ public class World implements BlockAccessor {
         }
         for (ChunkPos p : toRemove) {
             Chunk c = chunks.remove(p);
-            if (c != null) c.destroy();
+            if (c != null) {
+                if (c.isModifiedByPlayer()) {
+                    storage.save(c);
+                }
+                c.destroy();
+            }
         }
 
         // Remesh a limited number of dirty chunks per tick, nearest first.
@@ -149,6 +173,20 @@ public class World implements BlockAccessor {
     public boolean isFullyGenerated(int worldX, int worldZ) {
         Chunk c = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
         return c != null && c.isGenerated();
+    }
+
+    /** Persists every currently-loaded, player-modified chunk. Call before exiting so edits near the player aren't lost. */
+    public void saveAllModified() {
+        int saved = 0;
+        for (Chunk c : chunks.values()) {
+            if (c.isModifiedByPlayer()) {
+                storage.save(c);
+                saved++;
+            }
+        }
+        if (saved > 0) {
+            System.out.println("Saved " + saved + " modified chunk(s).");
+        }
     }
 
     public void destroy() {

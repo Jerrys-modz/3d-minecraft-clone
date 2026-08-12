@@ -11,6 +11,12 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 
@@ -29,6 +35,7 @@ public class Main {
     private static final float FOV_DEGREES = 75f;
     private static final float NEAR_PLANE = 0.05f;
     private static final float FAR_PLANE = 400f;
+    private static final float AUTOSAVE_INTERVAL_SECONDS = 60f;
 
     private static final BlockType[] HOTBAR = {
             BlockType.STONE, BlockType.DIRT, BlockType.GRASS, BlockType.SAND,
@@ -58,9 +65,10 @@ public class Main {
         TextureAtlas atlas = new TextureAtlas();
         atlas.generate();
 
-        long seed = System.currentTimeMillis();
-        System.out.println("World seed: " + seed);
-        World world = new World(seed, atlas);
+        Path saveDir = Paths.get(System.getenv().getOrDefault("MCCLONE_SAVE_DIR", "saves/world"));
+        long seed = loadOrCreateSeed(saveDir);
+        System.out.println("World seed: " + seed + " (save directory: " + saveDir.toAbsolutePath() + ")");
+        World world = new World(seed, atlas, saveDir);
         world.setRenderDistance(6);
 
         // Warm up: generate/mesh the spawn area synchronously before the player drops in,
@@ -94,6 +102,7 @@ public class Main {
         int autoTestFrames = autoTest ? Integer.parseInt(System.getenv().getOrDefault("MCCLONE_AUTOTEST_FRAMES", "60")) : 0;
         String autoTestPath = System.getenv().getOrDefault("MCCLONE_AUTOTEST_PATH", "screenshot.png");
         int frameCount = 0;
+        float timeSinceAutosave = 0f;
 
         while (!window.shouldClose()) {
             input.beginFrame();
@@ -120,6 +129,14 @@ public class Main {
             }
 
             world.update(player.getPosition().x, player.getPosition().z);
+
+            // Periodically flush edits to disk so a crash doesn't lose much progress
+            // (chunks are also always saved on a clean exit, see below).
+            timeSinceAutosave += dt;
+            if (timeSinceAutosave >= AUTOSAVE_INTERVAL_SECONDS) {
+                timeSinceAutosave = 0f;
+                world.saveAllModified();
+            }
 
             // Block selection via number keys.
             for (int i = 0; i < HOTBAR.length && i < 9; i++) {
@@ -185,12 +202,31 @@ public class Main {
             }
         }
 
+        world.saveAllModified();
+
         hud.destroy();
         chunkShader.destroy();
         lineShader.destroy();
         atlas.destroy();
         world.destroy();
         window.close();
+    }
+
+    /** Reuses the seed from a previous run if this save directory already has one, otherwise mints and stores a new one. */
+    private static long loadOrCreateSeed(Path saveDir) {
+        Path seedFile = saveDir.resolve("seed.txt");
+        try {
+            if (Files.isRegularFile(seedFile)) {
+                return Long.parseLong(Files.readString(seedFile, StandardCharsets.UTF_8).trim());
+            }
+            Files.createDirectories(saveDir);
+            long seed = System.currentTimeMillis();
+            Files.writeString(seedFile, Long.toString(seed), StandardCharsets.UTF_8);
+            return seed;
+        } catch (IOException | NumberFormatException e) {
+            System.err.println("Could not read/write seed file (" + e.getMessage() + "), using a fresh in-memory seed.");
+            return System.currentTimeMillis();
+        }
     }
 
     private boolean intersectsPlayer(Player player, Vector3i blockPos) {

@@ -29,6 +29,7 @@ public class Chunk {
     private volatile boolean dirty = true;
     private boolean generated = false;
     private boolean hasMeshData = false;
+    private boolean modifiedByPlayer = false;
 
     public Chunk(ChunkPos pos) {
         this.pos = pos;
@@ -78,6 +79,34 @@ public class Chunk {
     public void setLocal(int x, int y, int z, BlockType type) {
         if (!inBounds(x, y, z)) return;
         blocks[index(x, y, z)] = type.id;
+        dirty = true;
+    }
+
+    /** Like {@link #setLocal}, but also flags the chunk as needing to be saved to disk when it unloads. */
+    public void setLocalFromPlayer(int x, int y, int z, BlockType type) {
+        setLocal(x, y, z, type);
+        modifiedByPlayer = true;
+    }
+
+    public boolean isModifiedByPlayer() {
+        return modifiedByPlayer;
+    }
+
+    public void markModifiedByPlayer() {
+        modifiedByPlayer = true;
+    }
+
+    /** Raw block-id array for serialization. Returns the live backing array - treat as read-only. */
+    public byte[] getRawBlocks() {
+        return blocks;
+    }
+
+    /** Replaces this chunk's block data wholesale, e.g. when loading a saved chunk from disk. */
+    public void setRawBlocks(byte[] data) {
+        if (data.length != blocks.length) {
+            throw new IllegalArgumentException("Expected " + blocks.length + " bytes, got " + data.length);
+        }
+        System.arraycopy(data, 0, blocks, 0, blocks.length);
         dirty = true;
     }
 
