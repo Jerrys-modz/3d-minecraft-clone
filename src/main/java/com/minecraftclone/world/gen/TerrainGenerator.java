@@ -45,6 +45,7 @@ public class TerrainGenerator {
         Random featureRandom = new Random(seed ^ ((long) chunk.getPos().x() * 341873128712L) ^ ((long) chunk.getPos().z() * 132897987541L));
 
         int[][] heights = new int[Chunk.SIZE][Chunk.SIZE];
+        double[][] moisture = new double[Chunk.SIZE][Chunk.SIZE];
 
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
@@ -53,7 +54,8 @@ public class TerrainGenerator {
 
                 double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
                 double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
-                double moisture = moistureAt(wx, wz);
+                double moist = moistureAt(wx, wz);
+                moisture[x][z] = moist;
 
                 int height = BASE_HEIGHT + (int) Math.round(h * 14 + Math.max(0, mountains) * 40);
                 height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
@@ -62,7 +64,7 @@ public class TerrainGenerator {
                 }
                 heights[x][z] = height;
 
-                boolean desert = moisture < -0.25 && height <= SEA_LEVEL + 6;
+                boolean desert = moist < -0.25 && height <= SEA_LEVEL + 6;
 
                 for (int y = 0; y <= height; y++) {
                     BlockType type;
@@ -113,9 +115,9 @@ public class TerrainGenerator {
 
                 int wx = originX + x;
                 int wz = originZ + z;
-                double moisture = moistureAt(wx, wz);
-                boolean desert = moisture < -0.25 && height <= SEA_LEVEL + 6;
-                boolean forest = moisture > 0.25;
+                double moist = moisture[x][z];
+                boolean desert = moist < -0.25 && height <= SEA_LEVEL + 6;
+                boolean forest = moist > 0.25;
 
                 BlockType surface = chunk.getLocal(x, height, z);
                 if (desert && surface == BlockType.SAND) {

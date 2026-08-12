@@ -33,6 +33,7 @@ public class Player {
     /** Feet position: bottom-center of the player's bounding box. */
     private final Vector3f position = new Vector3f();
     private final Vector3f velocity = new Vector3f();
+    private final Vector3f eyePosition = new Vector3f();
     private final Camera camera = new Camera();
     private final Inventory inventory = new Inventory();
     private final PlayerStats stats = new PlayerStats();
@@ -77,8 +78,9 @@ public class Player {
         return position;
     }
 
+    /** Eye (camera) position: feet position plus the eye height. Returns a reused vector - copy before retaining. */
     public Vector3f getEyePosition() {
-        return new Vector3f(position.x, position.y + EYE_HEIGHT, position.z);
+        return eyePosition.set(position.x, position.y + EYE_HEIGHT, position.z);
     }
 
     public boolean isFlying() {

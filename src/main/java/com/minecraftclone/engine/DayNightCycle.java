@@ -19,6 +19,9 @@ public class DayNightCycle {
     private static final Vector3f DAY_SKY = new Vector3f(0.53f, 0.81f, 0.92f);
     private static final Vector3f NIGHT_SKY = new Vector3f(0.02f, 0.03f, 0.10f);
 
+    /** Reused output vector so per-frame sky lookups don't allocate. */
+    private final Vector3f skyColor = new Vector3f();
+
     /** 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset. Starts mid-morning. */
     private float time = 0.3f;
 
@@ -46,7 +49,7 @@ public class DayNightCycle {
 
     public Vector3f getSkyColor() {
         float t = getDaylightFactor();
-        return new Vector3f(
+        return skyColor.set(
                 NIGHT_SKY.x + (DAY_SKY.x - NIGHT_SKY.x) * t,
                 NIGHT_SKY.y + (DAY_SKY.y - NIGHT_SKY.y) * t,
                 NIGHT_SKY.z + (DAY_SKY.z - NIGHT_SKY.z) * t);

@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -353,7 +354,7 @@ public class Main {
                 float y = 0.95f;
                 float step = 0.052f;
                 hud.drawTextLeft("FPS: " + timer.getFps(), -0.95f, y, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format("XYZ: %.1f / %.1f / %.1f", pos.x, pos.y, pos.z),
+                hud.drawTextLeft(String.format(Locale.ROOT, "XYZ: %.1f / %.1f / %.1f", pos.x, pos.y, pos.z),
                         -0.95f, y - step, textSize, WHITE, aspect);
                 hud.drawTextLeft("Selected: " + HOTBAR[selectedSlot[0]],
                         -0.95f, y - 2f * step, textSize, WHITE, aspect);

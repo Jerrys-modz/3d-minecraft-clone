@@ -438,7 +438,7 @@ public class Hud {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
-        int rows = settings.ROW_COUNT;
+        int rows = Settings.ROW_COUNT;
         float size = 0.034f;
         float leftPad = 0.075f;   // panel-left edge to label start
         float rightPad = 0.07f;   // panel-right edge to value end
@@ -448,7 +448,7 @@ public class Hud {
         float widest = 0f;
         for (int i = 0; i < rows; i++) {
             widest = Math.max(widest,
-                    text.measure(settings.label(i), size) + labelValueGap + text.measure(settings.valueText(i), size));
+                    text.measure(Settings.label(i), size) + labelValueGap + text.measure(settings.valueText(i), size));
         }
         float panelW = widest + leftPad + rightPad;
 
@@ -488,7 +488,7 @@ public class Hud {
             String value = settings.valueText(i);
             float valueWidth = text.measure(value, size);
             drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
-            drawTextAt(settings.label(i), left + leftPad, baseline, size, selected ? highlight : idle);
+            drawTextAt(Settings.label(i), left + leftPad, baseline, size, selected ? highlight : idle);
             drawTextAt(value, left + panelW - rightPad - valueWidth, baseline, size, selected ? highlight : idleValue);
         }
 
