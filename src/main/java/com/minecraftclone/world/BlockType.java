@@ -45,7 +45,11 @@ public enum BlockType {
     WOOD_AXE(30, false, true, 43),
     STONE_AXE(31, false, true, 44),
     IRON_AXE(32, false, true, 45),
-    DIAMOND_AXE(33, false, true, 46);
+    DIAMOND_AXE(33, false, true, 46),
+    WOOD_SWORD(34, false, true, 47),
+    STONE_SWORD(35, false, true, 48),
+    IRON_SWORD(36, false, true, 49),
+    DIAMOND_SWORD(37, false, true, 50);
 
     public final byte id;
     public final boolean solid;

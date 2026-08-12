@@ -7,7 +7,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 ## Features
 
 - **Survival stats**: health, hunger and stamina, all visible as HUD bars. Falling too far, standing in lava, staying underwater too long past your breath limit, and letting hunger hit zero all deal real damage; health quietly regenerates on its own once you're well-fed. Sprinting costs stamina (and a little extra hunger) and locks out until it recovers. Death clears your inventory and respawns you at world spawn.
-- **Tools & mining**: breaking is hold-to-break, not instant - how long depends on the block's hardness and whatever tool you're holding. Wood/stone/iron/diamond pickaxes and axes (crafted from raw materials + sticks) each mine faster than the tier below, and some blocks (ores, in increasing order of rarity) flatly require a minimum tool tier - you can't punch out a diamond. The block outline glows redder and thickens as you get closer to breaking it.
+- **Tools & mining**: breaking is hold-to-break, not instant - how long depends on the block's hardness and whatever tool you're holding. Wood/stone/iron/diamond pickaxes, axes and swords (crafted from raw materials + sticks) each mine faster than the tier below at their specialty, and some blocks (ores, in increasing order of rarity) flatly require a minimum tool tier - you can't punch out a diamond. Swords are quickest through leaves and cacti; combat is on the roadmap once there's something to fight. The block outline glows redder and thickens as you get closer to breaking it.
 - **Foraging**: apples occasionally drop from broken leaves, and rare berry bushes dotted across grassy biomes yield berries when harvested. Select a food item and right-click to eat it and restore hunger — the same button placing blocks uses, since the game treats "use the selected item" as one contextual action.
 - **A day/night cycle**: a 10-minute real-time cycle dims the world and shifts the sky toward dark blue at night, driven by a global ambient-brightness uniform in the chunk shader — there's no dynamic light propagation, but darkness is a real, visible signal, not just cosmetic.
 - **Crafting**: a small fixed recipe table (logs → planks → sticks, sand → glass, planks/stone/ore + sticks → tools) - press `C` with the output selected in your hotbar and, if you have the ingredients, it's crafted directly into your inventory. No crafting-grid UI needed.
@@ -17,8 +17,8 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom), distance fog, and cross-shaped "billboard" geometry for non-cube decoration (grass/flowers/bushes) with alpha-cutout transparency.
 - **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a no-clip flight mode.
 - **Block interaction**: raycast-based block breaking/placing (reach limited to 6 blocks) with a wireframe outline on the targeted block, gated by a real inventory - breaking a block adds it to your count, placing spends one, and bedrock is unbreakable. Starts empty, so you gather before you build.
-- **On-screen HUD**: a hotbar (29 slots) with block icons sampled straight from the game's own texture atlas, live inventory counts drawn with a tiny procedural pixel font (no external font/text-rendering library), a highlight border on the selected slot, and health/hunger/stamina bars above it.
-- **Procedural texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, apples/berries/berry bushes, sticks, eight tools, alpha-cutout grass/flower tiles, and a 0-9 digit font, all generated at runtime.
+- **On-screen HUD**: a hotbar (33 slots) with block icons sampled straight from the game's own texture atlas, live inventory counts drawn with a tiny procedural pixel font (no external font/text-rendering library), a highlight border on the selected slot, and health/hunger/stamina bars above it.
+- **Procedural texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, apples/berries/berry bushes, sticks, twelve tools, alpha-cutout grass/flower tiles, and a 0-9 digit font, all generated at runtime.
 
 ## Requirements
 
@@ -81,10 +81,10 @@ You start with an empty inventory - break blocks to collect them (they show up w
 Breaking a block takes time, not a click - hold the mouse button down and watch the targeted block's outline glow redder (and thicken) as you get closer to breaking it. How long it takes depends on:
 
 - **The block's hardness** - dirt and sand are quick, stone slower, ores slower still.
-- **Your tool.** Each tier (wood → stone → iron → diamond) roughly doubles mining speed for its matching tool kind (pickaxe or axe) over the tier below; the wrong tool kind (or bare hands) gets no bonus. Some blocks are gated harder than that: coal needs at least a wood pickaxe, iron needs stone, gold and diamond need iron - anything less and it simply won't break, full stop, no matter how long you hold the button.
-- Craft tools with `C`: 3 of the tool's base material (planks, stone, or raw ore) + 2 sticks. Craft sticks from planks first (2 planks → 4 sticks). See `Mining.java` for the exact hardness/tier table.
+- **Your tool.** Each tier (wood → stone → iron → diamond) roughly doubles mining speed for its matching tool kind (pickaxe, axe, or sword) over the tier below; the wrong tool kind (or bare hands) gets no bonus. Some blocks are gated harder than that: coal needs at least a wood pickaxe, iron needs stone, gold and diamond need iron - anything less and it simply won't break, full stop, no matter how long you hold the button. Swords are the odd one out - no block requires one, but they're the fastest thing through leaves and cacti.
+- Craft pickaxes/axes with `C`: 3 of the tool's base material (planks, stone, or raw ore) + 2 sticks. Swords are lighter - 2 material + 1 stick. Craft sticks from planks first (2 planks → 4 sticks). See `Mining.java` for the exact hardness/tier table.
 
-Tools don't wear out yet (no durability) - that's on the roadmap below.
+Tools don't wear out yet (no durability), and swords have nothing to fight yet - both on the roadmap below.
 
 ## Saving
 
@@ -109,7 +109,7 @@ src/main/resources/shaders/    # GLSL vertex/fragment shaders (chunk, line, hud)
 This is a compact, from-scratch clone meant to be readable end-to-end, not a feature-complete recreation. Some deliberate simplifications:
 
 - Text rendering is limited to the digits 0-9 (inventory counts) via a hand-drawn pixel font baked into the same texture atlas as the blocks - there's no general text renderer, so FPS/debug info still only goes to the console, and there's no on-screen death/damage messaging beyond the bars themselves (check the console for a death notice).
-- Crafting is a small fixed table, not a grid - there's no way to combine arbitrary items. Pickaxes and axes exist with four material tiers each, but no durability yet (they never wear out), and there's no sword/shovel/weapon yet either.
+- Crafting is a small fixed table, not a grid - there's no way to combine arbitrary items. Pickaxes, axes and swords exist with four material tiers each, but no durability yet (they never wear out), and there's nothing for a sword to fight (no mobs) or a shovel to dig faster (no shovel).
 - No mobs (hostile or otherwise) - night is darker and a real signal, but nothing actually comes looking for you yet. No sleeping/beds to skip it either.
 - Water and leaves are rendered as solid (opaque) blocks rather than alpha-blended, keeping the renderer single-pass. (Grass/flowers/berry bushes are the exception - they're cross-shaped and alpha-cutout, not alpha-blended. Lava is opaque too, despite being a hazard.)
 - Day/night affects a single global ambient-brightness multiplier, not real light propagation - there's no torch/light-source placement, and caves are exactly as dark as the surface at the same time of day (no separate "underground is always dark" rule).
@@ -125,11 +125,11 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 **Done (in some form):** screenshots (well, `F2`)/tools/recipaedia (this README) → **1.1**; snow → **1.2**; furnace-free ore tools → partial **1.3**; food/eating → **1.5**; buckets/water physics/magma → partial **1.8**; diamonds/flat-ish terrain → partial **1.12**; saplings-ish (trees regrow via world-gen, not planting) → partial **1.13**; cacti → **1.15**; rain-free weather is still open but thunderstorms/pumpkins are on the list → **1.18** (partial); creative-adjacent options via the hotbar → partial **1.20**; survival/farming-adjacent (no crops yet) → partial **1.22**.
 
 **Not yet, roughly in the order they'd naturally build on what exists:**
-- Tool **durability** (tools currently never wear out) and a **sword** - natural next step for tools/mining.
+- Tool **durability** (tools currently never wear out) - the natural next step for tools/mining, now that pickaxes/axes/**swords** (done) all exist.
 - **Torches/lamps** (real local lighting, not just the global day/night dimmer) - the natural pairing for the day/night cycle.
 - A **furnace** and smelting (ore → ingot) ahead of raw-ore tools, plus **stairs/slabs/doors/fences/trapdoors** (partial-cube geometry the mesher doesn't support yet - everything is either a full cube or a cross-shaped sprite right now).
-- **Animals & mobs** - passive (cows, wolves, fish, birds...) and eventually hostile, with the AI/pathfinding that implies. Also compass/thermometer-style instruments, creature spawners.
-- **Weapons & combat** - bows/arrows, thrown items, explosives/fire.
+- **Animals & mobs** - passive (cows, wolves, fish, birds...) and eventually hostile, with the AI/pathfinding that implies. Also compass/thermometer-style instruments, creature spawners. This is what actually gives swords (done) a job beyond leaves/cacti.
+- **Combat** - attacking, damage, bows/arrows, thrown items, explosives/fire.
 - **Farming** - crops, planting/growing, not just foraging what world-gen placed.
 - **Boats**, **horse/animal riding**.
 - **Electricity**, **clothes/armor**, **temperature effects**.

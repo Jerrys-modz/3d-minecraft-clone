@@ -11,10 +11,14 @@ import java.util.Map;
  * optionally, an "effective" tool kind that speeds up breaking it and/or a
  * minimum tool tier required to break it at all (e.g. you can't punch out a
  * diamond - you need at least an iron pickaxe).
+ * <p>
+ * Swords exist as a tool kind (faster than bare hands on plant/fibrous
+ * material like leaves and cacti) but there's no combat yet - no mobs to
+ * swing them at - so for now that speed bonus is their only effect.
  */
 public final class Mining {
 
-    public enum ToolKind {NONE, PICKAXE, AXE}
+    public enum ToolKind {NONE, PICKAXE, AXE, SWORD}
 
     /** Higher is better. 0 = bare hands. */
     public static final int TIER_HAND = 0;
@@ -42,6 +46,10 @@ public final class Mining {
         TOOLS.put(BlockType.STONE_AXE, new ToolStats(ToolKind.AXE, TIER_STONE, 132));
         TOOLS.put(BlockType.IRON_AXE, new ToolStats(ToolKind.AXE, TIER_IRON, 251));
         TOOLS.put(BlockType.DIAMOND_AXE, new ToolStats(ToolKind.AXE, TIER_DIAMOND, 1562));
+        TOOLS.put(BlockType.WOOD_SWORD, new ToolStats(ToolKind.SWORD, TIER_WOOD, 60));
+        TOOLS.put(BlockType.STONE_SWORD, new ToolStats(ToolKind.SWORD, TIER_STONE, 132));
+        TOOLS.put(BlockType.IRON_SWORD, new ToolStats(ToolKind.SWORD, TIER_IRON, 251));
+        TOOLS.put(BlockType.DIAMOND_SWORD, new ToolStats(ToolKind.SWORD, TIER_DIAMOND, 1562));
 
         // Soft, no tool required - fast either way.
         put(BlockType.DIRT, 0.5f, ToolKind.NONE, TIER_HAND);
@@ -49,10 +57,11 @@ public final class Mining {
         put(BlockType.SAND, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.GRAVEL, 0.6f, ToolKind.NONE, TIER_HAND);
         put(BlockType.SNOW, 0.2f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.CACTUS, 0.4f, ToolKind.NONE, TIER_HAND);
+        // Swords are quicker through plant/fibrous material - no requirement, just a bonus.
+        put(BlockType.CACTUS, 0.4f, ToolKind.SWORD, TIER_HAND);
 
         // Instant, no tool - decoration.
-        put(BlockType.LEAVES, 0.2f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.LEAVES, 0.2f, ToolKind.SWORD, TIER_HAND);
         put(BlockType.TALL_GRASS, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_RED, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_YELLOW, 0f, ToolKind.NONE, TIER_HAND);

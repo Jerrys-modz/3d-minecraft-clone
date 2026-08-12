@@ -34,6 +34,12 @@ public final class Crafting {
         register(new Recipe(BlockType.STONE, 3, BlockType.STICK, 2, BlockType.STONE_AXE, 1));
         register(new Recipe(BlockType.IRON_ORE, 3, BlockType.STICK, 2, BlockType.IRON_AXE, 1));
         register(new Recipe(BlockType.DIAMOND_ORE, 3, BlockType.STICK, 2, BlockType.DIAMOND_AXE, 1));
+
+        // Swords are lighter than pickaxes/axes: 2 material + 1 stick instead of 3 + 2.
+        register(new Recipe(BlockType.PLANKS, 2, BlockType.STICK, 1, BlockType.WOOD_SWORD, 1));
+        register(new Recipe(BlockType.STONE, 2, BlockType.STICK, 1, BlockType.STONE_SWORD, 1));
+        register(new Recipe(BlockType.IRON_ORE, 2, BlockType.STICK, 1, BlockType.IRON_SWORD, 1));
+        register(new Recipe(BlockType.DIAMOND_ORE, 2, BlockType.STICK, 1, BlockType.DIAMOND_SWORD, 1));
     }
 
     private static void register(Recipe recipe) {

@@ -107,6 +107,10 @@ public class TextureAtlas {
         paintAxe(image, 44, 0x9E9E9E);      // stone
         paintAxe(image, 45, 0xE8E8E8);      // iron
         paintAxe(image, 46, 0x5FE0E0);      // diamond
+        paintSword(image, 47, 0xA9814F);    // wood
+        paintSword(image, 48, 0x9E9E9E);    // stone
+        paintSword(image, 49, 0xE8E8E8);    // iron
+        paintSword(image, 50, 0x5FE0E0);    // diamond
 
         return image;
     }
@@ -354,6 +358,18 @@ public class TextureAtlas {
                 }
             }
         }
+    }
+
+    /** A pointed vertical blade over a dark crossguard and a short handle, tinted by material - sword icon. */
+    private void paintSword(BufferedImage img, int index, int bladeColor) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        drawThickLine(img, ox, oy, 8, 2, 8, 10, bladeColor); // blade
+        img.setRGB(ox + 8, oy + 2, 0xFF000000 | bladeColor); // sharpen the tip to a single pixel
+        for (int x = 4; x <= 11; x++) {
+            img.setRGB(ox + x, oy + 11, 0xFF000000 | 0x4A4A4A); // crossguard
+        }
+        drawThickLine(img, ox, oy, 8, 12, 8, 15, 0x6E4A2A); // handle
     }
 
     /** Plots a ~2px-thick straight line between two points in tile-local coordinates. */

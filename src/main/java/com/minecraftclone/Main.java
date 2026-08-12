@@ -52,7 +52,8 @@ public class Main {
             BlockType.LAVA, BlockType.GLASS, BlockType.APPLE, BlockType.BERRIES,
             BlockType.STICK,
             BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
-            BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE
+            BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
+            BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD
     };
 
     private static final int APPLE_DROP_CHANCE = 8;    // 1 in 8 leaves broken also yield an apple
