@@ -4,6 +4,7 @@ import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.IconMesh;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.LineMesh;
+import com.minecraftclone.engine.graphics.TextRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.ToolDurability;
@@ -20,8 +21,9 @@ import static org.lwjgl.opengl.GL11.*;
 
 /**
  * Draws all 2D overlay elements: the crosshair, the wireframe outline around
- * the targeted block, and the hotbar (block icons + inventory counts, with
- * the selected slot highlighted).
+ * the targeted block, the hotbar (block icons + inventory counts, with the
+ * selected slot highlighted), the health/hunger/stamina bars, transient
+ * on-screen messages, and the F3 debug overlay.
  * <p>
  * All 2D geometry is built in a "logical square" coordinate space (-1..1 on
  * both axes, as if the viewport were square) and corrected for the real
@@ -42,6 +44,8 @@ public class Hud {
     private static final float STAT_BAR_GAP = 0.007f;          // gap between stacked bars
     private static final float STAT_BAR_STACK_MARGIN = 0.014f; // gap between the bar stack and the hotbar panel below it
 
+    private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
+
     private final Shader lineShader;
     private final Shader hudShader;
 
@@ -51,7 +55,7 @@ public class Hud {
     private final LineMesh hotbarHighlight = new LineMesh(GL_LINES);
     private final IconMesh hotbarBlockIcons = new IconMesh();  // batched: all non-item slots, sampling the shared block atlas
     private final IconMesh hotbarItemIcon = new IconMesh();    // reused per slot: each item has its own texture, so items can't batch
-    private final IconMesh hotbarCounts = new IconMesh();      // batched: every slot's inventory-count digits, sampling the font atlas
+    private final TextRenderer text;                           // all HUD text: counts, messages, debug overlay
     private final LineMesh statBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh statBarFill = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarBackground = new LineMesh(GL_TRIANGLES);
@@ -61,9 +65,10 @@ public class Hud {
     private final Matrix4f modelMatrix = new Matrix4f();
     private final Matrix4f hudTransform = new Matrix4f();
 
-    public Hud(Shader lineShader, Shader hudShader) {
+    public Hud(Shader lineShader, Shader hudShader, FontAtlas font) {
         this.lineShader = lineShader;
         this.hudShader = hudShader;
+        this.text = new TextRenderer(font, hudShader);
         buildCrosshair();
         buildCubeOutline();
     }
@@ -147,7 +152,7 @@ public class Hud {
         return slotCenterY() + HOTBAR_SLOT_SIZE / 2f + HOTBAR_PADDING;
     }
 
-    public void renderHotbar(TextureAtlas atlas, ItemTextures itemTextures, FontAtlas font, ToolDurability durability,
+    public void renderHotbar(TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
                               BlockType[] hotbar, Inventory inventory, int selectedSlot, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
 
@@ -193,19 +198,17 @@ public class Hud {
         // Icons come from three separate texture sources, so they can't all
         // batch into one draw call the way they used to: block icons still
         // batch together (one shared atlas), each item icon needs its own
-        // individual bind+draw (its own PNG), and the count digits batch
-        // together again (one shared font strip).
+        // individual bind+draw (its own PNG), and the count text batches
+        // together again through the shared font atlas + TextRenderer.
         List<Float> blockVertices = new ArrayList<>();
         List<Integer> blockIndices = new ArrayList<>();
         int[] blockVertexCounter = {0};
 
-        List<Float> countVertices = new ArrayList<>();
-        List<Integer> countIndices = new ArrayList<>();
-        int[] countVertexCounter = {0};
-
         List<float[]> durabilityBars = new ArrayList<>(); // {cx, fraction} for worn tool slots only
 
         float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
+
+        text.begin();
 
         for (int i = 0; i < count; i++) {
             float cx = slotCenterX(i, count);
@@ -224,6 +227,7 @@ public class Hud {
                 hudShader.bind();
                 hudShader.setUniform("transform", hudTransform);
                 hudShader.setUniform("atlas", 0);
+                hudShader.setUniform("color", WHITE);
                 itemTextures.bind(type);
                 hotbarItemIcon.render();
                 hudShader.unbind();
@@ -242,35 +246,26 @@ public class Hud {
 
             int amount = inventory.getCount(type);
             if (amount > 0) {
-                String text = Integer.toString(Math.min(amount, 999));
+                String countText = Integer.toString(Math.min(amount, 999));
                 float digitSize = 0.032f;
-                float digitGap = 0.002f;
-                float textWidth = text.length() * digitSize + (text.length() - 1) * digitGap;
-                float startX = cx + iconHalf - textWidth;
-                float y = centerY + iconHalf - digitSize;
-                for (int c = 0; c < text.length(); c++) {
-                    int digit = text.charAt(c) - '0';
-                    float x = startX + c * (digitSize + digitGap);
-                    addQuad(countVertices, countIndices, countVertexCounter,
-                            x, y, x + digitSize, y + digitSize,
-                            font.getUV(digit));
-                }
+                float textWidth = text.measure(countText, digitSize);
+                // Right-aligned to the icon's top corner; y is the text block's bottom edge.
+                text.add(countText, cx + iconHalf - textWidth, centerY + iconHalf - digitSize, digitSize);
             }
         }
 
         hudShader.bind();
         hudShader.setUniform("transform", hudTransform);
         hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", WHITE);
 
         hotbarBlockIcons.upload(toFloatArray(blockVertices), toIntArray(blockIndices));
         atlas.bind();
         hotbarBlockIcons.render();
 
-        hotbarCounts.upload(toFloatArray(countVertices), toIntArray(countIndices));
-        font.bind();
-        hotbarCounts.render();
-
         hudShader.unbind();
+
+        text.render(hudTransform, WHITE);
 
         if (!durabilityBars.isEmpty()) {
             lineShader.bind();
@@ -376,6 +371,64 @@ public class Hud {
         return topY + STAT_BAR_GAP;
     }
 
+    /**
+     * A transient line of on-screen text with its own color and lifetime.
+     * {@code Main} owns the list and updates {@link #age} / drops expired
+     * entries; {@link Hud#renderMessages} just draws what's still alive.
+     */
+    public static class Message {
+        public final String text;
+        public final Vector4f color;
+        public final float duration;
+        public float age;
+
+        public Message(String text, Vector4f color, float duration) {
+            this.text = text;
+            this.color = color;
+            this.duration = duration;
+        }
+
+        public boolean isExpired() {
+            return age >= duration;
+        }
+    }
+
+    /**
+     * Draws each still-visible {@link Message} centered horizontally, stacked
+     * upward from just below the crosshair area, in its own color.
+     */
+    public void renderMessages(List<Message> messages, float aspectRatio) {
+        if (messages.isEmpty()) return;
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        float size = 0.04f;
+        float lineHeight = 0.055f;
+        float bottomY = 0.12f;
+        for (Message m : messages) {
+            if (m.isExpired()) continue;
+            text.begin();
+            float width = text.measure(m.text, size);
+            text.add(m.text, -width / 2f, bottomY, size);
+            text.render(hudTransform, m.color);
+            bottomY += lineHeight;
+        }
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Draws a single left-aligned line of text (e.g. the F3 debug overlay). */
+    public void drawTextLeft(String value, float x, float bottomY, float size, Vector4f color, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        text.begin();
+        text.add(value, x, bottomY, size);
+        text.render(hudTransform, color);
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
     private void addQuad(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
                           float minX, float minY, float maxX, float maxY, float[] uv) {
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
@@ -396,7 +449,7 @@ public class Hud {
         hotbarHighlight.destroy();
         hotbarBlockIcons.destroy();
         hotbarItemIcon.destroy();
-        hotbarCounts.destroy();
+        text.destroy();
         statBarBackground.destroy();
         statBarFill.destroy();
         durabilityBarBackground.destroy();

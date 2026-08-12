@@ -7,30 +7,135 @@ import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
 import static org.lwjgl.opengl.GL13.glActiveTexture;
 
 /**
- * A tiny procedurally-generated strip of 10 tiles holding the digits 0-9,
- * for the HUD's inventory-count text. Split out from {@link TextureAtlas}
- * so the block atlas only has to hold block art - digits are neither a
- * block nor an inventory item, just HUD text, so they get their own
- * minimal strip rather than sharing space with either.
+ * A procedurally-generated pixel-font atlas covering the full printable ASCII
+ * range (32-126), laid out on a 16x6 grid of 16x16 pixel tiles (256x96 total).
+ * Split out from {@link TextureAtlas} so the block atlas only has to hold
+ * block art - glyphs are neither a block nor an inventory item, just HUD text,
+ * so they get their own sheet rather than sharing space with either.
+ * <p>
+ * Glyphs are the classic 5x7 pixel font: each is five "column" bytes, one per
+ * pixel column, where bit 0 of a byte is the glyph's top row. Painting is 2x
+ * upscaled into its tile, preserving the blocky nearest-neighbor look shared
+ * by every other texture in the game.
  */
 public class FontAtlas {
 
     public static final int TILE_PX = 16;
-    public static final int DIGIT_COUNT = 10;
-    public static final int ATLAS_W = TILE_PX * DIGIT_COUNT;
-    public static final int ATLAS_H = TILE_PX;
+    public static final int GRID_COLS = 16;
+    public static final int GRID_ROWS = 6;
+    public static final int ATLAS_W = GRID_COLS * TILE_PX;
+    public static final int ATLAS_H = GRID_ROWS * TILE_PX;
 
-    private static final String[] DIGIT_GLYPHS = {
-            "111101101101111", // 0
-            "010110010010111", // 1
-            "111001111100111", // 2
-            "111001111001111", // 3
-            "101101111001001", // 4
-            "111100111001111", // 5
-            "111100111101111", // 6
-            "111001010010010", // 7
-            "111101111101111", // 8
-            "111101111001111", // 9
+    public static final char FIRST_CHAR = ' ';
+    public static final char LAST_CHAR = '~';
+    public static final int CHAR_COUNT = LAST_CHAR - FIRST_CHAR + 1;
+
+    private static final int GLYPH_COLS = 5;
+    private static final int GLYPH_ROWS = 7;
+    private static final int SCALE = 2;
+
+    /**
+     * One entry per printable ASCII character (index = char - ' '). Each entry
+     * is five column bytes; bit {@code r} of column {@code c} is the pixel at
+     * (column c, row r) with bit 0 = top row. The classic 5x7 pixel-font
+     * table, the same one used by many embedded/retro projects.
+     */
+    private static final int[][] GLYPHS = {
+            {0x00, 0x00, 0x00, 0x00, 0x00}, // ' '
+            {0x00, 0x00, 0x5F, 0x00, 0x00}, // '!'
+            {0x00, 0x07, 0x00, 0x07, 0x00}, // '"'
+            {0x14, 0x7F, 0x14, 0x7F, 0x14}, // '#'
+            {0x24, 0x2A, 0x7F, 0x2A, 0x12}, // '$'
+            {0x23, 0x13, 0x08, 0x64, 0x62}, // '%'
+            {0x36, 0x49, 0x55, 0x22, 0x50}, // '&'
+            {0x00, 0x05, 0x03, 0x00, 0x00}, // '\''
+            {0x00, 0x1C, 0x22, 0x41, 0x00}, // '('
+            {0x00, 0x41, 0x22, 0x1C, 0x00}, // ')'
+            {0x14, 0x08, 0x3E, 0x08, 0x14}, // '*'
+            {0x08, 0x08, 0x3E, 0x08, 0x08}, // '+'
+            {0x00, 0x50, 0x30, 0x00, 0x00}, // ','
+            {0x08, 0x08, 0x08, 0x08, 0x08}, // '-'
+            {0x00, 0x60, 0x60, 0x00, 0x00}, // '.'
+            {0x20, 0x10, 0x08, 0x04, 0x02}, // '/'
+            {0x3E, 0x51, 0x49, 0x45, 0x3E}, // '0'
+            {0x00, 0x42, 0x7F, 0x40, 0x00}, // '1'
+            {0x42, 0x61, 0x51, 0x49, 0x46}, // '2'
+            {0x21, 0x41, 0x45, 0x4B, 0x31}, // '3'
+            {0x18, 0x14, 0x12, 0x7F, 0x10}, // '4'
+            {0x27, 0x45, 0x45, 0x45, 0x39}, // '5'
+            {0x3C, 0x4A, 0x49, 0x49, 0x30}, // '6'
+            {0x01, 0x71, 0x09, 0x05, 0x03}, // '7'
+            {0x36, 0x49, 0x49, 0x49, 0x36}, // '8'
+            {0x06, 0x49, 0x49, 0x29, 0x1E}, // '9'
+            {0x00, 0x36, 0x36, 0x00, 0x00}, // ':'
+            {0x00, 0x56, 0x36, 0x00, 0x00}, // ';'
+            {0x08, 0x14, 0x22, 0x41, 0x00}, // '<'
+            {0x14, 0x14, 0x14, 0x14, 0x14}, // '='
+            {0x00, 0x41, 0x22, 0x14, 0x08}, // '>'
+            {0x02, 0x01, 0x51, 0x09, 0x06}, // '?'
+            {0x32, 0x49, 0x79, 0x41, 0x3E}, // '@'
+            {0x7E, 0x11, 0x11, 0x11, 0x7E}, // 'A'
+            {0x7F, 0x49, 0x49, 0x49, 0x36}, // 'B'
+            {0x3E, 0x41, 0x41, 0x41, 0x22}, // 'C'
+            {0x7F, 0x41, 0x41, 0x22, 0x1C}, // 'D'
+            {0x7F, 0x49, 0x49, 0x49, 0x41}, // 'E'
+            {0x7F, 0x09, 0x09, 0x09, 0x01}, // 'F'
+            {0x3E, 0x41, 0x49, 0x49, 0x7A}, // 'G'
+            {0x7F, 0x08, 0x08, 0x08, 0x7F}, // 'H'
+            {0x00, 0x41, 0x7F, 0x41, 0x00}, // 'I'
+            {0x20, 0x40, 0x41, 0x3F, 0x01}, // 'J'
+            {0x7F, 0x08, 0x14, 0x22, 0x41}, // 'K'
+            {0x7F, 0x40, 0x40, 0x40, 0x40}, // 'L'
+            {0x7F, 0x02, 0x0C, 0x02, 0x7F}, // 'M'
+            {0x7F, 0x04, 0x08, 0x10, 0x7F}, // 'N'
+            {0x3E, 0x41, 0x41, 0x41, 0x3E}, // 'O'
+            {0x7F, 0x09, 0x09, 0x09, 0x06}, // 'P'
+            {0x3E, 0x41, 0x51, 0x21, 0x5E}, // 'Q'
+            {0x7F, 0x09, 0x19, 0x29, 0x46}, // 'R'
+            {0x46, 0x49, 0x49, 0x49, 0x31}, // 'S'
+            {0x01, 0x01, 0x7F, 0x01, 0x01}, // 'T'
+            {0x3F, 0x40, 0x40, 0x40, 0x3F}, // 'U'
+            {0x1F, 0x20, 0x40, 0x20, 0x1F}, // 'V'
+            {0x3F, 0x40, 0x38, 0x40, 0x3F}, // 'W'
+            {0x63, 0x14, 0x08, 0x14, 0x63}, // 'X'
+            {0x07, 0x08, 0x70, 0x08, 0x07}, // 'Y'
+            {0x61, 0x51, 0x49, 0x45, 0x43}, // 'Z'
+            {0x00, 0x7F, 0x41, 0x41, 0x00}, // '['
+            {0x02, 0x04, 0x08, 0x10, 0x20}, // '\\'
+            {0x00, 0x41, 0x41, 0x7F, 0x00}, // ']'
+            {0x04, 0x02, 0x01, 0x02, 0x04}, // '^'
+            {0x40, 0x40, 0x40, 0x40, 0x40}, // '_'
+            {0x00, 0x01, 0x02, 0x04, 0x00}, // '`'
+            {0x20, 0x54, 0x54, 0x54, 0x78}, // 'a'
+            {0x7F, 0x48, 0x44, 0x44, 0x38}, // 'b'
+            {0x38, 0x44, 0x44, 0x44, 0x20}, // 'c'
+            {0x38, 0x44, 0x44, 0x48, 0x7F}, // 'd'
+            {0x38, 0x54, 0x54, 0x54, 0x18}, // 'e'
+            {0x08, 0x7E, 0x09, 0x01, 0x02}, // 'f'
+            {0x0C, 0x52, 0x52, 0x52, 0x3E}, // 'g'
+            {0x7F, 0x08, 0x04, 0x04, 0x78}, // 'h'
+            {0x00, 0x44, 0x7D, 0x40, 0x00}, // 'i'
+            {0x20, 0x40, 0x44, 0x3D, 0x00}, // 'j'
+            {0x7F, 0x10, 0x28, 0x44, 0x00}, // 'k'
+            {0x00, 0x41, 0x7F, 0x40, 0x00}, // 'l'
+            {0x7C, 0x04, 0x18, 0x04, 0x78}, // 'm'
+            {0x7C, 0x08, 0x04, 0x04, 0x78}, // 'n'
+            {0x38, 0x44, 0x44, 0x44, 0x38}, // 'o'
+            {0x7C, 0x14, 0x14, 0x14, 0x08}, // 'p'
+            {0x08, 0x14, 0x14, 0x18, 0x7C}, // 'q'
+            {0x7C, 0x08, 0x04, 0x04, 0x08}, // 'r'
+            {0x48, 0x54, 0x54, 0x54, 0x20}, // 's'
+            {0x04, 0x3F, 0x44, 0x40, 0x20}, // 't'
+            {0x3C, 0x40, 0x40, 0x20, 0x7C}, // 'u'
+            {0x1C, 0x20, 0x40, 0x20, 0x1C}, // 'v'
+            {0x3C, 0x40, 0x30, 0x40, 0x3C}, // 'w'
+            {0x44, 0x28, 0x10, 0x28, 0x44}, // 'x'
+            {0x0C, 0x50, 0x50, 0x50, 0x3C}, // 'y'
+            {0x44, 0x64, 0x54, 0x4C, 0x44}, // 'z'
+            {0x00, 0x08, 0x36, 0x41, 0x00}, // '{'
+            {0x00, 0x00, 0x7F, 0x00, 0x00}, // '|'
+            {0x00, 0x41, 0x36, 0x08, 0x00}, // '}'
+            {0x08, 0x04, 0x08, 0x10, 0x08}, // '~'
     };
 
     private int textureId;
@@ -39,34 +144,32 @@ public class FontAtlas {
         textureId = GLTexture.upload(buildImage());
     }
 
-    /** Builds the CPU-side strip image without touching the GPU - split out so tooling/tests can inspect the art directly. */
+    /** Builds the CPU-side atlas image without touching the GPU - split out so tooling/tests can inspect the art directly. */
     public BufferedImage buildImage() {
         BufferedImage image = new BufferedImage(ATLAS_W, ATLAS_H, BufferedImage.TYPE_INT_ARGB);
-        for (int d = 0; d < DIGIT_COUNT; d++) {
-            paintDigit(image, d, DIGIT_GLYPHS[d]);
+        for (int i = 0; i < CHAR_COUNT; i++) {
+            paintGlyph(image, i, GLYPHS[i]);
         }
         return image;
     }
 
     /**
-     * Draws a digit from a 3x5 bitmap (each glyph string is 15 chars, row-major,
-     * '1' = filled), scaled up ~3x and centered in its tile, on a transparent
-     * background - a compact enough pixel font to read at small HUD sizes.
+     * Paints one glyph, 2x upscaled and centered in its 16x16 tile, on a
+     * transparent background. Glyphs are stored column-major (see {@link #GLYPHS}):
+     * bit {@code r} of column {@code c} is the pixel at row {@code r}.
      */
-    private void paintDigit(BufferedImage img, int digit, String glyph) {
-        int ox = digit * TILE_PX;
-        int scale = 3;
-        int glyphPxW = 3 * scale;
-        int glyphPxH = 5 * scale;
-        int offX = (TILE_PX - glyphPxW) / 2;
-        int offY = (TILE_PX - glyphPxH) / 2;
-        for (int row = 0; row < 5; row++) {
-            for (int col = 0; col < 3; col++) {
-                if (glyph.charAt(row * 3 + col) != '1') continue;
-                for (int sy = 0; sy < scale; sy++) {
-                    for (int sx = 0; sx < scale; sx++) {
-                        int x = ox + offX + col * scale + sx;
-                        int y = offY + row * scale + sy;
+    private void paintGlyph(BufferedImage img, int glyphIndex, int[] column) {
+        int ox = (glyphIndex % GRID_COLS) * TILE_PX;
+        int oy = (glyphIndex / GRID_COLS) * TILE_PX;
+        int offX = (TILE_PX - GLYPH_COLS * SCALE) / 2;
+        int offY = (TILE_PX - GLYPH_ROWS * SCALE) / 2;
+        for (int row = 0; row < GLYPH_ROWS; row++) {
+            for (int col = 0; col < GLYPH_COLS; col++) {
+                if ((column[col] & (1 << row)) == 0) continue;
+                for (int sy = 0; sy < SCALE; sy++) {
+                    for (int sx = 0; sx < SCALE; sx++) {
+                        int x = ox + offX + col * SCALE + sx;
+                        int y = oy + offY + row * SCALE + sy;
                         img.setRGB(x, y, 0xFFFFFFFF);
                     }
                 }
@@ -79,13 +182,24 @@ public class FontAtlas {
         glBindTexture(GL_TEXTURE_2D, textureId);
     }
 
-    /** Returns {u0, v0, u1, v1} for the given digit (0-9), inset slightly to avoid edge bleeding. */
-    public float[] getUV(int digit) {
-        int d = Math.max(0, Math.min(9, digit));
-        float inset = 0.02f / DIGIT_COUNT;
-        float u0 = (float) d / DIGIT_COUNT + inset;
-        float u1 = (float) (d + 1) / DIGIT_COUNT - inset;
-        return new float[]{u0, 0f, u1, 1f};
+    /** Returns {u0, v0, u1, v1} for the given printable ASCII character, inset slightly to avoid edge bleeding. */
+    public float[] getUV(char c) {
+        return getUV((int) c);
+    }
+
+    /** Returns {u0, v0, u1, v1} for the given ASCII code (clamped to the printable range 32-126), inset to avoid edge bleeding. */
+    public float[] getUV(int asciiCode) {
+        int c = Math.max((int) FIRST_CHAR, Math.min((int) LAST_CHAR, asciiCode));
+        int index = c - (int) FIRST_CHAR;
+        int col = index % GRID_COLS;
+        int row = index / GRID_COLS;
+        float insetU = 0.02f / GRID_COLS;
+        float insetV = 0.02f / GRID_ROWS;
+        float u0 = (float) col / GRID_COLS + insetU;
+        float v0 = (float) row / GRID_ROWS + insetV;
+        float u1 = (float) (col + 1) / GRID_COLS - insetU;
+        float v1 = (float) (row + 1) / GRID_ROWS - insetV;
+        return new float[]{u0, v0, u1, v1};
     }
 
     public void destroy() {

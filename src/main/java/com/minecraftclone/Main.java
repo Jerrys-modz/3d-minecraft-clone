@@ -16,12 +16,15 @@ import com.minecraftclone.world.World;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
+import org.joml.Vector4f;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -36,7 +39,8 @@ import static org.lwjgl.opengl.GL11.*;
  * whether it's even possible depend on the selected tool - see {@link
  * com.minecraftclone.world.Mining}), Right-click to place the selected block
  * (or eat it, if it's food), C to craft the selected item from its recipe,
- * 1-9 or scroll wheel to pick a block, Esc to release the mouse cursor.
+ * 1-9 or scroll wheel to pick a block, F3 to toggle the on-screen debug
+ * overlay, Esc to release the mouse cursor.
  */
 public class Main {
 
@@ -61,6 +65,13 @@ public class Main {
 
     private static final int APPLE_DROP_CHANCE = 8;    // 1 in 8 leaves broken also yield an apple
     private static final int BERRIES_PER_BUSH = 2;
+
+    private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
+
+    /** Queues a transient on-screen message (rendered via {@link Hud#renderMessages}). */
+    private static void showMessage(List<Hud.Message> messages, String text, Vector4f color, float duration) {
+        messages.add(new Hud.Message(text, color, duration));
+    }
 
     public static void main(String[] args) {
         new Main().run();
@@ -106,7 +117,9 @@ public class Main {
         Player player = new Player();
         player.spawn(world, 0.5f, 0.5f);
 
-        Hud hud = new Hud(lineShader, hudShader);
+        Hud hud = new Hud(lineShader, hudShader, font);
+        List<Hud.Message> messages = new ArrayList<>();
+        boolean[] showDebug = {false};
 
         window.setCursorCaptured(true);
         boolean[] cursorCaptured = {true};
@@ -119,7 +132,7 @@ public class Main {
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl sprint, F fly toggle,");
         System.out.println("          hold Left-click to mine (speed/possibility depends on your tool),");
         System.out.println("          Right-click place (or eat, if selected item is food),");
-        System.out.println("          C craft selected item, 1-9/scroll select block, Esc release mouse.");
+        System.out.println("          C craft selected item, 1-9/scroll select block, F3 debug, Esc release mouse.");
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -155,6 +168,9 @@ public class Main {
                 window.setCursorCaptured(cursorCaptured[0]);
                 input.resetMouseDelta();
             }
+            if (input.isKeyJustPressed(GLFW_KEY_F3)) {
+                showDebug[0] = !showDebug[0];
+            }
             boolean screenshotRequested = input.isKeyJustPressed(GLFW_KEY_F2);
 
             if (cursorCaptured[0]) {
@@ -165,9 +181,18 @@ public class Main {
 
             if (player.getStats().isDead()) {
                 System.out.println("You died. Respawning...");
+                showMessage(messages, "You died!", new Vector4f(0.9f, 0.25f, 0.25f, 1f), 3.0f);
                 player.getInventory().clear();
                 player.getDurability().reset();
                 player.respawn(world, 0.5f, 0.5f);
+            }
+
+            // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                messages.get(i).age += dt;
+                if (messages.get(i).isExpired()) {
+                    messages.remove(i);
+                }
             }
 
             // Periodically flush edits to disk so a crash doesn't lose much progress
@@ -193,6 +218,7 @@ public class Main {
                 BlockType selected = HOTBAR[selectedSlot[0]];
                 if (Crafting.craft(player.getInventory(), selected)) {
                     System.out.println("Crafted " + selected + " (now have " + player.getInventory().getCount(selected) + ")");
+                    showMessage(messages, "Crafted " + selected, new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
                 }
             }
 
@@ -224,6 +250,8 @@ public class Main {
                     if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
                         player.getInventory().remove(heldItem, 1);
                         System.out.println("Your " + heldItem + " broke!");
+                        showMessage(messages, "Your " + heldItem + " broke!",
+                                new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
                     }
                 }
 
@@ -265,12 +293,25 @@ public class Main {
                 hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction);
             }
             hud.renderCrosshair(window.getAspectRatio());
-            hud.renderHotbar(atlas, itemTextures, font, player.getDurability(), HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
+            hud.renderHotbar(atlas, itemTextures, player.getDurability(), HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
             hud.renderStatusBars(
                     player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
                     player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
                     player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
                     HOTBAR.length, window.getAspectRatio());
+            hud.renderMessages(messages, window.getAspectRatio());
+            if (showDebug[0]) {
+                Vector3f pos = player.getPosition();
+                float aspect = window.getAspectRatio();
+                float textSize = 0.035f;
+                float y = 0.95f;
+                float step = 0.052f;
+                hud.drawTextLeft("FPS: " + timer.getFps(), -0.95f, y, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format("XYZ: %.1f / %.1f / %.1f", pos.x, pos.y, pos.z),
+                        -0.95f, y - step, textSize, WHITE, aspect);
+                hud.drawTextLeft("Selected: " + HOTBAR[selectedSlot[0]],
+                        -0.95f, y - 2f * step, textSize, WHITE, aspect);
+            }
 
             frameCount++;
             boolean autoTestShot = autoTest && frameCount >= autoTestFrames;

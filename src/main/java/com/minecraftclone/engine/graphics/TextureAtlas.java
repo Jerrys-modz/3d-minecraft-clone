@@ -14,8 +14,8 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
  * unlike items, blocks genuinely benefit from living on one shared sheet
  * since chunk meshing batches many block faces into a single draw call.
  * (Inventory-only items have their own individual PNG files instead - see
- * {@link ItemTextures} - and the HUD's digit font lives in its own tiny
- * strip - see {@link FontAtlas} - since neither is a block.)
+ * {@link ItemTextures} - and the HUD's text font lives in its own small
+ * atlas - see {@link FontAtlas} - since neither is a block.)
  * <p>
  * Tile indices match {@link com.minecraftclone.world.BlockType}'s
  * topTile/sideTile/bottomTile fields. Not every tile in the 8x8 grid is

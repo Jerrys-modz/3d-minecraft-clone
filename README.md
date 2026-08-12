@@ -18,7 +18,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom), distance fog, and cross-shaped "billboard" geometry for non-cube decoration (grass/flowers/bushes) with alpha-cutout transparency.
 - **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a no-clip flight mode.
 - **Block interaction**: raycast-based block breaking/placing (reach limited to 6 blocks) with a wireframe outline on the targeted block, gated by a real inventory - breaking a block adds it to your count, placing spends one, and bedrock is unbreakable. Starts empty, so you gather before you build.
-- **On-screen HUD**: a hotbar (35 slots) with block icons batched from the game's shared texture atlas and item icons (food/tools) drawn from their own individual PNGs, live inventory counts drawn with a tiny procedural pixel font (its own small atlas, no external font/text-rendering library), a highlight border on the selected slot, and health/hunger/stamina bars above it.
+- **On-screen HUD**: a hotbar (35 slots) with block icons batched from the game's shared texture atlas and item icons (food/tools) drawn from their own individual PNGs, live inventory counts drawn with a tiny procedural pixel font (its own small atlas, no external font/text-rendering library), a highlight border on the selected slot, health/hunger/stamina bars above it, transient on-screen messages (death, crafting, tool breakage), and an `F3`-toggled debug overlay (FPS, position, selected item).
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, torches, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 
 ## Requirements
@@ -66,6 +66,7 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 | `C` | Craft the selected item from its recipe, if you have the ingredients |
 | `1`-`9` / mouse wheel | Select hotbar block |
 | `F2` | Save a screenshot to `screenshot.png` |
+| `F3` | Toggle the debug overlay (FPS / position / selected item) |
 | `Esc` | Release/recapture the mouse cursor |
 
 You start with an empty inventory - break blocks to collect them (they show up with a count on the hotbar) before you can place them elsewhere. Bedrock can't be broken.
@@ -97,7 +98,7 @@ Two different asset strategies, chosen per what actually benefits from each:
 
 - **Blocks** (`TextureAtlas`): generated procedurally into one shared 8×8 tile sheet at startup. Chunk meshing batches many blocks into a single draw call, so sharing one sheet (and one texture bind) across all of them matters for performance.
 - **Items** (`ItemTextures`): food and tools are inventory-only and never batch together the way block faces do, so each one is a real, individual 16×16 PNG file committed under `src/main/resources/items/`, loaded from the classpath at runtime. They were produced once by [`GenerateItemTextures`](src/main/java/com/minecraftclone/tools/GenerateItemTextures.java) - a small offline tool, not something the game runs itself - and are checked into the repo like any other asset; re-run that tool and commit the results if an item's art ever needs to change.
-- **HUD digit font** (`FontAtlas`): the 0-9 pixel font used for inventory counts gets its own tiny procedurally-generated strip, separate from both of the above, since it's neither a block nor an item.
+- **HUD font** (`FontAtlas` + `TextRenderer`): a full printable-ASCII (32-126) 5x7 pixel font, procedurally generated into its own sheet, is used for every piece of on-screen text: inventory counts, transient messages (death/craft/tool-break), and the `F3` debug overlay. Like the block atlas, it has its own tiny atlas separate from blocks and items since it's neither.
 
 All three share one GL upload helper (`GLTexture`) and the same nearest-neighbor filtering, so the blocky pixel-art look is consistent everywhere.
 
@@ -121,7 +122,7 @@ src/main/resources/items/      # Individual item PNGs (see Textures below)
 
 This is a compact, from-scratch clone meant to be readable end-to-end, not a feature-complete recreation. Some deliberate simplifications:
 
-- Text rendering is limited to the digits 0-9 (inventory counts) via a hand-drawn pixel font baked into its own tiny procedural atlas (separate from both the block atlas and the item PNGs) - there's no general text renderer, so FPS/debug info still only goes to the console, and there's no on-screen death/damage messaging beyond the bars themselves (check the console for a death notice).
+- Text rendering now covers the full printable ASCII set via a single 5x7 pixel font (see Textures) - inventory counts, on-screen death/craft/tool-break messages, and the F3 debug overlay (FPS/position/selected item) all flow through it. It's still just lines of text, though: there's no layout engine or multi-line UI, so a real recipe book, chat-style log, or death/damage scrolling message list would need building on top of it rather than existing yet.
 - Crafting is a small fixed table, not a grid - there's no way to combine arbitrary items. Pickaxes, axes and swords exist with four material tiers each and now wear out with use (see Mining & tools), but there's no repairing/anvil yet - a worn-out tool is just gone - and there's nothing for a sword to fight (no mobs) or a shovel to dig faster (no shovel).
 - No mobs (hostile or otherwise) - night is darker and a real signal, but nothing actually comes looking for you yet. No sleeping/beds to skip it either.
 - Water and leaves are rendered as solid (opaque) blocks rather than alpha-blended, keeping the renderer single-pass. (Grass/flowers/berry bushes are the exception - they're cross-shaped and alpha-cutout, not alpha-blended. Lava is opaque too, despite being a hazard.)
@@ -135,7 +136,7 @@ This is a compact, from-scratch clone meant to be readable end-to-end, not a fea
 
 This project is being grown incrementally, loosely following [Survivalcraft](https://survivalcraft.net/)'s own real-world update history as a backlog of features to work through - not chasing parity with any specific version, just using it as a source of "what's next" in roughly the order the genre itself matured. Roughly where things stand against that list:
 
-**Done (in some form):** screenshots (well, `F2`)/tools/recipaedia (this README) → **1.1**; snow → **1.2**; furnace-free ore tools → partial **1.3**; food/eating → **1.5**; buckets/water physics/magma → partial **1.8**; diamonds/flat-ish terrain → partial **1.12**; saplings-ish (trees regrow via world-gen, not planting) → partial **1.13**; cacti → **1.15**; rain-free weather is still open but thunderstorms/pumpkins are on the list → **1.18** (partial); creative-adjacent options via the hotbar → partial **1.20**; survival/farming-adjacent (no crops yet) → partial **1.22**. Also done outside that list: tool **durability** (uses-based wear per tool, with a HUD wear indicator - no repair/anvil yet); **torches** (a real, if distance-based rather than flood-filled, local light source that overrides the night-time dimmer - see Notes & Simplifications).
+**Done (in some form):** screenshots (well, `F2`)/tools/recipaedia (this README) → **1.1**; snow → **1.2**; furnace-free ore tools → partial **1.3**; food/eating → **1.5**; buckets/water physics/magma → partial **1.8**; diamonds/flat-ish terrain → partial **1.12**; saplings-ish (trees regrow via world-gen, not planting) → partial **1.13**; cacti → **1.15**; rain-free weather is still open but thunderstorms/pumpkins are on the list → **1.18** (partial); creative-adjacent options via the hotbar → partial **1.20**; survival/farming-adjacent (no crops yet) → partial **1.22**. Also done outside that list: tool **durability** (uses-based wear per tool, with a HUD wear indicator - no repair/anvil yet); **torches** (a real, if distance-based rather than flood-filled, local light source that overrides the night-time dimmer - see Notes & Simplifications); an on-screen **text renderer** (full-ASCII pixel font powering inventory counts, transient messages and the F3 debug overlay - see Notes & Simplifications for what it doesn't yet do).
 
 **Not yet, roughly in the order they'd naturally build on what exists:**
 - A brighter full-cube **lamp** to go with torches, for lighting up a whole room without a forest of sticks poking out of the walls.
@@ -145,7 +146,7 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 - **Farming** - crops, planting/growing, not just foraging what world-gen placed.
 - **Boats**, **horse/animal riding**.
 - **Electricity**, **clothes/armor**, **temperature effects**.
-- A proper on-screen **text renderer** (currently only digits 0-9 exist) - would unblock a real recipe book, death/damage messages, and debug info in-game instead of the console.
+- A real **recipe book / on-screen UI** now that a text renderer exists - crafting/message logs, death/damage messaging, and debug info are in-game (see Features), but there's no scrollable/laid-out panel yet, and no map/inventory screen beyond the hotbar.
 
 If you've got a specific one of these in mind, just say which and it jumps the queue.
 
