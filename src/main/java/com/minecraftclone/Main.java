@@ -2,7 +2,9 @@ package com.minecraftclone;
 
 import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.Player;
+import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
@@ -16,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Random;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -26,7 +29,8 @@ import static org.lwjgl.opengl.GL11.*;
  * <p>
  * Controls: WASD to move, mouse to look, Space to jump, Left-Ctrl to sprint,
  * F to toggle flight, Left-click to break a block, Right-click to place the
- * selected block, 1-9 or scroll wheel to pick a block, Esc to release the
+ * selected block (or eat it, if it's food), C to craft the selected item
+ * from its recipe, 1-9 or scroll wheel to pick a block, Esc to release the
  * mouse cursor.
  */
 public class Main {
@@ -43,8 +47,11 @@ public class Main {
             BlockType.GRAVEL, BlockType.SNOW,
             BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
             BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
-            BlockType.LAVA
+            BlockType.LAVA, BlockType.GLASS, BlockType.APPLE, BlockType.BERRIES
     };
+
+    private static final int APPLE_DROP_CHANCE = 8;    // 1 in 8 leaves broken also yield an apple
+    private static final int BERRIES_PER_BUSH = 2;
 
     public static void main(String[] args) {
         new Main().run();
@@ -92,11 +99,12 @@ public class Main {
         boolean[] cursorCaptured = {true};
 
         int[] selectedSlot = {0};
-
-        Vector3f fogColor = new Vector3f(0.53f, 0.81f, 0.92f);
+        Random loot = new Random();
+        DayNightCycle dayNightCycle = new DayNightCycle();
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl sprint, F fly toggle,");
-        System.out.println("          Left-click break, Right-click place, 1-9/scroll select block, Esc release mouse.");
+        System.out.println("          Left-click break, Right-click place (or eat, if selected item is food),");
+        System.out.println("          C craft selected item, 1-9/scroll select block, Esc release mouse.");
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -107,6 +115,9 @@ public class Main {
         boolean autoTest = System.getenv("MCCLONE_AUTOTEST") != null;
         int autoTestFrames = autoTest ? Integer.parseInt(System.getenv().getOrDefault("MCCLONE_AUTOTEST_FRAMES", "60")) : 0;
         String autoTestPath = System.getenv().getOrDefault("MCCLONE_AUTOTEST_PATH", "screenshot.png");
+        if (System.getenv("MCCLONE_AUTOTEST_TIME") != null) {
+            dayNightCycle.setTime(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_TIME")));
+        }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
 
@@ -122,6 +133,7 @@ public class Main {
 
             float dt = timer.getDeltaTime();
             timer.updateFps(dt);
+            dayNightCycle.update(dt);
 
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 cursorCaptured[0] = !cursorCaptured[0];
@@ -135,6 +147,12 @@ public class Main {
             }
 
             world.update(player.getPosition().x, player.getPosition().z);
+
+            if (player.getStats().isDead()) {
+                System.out.println("You died. Respawning...");
+                player.getInventory().clear();
+                player.respawn(world, 0.5f, 0.5f);
+            }
 
             // Periodically flush edits to disk so a crash doesn't lose much progress
             // (chunks are also always saved on a clean exit, see below).
@@ -155,6 +173,13 @@ public class Main {
                 selectedSlot[0] = Math.floorMod(selectedSlot[0] - (int) Math.signum(scroll), HOTBAR.length);
             }
 
+            if (input.isKeyJustPressed(GLFW_KEY_C)) {
+                BlockType selected = HOTBAR[selectedSlot[0]];
+                if (Crafting.craft(player.getInventory(), selected)) {
+                    System.out.println("Crafted " + selected + " (now have " + player.getInventory().getCount(selected) + ")");
+                }
+            }
+
             Raycaster.Hit hit = null;
             if (cursorCaptured[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
@@ -163,19 +188,33 @@ public class Main {
                     BlockType broken = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                     if (broken != BlockType.BEDROCK) { // bedrock is unbreakable, like vanilla
                         world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
-                        player.getInventory().add(broken, 1);
+                        if (broken == BlockType.BERRY_BUSH) {
+                            // Harvesting a bush yields berries, not the bush itself - it doesn't regrow.
+                            player.getInventory().add(BlockType.BERRIES, BERRIES_PER_BUSH);
+                        } else {
+                            player.getInventory().add(broken, 1);
+                            if (broken == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
+                                player.getInventory().add(BlockType.APPLE, 1);
+                            }
+                        }
                     }
                 }
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
-                    Vector3i p = hit.placePos;
                     BlockType selected = HOTBAR[selectedSlot[0]];
-                    if (!intersectsPlayer(player, p) && player.getInventory().remove(selected, 1)) {
-                        world.setBlock(p.x, p.y, p.z, selected);
+                    if (selected.isEdible()) {
+                        player.eat(selected);
+                    } else {
+                        Vector3i p = hit.placePos;
+                        if (!intersectsPlayer(player, p) && player.getInventory().remove(selected, 1)) {
+                            world.setBlock(p.x, p.y, p.z, selected);
+                        }
                     }
                 }
             }
 
             // --- Render ---
+            Vector3f skyColor = dayNightCycle.getSkyColor();
+            window.setClearColor(skyColor.x, skyColor.y, skyColor.z, 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             Matrix4f projection = player.getCamera().getProjectionMatrix(FOV_DEGREES, window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
@@ -185,9 +224,10 @@ public class Main {
             chunkShader.setUniform("projection", projection);
             chunkShader.setUniform("view", view);
             chunkShader.setUniform("atlas", 0);
-            chunkShader.setUniform("fogColor", fogColor);
+            chunkShader.setUniform("fogColor", skyColor);
             chunkShader.setUniform("fogStart", (world.getRenderDistance() - 2) * 16f);
             chunkShader.setUniform("fogEnd", world.getRenderDistance() * 16f);
+            chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness());
             atlas.bind();
             world.render(chunkShader);
             chunkShader.unbind();
@@ -197,6 +237,11 @@ public class Main {
             }
             hud.renderCrosshair(window.getAspectRatio());
             hud.renderHotbar(atlas, HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
+            hud.renderStatusBars(
+                    player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
+                    player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
+                    player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
+                    HOTBAR.length, window.getAspectRatio());
 
             frameCount++;
             boolean autoTestShot = autoTest && frameCount >= autoTestFrames;

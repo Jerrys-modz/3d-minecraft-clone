@@ -11,8 +11,9 @@ import static org.lwjgl.glfw.GLFW.*;
 
 /**
  * First-person player controller: walking/flying physics, AABB-vs-voxel
- * collision resolved one axis at a time, mouse look, and a couple of
- * quality-of-life extras (jump, sprint, fly toggle).
+ * collision resolved one axis at a time, mouse look, survival stats
+ * (health/hunger/stamina), and a couple of quality-of-life extras (jump,
+ * sprint, fly toggle).
  */
 public class Player {
 
@@ -34,9 +35,11 @@ public class Player {
     private final Vector3f velocity = new Vector3f();
     private final Camera camera = new Camera();
     private final Inventory inventory = new Inventory();
+    private final PlayerStats stats = new PlayerStats();
 
     private boolean onGround = false;
     private boolean flying = false;
+    private float lastFallImpactSpeed = 0f;
 
     public void spawn(World world, float x, float z) {
         int surfaceY = world.getSurfaceHeight((int) Math.floor(x), (int) Math.floor(z));
@@ -45,12 +48,22 @@ public class Player {
         camera.setPosition(x, position.y + EYE_HEIGHT, z);
     }
 
+    /** Full respawn: stats and position reset, as if starting over (used after death). */
+    public void respawn(World world, float x, float z) {
+        spawn(world, x, z);
+        stats.reset();
+    }
+
     public Camera getCamera() {
         return camera;
     }
 
     public Inventory getInventory() {
         return inventory;
+    }
+
+    public PlayerStats getStats() {
+        return stats;
     }
 
     public Vector3f getPosition() {
@@ -65,11 +78,26 @@ public class Player {
         return flying;
     }
 
+    /** Attempts to eat one unit of {@code food} from the inventory. Returns false if it's not food or there's none held. */
+    public boolean eat(BlockType food) {
+        if (!food.isEdible()) return false;
+        if (!inventory.remove(food, 1)) return false;
+        stats.eat(food.foodValue);
+        return true;
+    }
+
     public void update(float dt, Input input, World world) {
         updateLook(input);
         updateFlyToggle(input);
-        updateMovement(dt, input, world);
+        boolean sprintingAndMoving = updateMovement(dt, input, world);
         camera.setPosition(position.x, position.y + EYE_HEIGHT, position.z);
+
+        boolean inLava = overlaps(world, aabbAt(position), BlockType.LAVA);
+        boolean submerged = world.getBlock(
+                (int) Math.floor(position.x), (int) Math.floor(position.y + EYE_HEIGHT), (int) Math.floor(position.z))
+                == BlockType.WATER;
+        stats.update(dt, inLava, submerged, sprintingAndMoving, lastFallImpactSpeed);
+        lastFallImpactSpeed = 0f;
     }
 
     private void updateLook(Input input) {
@@ -86,7 +114,8 @@ public class Player {
         }
     }
 
-    private void updateMovement(float dt, Input input, World world) {
+    /** Returns true if the player is sprinting and actually moving this frame (for stamina/hunger drain). */
+    private boolean updateMovement(float dt, Input input, World world) {
         Vector3f front = camera.getFrontFlat();
         Vector3f right = new Vector3f(-front.z, 0, front.x); // matches Camera.getRight()'s front-cross-up convention
 
@@ -96,13 +125,14 @@ public class Player {
         if (input.isKeyDown(GLFW_KEY_D)) { moveX += right.x; moveZ += right.z; }
         if (input.isKeyDown(GLFW_KEY_A)) { moveX -= right.x; moveZ -= right.z; }
 
+        boolean moving = (moveX * moveX + moveZ * moveZ) > 0.0001f;
         float len = (float) Math.sqrt(moveX * moveX + moveZ * moveZ);
-        if (len > 0.0001f) {
+        if (moving) {
             moveX /= len;
             moveZ /= len;
         }
 
-        boolean sprinting = input.isKeyDown(GLFW_KEY_LEFT_CONTROL);
+        boolean sprinting = input.isKeyDown(GLFW_KEY_LEFT_CONTROL) && stats.canSprint();
         float speed = flying ? FLY_SPEED : (sprinting ? SPRINT_SPEED : WALK_SPEED);
 
         velocity.x = moveX * speed;
@@ -123,6 +153,7 @@ public class Player {
         }
 
         moveAndCollide(world, velocity.x * dt, velocity.y * dt, velocity.z * dt);
+        return sprinting && moving;
     }
 
     private AABB aabbAt(Vector3f pos) {
@@ -152,6 +183,28 @@ public class Player {
         return false;
     }
 
+    /** True if any block of the given (non-collidable) type overlaps the box - used for lava/water hazard checks. */
+    private boolean overlaps(World world, AABB box, BlockType wanted) {
+        int minX = (int) Math.floor(box.minX);
+        int maxX = (int) Math.floor(box.maxX - 1e-4f);
+        int minY = (int) Math.floor(box.minY);
+        int maxY = (int) Math.floor(box.maxY - 1e-4f);
+        int minZ = (int) Math.floor(box.minZ);
+        int maxZ = (int) Math.floor(box.maxZ - 1e-4f);
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    if (world.getBlock(x, y, z) == wanted) {
+                        AABB blockBox = new AABB(x, y, z, x + 1, y + 1, z + 1);
+                        if (box.intersects(blockBox)) return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     /** Moves the player by (dx, dy, dz), resolving collisions one axis at a time. */
     private void moveAndCollide(World world, float dx, float dy, float dz) {
         onGround = false;
@@ -162,6 +215,7 @@ public class Player {
         if (collidesAt(world, movedY)) {
             if (dy < 0) {
                 onGround = true;
+                lastFallImpactSpeed = Math.max(lastFallImpactSpeed, -velocity.y);
             }
             velocity.y = 0;
             dy = 0;

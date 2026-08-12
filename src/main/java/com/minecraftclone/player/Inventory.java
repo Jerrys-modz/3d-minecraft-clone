@@ -36,4 +36,9 @@ public class Inventory {
         }
         return true;
     }
+
+    /** Empties the inventory entirely - used as the death penalty on respawn. */
+    public void clear() {
+        counts.clear();
+    }
 }

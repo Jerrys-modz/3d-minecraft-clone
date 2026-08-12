@@ -8,6 +8,7 @@ uniform sampler2D atlas;
 uniform vec3 fogColor;
 uniform float fogStart;
 uniform float fogEnd;
+uniform float ambientBrightness; // day/night dimming, see DayNightCycle
 
 out vec4 outColor;
 
@@ -17,7 +18,7 @@ void main() {
         discard;
     }
 
-    vec3 shaded = texColor.rgb * fragLight;
+    vec3 shaded = texColor.rgb * fragLight * ambientBrightness;
 
     float fogFactor = clamp((fragViewDistance - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
     vec3 finalColor = mix(shaded, fogColor, fogFactor);

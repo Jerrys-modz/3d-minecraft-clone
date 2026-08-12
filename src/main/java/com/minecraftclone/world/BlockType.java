@@ -3,7 +3,7 @@ package com.minecraftclone.world;
 /**
  * All placeable/generatable block types. Each entry defines which tile of
  * the procedural texture atlas is used for the top, side and bottom faces,
- * plus a few gameplay flags (solidity, transparency, cross-shape).
+ * plus a few gameplay flags (solidity, transparency, cross-shape, food value).
  * <p>
  * Atlas tile indices refer to {@link com.minecraftclone.engine.graphics.TextureAtlas}.
  */
@@ -28,7 +28,11 @@ public enum BlockType {
     LAVA(17, false, true, 20, 20, 20),
     TALL_GRASS(18, false, true, 21),
     FLOWER_RED(19, false, true, 22),
-    FLOWER_YELLOW(20, false, true, 23);
+    FLOWER_YELLOW(20, false, true, 23),
+    GLASS(21, true, false, 34, 34, 34),
+    BERRY_BUSH(22, false, true, 37),
+    APPLE(23, false, true, 35, 20),   // food: restores 20 hunger
+    BERRIES(24, false, true, 36, 10); // food: restores 10 hunger
 
     public final byte id;
     public final boolean solid;
@@ -37,9 +41,15 @@ public enum BlockType {
     public final int topTile;
     public final int sideTile;
     public final int bottomTile;
+    public final int foodValue;
 
     /** Full-cube block: distinct top/side/bottom textures, collides with the player. */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile) {
+        this(id, solid, transparent, topTile, sideTile, bottomTile, 0);
+    }
+
+    /** Full-cube block with a food value (not currently used - cubes aren't eaten - but kept symmetric). */
+    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue) {
         this.id = (byte) id;
         this.solid = solid;
         this.transparent = transparent;
@@ -47,10 +57,16 @@ public enum BlockType {
         this.topTile = topTile;
         this.sideTile = sideTile;
         this.bottomTile = bottomTile;
+        this.foodValue = foodValue;
     }
 
     /** Cross-shaped (billboard-X) decoration block, e.g. grass/flowers: one texture, never collides. */
     BlockType(int id, boolean solid, boolean transparent, int tile) {
+        this(id, solid, transparent, tile, 0);
+    }
+
+    /** Cross-shaped, edible item (apple/berries): never placed by the player, only eaten. */
+    BlockType(int id, boolean solid, boolean transparent, int tile, int foodValue) {
         this.id = (byte) id;
         this.solid = solid;
         this.transparent = transparent;
@@ -58,6 +74,7 @@ public enum BlockType {
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
+        this.foodValue = foodValue;
     }
 
     private static final BlockType[] BY_ID = new BlockType[values().length];
@@ -78,5 +95,9 @@ public enum BlockType {
     /** True if this block stops the player / blocks a raycast. */
     public boolean isCollidable() {
         return solid;
+    }
+
+    public boolean isEdible() {
+        return foodValue > 0;
     }
 }
