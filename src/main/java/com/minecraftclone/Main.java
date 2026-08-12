@@ -1,6 +1,8 @@
 package com.minecraftclone;
 
 import com.minecraftclone.engine.*;
+import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.MiningController;
@@ -9,6 +11,7 @@ import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.World;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -49,7 +52,7 @@ public class Main {
             BlockType.GRAVEL, BlockType.SNOW,
             BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
             BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
-            BlockType.LAVA, BlockType.GLASS, BlockType.APPLE, BlockType.BERRIES,
+            BlockType.LAVA, BlockType.GLASS, BlockType.TORCH, BlockType.APPLE, BlockType.BERRIES,
             BlockType.STICK,
             BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
             BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
@@ -83,6 +86,10 @@ public class Main {
 
         TextureAtlas atlas = new TextureAtlas();
         atlas.generate();
+        ItemTextures itemTextures = new ItemTextures();
+        itemTextures.generate();
+        FontAtlas font = new FontAtlas();
+        font.generate();
 
         Path saveDir = Paths.get(System.getenv().getOrDefault("MCCLONE_SAVE_DIR", "saves/world"));
         long seed = loadOrCreateSeed(saveDir);
@@ -159,6 +166,7 @@ public class Main {
             if (player.getStats().isDead()) {
                 System.out.println("You died. Respawning...");
                 player.getInventory().clear();
+                player.getDurability().reset();
                 player.respawn(world, 0.5f, 0.5f);
             }
 
@@ -211,12 +219,20 @@ public class Main {
                             player.getInventory().add(BlockType.APPLE, 1);
                         }
                     }
+
+                    // Wear down the tool that did the breaking; once its uses run out, it's gone.
+                    if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
+                        player.getInventory().remove(heldItem, 1);
+                        System.out.println("Your " + heldItem + " broke!");
+                    }
                 }
 
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
                     if (heldItem.isEdible()) {
                         player.eat(heldItem);
-                    } else {
+                    } else if (!heldItem.isItem) {
+                        // Pure inventory items (tools, and any future non-edible item)
+                        // have no world tile and can never be placed as a block.
                         Vector3i p = hit.placePos;
                         if (!intersectsPlayer(player, p) && player.getInventory().remove(heldItem, 1)) {
                             world.setBlock(p.x, p.y, p.z, heldItem);
@@ -249,7 +265,7 @@ public class Main {
                 hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction);
             }
             hud.renderCrosshair(window.getAspectRatio());
-            hud.renderHotbar(atlas, HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
+            hud.renderHotbar(atlas, itemTextures, font, player.getDurability(), HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
             hud.renderStatusBars(
                     player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
                     player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
@@ -279,6 +295,8 @@ public class Main {
         lineShader.destroy();
         hudShader.destroy();
         atlas.destroy();
+        itemTextures.destroy();
+        font.destroy();
         world.destroy();
         window.close();
     }

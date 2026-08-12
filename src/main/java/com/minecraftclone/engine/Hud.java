@@ -1,10 +1,14 @@
 package com.minecraftclone.engine;
 
+import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.IconMesh;
+import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.LineMesh;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
+import com.minecraftclone.player.ToolDurability;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Mining;
 import org.joml.Matrix4f;
 import org.joml.Vector3i;
 import org.joml.Vector4f;
@@ -32,6 +36,8 @@ public class Hud {
     private static final float HOTBAR_BOTTOM_MARGIN = 0.06f; // distance from the bottom edge to the slot row's bottom
     private static final float HOTBAR_PADDING = 0.015f;      // background panel padding beyond the slots
 
+    private static final float DURABILITY_BAR_HEIGHT = 0.008f; // thin wear strip along the bottom of a worn tool's icon
+
     private static final float STAT_BAR_HEIGHT = 0.022f;
     private static final float STAT_BAR_GAP = 0.007f;          // gap between stacked bars
     private static final float STAT_BAR_STACK_MARGIN = 0.014f; // gap between the bar stack and the hotbar panel below it
@@ -43,9 +49,13 @@ public class Hud {
     private final LineMesh cubeOutline = new LineMesh();
     private final LineMesh hotbarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh hotbarHighlight = new LineMesh(GL_LINES);
-    private final IconMesh hotbarIcons = new IconMesh();
+    private final IconMesh hotbarBlockIcons = new IconMesh();  // batched: all non-item slots, sampling the shared block atlas
+    private final IconMesh hotbarItemIcon = new IconMesh();    // reused per slot: each item has its own texture, so items can't batch
+    private final IconMesh hotbarCounts = new IconMesh();      // batched: every slot's inventory-count digits, sampling the font atlas
     private final LineMesh statBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh statBarFill = new LineMesh(GL_TRIANGLES);
+    private final LineMesh durabilityBarBackground = new LineMesh(GL_TRIANGLES);
+    private final LineMesh durabilityBarFill = new LineMesh(GL_TRIANGLES);
 
     private final Matrix4f identity = new Matrix4f();
     private final Matrix4f modelMatrix = new Matrix4f();
@@ -137,7 +147,8 @@ public class Hud {
         return slotCenterY() + HOTBAR_SLOT_SIZE / 2f + HOTBAR_PADDING;
     }
 
-    public void renderHotbar(TextureAtlas atlas, BlockType[] hotbar, Inventory inventory, int selectedSlot, float aspectRatio) {
+    public void renderHotbar(TextureAtlas atlas, ItemTextures itemTextures, FontAtlas font, ToolDurability durability,
+                              BlockType[] hotbar, Inventory inventory, int selectedSlot, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
 
         int count = hotbar.length;
@@ -179,19 +190,57 @@ public class Hud {
         hotbarHighlight.render();
         lineShader.unbind();
 
-        // Icons + count digits, batched into one textured draw call.
-        List<Float> vertices = new ArrayList<>();
-        List<Integer> indices = new ArrayList<>();
-        int[] vertexCounter = {0};
+        // Icons come from three separate texture sources, so they can't all
+        // batch into one draw call the way they used to: block icons still
+        // batch together (one shared atlas), each item icon needs its own
+        // individual bind+draw (its own PNG), and the count digits batch
+        // together again (one shared font strip).
+        List<Float> blockVertices = new ArrayList<>();
+        List<Integer> blockIndices = new ArrayList<>();
+        int[] blockVertexCounter = {0};
+
+        List<Float> countVertices = new ArrayList<>();
+        List<Integer> countIndices = new ArrayList<>();
+        int[] countVertexCounter = {0};
+
+        List<float[]> durabilityBars = new ArrayList<>(); // {cx, fraction} for worn tool slots only
+
+        float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
 
         for (int i = 0; i < count; i++) {
             float cx = slotCenterX(i, count);
-            float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
-            addQuad(vertices, indices, vertexCounter,
-                    cx - iconHalf, centerY - iconHalf, cx + iconHalf, centerY + iconHalf,
-                    atlas.getUV(hotbar[i].topTile));
+            BlockType type = hotbar[i];
 
-            int amount = inventory.getCount(hotbar[i]);
+            if (type.isItem) {
+                // Own texture, own draw call - can't be batched with the shared atlas.
+                float[] quadVerts = {
+                        cx - iconHalf, centerY - iconHalf, 0f, 1f,
+                        cx + iconHalf, centerY - iconHalf, 1f, 1f,
+                        cx + iconHalf, centerY + iconHalf, 1f, 0f,
+                        cx - iconHalf, centerY + iconHalf, 0f, 0f,
+                };
+                hotbarItemIcon.upload(quadVerts, QUAD_INDICES);
+
+                hudShader.bind();
+                hudShader.setUniform("transform", hudTransform);
+                hudShader.setUniform("atlas", 0);
+                itemTextures.bind(type);
+                hotbarItemIcon.render();
+                hudShader.unbind();
+            } else {
+                addQuad(blockVertices, blockIndices, blockVertexCounter,
+                        cx - iconHalf, centerY - iconHalf, cx + iconHalf, centerY + iconHalf,
+                        atlas.getUV(type.topTile));
+            }
+
+            if (Mining.isTool(type)) {
+                float fraction = durability.fraction(type);
+                if (fraction < 1f) {
+                    durabilityBars.add(new float[]{cx, fraction});
+                }
+            }
+
+            int amount = inventory.getCount(type);
             if (amount > 0) {
                 String text = Integer.toString(Math.min(amount, 999));
                 float digitSize = 0.032f;
@@ -202,27 +251,78 @@ public class Hud {
                 for (int c = 0; c < text.length(); c++) {
                     int digit = text.charAt(c) - '0';
                     float x = startX + c * (digitSize + digitGap);
-                    addQuad(vertices, indices, vertexCounter,
+                    addQuad(countVertices, countIndices, countVertexCounter,
                             x, y, x + digitSize, y + digitSize,
-                            atlas.getUV(TextureAtlas.digitTile(digit)));
+                            font.getUV(digit));
                 }
             }
         }
 
-        float[] vArray = new float[vertices.size()];
-        for (int i = 0; i < vArray.length; i++) vArray[i] = vertices.get(i);
-        int[] iArray = new int[indices.size()];
-        for (int i = 0; i < iArray.length; i++) iArray[i] = indices.get(i);
-        hotbarIcons.upload(vArray, iArray);
-
         hudShader.bind();
         hudShader.setUniform("transform", hudTransform);
         hudShader.setUniform("atlas", 0);
+
+        hotbarBlockIcons.upload(toFloatArray(blockVertices), toIntArray(blockIndices));
         atlas.bind();
-        hotbarIcons.render();
+        hotbarBlockIcons.render();
+
+        hotbarCounts.upload(toFloatArray(countVertices), toIntArray(countIndices));
+        font.bind();
+        hotbarCounts.render();
+
         hudShader.unbind();
 
+        if (!durabilityBars.isEmpty()) {
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            float barY1 = centerY - iconHalf;                 // icon's bottom edge
+            float barY0 = barY1 - DURABILITY_BAR_HEIGHT;
+            for (float[] bar : durabilityBars) {
+                renderDurabilityBar(bar[0] - iconHalf, bar[0] + iconHalf, barY0, barY1, bar[1]);
+            }
+            lineShader.unbind();
+        }
+
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Draws one tool's wear strip: dark background + a fill that shrinks and shifts green->yellow->red as it wears. */
+    private void renderDurabilityBar(float minX, float maxX, float minY, float maxY, float fraction) {
+        float[] bg = {
+                minX, minY, 0, maxX, minY, 0, maxX, maxY, 0,
+                minX, minY, 0, maxX, maxY, 0, minX, maxY, 0,
+        };
+        durabilityBarBackground.upload(bg);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.6f));
+        durabilityBarBackground.render();
+
+        float clamped = Math.max(0f, Math.min(1f, fraction));
+        float fillMaxX = minX + (maxX - minX) * clamped;
+        float r = clamped < 0.5f ? 1f : (1f - clamped) * 2f;
+        float g = clamped > 0.5f ? 1f : clamped * 2f;
+        float[] fill = {
+                minX, minY, 0, fillMaxX, minY, 0, fillMaxX, maxY, 0,
+                minX, minY, 0, fillMaxX, maxY, 0, minX, maxY, 0,
+        };
+        durabilityBarFill.upload(fill);
+        lineShader.setUniform("color", new Vector4f(r, g, 0f, 0.95f));
+        durabilityBarFill.render();
+    }
+
+    private static final int[] QUAD_INDICES = {0, 1, 2, 0, 2, 3};
+
+    private static float[] toFloatArray(List<Float> values) {
+        float[] array = new float[values.size()];
+        for (int i = 0; i < array.length; i++) array[i] = values.get(i);
+        return array;
+    }
+
+    private static int[] toIntArray(List<Integer> values) {
+        int[] array = new int[values.size()];
+        for (int i = 0; i < array.length; i++) array[i] = values.get(i);
+        return array;
     }
 
     /** Health (red), hunger (orange) and stamina (yellow) bars, stacked above the hotbar. */
@@ -294,8 +394,12 @@ public class Hud {
         cubeOutline.destroy();
         hotbarBackground.destroy();
         hotbarHighlight.destroy();
-        hotbarIcons.destroy();
+        hotbarBlockIcons.destroy();
+        hotbarItemIcon.destroy();
+        hotbarCounts.destroy();
         statBarBackground.destroy();
         statBarFill.destroy();
+        durabilityBarBackground.destroy();
+        durabilityBarFill.destroy();
     }
 }

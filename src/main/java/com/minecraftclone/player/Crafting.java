@@ -24,6 +24,7 @@ public final class Crafting {
         register(new Recipe(BlockType.WOOD_LOG, 1, null, 0, BlockType.PLANKS, 4));
         register(new Recipe(BlockType.SAND, 2, null, 0, BlockType.GLASS, 1));
         register(new Recipe(BlockType.PLANKS, 2, null, 0, BlockType.STICK, 4));
+        register(new Recipe(BlockType.STICK, 1, BlockType.COAL_ORE, 1, BlockType.TORCH, 4));
 
         register(new Recipe(BlockType.PLANKS, 3, BlockType.STICK, 2, BlockType.WOOD_PICKAXE, 1));
         register(new Recipe(BlockType.STONE, 3, BlockType.STICK, 2, BlockType.STONE_PICKAXE, 1));

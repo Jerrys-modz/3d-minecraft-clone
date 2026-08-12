@@ -4,11 +4,12 @@ import org.joml.Vector3f;
 
 /**
  * Tracks time of day and derives the sky/fog color and a global ambient
- * brightness multiplier from it. There's no real dynamic lighting engine
- * (see the chunk shader's per-face fixed shading) - "night" is approximated
- * by dimming everything and shifting the sky towards dark blue, which is
- * enough to make darkness a real gameplay signal without a full light
- * propagation system.
+ * brightness multiplier from it. "Night" is approximated by dimming
+ * everything and shifting the sky towards dark blue - a single scene-wide
+ * floor, not real light propagation (see the chunk shader's per-face fixed
+ * shading). Torches punch a local hole in that floor instead: see {@link
+ * com.minecraftclone.world.Chunk}'s block-light baking, which keeps
+ * torch-lit areas bright independently of this class's day/night dimming.
  */
 public class DayNightCycle {
 
