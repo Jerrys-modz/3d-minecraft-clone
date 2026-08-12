@@ -32,7 +32,20 @@ public enum BlockType {
     GLASS(21, true, false, 34, 34, 34),
     BERRY_BUSH(22, false, true, 37),
     APPLE(23, false, true, 35, 20),   // food: restores 20 hunger
-    BERRIES(24, false, true, 36, 10); // food: restores 10 hunger
+    BERRIES(24, false, true, 36, 10), // food: restores 10 hunger
+
+    // Tools: inventory-only items, never placed in the world. Mining stats
+    // (tool kind/tier/durability) live in Mining.java, not here, to keep
+    // this enum focused on rendering/collision.
+    STICK(25, false, true, 38),
+    WOOD_PICKAXE(26, false, true, 39),
+    STONE_PICKAXE(27, false, true, 40),
+    IRON_PICKAXE(28, false, true, 41),
+    DIAMOND_PICKAXE(29, false, true, 42),
+    WOOD_AXE(30, false, true, 43),
+    STONE_AXE(31, false, true, 44),
+    IRON_AXE(32, false, true, 45),
+    DIAMOND_AXE(33, false, true, 46);
 
     public final byte id;
     public final boolean solid;
