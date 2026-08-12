@@ -35,6 +35,7 @@ public class Chunk {
     private boolean generated = false;
     private boolean hasMeshData = false;
     private boolean modifiedByPlayer = false;
+    private boolean leavesTransparent = false;
 
     public Chunk(ChunkPos pos) {
         this.pos = pos;
@@ -147,8 +148,12 @@ public class Chunk {
      * @param nearbyLights every light-emitting block within reach of this chunk (this chunk's own
      *                     plus its neighbors', see {@code World.collectNearbyLights}), as world-space
      *                     {wx, wy, wz, lightLevel} - used to bake a static glow around each one.
+     * @param leavesTransparent whether the "see-through leaves" setting is on: leaves then use the
+     *                          alpha-cutout atlas tile and stop occluding faces toward them (so you
+     *                          can see through a canopy). Rebuild meshes after toggling it.
      */
-    public void rebuildMesh(BlockAccessor world, TextureAtlas atlas, List<int[]> nearbyLights) {
+    public void rebuildMesh(BlockAccessor world, TextureAtlas atlas, List<int[]> nearbyLights, boolean leavesTransparent) {
+        this.leavesTransparent = leavesTransparent;
         List<Float> vertices = new ArrayList<>(4096);
         List<Integer> indices = new ArrayList<>(4096);
         int[] vertexCounter = {0};
@@ -225,7 +230,11 @@ public class Chunk {
         // Cross-shaped decoration (grass/flowers) doesn't cover a full cell, so a
         // solid neighbor's face toward it must still be drawn - treat it like air
         // for culling purposes.
-        return neighbor == BlockType.AIR || neighbor.cross;
+        if (neighbor == BlockType.AIR || neighbor.cross) return true;
+        // With see-through leaves on, leaf blocks stop occluding faces too - both
+        // the leaf block's own faces and the blocks behind it get drawn, so the
+        // cutout holes in the leaves texture actually show what's behind.
+        return leavesTransparent && neighbor == BlockType.LEAVES;
     }
 
     /**
@@ -257,6 +266,11 @@ public class Chunk {
             case BOTTOM -> block.bottomTile;
             default -> block.sideTile;
         };
+        // See-through leaves use the alpha-cutout variant of the leaves texture
+        // (the shader discards its transparent holes) so the canopy is translucent.
+        if (leavesTransparent && block == BlockType.LEAVES) {
+            tile = TextureAtlas.LEAVES_CUTOUT_TILE;
+        }
         float[] uv = atlas.getUV(tile);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
         float light = switch (face) {

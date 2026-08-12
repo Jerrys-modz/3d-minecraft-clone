@@ -19,6 +19,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a no-clip flight mode.
 - **Block interaction**: raycast-based block breaking/placing (reach limited to 6 blocks) with a wireframe outline on the targeted block, gated by a real inventory - breaking a block adds it to your count, placing spends one, and bedrock is unbreakable. Starts empty, so you gather before you build.
 - **On-screen HUD**: a hotbar (35 slots) with block icons batched from the game's shared texture atlas and item icons (food/tools) drawn from their own individual PNGs, live inventory counts drawn with a tiny procedural pixel font (its own small atlas, no external font/text-rendering library), a highlight border on the selected slot, health/hunger/stamina bars above it, transient on-screen messages (death, crafting, tool breakage), and an `F3`-toggled debug overlay (FPS, position, selected item).
+- **Settings menu**: `Esc` pauses the game and opens an in-game settings menu (keyboard-navigated - arrows/WASD to move, Enter/Space to toggle) for graphics options. The first one is **see-through leaves**: with it on, leaves use an alpha-cutout texture with holes punched through them and stop occluding faces behind them, so you can actually see through a tree canopy (the classic "fast leaves" look); off, they're the default opaque cubes. Toggling it live-rebuilds loaded chunk meshes, so the change streams in while you're looking at it.
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, torches, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 
 ## Requirements
@@ -67,7 +68,7 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 | `1`-`9` / mouse wheel | Select hotbar block |
 | `F2` | Save a screenshot to `screenshot.png` |
 | `F3` | Toggle the debug overlay (FPS / position / selected item) |
-| `Esc` | Release/recapture the mouse cursor |
+| `Esc` | Open/close the settings menu (pauses the game) |
 
 You start with an empty inventory - break blocks to collect them (they show up with a count on the hotbar) before you can place them elsewhere. Bedrock can't be broken.
 
@@ -107,6 +108,7 @@ All three share one GL upload helper (`GLTexture`) and the same nearest-neighbor
 ```
 src/main/java/com/minecraftclone/
 ├── Main.java                 # Entry point & game loop
+├── Settings.java             # In-game settings menu rows & values (see Settings menu)
 ├── engine/                   # Window, input, camera, shaders, HUD, DayNightCycle
 │   └── graphics/              # TextureAtlas, ItemTextures, FontAtlas, GLTexture, Mesh, LineMesh, IconMesh
 ├── world/                    # Chunk, World (streaming/meshing), BlockType, Mining
@@ -125,7 +127,7 @@ This is a compact, from-scratch clone meant to be readable end-to-end, not a fea
 - Text rendering now covers the full printable ASCII set via a single 5x7 pixel font (see Textures) - inventory counts, on-screen death/craft/tool-break messages, and the F3 debug overlay (FPS/position/selected item) all flow through it. It's still just lines of text, though: there's no layout engine or multi-line UI, so a real recipe book, chat-style log, or death/damage scrolling message list would need building on top of it rather than existing yet.
 - Crafting is a small fixed table, not a grid - there's no way to combine arbitrary items. Pickaxes, axes and swords exist with four material tiers each and now wear out with use (see Mining & tools), but there's no repairing/anvil yet - a worn-out tool is just gone - and there's nothing for a sword to fight (no mobs) or a shovel to dig faster (no shovel).
 - No mobs (hostile or otherwise) - night is darker and a real signal, but nothing actually comes looking for you yet. No sleeping/beds to skip it either.
-- Water and leaves are rendered as solid (opaque) blocks rather than alpha-blended, keeping the renderer single-pass. (Grass/flowers/berry bushes are the exception - they're cross-shaped and alpha-cutout, not alpha-blended. Lava is opaque too, despite being a hazard.)
+- Water is rendered as a solid (opaque) block rather than alpha-blended, keeping the renderer single-pass. Leaves are opaque by default but have a **see-through** mode (settings menu) that switches them to an alpha-cutout texture with holes - cutout discards transparent fragments in the shader, so it still needs no sorting and stays single-pass. (Grass/flowers/berry bushes are cross-shaped and alpha-cutout too. Lava is opaque despite being a hazard.)
 - Day/night affects a single global ambient-brightness multiplier, and caves are exactly as dark as the surface at the same time of day (no separate "underground is always dark" rule). Torches punch a local hole in that multiplier rather than doing real light propagation: each one bakes a static glow into nearby chunk meshes at mesh-build time, falling off with straight-line distance (Minecraft-style, 1/15 per block) rather than being flood-filled and blocked by walls - so a torch on the other side of a thin wall will still show a faint glow through it. There's also no light bouncing or color tinting, just a brightness floor.
 - Chunk meshing runs on the main thread with a per-frame budget, so there's no multithreading complexity, at the cost of a brief pause when flying very fast into unloaded terrain.
 - World height is capped (128 blocks, same idea as vanilla Minecraft's build limit) — it's the horizontal extent that's unbounded.

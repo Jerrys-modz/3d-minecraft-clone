@@ -1,5 +1,6 @@
 package com.minecraftclone.engine;
 
+import com.minecraftclone.Settings;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.IconMesh;
 import com.minecraftclone.engine.graphics.ItemTextures;
@@ -60,6 +61,7 @@ public class Hud {
     private final LineMesh statBarFill = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarFill = new LineMesh(GL_TRIANGLES);
+    private final LineMesh settingsPanel = new LineMesh(GL_TRIANGLES);
 
     private final Matrix4f identity = new Matrix4f();
     private final Matrix4f modelMatrix = new Matrix4f();
@@ -429,6 +431,77 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    /**
+     * Draws the pause/settings menu: a semi-transparent panel with a title, one
+     * row per toggle in {@link Settings}, and a highlighted selection marker.
+     * {@code selectedIndex} points at the currently-highlighted row.
+     */
+    public void renderSettingsMenu(Settings settings, int selectedIndex, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        String[] labels = settings.ROW_LABELS;
+        int rows = labels.length;
+        float panelW = 0.58f;
+        float rowH = 0.05f;
+        float titleH = 0.07f;
+        float pad = 0.035f;
+        float panelH = pad * 2f + titleH + rows * rowH;
+        float centerY = 0.12f;
+        float left = -panelW / 2f;
+        float top = centerY + panelH / 2f;
+
+        // Semi-transparent panel background.
+        float[] panel = {
+                left, centerY - panelH / 2f, 0, left + panelW, centerY - panelH / 2f, 0, left + panelW, centerY + panelH / 2f, 0,
+                left, centerY - panelH / 2f, 0, left + panelW, centerY + panelH / 2f, 0, left, centerY + panelH / 2f, 0,
+        };
+        settingsPanel.upload(panel);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.55f));
+        settingsPanel.render();
+        lineShader.unbind();
+
+        // Title, centered near the top of the panel.
+        drawCenteredText("Settings", 0f, top - pad - 0.045f, 0.045f, WHITE);
+
+        // One row per setting: a ">" marker + label on the left, ON/OFF on the right.
+        Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
+        Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
+        Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
+        for (int i = 0; i < rows; i++) {
+            float rowTop = top - pad - titleH - i * rowH;
+            float baseline = rowTop - rowH + 0.015f;
+            boolean selected = i == selectedIndex;
+            drawTextAt(selected ? ">" : " ", left + 0.05f, baseline, 0.038f, selected ? highlight : idle);
+            drawTextAt(labels[i], left + 0.09f, baseline, 0.038f, selected ? highlight : idle);
+            String value = settings.toggles[i] ? "ON" : "OFF";
+            float valueWidth = text.measure(value, 0.038f);
+            drawTextAt(value, left + panelW - 0.06f - valueWidth, baseline, 0.038f, selected ? highlight : idleValue);
+        }
+
+        drawCenteredText("Enter/Space: toggle    Esc: close", 0f, centerY - panelH / 2f - 0.05f, 0.028f, idleValue);
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Draws one line of text left-aligned at (bottomLeftX, bottomY), assuming {@link #hudTransform} is already set up. */
+    private void drawTextAt(String value, float bottomLeftX, float bottomY, float size, Vector4f color) {
+        text.begin();
+        text.add(value, bottomLeftX, bottomY, size);
+        text.render(hudTransform, color);
+    }
+
+    /** Draws one line of text horizontally centered on {@code centerX}, assuming {@link #hudTransform} is already set up. */
+    private void drawCenteredText(String value, float centerX, float bottomY, float size, Vector4f color) {
+        text.begin();
+        text.add(value, centerX - text.measure(value, size) / 2f, bottomY, size);
+        text.render(hudTransform, color);
+    }
+
     private void addQuad(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
                           float minX, float minY, float maxX, float maxY, float[] uv) {
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
@@ -454,5 +527,6 @@ public class Hud {
         statBarFill.destroy();
         durabilityBarBackground.destroy();
         durabilityBarFill.destroy();
+        settingsPanel.destroy();
     }
 }

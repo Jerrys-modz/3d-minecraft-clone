@@ -29,6 +29,7 @@ public class World implements BlockAccessor {
     private final ChunkStorage storage;
 
     private int renderDistance = 6;
+    private boolean leavesTransparent = false;
     private static final int MAX_GENERATE_PER_TICK = 4;
     private static final int MAX_MESH_PER_TICK = 4;
 
@@ -44,6 +45,24 @@ public class World implements BlockAccessor {
 
     public int getRenderDistance() {
         return renderDistance;
+    }
+
+    public boolean isLeavesTransparent() {
+        return leavesTransparent;
+    }
+
+    /**
+     * Turns the "see-through leaves" setting on/off. Every loaded chunk is
+     * flagged dirty so its mesh is rebuilt with the new leaf culling/tile on
+     * the next few {@link #update} ticks (staggered per tick, like any other
+     * remesh, so the change streams in rather than freezing a frame).
+     */
+    public void setLeavesTransparent(boolean value) {
+        if (this.leavesTransparent == value) return;
+        this.leavesTransparent = value;
+        for (Chunk c : chunks.values()) {
+            c.markDirty();
+        }
     }
 
     public static int worldToChunk(int worldCoord) {
@@ -192,7 +211,7 @@ public class World implements BlockAccessor {
         dirty.sort((a, b) -> Double.compare(a.getPos().distanceSq(pcx, pcz), b.getPos().distanceSq(pcx, pcz)));
         for (int i = 0; i < Math.min(MAX_MESH_PER_TICK, dirty.size()); i++) {
             Chunk c = dirty.get(i);
-            c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()));
+            c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
         }
     }
 

@@ -31,6 +31,9 @@ public class TextureAtlas {
     public static final int TILE_PX = 16;
     public static final int ATLAS_PX = GRID * TILE_PX;
 
+    /** Tile index of the alpha-cutout leaves texture used when the "see-through leaves" setting is on. */
+    public static final int LEAVES_CUTOUT_TILE = 24;
+
     private int textureId;
 
     public void generate() {
@@ -73,6 +76,7 @@ public class TextureAtlas {
 
         paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
         paintGlassPanes(image, 34);
+        paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
 
@@ -251,6 +255,30 @@ public class TextureAtlas {
                     float roll = rnd.nextFloat();
                     int color = roll < 0.15f ? 0x9C2B4E : (roll < 0.55f ? 0x3E8E35 : 0x2F701F);
                     img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                }
+            }
+        }
+    }
+
+    /**
+     * A "fast leaves" tile for the see-through-leaves setting: the same green
+     * palette as the solid leaves tile (index 9) but with small square holes
+     * carved out, so the chunk shader's alpha-cutout (see chunk.frag's discard)
+     * lets the world behind the canopy show through. Painted with its own draw
+     * from the shared seeded Random, so the hole pattern differs from tile 9's.
+     */
+    private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int cy = 0; cy < TILE_PX; cy += 2) {
+            for (int cx = 0; cx < TILE_PX; cx += 2) {
+                boolean hole = rnd.nextFloat() < 0.32f;
+                int base = rnd.nextFloat() < 0.55f ? 0x3E8E35 : 0x2F701F;
+                for (int y = 0; y < 2; y++) {
+                    for (int x = 0; x < 2; x++) {
+                        int px = ox + cx + x, py = oy + cy + y;
+                        img.setRGB(px, py, hole ? 0x00000000 : (0xFF000000 | base));
+                    }
                 }
             }
         }

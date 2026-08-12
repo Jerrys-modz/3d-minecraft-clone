@@ -40,7 +40,8 @@ import static org.lwjgl.opengl.GL11.*;
  * com.minecraftclone.world.Mining}), Right-click to place the selected block
  * (or eat it, if it's food), C to craft the selected item from its recipe,
  * 1-9 or scroll wheel to pick a block, F3 to toggle the on-screen debug
- * overlay, Esc to release the mouse cursor.
+ * overlay, Esc to open/close the settings menu (where graphics options like
+ * see-through leaves live).
  */
 public class Main {
 
@@ -71,6 +72,11 @@ public class Main {
     /** Queues a transient on-screen message (rendered via {@link Hud#renderMessages}). */
     private static void showMessage(List<Hud.Message> messages, String text, Vector4f color, float duration) {
         messages.add(new Hud.Message(text, color, duration));
+    }
+
+    /** Pushes the current in-memory {@link Settings} into the world/renderer. */
+    private void applySettings(Settings settings, World world) {
+        world.setLeavesTransparent(settings.isLeavesTransparent());
     }
 
     public static void main(String[] args) {
@@ -120,9 +126,11 @@ public class Main {
         Hud hud = new Hud(lineShader, hudShader, font);
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
+        Settings settings = new Settings();
+        boolean[] menuOpen = {false};
+        int[] menuSelection = {0};
 
         window.setCursorCaptured(true);
-        boolean[] cursorCaptured = {true};
 
         int[] selectedSlot = {0};
         Random loot = new Random();
@@ -132,7 +140,7 @@ public class Main {
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl sprint, F fly toggle,");
         System.out.println("          hold Left-click to mine (speed/possibility depends on your tool),");
         System.out.println("          Right-click place (or eat, if selected item is food),");
-        System.out.println("          C craft selected item, 1-9/scroll select block, F3 debug, Esc release mouse.");
+        System.out.println("          C craft selected item, 1-9/scroll select block, F3 debug, Esc settings menu.");
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -164,19 +172,38 @@ public class Main {
             dayNightCycle.update(dt);
 
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
-                cursorCaptured[0] = !cursorCaptured[0];
-                window.setCursorCaptured(cursorCaptured[0]);
+                menuOpen[0] = !menuOpen[0];
+                window.setCursorCaptured(!menuOpen[0]);
                 input.resetMouseDelta();
             }
+
+            if (menuOpen[0]) {
+                // Pause menu: navigate with arrows/WASD, toggle the highlighted
+                // setting with Enter/Space/Left/Right.
+                if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                    menuSelection[0] = Math.floorMod(menuSelection[0] - 1, Settings.ROW_COUNT);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                    menuSelection[0] = Math.floorMod(menuSelection[0] + 1, Settings.ROW_COUNT);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)
+                        || input.isKeyJustPressed(GLFW_KEY_RIGHT) || input.isKeyJustPressed(GLFW_KEY_LEFT)) {
+                    settings.toggles[menuSelection[0]] = !settings.toggles[menuSelection[0]];
+                    applySettings(settings, world);
+                }
+            }
+
             if (input.isKeyJustPressed(GLFW_KEY_F3)) {
                 showDebug[0] = !showDebug[0];
             }
             boolean screenshotRequested = input.isKeyJustPressed(GLFW_KEY_F2);
 
-            if (cursorCaptured[0]) {
+            if (!menuOpen[0]) {
                 player.update(dt, input, world);
             }
 
+            // Keep streaming/remeshing even with the menu open, so toggling a
+            // rendering setting (e.g. see-through leaves) takes effect live.
             world.update(player.getPosition().x, player.getPosition().z);
 
             if (player.getStats().isDead()) {
@@ -203,28 +230,28 @@ public class Main {
                 world.saveAllModified();
             }
 
-            // Block selection via number keys.
-            for (int i = 0; i < HOTBAR.length && i < 9; i++) {
-                if (input.isKeyJustPressed(GLFW_KEY_1 + i)) {
-                    selectedSlot[0] = i;
-                }
-            }
-            double scroll = input.getScrollDelta();
-            if (scroll != 0) {
-                selectedSlot[0] = Math.floorMod(selectedSlot[0] - (int) Math.signum(scroll), HOTBAR.length);
-            }
-
-            if (input.isKeyJustPressed(GLFW_KEY_C)) {
-                BlockType selected = HOTBAR[selectedSlot[0]];
-                if (Crafting.craft(player.getInventory(), selected)) {
-                    System.out.println("Crafted " + selected + " (now have " + player.getInventory().getCount(selected) + ")");
-                    showMessage(messages, "Crafted " + selected, new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
-                }
-            }
-
             Raycaster.Hit hit = null;
             float breakFraction = 0f;
-            if (cursorCaptured[0]) {
+            if (!menuOpen[0]) {
+                // Block selection via number keys.
+                for (int i = 0; i < HOTBAR.length && i < 9; i++) {
+                    if (input.isKeyJustPressed(GLFW_KEY_1 + i)) {
+                        selectedSlot[0] = i;
+                    }
+                }
+                double scroll = input.getScrollDelta();
+                if (scroll != 0) {
+                    selectedSlot[0] = Math.floorMod(selectedSlot[0] - (int) Math.signum(scroll), HOTBAR.length);
+                }
+
+                if (input.isKeyJustPressed(GLFW_KEY_C)) {
+                    BlockType selected = HOTBAR[selectedSlot[0]];
+                    if (Crafting.craft(player.getInventory(), selected)) {
+                        System.out.println("Crafted " + selected + " (now have " + player.getInventory().getCount(selected) + ")");
+                        showMessage(messages, "Crafted " + selected, new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
+                    }
+                }
+
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 BlockType targetType = hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
@@ -289,10 +316,12 @@ public class Main {
             world.render(chunkShader);
             chunkShader.unbind();
 
-            if (hit != null) {
-                hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction);
+            if (!menuOpen[0]) {
+                if (hit != null) {
+                    hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction);
+                }
+                hud.renderCrosshair(window.getAspectRatio());
             }
-            hud.renderCrosshair(window.getAspectRatio());
             hud.renderHotbar(atlas, itemTextures, player.getDurability(), HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
             hud.renderStatusBars(
                     player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
@@ -311,6 +340,9 @@ public class Main {
                         -0.95f, y - step, textSize, WHITE, aspect);
                 hud.drawTextLeft("Selected: " + HOTBAR[selectedSlot[0]],
                         -0.95f, y - 2f * step, textSize, WHITE, aspect);
+            }
+            if (menuOpen[0]) {
+                hud.renderSettingsMenu(settings, menuSelection[0], window.getAspectRatio());
             }
 
             frameCount++;
