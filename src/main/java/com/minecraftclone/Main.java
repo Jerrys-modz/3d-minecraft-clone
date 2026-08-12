@@ -40,7 +40,10 @@ public class Main {
     private static final BlockType[] HOTBAR = {
             BlockType.STONE, BlockType.DIRT, BlockType.GRASS, BlockType.SAND,
             BlockType.WOOD_LOG, BlockType.PLANKS, BlockType.LEAVES,
-            BlockType.GRAVEL, BlockType.SNOW
+            BlockType.GRAVEL, BlockType.SNOW,
+            BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
+            BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
+            BlockType.LAVA
     };
 
     public static void main(String[] args) {

@@ -129,6 +129,13 @@ public class Chunk {
                     int wy = y;
                     int wz = originZ + z;
 
+                    if (block.cross) {
+                        // Decoration (grass/flowers): two crossed planes, always fully
+                        // visible - no face culling, since it never covers a whole cell.
+                        emitCross(vertices, indices, vertexCounter, wx, wy, wz, block, atlas);
+                        continue;
+                    }
+
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz)) {
                         emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.TOP, block, atlas);
@@ -177,7 +184,10 @@ public class Chunk {
         } else {
             neighbor = world.getBlock(worldX, worldY, worldZ);
         }
-        return neighbor == BlockType.AIR;
+        // Cross-shaped decoration (grass/flowers) doesn't cover a full cell, so a
+        // solid neighbor's face toward it must still be drawn - treat it like air
+        // for culling purposes.
+        return neighbor == BlockType.AIR || neighbor.cross;
     }
 
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
@@ -214,6 +224,41 @@ public class Chunk {
             default -> throw new IllegalStateException();
         }
 
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light);
+    }
+
+    /**
+     * Emits a cross-shaped decoration (two diagonal planes forming an "X" when
+     * viewed from above), like grass tufts and flowers. Each plane is drawn as
+     * two quads with opposite winding so it's visible from both sides without
+     * needing to disable backface culling.
+     */
+    private void emitCross(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
+                            int wx, int wy, int wz, BlockType block, TextureAtlas atlas) {
+        float[] uv = atlas.getUV(block.topTile);
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+        float light = LIGHT_TOP;
+
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + 1, z1 = wz + 1;
+
+        float[][] planeA = {{x0, y0, z0}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z0}};
+        float[][] planeB = {{x0, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x0, y1, z1}};
+
+        emitQuadBothSides(vertices, indices, vertexCounter, planeA, uvs, light);
+        emitQuadBothSides(vertices, indices, vertexCounter, planeB, uvs, light);
+    }
+
+    private void emitQuadBothSides(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
+                                    float[][] positions, float[][] uvs, float light) {
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light);
+        float[][] reversed = {positions[3], positions[2], positions[1], positions[0]};
+        float[][] uvsReversed = {uvs[3], uvs[2], uvs[1], uvs[0]};
+        emitQuad(vertices, indices, vertexCounter, reversed, uvsReversed, light);
+    }
+
+    private void emitQuad(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
+                           float[][] positions, float[][] uvs, float light) {
         int base = vertexCounter[0];
         for (int i = 0; i < 4; i++) {
             vertices.add(positions[i][0]);

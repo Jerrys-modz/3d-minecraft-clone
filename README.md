@@ -7,11 +7,12 @@ A voxel sandbox game inspired by Minecraft, written in Java on top of [LWJGL 3](
 ## Features
 
 - **Infinite, persistent voxel world**: chunks (16×128×16) generate on demand from the seed as you explore in any direction with no boundary, streamed in/out around the player and loaded/meshed incrementally so the game never freezes. Memory stays bounded to render distance — only chunks you've actually edited are written to disk, and reloading one restores your edits instead of regenerating pristine terrain, even across a restart.
-- **Procedural terrain generation**: layered Perlin/fBm noise for rolling hills and mountains, a second noise channel for rough biomes (plains / desert / snowy peaks), cave carving, trees, and cacti.
-- **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom) and distance fog.
+- **Procedural terrain generation**: layered Perlin/fBm noise for rolling hills and mountains, a second noise channel for rough biomes (desert / plains / forest / snowy peaks), winding rivers carved from a dedicated noise channel, 3D-noise cave systems with lava pooling in the deepest pockets, and four depth-gated ore veins (coal, iron, gold, diamond - rarer ones deeper and sparser, mirroring vanilla Minecraft's progression).
+- **Biome-varied vegetation**: dense oak forests where it's wet, sparser oak on plains, conical pine trees at higher/colder elevations, cacti in deserts, and tall grass/flowers scattered across grassy ground.
+- **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom), distance fog, and cross-shaped "billboard" geometry for non-cube decoration (grass/flowers) with alpha-cutout transparency.
 - **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, sprinting, and a no-clip flight mode.
-- **Block interaction**: raycast-based block breaking/placing with a 9-slot hotbar, reach limited to 6 blocks, and a wireframe outline on the targeted block.
-- **Procedural texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel and cactus tiles, all generated at runtime.
+- **Block interaction**: raycast-based block breaking/placing with a hotbar (reach limited to 6 blocks) covering terrain blocks, all four ores, and grass/flowers/lava, plus a wireframe outline on the targeted block.
+- **Procedural texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, four ores, and alpha-cutout grass/flower tiles, all generated at runtime.
 
 ## Requirements
 
@@ -74,7 +75,8 @@ This is a compact, from-scratch clone meant to be readable end-to-end, not a fea
 
 - No text/font rendering — the hotbar/FPS aren't drawn on screen (see console output for the world seed and controls).
 - No inventory/crafting/mobs — it's a "creative mode" walk-and-build sandbox.
-- Water and leaves are rendered as solid (opaque) blocks rather than alpha-blended, keeping the renderer single-pass.
+- Water, lava and leaves are rendered as solid (opaque) blocks rather than alpha-blended, keeping the renderer single-pass. (Grass/flowers are the exception - they're cross-shaped and alpha-cutout, not alpha-blended.)
+- Lava is purely a visual/world-gen hazard - there's no health or damage system, so walking into it does nothing (same as water, just non-collidable).
 - Chunk meshing runs on the main thread with a per-frame budget, so there's no multithreading complexity, at the cost of a brief pause when flying very fast into unloaded terrain.
 - World height is capped (128 blocks, same idea as vanilla Minecraft's build limit) — it's the horizontal extent that's unbounded.
 - Chunk vertex positions are baked in absolute world-space `float`s rather than being camera-relative, so precision (and therefore visual stability) very gradually degrades if you travel extremely far (hundreds of thousands of blocks) from spawn — not something you'll hit in normal play.

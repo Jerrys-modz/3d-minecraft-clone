@@ -12,22 +12,29 @@ import static org.lwjgl.system.MemoryUtil.memAlloc;
 import static org.lwjgl.system.MemoryUtil.memFree;
 
 /**
- * A small procedurally-generated block texture atlas, laid out on a 4x4 grid
- * of 16x16 pixel tiles (64x64 total). Generating the art at runtime keeps the
- * project fully self-contained with no external image assets to ship.
+ * A small procedurally-generated block texture atlas, laid out on an 8x8 grid
+ * of 16x16 pixel tiles (128x128 total). Generating the art at runtime keeps
+ * the project fully self-contained with no external image assets to ship.
  * <p>
- * Tile indices (0-15) match {@link com.minecraftclone.world.BlockType}'s
- * topTile/sideTile/bottomTile fields.
+ * Tile indices match {@link com.minecraftclone.world.BlockType}'s
+ * topTile/sideTile/bottomTile fields. Tiles for cross-shaped decoration
+ * blocks (grass/flowers) are painted onto a transparent background and rely
+ * on the chunk fragment shader's alpha-cutout discard.
  */
 public class TextureAtlas {
 
-    public static final int GRID = 4;
+    public static final int GRID = 8;
     public static final int TILE_PX = 16;
     public static final int ATLAS_PX = GRID * TILE_PX;
 
     private int textureId;
 
     public void generate() {
+        textureId = uploadImage(buildImage());
+    }
+
+    /** Builds the CPU-side atlas image without touching the GPU - split out so tooling/tests can inspect the art directly. */
+    public BufferedImage buildImage() {
         BufferedImage image = new BufferedImage(ATLAS_PX, ATLAS_PX, BufferedImage.TYPE_INT_ARGB);
         Random rnd = new Random(1337);
 
@@ -50,7 +57,17 @@ public class TextureAtlas {
         paintTile(image, 14, rnd, 0x8D8878, 0x716C5E, true);  // gravel
         paintTile(image, 15, rnd, 0x4E8B3C, 0x3D6E2E, true);  // cactus
 
-        textureId = uploadImage(image);
+        paintOreTile(image, 16, rnd, 0x1B1B1B);               // coal ore (dark speckles in stone)
+        paintOreTile(image, 17, rnd, 0xC08B5C);                // iron ore (rusty tan speckles)
+        paintOreTile(image, 18, rnd, 0xE8C93A);                // gold ore (gold speckles)
+        paintOreTile(image, 19, rnd, 0x5FE0E0);                // diamond ore (cyan speckles)
+        paintTile(image, 20, rnd, 0xE25822, 0xB33A12, true);   // lava
+
+        paintCrossGrass(image, 21, rnd, 0x4C8C2C);                        // tall grass
+        paintCrossFlower(image, 22, rnd, 0x3D6E2E, 0xD0392B, 0xE8C93A);   // red flower
+        paintCrossFlower(image, 23, rnd, 0x3D6E2E, 0xF2D33A, 0xB5651D);   // yellow flower
+
+        return image;
     }
 
     private static int tileX(int index) {
@@ -131,6 +148,68 @@ public class TextureAtlas {
                 }
             }
         }
+    }
+
+    /** Stone base with a few small clustered "ore" speckle blobs, for coal/iron/gold/diamond ore blocks. */
+    private void paintOreTile(BufferedImage img, int index, Random rnd, int oreColor) {
+        paintTile(img, index, rnd, 0x8A8A8A, 0x777777, true);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int blobs = 3 + rnd.nextInt(3);
+        for (int b = 0; b < blobs; b++) {
+            int cx = rnd.nextInt(TILE_PX);
+            int cy = rnd.nextInt(TILE_PX);
+            int size = 1 + rnd.nextInt(2);
+            for (int dy = -size; dy <= size; dy++) {
+                for (int dx = -size; dx <= size; dx++) {
+                    int px = cx + dx, py = cy + dy;
+                    if (px < 0 || px >= TILE_PX || py < 0 || py >= TILE_PX) continue;
+                    if (dx * dx + dy * dy <= size * size && rnd.nextFloat() < 0.85f) {
+                        img.setRGB(ox + px, oy + py, 0xFF000000 | oreColor);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * A tuft of a few vertical (slightly swaying) blade strokes on a fully
+     * transparent background, for the cross-shaped tall grass decoration.
+     */
+    private void paintCrossGrass(BufferedImage img, int index, Random rnd, int color) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int blades = 5 + rnd.nextInt(3);
+        for (int b = 0; b < blades; b++) {
+            int bx = 2 + rnd.nextInt(TILE_PX - 4);
+            int height = 8 + rnd.nextInt(6);
+            int topY = TILE_PX - height;
+            int sway = rnd.nextInt(3) - 1;
+            for (int y = topY; y < TILE_PX; y++) {
+                int t = y - topY;
+                int x = bx + (sway * t) / Math.max(1, height - 1);
+                if (x < 0 || x >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** A simple stem + petal cluster + center on a transparent background, for the cross-shaped flower decorations. */
+    private void paintCrossFlower(BufferedImage img, int index, Random rnd, int stemColor, int petalColor, int centerColor) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int stemX = TILE_PX / 2;
+        for (int y = TILE_PX - 6; y < TILE_PX; y++) {
+            img.setRGB(ox + stemX, oy + y, 0xFF000000 | stemColor);
+        }
+        int headY = TILE_PX - 8;
+        int[][] petalOffsets = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
+        for (int[] o : petalOffsets) {
+            int x = stemX + o[0], y = headY + o[1];
+            if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
+            img.setRGB(ox + x, oy + y, 0xFF000000 | petalColor);
+        }
+        img.setRGB(ox + stemX, oy + headY, 0xFF000000 | centerColor);
     }
 
     private int uploadImage(BufferedImage image) {

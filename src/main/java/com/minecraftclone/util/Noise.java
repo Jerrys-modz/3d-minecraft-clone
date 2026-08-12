@@ -89,4 +89,19 @@ public final class Noise {
         }
         return total / maxAmplitude;
     }
+
+    /** 3D fBm: used for volumetric features (caves, ore veins) where clustering needs to vary in all three axes. */
+    public double fbm3(double x, double y, double z, int octaves, double persistence, double lacunarity) {
+        double total = 0;
+        double amplitude = 1;
+        double frequency = 1;
+        double maxAmplitude = 0;
+        for (int i = 0; i < octaves; i++) {
+            total += noise3(x * frequency, y * frequency, z * frequency) * amplitude;
+            maxAmplitude += amplitude;
+            amplitude *= persistence;
+            frequency *= lacunarity;
+        }
+        return total / maxAmplitude;
+    }
 }
