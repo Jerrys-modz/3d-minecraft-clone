@@ -36,6 +36,7 @@ public class Player {
     private final Camera camera = new Camera();
     private final Inventory inventory = new Inventory();
     private final PlayerStats stats = new PlayerStats();
+    private final ToolDurability durability = new ToolDurability();
 
     private boolean onGround = false;
     private boolean flying = false;
@@ -64,6 +65,10 @@ public class Player {
 
     public PlayerStats getStats() {
         return stats;
+    }
+
+    public ToolDurability getDurability() {
+        return durability;
     }
 
     public Vector3f getPosition() {

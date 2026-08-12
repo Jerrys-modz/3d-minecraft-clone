@@ -11,6 +11,7 @@ import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.World;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -165,6 +166,7 @@ public class Main {
             if (player.getStats().isDead()) {
                 System.out.println("You died. Respawning...");
                 player.getInventory().clear();
+                player.getDurability().reset();
                 player.respawn(world, 0.5f, 0.5f);
             }
 
@@ -217,6 +219,12 @@ public class Main {
                             player.getInventory().add(BlockType.APPLE, 1);
                         }
                     }
+
+                    // Wear down the tool that did the breaking; once its uses run out, it's gone.
+                    if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
+                        player.getInventory().remove(heldItem, 1);
+                        System.out.println("Your " + heldItem + " broke!");
+                    }
                 }
 
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
@@ -257,7 +265,7 @@ public class Main {
                 hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction);
             }
             hud.renderCrosshair(window.getAspectRatio());
-            hud.renderHotbar(atlas, itemTextures, font, HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
+            hud.renderHotbar(atlas, itemTextures, font, player.getDurability(), HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
             hud.renderStatusBars(
                     player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
                     player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
