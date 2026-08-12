@@ -104,14 +104,16 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
-    public void renderBlockOutline(Matrix4f projection, Matrix4f view, Vector3i blockPos) {
+    /** @param breakFraction 0 (just looking at it) to 1 (about to break) - tints the outline red and thickens it as it climbs. */
+    public void renderBlockOutline(Matrix4f projection, Matrix4f view, Vector3i blockPos, float breakFraction) {
         lineShader.bind();
         lineShader.setUniform("projection", projection);
         lineShader.setUniform("view", view);
         Matrix4f model = modelMatrix.identity().translate(blockPos.x, blockPos.y, blockPos.z);
         lineShader.setUniform("model", model);
-        lineShader.setUniform("color", new Vector4f(0, 0, 0, 0.6f));
-        glLineWidth(2.5f);
+        float p = Math.max(0f, Math.min(1f, breakFraction));
+        lineShader.setUniform("color", new Vector4f(p, 0f, 0f, 0.6f + p * 0.35f));
+        glLineWidth(2.5f + p * 2.5f);
         cubeOutline.render();
         lineShader.unbind();
     }

@@ -98,6 +98,20 @@ public class TextureAtlas {
         paintBerries(image, 36);
         paintBerryBush(image, 37, rnd);
 
+        paintStick(image, 38);
+        paintPickaxe(image, 39, 0xA9814F);  // wood
+        paintPickaxe(image, 40, 0x9E9E9E);  // stone
+        paintPickaxe(image, 41, 0xE8E8E8);  // iron
+        paintPickaxe(image, 42, 0x5FE0E0);  // diamond
+        paintAxe(image, 43, 0xA9814F);      // wood
+        paintAxe(image, 44, 0x9E9E9E);      // stone
+        paintAxe(image, 45, 0xE8E8E8);      // iron
+        paintAxe(image, 46, 0x5FE0E0);      // diamond
+        paintSword(image, 47, 0xA9814F);    // wood
+        paintSword(image, 48, 0x9E9E9E);    // stone
+        paintSword(image, 49, 0xE8E8E8);    // iron
+        paintSword(image, 50, 0x5FE0E0);    // diamond
+
         return image;
     }
 
@@ -308,6 +322,67 @@ public class TextureAtlas {
                     float roll = rnd.nextFloat();
                     int color = roll < 0.15f ? 0x9C2B4E : (roll < 0.55f ? 0x3E8E35 : 0x2F701F);
                     img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                }
+            }
+        }
+    }
+
+    /** A short diagonal brown stick, on a transparent background - the basic tool-crafting ingredient. */
+    private void paintStick(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        drawThickLine(img, ox, oy, 3, 13, 12, 4, 0x8B5A2B);
+    }
+
+    /** A vertical handle with a wide two-pronged head near the top, tinted by material - pickaxe icon. */
+    private void paintPickaxe(BufferedImage img, int index, int headColor) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        drawThickLine(img, ox, oy, 8, 15, 7, 5, 0x6E4A2A); // handle
+        drawThickLine(img, ox, oy, 3, 7, 13, 4, headColor);  // head, left prong to right prong
+        drawThickLine(img, ox, oy, 3, 7, 8, 3, headColor);
+        drawThickLine(img, ox, oy, 13, 4, 8, 3, headColor);
+    }
+
+    /** A vertical handle with a triangular blade near the top, tinted by material - axe icon. */
+    private void paintAxe(BufferedImage img, int index, int headColor) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        drawThickLine(img, ox, oy, 6, 15, 7, 6, 0x6E4A2A); // handle
+        for (int y = 2; y <= 8; y++) {
+            int width = 6 - Math.abs(y - 5);
+            for (int x = 0; x < width; x++) {
+                int px = 7 + x, py = y;
+                if (px >= 0 && px < TILE_PX && py >= 0 && py < TILE_PX) {
+                    img.setRGB(ox + px, oy + py, 0xFF000000 | headColor);
+                }
+            }
+        }
+    }
+
+    /** A pointed vertical blade over a dark crossguard and a short handle, tinted by material - sword icon. */
+    private void paintSword(BufferedImage img, int index, int bladeColor) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        drawThickLine(img, ox, oy, 8, 2, 8, 10, bladeColor); // blade
+        img.setRGB(ox + 8, oy + 2, 0xFF000000 | bladeColor); // sharpen the tip to a single pixel
+        for (int x = 4; x <= 11; x++) {
+            img.setRGB(ox + x, oy + 11, 0xFF000000 | 0x4A4A4A); // crossguard
+        }
+        drawThickLine(img, ox, oy, 8, 12, 8, 15, 0x6E4A2A); // handle
+    }
+
+    /** Plots a ~2px-thick straight line between two points in tile-local coordinates. */
+    private void drawThickLine(BufferedImage img, int ox, int oy, int x0, int y0, int x1, int y1, int color) {
+        int steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2 + 1;
+        for (int i = 0; i <= steps; i++) {
+            float t = steps == 0 ? 0 : (float) i / steps;
+            int x = Math.round(x0 + (x1 - x0) * t);
+            int y = Math.round(y0 + (y1 - y0) * t);
+            for (int dx = 0; dx <= 1; dx++) {
+                int px = x + dx, py = y;
+                if (px >= 0 && px < TILE_PX && py >= 0 && py < TILE_PX) {
+                    img.setRGB(ox + px, oy + py, 0xFF000000 | color);
                 }
             }
         }

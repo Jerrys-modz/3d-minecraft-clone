@@ -3,6 +3,7 @@ package com.minecraftclone;
 import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Crafting;
+import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.util.Raycaster;
@@ -28,10 +29,11 @@ import static org.lwjgl.opengl.GL11.*;
  * runs the main game loop.
  * <p>
  * Controls: WASD to move, mouse to look, Space to jump, Left-Ctrl to sprint,
- * F to toggle flight, Left-click to break a block, Right-click to place the
- * selected block (or eat it, if it's food), C to craft the selected item
- * from its recipe, 1-9 or scroll wheel to pick a block, Esc to release the
- * mouse cursor.
+ * F to toggle flight, hold Left-click to break the targeted block (speed and
+ * whether it's even possible depend on the selected tool - see {@link
+ * com.minecraftclone.world.Mining}), Right-click to place the selected block
+ * (or eat it, if it's food), C to craft the selected item from its recipe,
+ * 1-9 or scroll wheel to pick a block, Esc to release the mouse cursor.
  */
 public class Main {
 
@@ -47,7 +49,11 @@ public class Main {
             BlockType.GRAVEL, BlockType.SNOW,
             BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
             BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
-            BlockType.LAVA, BlockType.GLASS, BlockType.APPLE, BlockType.BERRIES
+            BlockType.LAVA, BlockType.GLASS, BlockType.APPLE, BlockType.BERRIES,
+            BlockType.STICK,
+            BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
+            BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
+            BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD
     };
 
     private static final int APPLE_DROP_CHANCE = 8;    // 1 in 8 leaves broken also yield an apple
@@ -101,9 +107,11 @@ public class Main {
         int[] selectedSlot = {0};
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
+        MiningController mining = new MiningController();
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl sprint, F fly toggle,");
-        System.out.println("          Left-click break, Right-click place (or eat, if selected item is food),");
+        System.out.println("          hold Left-click to mine (speed/possibility depends on your tool),");
+        System.out.println("          Right-click place (or eat, if selected item is food),");
         System.out.println("          C craft selected item, 1-9/scroll select block, Esc release mouse.");
 
         glEnable(GL_BLEND);
@@ -181,32 +189,37 @@ public class Main {
             }
 
             Raycaster.Hit hit = null;
+            float breakFraction = 0f;
             if (cursorCaptured[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT) && hit != null) {
-                    BlockType broken = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
-                    if (broken != BlockType.BEDROCK) { // bedrock is unbreakable, like vanilla
-                        world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
-                        if (broken == BlockType.BERRY_BUSH) {
-                            // Harvesting a bush yields berries, not the bush itself - it doesn't regrow.
-                            player.getInventory().add(BlockType.BERRIES, BERRIES_PER_BUSH);
-                        } else {
-                            player.getInventory().add(broken, 1);
-                            if (broken == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
-                                player.getInventory().add(BlockType.APPLE, 1);
-                            }
+                BlockType targetType = hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
+                BlockType heldItem = HOTBAR[selectedSlot[0]];
+                boolean holding = hit != null && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
+                breakFraction = mining.update(hit != null ? hit.blockPos : null, targetType, heldItem, holding, dt);
+
+                if (breakFraction >= 1f) {
+                    mining.reset();
+                    breakFraction = 0f;
+                    world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                    if (targetType == BlockType.BERRY_BUSH) {
+                        // Harvesting a bush yields berries, not the bush itself - it doesn't regrow.
+                        player.getInventory().add(BlockType.BERRIES, BERRIES_PER_BUSH);
+                    } else {
+                        player.getInventory().add(targetType, 1);
+                        if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
+                            player.getInventory().add(BlockType.APPLE, 1);
                         }
                     }
                 }
+
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
-                    BlockType selected = HOTBAR[selectedSlot[0]];
-                    if (selected.isEdible()) {
-                        player.eat(selected);
+                    if (heldItem.isEdible()) {
+                        player.eat(heldItem);
                     } else {
                         Vector3i p = hit.placePos;
-                        if (!intersectsPlayer(player, p) && player.getInventory().remove(selected, 1)) {
-                            world.setBlock(p.x, p.y, p.z, selected);
+                        if (!intersectsPlayer(player, p) && player.getInventory().remove(heldItem, 1)) {
+                            world.setBlock(p.x, p.y, p.z, heldItem);
                         }
                     }
                 }
@@ -233,7 +246,7 @@ public class Main {
             chunkShader.unbind();
 
             if (hit != null) {
-                hud.renderBlockOutline(projection, view, hit.blockPos);
+                hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction);
             }
             hud.renderCrosshair(window.getAspectRatio());
             hud.renderHotbar(atlas, HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
