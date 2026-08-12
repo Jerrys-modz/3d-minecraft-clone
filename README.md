@@ -21,17 +21,26 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 
 ## Requirements
 
-- JDK 17+
-- Maven 3.6+
+- JDK 17+ (only to run a pre-built jar; also need Maven 3.6+ to build from source)
 - A GPU with OpenGL 3.3 support (or a software rasterizer like Mesa `llvmpipe`)
 
-## Building & Running
+## Getting a jar
+
+Every [GitHub Release](../../releases) has `minecraft-clone.jar` attached as a build artifact - just download it and run:
+
+```bash
+java -jar minecraft-clone.jar
+```
+
+That jar is built automatically by [`.github/workflows/release.yml`](.github/workflows/release.yml) whenever a release is published, so there's no manual packaging step to keep in sync.
+
+## Building & Running from source
 
 ```bash
 mvn compile exec:java
 ```
 
-or build a runnable fat jar:
+or build a runnable fat jar yourself:
 
 ```bash
 mvn package
