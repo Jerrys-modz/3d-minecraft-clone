@@ -64,6 +64,9 @@ public class Main {
         Shader lineShader = new Shader(
                 ResourceLoader.loadAsString("/shaders/line.vert"),
                 ResourceLoader.loadAsString("/shaders/line.frag"));
+        Shader hudShader = new Shader(
+                ResourceLoader.loadAsString("/shaders/hud.vert"),
+                ResourceLoader.loadAsString("/shaders/hud.frag"));
 
         TextureAtlas atlas = new TextureAtlas();
         atlas.generate();
@@ -83,7 +86,7 @@ public class Main {
         Player player = new Player();
         player.spawn(world, 0.5f, 0.5f);
 
-        Hud hud = new Hud(lineShader);
+        Hud hud = new Hud(lineShader, hudShader);
 
         window.setCursorCaptured(true);
         boolean[] cursorCaptured = {true};
@@ -157,12 +160,17 @@ public class Main {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT) && hit != null) {
-                    world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                    BlockType broken = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                    if (broken != BlockType.BEDROCK) { // bedrock is unbreakable, like vanilla
+                        world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                        player.getInventory().add(broken, 1);
+                    }
                 }
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
                     Vector3i p = hit.placePos;
-                    if (!intersectsPlayer(player, p)) {
-                        world.setBlock(p.x, p.y, p.z, HOTBAR[selectedSlot[0]]);
+                    BlockType selected = HOTBAR[selectedSlot[0]];
+                    if (!intersectsPlayer(player, p) && player.getInventory().remove(selected, 1)) {
+                        world.setBlock(p.x, p.y, p.z, selected);
                     }
                 }
             }
@@ -188,6 +196,7 @@ public class Main {
                 hud.renderBlockOutline(projection, view, hit.blockPos);
             }
             hud.renderCrosshair(window.getAspectRatio());
+            hud.renderHotbar(atlas, HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
 
             frameCount++;
             boolean autoTestShot = autoTest && frameCount >= autoTestFrames;
@@ -210,6 +219,7 @@ public class Main {
         hud.destroy();
         chunkShader.destroy();
         lineShader.destroy();
+        hudShader.destroy();
         atlas.destroy();
         world.destroy();
         window.close();

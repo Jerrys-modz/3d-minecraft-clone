@@ -27,6 +27,27 @@ public class TextureAtlas {
     public static final int TILE_PX = 16;
     public static final int ATLAS_PX = GRID * TILE_PX;
 
+    /** Tiles 24-33: digits '0'-'9', for the HUD's inventory-count text. See {@link #digitTile}. */
+    public static final int DIGIT_TILE_BASE = 24;
+
+    private static final String[] DIGIT_GLYPHS = {
+            "111101101101111", // 0
+            "010110010010111", // 1
+            "111001111100111", // 2
+            "111001111001111", // 3
+            "101101111001001", // 4
+            "111100111001111", // 5
+            "111100111101111", // 6
+            "111001010010010", // 7
+            "111101111101111", // 8
+            "111101111001111", // 9
+    };
+
+    /** Atlas tile index for the given digit (0-9). */
+    public static int digitTile(int digit) {
+        return DIGIT_TILE_BASE + Math.max(0, Math.min(9, digit));
+    }
+
     private int textureId;
 
     public void generate() {
@@ -66,6 +87,10 @@ public class TextureAtlas {
         paintCrossGrass(image, 21, rnd, 0x4C8C2C);                        // tall grass
         paintCrossFlower(image, 22, rnd, 0x3D6E2E, 0xD0392B, 0xE8C93A);   // red flower
         paintCrossFlower(image, 23, rnd, 0x3D6E2E, 0xF2D33A, 0xB5651D);   // yellow flower
+
+        for (int d = 0; d <= 9; d++) {
+            paintDigit(image, digitTile(d), DIGIT_GLYPHS[d], 0xFFFFFF);
+        }
 
         return image;
     }
@@ -210,6 +235,33 @@ public class TextureAtlas {
             img.setRGB(ox + x, oy + y, 0xFF000000 | petalColor);
         }
         img.setRGB(ox + stemX, oy + headY, 0xFF000000 | centerColor);
+    }
+
+    /**
+     * Draws a digit from a 3x5 bitmap (each glyph string is 15 chars, row-major,
+     * '1' = filled), scaled up ~3x and centered in the tile, on a transparent
+     * background - a compact enough pixel font to read at small HUD sizes.
+     */
+    private void paintDigit(BufferedImage img, int index, String glyph, int color) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int scale = 3;
+        int glyphPxW = 3 * scale;
+        int glyphPxH = 5 * scale;
+        int offX = (TILE_PX - glyphPxW) / 2;
+        int offY = (TILE_PX - glyphPxH) / 2;
+        for (int row = 0; row < 5; row++) {
+            for (int col = 0; col < 3; col++) {
+                if (glyph.charAt(row * 3 + col) != '1') continue;
+                for (int sy = 0; sy < scale; sy++) {
+                    for (int sx = 0; sx < scale; sx++) {
+                        int x = offX + col * scale + sx;
+                        int y = offY + row * scale + sy;
+                        img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                    }
+                }
+            }
+        }
     }
 
     private int uploadImage(BufferedImage image) {

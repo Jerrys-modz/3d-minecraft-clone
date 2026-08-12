@@ -11,8 +11,9 @@ A voxel sandbox game inspired by Minecraft, written in Java on top of [LWJGL 3](
 - **Biome-varied vegetation**: dense oak forests where it's wet, sparser oak on plains, conical pine trees at higher/colder elevations, cacti in deserts, and tall grass/flowers scattered across grassy ground.
 - **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom), distance fog, and cross-shaped "billboard" geometry for non-cube decoration (grass/flowers) with alpha-cutout transparency.
 - **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, sprinting, and a no-clip flight mode.
-- **Block interaction**: raycast-based block breaking/placing with a hotbar (reach limited to 6 blocks) covering terrain blocks, all four ores, and grass/flowers/lava, plus a wireframe outline on the targeted block.
-- **Procedural texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, four ores, and alpha-cutout grass/flower tiles, all generated at runtime.
+- **Block interaction**: raycast-based block breaking/placing (reach limited to 6 blocks) with a wireframe outline on the targeted block, gated by a real inventory - breaking a block adds it to your count, placing spends one, and bedrock is unbreakable. Starts empty, so you gather before you build.
+- **On-screen hotbar HUD**: 17 slots across the bottom of the screen with block icons sampled straight from the game's own texture atlas, live inventory counts drawn with a tiny procedural pixel font (no external font/text-rendering library), and a highlight border on the selected slot.
+- **Procedural texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, four ores, alpha-cutout grass/flower tiles, and a 0-9 digit font, all generated at runtime.
 
 ## Requirements
 
@@ -51,6 +52,8 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 | `F2` | Save a screenshot to `screenshot.png` |
 | `Esc` | Release/recapture the mouse cursor |
 
+You start with an empty inventory - break blocks to collect them (they show up with a count on the hotbar) before you can place them elsewhere. Bedrock can't be broken.
+
 ## Saving
 
 The world is saved to `saves/world/` next to wherever you run the jar from (override with the `MCCLONE_SAVE_DIR` environment variable). The world seed is written there on first launch and reused on every subsequent launch, so it's the same world each time you start the game. Only chunks you've actually broken/placed blocks in are ever written to disk — untouched terrain is cheap to regenerate deterministically from the seed, which is what keeps disk and memory usage bounded no matter how far you explore. Edits autosave every 60 seconds and on a clean exit.
@@ -60,21 +63,21 @@ The world is saved to `saves/world/` next to wherever you run the jar from (over
 ```
 src/main/java/com/minecraftclone/
 ├── Main.java                 # Entry point & game loop
-├── engine/                   # Window, input, camera, shaders, HUD
-│   └── graphics/              # TextureAtlas, Mesh, LineMesh (GL wrappers)
+├── engine/                   # Window, input, camera, shaders, HUD (crosshair/outline/hotbar)
+│   └── graphics/              # TextureAtlas, Mesh, LineMesh, IconMesh (GL wrappers)
 ├── world/                    # Chunk, World (streaming/meshing), BlockType
 │   └── gen/                   # TerrainGenerator (noise-based world gen)
-├── player/                    # Player controller (physics & collision)
+├── player/                    # Player controller (physics & collision), Inventory
 └── util/                      # Noise, AABB, Raycaster, ResourceLoader
-src/main/resources/shaders/    # GLSL vertex/fragment shaders
+src/main/resources/shaders/    # GLSL vertex/fragment shaders (chunk, line, hud)
 ```
 
 ## Notes & Simplifications
 
 This is a compact, from-scratch clone meant to be readable end-to-end, not a feature-complete recreation. Some deliberate simplifications:
 
-- No text/font rendering — the hotbar/FPS aren't drawn on screen (see console output for the world seed and controls).
-- No inventory/crafting/mobs — it's a "creative mode" walk-and-build sandbox.
+- Text rendering is limited to the digits 0-9 (inventory counts) via a hand-drawn pixel font baked into the same texture atlas as the blocks - there's no general text renderer, so FPS/debug info still only goes to the console.
+- There's an inventory (break to gather, place to spend) but no crafting or mobs - you work with raw blocks straight out of the ground, and the world is otherwise uninhabited.
 - Water, lava and leaves are rendered as solid (opaque) blocks rather than alpha-blended, keeping the renderer single-pass. (Grass/flowers are the exception - they're cross-shaped and alpha-cutout, not alpha-blended.)
 - Lava is purely a visual/world-gen hazard - there's no health or damage system, so walking into it does nothing (same as water, just non-collidable).
 - Chunk meshing runs on the main thread with a per-frame budget, so there's no multithreading complexity, at the cost of a brief pause when flying very fast into unloaded terrain.

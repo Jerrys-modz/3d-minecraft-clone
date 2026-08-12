@@ -33,6 +33,7 @@ public class Player {
     private final Vector3f position = new Vector3f();
     private final Vector3f velocity = new Vector3f();
     private final Camera camera = new Camera();
+    private final Inventory inventory = new Inventory();
 
     private boolean onGround = false;
     private boolean flying = false;
@@ -46,6 +47,10 @@ public class Player {
 
     public Camera getCamera() {
         return camera;
+    }
+
+    public Inventory getInventory() {
+        return inventory;
     }
 
     public Vector3f getPosition() {
