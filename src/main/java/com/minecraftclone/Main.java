@@ -1,6 +1,8 @@
 package com.minecraftclone;
 
 import com.minecraftclone.engine.*;
+import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.MiningController;
@@ -83,6 +85,10 @@ public class Main {
 
         TextureAtlas atlas = new TextureAtlas();
         atlas.generate();
+        ItemTextures itemTextures = new ItemTextures();
+        itemTextures.generate();
+        FontAtlas font = new FontAtlas();
+        font.generate();
 
         Path saveDir = Paths.get(System.getenv().getOrDefault("MCCLONE_SAVE_DIR", "saves/world"));
         long seed = loadOrCreateSeed(saveDir);
@@ -216,7 +222,9 @@ public class Main {
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
                     if (heldItem.isEdible()) {
                         player.eat(heldItem);
-                    } else {
+                    } else if (!heldItem.isItem) {
+                        // Pure inventory items (tools, and any future non-edible item)
+                        // have no world tile and can never be placed as a block.
                         Vector3i p = hit.placePos;
                         if (!intersectsPlayer(player, p) && player.getInventory().remove(heldItem, 1)) {
                             world.setBlock(p.x, p.y, p.z, heldItem);
@@ -249,7 +257,7 @@ public class Main {
                 hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction);
             }
             hud.renderCrosshair(window.getAspectRatio());
-            hud.renderHotbar(atlas, HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
+            hud.renderHotbar(atlas, itemTextures, font, HOTBAR, player.getInventory(), selectedSlot[0], window.getAspectRatio());
             hud.renderStatusBars(
                     player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
                     player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
@@ -279,6 +287,8 @@ public class Main {
         lineShader.destroy();
         hudShader.destroy();
         atlas.destroy();
+        itemTextures.destroy();
+        font.destroy();
         world.destroy();
         window.close();
     }

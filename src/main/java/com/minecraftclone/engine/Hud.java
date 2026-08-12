@@ -1,6 +1,8 @@
 package com.minecraftclone.engine;
 
+import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.IconMesh;
+import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.LineMesh;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
@@ -43,7 +45,9 @@ public class Hud {
     private final LineMesh cubeOutline = new LineMesh();
     private final LineMesh hotbarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh hotbarHighlight = new LineMesh(GL_LINES);
-    private final IconMesh hotbarIcons = new IconMesh();
+    private final IconMesh hotbarBlockIcons = new IconMesh();  // batched: all non-item slots, sampling the shared block atlas
+    private final IconMesh hotbarItemIcon = new IconMesh();    // reused per slot: each item has its own texture, so items can't batch
+    private final IconMesh hotbarCounts = new IconMesh();      // batched: every slot's inventory-count digits, sampling the font atlas
     private final LineMesh statBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh statBarFill = new LineMesh(GL_TRIANGLES);
 
@@ -137,7 +141,8 @@ public class Hud {
         return slotCenterY() + HOTBAR_SLOT_SIZE / 2f + HOTBAR_PADDING;
     }
 
-    public void renderHotbar(TextureAtlas atlas, BlockType[] hotbar, Inventory inventory, int selectedSlot, float aspectRatio) {
+    public void renderHotbar(TextureAtlas atlas, ItemTextures itemTextures, FontAtlas font,
+                              BlockType[] hotbar, Inventory inventory, int selectedSlot, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
 
         int count = hotbar.length;
@@ -179,19 +184,48 @@ public class Hud {
         hotbarHighlight.render();
         lineShader.unbind();
 
-        // Icons + count digits, batched into one textured draw call.
-        List<Float> vertices = new ArrayList<>();
-        List<Integer> indices = new ArrayList<>();
-        int[] vertexCounter = {0};
+        // Icons come from three separate texture sources, so they can't all
+        // batch into one draw call the way they used to: block icons still
+        // batch together (one shared atlas), each item icon needs its own
+        // individual bind+draw (its own PNG), and the count digits batch
+        // together again (one shared font strip).
+        List<Float> blockVertices = new ArrayList<>();
+        List<Integer> blockIndices = new ArrayList<>();
+        int[] blockVertexCounter = {0};
+
+        List<Float> countVertices = new ArrayList<>();
+        List<Integer> countIndices = new ArrayList<>();
+        int[] countVertexCounter = {0};
+
+        float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
 
         for (int i = 0; i < count; i++) {
             float cx = slotCenterX(i, count);
-            float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
-            addQuad(vertices, indices, vertexCounter,
-                    cx - iconHalf, centerY - iconHalf, cx + iconHalf, centerY + iconHalf,
-                    atlas.getUV(hotbar[i].topTile));
+            BlockType type = hotbar[i];
 
-            int amount = inventory.getCount(hotbar[i]);
+            if (type.isItem) {
+                // Own texture, own draw call - can't be batched with the shared atlas.
+                float[] quadVerts = {
+                        cx - iconHalf, centerY - iconHalf, 0f, 1f,
+                        cx + iconHalf, centerY - iconHalf, 1f, 1f,
+                        cx + iconHalf, centerY + iconHalf, 1f, 0f,
+                        cx - iconHalf, centerY + iconHalf, 0f, 0f,
+                };
+                hotbarItemIcon.upload(quadVerts, QUAD_INDICES);
+
+                hudShader.bind();
+                hudShader.setUniform("transform", hudTransform);
+                hudShader.setUniform("atlas", 0);
+                itemTextures.bind(type);
+                hotbarItemIcon.render();
+                hudShader.unbind();
+            } else {
+                addQuad(blockVertices, blockIndices, blockVertexCounter,
+                        cx - iconHalf, centerY - iconHalf, cx + iconHalf, centerY + iconHalf,
+                        atlas.getUV(type.topTile));
+            }
+
+            int amount = inventory.getCount(type);
             if (amount > 0) {
                 String text = Integer.toString(Math.min(amount, 999));
                 float digitSize = 0.032f;
@@ -202,27 +236,42 @@ public class Hud {
                 for (int c = 0; c < text.length(); c++) {
                     int digit = text.charAt(c) - '0';
                     float x = startX + c * (digitSize + digitGap);
-                    addQuad(vertices, indices, vertexCounter,
+                    addQuad(countVertices, countIndices, countVertexCounter,
                             x, y, x + digitSize, y + digitSize,
-                            atlas.getUV(TextureAtlas.digitTile(digit)));
+                            font.getUV(digit));
                 }
             }
         }
 
-        float[] vArray = new float[vertices.size()];
-        for (int i = 0; i < vArray.length; i++) vArray[i] = vertices.get(i);
-        int[] iArray = new int[indices.size()];
-        for (int i = 0; i < iArray.length; i++) iArray[i] = indices.get(i);
-        hotbarIcons.upload(vArray, iArray);
-
         hudShader.bind();
         hudShader.setUniform("transform", hudTransform);
         hudShader.setUniform("atlas", 0);
+
+        hotbarBlockIcons.upload(toFloatArray(blockVertices), toIntArray(blockIndices));
         atlas.bind();
-        hotbarIcons.render();
+        hotbarBlockIcons.render();
+
+        hotbarCounts.upload(toFloatArray(countVertices), toIntArray(countIndices));
+        font.bind();
+        hotbarCounts.render();
+
         hudShader.unbind();
 
         glEnable(GL_DEPTH_TEST);
+    }
+
+    private static final int[] QUAD_INDICES = {0, 1, 2, 0, 2, 3};
+
+    private static float[] toFloatArray(List<Float> values) {
+        float[] array = new float[values.size()];
+        for (int i = 0; i < array.length; i++) array[i] = values.get(i);
+        return array;
+    }
+
+    private static int[] toIntArray(List<Integer> values) {
+        int[] array = new int[values.size()];
+        for (int i = 0; i < array.length; i++) array[i] = values.get(i);
+        return array;
     }
 
     /** Health (red), hunger (orange) and stamina (yellow) bars, stacked above the hotbar. */
@@ -294,7 +343,9 @@ public class Hud {
         cubeOutline.destroy();
         hotbarBackground.destroy();
         hotbarHighlight.destroy();
-        hotbarIcons.destroy();
+        hotbarBlockIcons.destroy();
+        hotbarItemIcon.destroy();
+        hotbarCounts.destroy();
         statBarBackground.destroy();
         statBarFill.destroy();
     }

@@ -1,6 +1,6 @@
 # 3D Minecraft Clone
 
-A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/) (GLFW + modern OpenGL) — closer to a "survival craft" than to vanilla Minecraft's creative-friendly loop: you gather everything by hand, hunger and lava and falling and drowning can all kill you, and the day/night cycle actually matters. Fully self-contained — no external textures or assets to download; the texture atlas is generated procedurally at startup.
+A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/) (GLFW + modern OpenGL) — closer to a "survival craft" than to vanilla Minecraft's creative-friendly loop: you gather everything by hand, hunger and lava and falling and drowning can all kill you, and the day/night cycle actually matters. Fully self-contained — no assets to download at runtime. Block textures are generated procedurally into one shared atlas at startup (so chunk meshing can batch many blocks into a single draw call); each inventory-only item (tools, food) instead has its own individual 16×16 PNG committed in the repo under `src/main/resources/items/`, produced once by a small offline generator tool - see [Textures](#textures) below.
 
 ![Screenshot](docs/screenshot.png)
 
@@ -17,8 +17,8 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom), distance fog, and cross-shaped "billboard" geometry for non-cube decoration (grass/flowers/bushes) with alpha-cutout transparency.
 - **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a no-clip flight mode.
 - **Block interaction**: raycast-based block breaking/placing (reach limited to 6 blocks) with a wireframe outline on the targeted block, gated by a real inventory - breaking a block adds it to your count, placing spends one, and bedrock is unbreakable. Starts empty, so you gather before you build.
-- **On-screen HUD**: a hotbar (33 slots) with block icons sampled straight from the game's own texture atlas, live inventory counts drawn with a tiny procedural pixel font (no external font/text-rendering library), a highlight border on the selected slot, and health/hunger/stamina bars above it.
-- **Procedural texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, apples/berries/berry bushes, sticks, twelve tools, alpha-cutout grass/flower tiles, and a 0-9 digit font, all generated at runtime.
+- **On-screen HUD**: a hotbar (33 slots) with block icons batched from the game's shared texture atlas and item icons (food/tools) drawn from their own individual PNGs, live inventory counts drawn with a tiny procedural pixel font (its own small atlas, no external font/text-rendering library), a highlight border on the selected slot, and health/hunger/stamina bars above it.
+- **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 
 ## Requirements
 
@@ -90,25 +90,37 @@ Tools don't wear out yet (no durability), and swords have nothing to fight yet -
 
 The world is saved to `saves/world/` next to wherever you run the jar from (override with the `MCCLONE_SAVE_DIR` environment variable). The world seed is written there on first launch and reused on every subsequent launch, so it's the same world each time you start the game. Only chunks you've actually broken/placed blocks in are ever written to disk — untouched terrain is cheap to regenerate deterministically from the seed, which is what keeps disk and memory usage bounded no matter how far you explore. Edits autosave every 60 seconds and on a clean exit.
 
+## Textures
+
+Two different asset strategies, chosen per what actually benefits from each:
+
+- **Blocks** (`TextureAtlas`): generated procedurally into one shared 8×8 tile sheet at startup. Chunk meshing batches many blocks into a single draw call, so sharing one sheet (and one texture bind) across all of them matters for performance.
+- **Items** (`ItemTextures`): food and tools are inventory-only and never batch together the way block faces do, so each one is a real, individual 16×16 PNG file committed under `src/main/resources/items/`, loaded from the classpath at runtime. They were produced once by [`GenerateItemTextures`](src/main/java/com/minecraftclone/tools/GenerateItemTextures.java) - a small offline tool, not something the game runs itself - and are checked into the repo like any other asset; re-run that tool and commit the results if an item's art ever needs to change.
+- **HUD digit font** (`FontAtlas`): the 0-9 pixel font used for inventory counts gets its own tiny procedurally-generated strip, separate from both of the above, since it's neither a block nor an item.
+
+All three share one GL upload helper (`GLTexture`) and the same nearest-neighbor filtering, so the blocky pixel-art look is consistent everywhere.
+
 ## Project Layout
 
 ```
 src/main/java/com/minecraftclone/
 ├── Main.java                 # Entry point & game loop
 ├── engine/                   # Window, input, camera, shaders, HUD, DayNightCycle
-│   └── graphics/              # TextureAtlas, Mesh, LineMesh, IconMesh (GL wrappers)
+│   └── graphics/              # TextureAtlas, ItemTextures, FontAtlas, GLTexture, Mesh, LineMesh, IconMesh
 ├── world/                    # Chunk, World (streaming/meshing), BlockType, Mining
 │   └── gen/                   # TerrainGenerator (noise-based world gen)
 ├── player/                    # Player controller, PlayerStats, Inventory, Crafting, MiningController
+├── tools/                     # GenerateItemTextures (offline, not run by the game itself)
 └── util/                      # Noise, AABB, Raycaster, ResourceLoader
 src/main/resources/shaders/    # GLSL vertex/fragment shaders (chunk, line, hud)
+src/main/resources/items/      # Individual item PNGs (see Textures below)
 ```
 
 ## Notes & Simplifications
 
 This is a compact, from-scratch clone meant to be readable end-to-end, not a feature-complete recreation. Some deliberate simplifications:
 
-- Text rendering is limited to the digits 0-9 (inventory counts) via a hand-drawn pixel font baked into the same texture atlas as the blocks - there's no general text renderer, so FPS/debug info still only goes to the console, and there's no on-screen death/damage messaging beyond the bars themselves (check the console for a death notice).
+- Text rendering is limited to the digits 0-9 (inventory counts) via a hand-drawn pixel font baked into its own tiny procedural atlas (separate from both the block atlas and the item PNGs) - there's no general text renderer, so FPS/debug info still only goes to the console, and there's no on-screen death/damage messaging beyond the bars themselves (check the console for a death notice).
 - Crafting is a small fixed table, not a grid - there's no way to combine arbitrary items. Pickaxes, axes and swords exist with four material tiers each, but no durability yet (they never wear out), and there's nothing for a sword to fight (no mobs) or a shovel to dig faster (no shovel).
 - No mobs (hostile or otherwise) - night is darker and a real signal, but nothing actually comes looking for you yet. No sleeping/beds to skip it either.
 - Water and leaves are rendered as solid (opaque) blocks rather than alpha-blended, keeping the renderer single-pass. (Grass/flowers/berry bushes are the exception - they're cross-shaped and alpha-cutout, not alpha-blended. Lava is opaque too, despite being a hazard.)
