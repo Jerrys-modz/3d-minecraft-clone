@@ -52,7 +52,7 @@ public class Main {
             BlockType.GRAVEL, BlockType.SNOW,
             BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
             BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
-            BlockType.LAVA, BlockType.GLASS, BlockType.APPLE, BlockType.BERRIES,
+            BlockType.LAVA, BlockType.GLASS, BlockType.TORCH, BlockType.APPLE, BlockType.BERRIES,
             BlockType.STICK,
             BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
             BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,

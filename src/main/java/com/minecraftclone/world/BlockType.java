@@ -31,6 +31,7 @@ public enum BlockType {
     FLOWER_YELLOW(20, false, true, 23),
     GLASS(21, true, false, 34, 34, 34),
     BERRY_BUSH(22, false, true, 37),
+    TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -63,6 +64,8 @@ public enum BlockType {
     public final int foodValue;
     /** True for inventory-only items (food/tools): no atlas tile, own PNG texture, never placeable as a world block. */
     public final boolean isItem;
+    /** 0-15, Minecraft-style: how brightly this block glows (0 = not a light source). See torch handling in {@link Chunk}. */
+    public final int lightLevel;
 
     /** Full-cube block: distinct top/side/bottom textures, collides with the player. */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile) {
@@ -80,10 +83,16 @@ public enum BlockType {
         this.bottomTile = bottomTile;
         this.foodValue = foodValue;
         this.isItem = false;
+        this.lightLevel = 0;
     }
 
     /** Cross-shaped (billboard-X) world decoration block, e.g. grass/flowers/berry bush: one atlas tile, never collides. */
     BlockType(int id, boolean solid, boolean transparent, int tile) {
+        this(id, solid, transparent, tile, 0);
+    }
+
+    /** Cross-shaped world decoration that's also a light source, e.g. a torch. */
+    BlockType(int id, boolean solid, boolean transparent, int tile, int lightLevel) {
         this.id = (byte) id;
         this.solid = solid;
         this.transparent = transparent;
@@ -93,6 +102,7 @@ public enum BlockType {
         this.bottomTile = tile;
         this.foodValue = 0;
         this.isItem = false;
+        this.lightLevel = lightLevel;
     }
 
     /** Inventory-only item (tool, or foraged food like apple/berries): no atlas tile, has its own PNG texture, never placeable as a world block. */
@@ -106,6 +116,7 @@ public enum BlockType {
         this.bottomTile = -1;
         this.foodValue = foodValue;
         this.isItem = true;
+        this.lightLevel = 0;
     }
 
     private static final BlockType[] BY_ID = new BlockType[values().length];
@@ -130,5 +141,9 @@ public enum BlockType {
 
     public boolean isEdible() {
         return foodValue > 0;
+    }
+
+    public boolean isLightSource() {
+        return lightLevel > 0;
     }
 }

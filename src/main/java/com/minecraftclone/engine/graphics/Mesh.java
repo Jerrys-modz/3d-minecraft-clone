@@ -10,12 +10,12 @@ import static org.lwjgl.system.MemoryUtil.*;
 
 /**
  * A GPU mesh with an interleaved vertex buffer:
- * position(3 floats), uv(2 floats), light(1 float) = 6 floats/vertex,
+ * position(3 floats), uv(2 floats), light(1 float), blockLight(1 float) = 7 floats/vertex,
  * plus an index buffer.
  */
 public class Mesh {
 
-    public static final int STRIDE_FLOATS = 6;
+    public static final int STRIDE_FLOATS = 7;
 
     private final int vaoId;
     private final int vboId;
@@ -51,6 +51,8 @@ public class Mesh {
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(2, 1, GL_FLOAT, false, strideBytes, 5L * Float.BYTES);
         glEnableVertexAttribArray(2);
+        glVertexAttribPointer(3, 1, GL_FLOAT, false, strideBytes, 6L * Float.BYTES);
+        glEnableVertexAttribArray(3);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);

@@ -74,6 +74,7 @@ public class TextureAtlas {
         paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
         paintGlassPanes(image, 34);
         paintBerryBush(image, 37, rnd);
+        paintTorch(image, 38);
 
         return image;
     }
@@ -249,6 +250,28 @@ public class TextureAtlas {
                 if (d <= r) {
                     float roll = rnd.nextFloat();
                     int color = roll < 0.15f ? 0x9C2B4E : (roll < 0.55f ? 0x3E8E35 : 0x2F701F);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                }
+            }
+        }
+    }
+
+    /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background - the torch light source. */
+    private void paintTorch(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Stick: a thin vertical shaft in the lower two-thirds of the tile.
+        for (int y = 7; y < TILE_PX; y++) {
+            img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x6E4A2A);
+            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x8B5A2B);
+        }
+        // Flame: a small warm blob at the top, brighter toward the center.
+        double cx = 7.5, cy = 4.5;
+        for (int y = 1; y <= 8; y++) {
+            for (int x = 4; x <= 11; x++) {
+                double d = Math.hypot(x - cx, (y - cy) * 1.2);
+                if (d <= 3.2) {
+                    int color = d <= 1.4 ? 0xFFE066 : (d <= 2.4 ? 0xF2A93B : 0xD9601A);
                     img.setRGB(ox + x, oy + y, 0xFF000000 | color);
                 }
             }

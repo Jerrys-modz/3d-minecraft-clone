@@ -25,6 +25,11 @@ public class Chunk {
     private final ChunkPos pos;
     private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
     private final Mesh mesh = new Mesh();
+    // Local positions (+ light level) of every light-emitting block (torches) currently
+    // in this chunk, kept incrementally up to date - see setLocal/setRawBlocks. Small and
+    // rare enough that a flat list beats a spatial index; consulted by rebuildMesh to bake
+    // a static, non-occlusion-aware glow around each one (see World.collectNearbyLights).
+    private final List<int[]> lightSources = new ArrayList<>();
 
     private volatile boolean dirty = true;
     private boolean generated = false;
@@ -78,8 +83,20 @@ public class Chunk {
 
     public void setLocal(int x, int y, int z, BlockType type) {
         if (!inBounds(x, y, z)) return;
+        BlockType old = getLocal(x, y, z);
+        if (old.isLightSource()) removeLightSource(x, y, z);
         blocks[index(x, y, z)] = type.id;
+        if (type.isLightSource()) lightSources.add(new int[]{x, y, z, type.lightLevel});
         dirty = true;
+    }
+
+    private void removeLightSource(int x, int y, int z) {
+        lightSources.removeIf(s -> s[0] == x && s[1] == y && s[2] == z);
+    }
+
+    /** Local positions of every light-emitting block in this chunk, as {x, y, z, lightLevel}. Treat as read-only. */
+    public List<int[]> getLocalLightSources() {
+        return lightSources;
     }
 
     /** Like {@link #setLocal}, but also flags the chunk as needing to be saved to disk when it unloads. */
@@ -108,10 +125,30 @@ public class Chunk {
         }
         System.arraycopy(data, 0, blocks, 0, blocks.length);
         dirty = true;
+        rebuildLightSourceIndex();
     }
 
-    /** Rebuilds the CPU-side vertex data and uploads it to the GPU. Call from the main (GL) thread. */
-    public void rebuildMesh(BlockAccessor world, TextureAtlas atlas) {
+    /** Full O(chunk volume) rescan of light sources - only needed after a wholesale block replacement (disk load). */
+    private void rebuildLightSourceIndex() {
+        lightSources.clear();
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int z = 0; z < SIZE; z++) {
+                for (int x = 0; x < SIZE; x++) {
+                    BlockType t = getLocal(x, y, z);
+                    if (t.isLightSource()) lightSources.add(new int[]{x, y, z, t.lightLevel});
+                }
+            }
+        }
+    }
+
+    /**
+     * Rebuilds the CPU-side vertex data and uploads it to the GPU. Call from the main (GL) thread.
+     *
+     * @param nearbyLights every light-emitting block within reach of this chunk (this chunk's own
+     *                     plus its neighbors', see {@code World.collectNearbyLights}), as world-space
+     *                     {wx, wy, wz, lightLevel} - used to bake a static glow around each one.
+     */
+    public void rebuildMesh(BlockAccessor world, TextureAtlas atlas, List<int[]> nearbyLights) {
         List<Float> vertices = new ArrayList<>(4096);
         List<Integer> indices = new ArrayList<>(4096);
         int[] vertexCounter = {0};
@@ -128,37 +165,38 @@ public class Chunk {
                     int wx = originX + x;
                     int wy = y;
                     int wz = originZ + z;
+                    float blockLight = computeBlockLight(nearbyLights, wx + 0.5f, wy + 0.5f, wz + 0.5f);
 
                     if (block.cross) {
                         // Decoration (grass/flowers): two crossed planes, always fully
                         // visible - no face culling, since it never covers a whole cell.
-                        emitCross(vertices, indices, vertexCounter, wx, wy, wz, block, atlas);
+                        emitCross(vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
 
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.TOP, block, atlas);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.TOP, block, atlas, blockLight);
                     }
                     // -Y bottom
                     if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.BOTTOM, block, atlas);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
                     }
                     // +X east
                     if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.EAST, block, atlas);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.EAST, block, atlas, blockLight);
                     }
                     // -X west
                     if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.WEST, block, atlas);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.WEST, block, atlas, blockLight);
                     }
                     // +Z south
                     if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.SOUTH, block, atlas);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
                     }
                     // -Z north
                     if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.NORTH, block, atlas);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
                     }
                 }
             }
@@ -190,10 +228,30 @@ public class Chunk {
         return neighbor == BlockType.AIR || neighbor.cross;
     }
 
+    /**
+     * Brightness floor (0..1) contributed by nearby light sources at world-space point
+     * (px, py, pz): each source's contribution falls off linearly by 1/15 per block of
+     * straight-line distance (Minecraft-style falloff, but distance- rather than
+     * flood-fill-based - it isn't blocked by walls, a deliberate simplification). Zero if
+     * nothing is close enough, which is the common case for most of the world.
+     */
+    private float computeBlockLight(List<int[]> nearbyLights, float px, float py, float pz) {
+        float best = 0f;
+        for (int[] src : nearbyLights) {
+            float dx = px - (src[0] + 0.5f);
+            float dy = py - (src[1] + 0.5f);
+            float dz = pz - (src[2] + 0.5f);
+            float dist = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            float contribution = (src[3] - dist) / 15f;
+            if (contribution > best) best = contribution;
+        }
+        return Math.min(1f, best);
+    }
+
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
 
     private void emitFace(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
-                           int wx, int wy, int wz, Face face, BlockType block, TextureAtlas atlas) {
+                           int wx, int wy, int wz, Face face, BlockType block, TextureAtlas atlas, float blockLight) {
         int tile = switch (face) {
             case TOP -> block.topTile;
             case BOTTOM -> block.bottomTile;
@@ -224,17 +282,17 @@ public class Chunk {
             default -> throw new IllegalStateException();
         }
 
-        emitQuad(vertices, indices, vertexCounter, positions, uvs, light);
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
     }
 
     /**
      * Emits a cross-shaped decoration (two diagonal planes forming an "X" when
-     * viewed from above), like grass tufts and flowers. Each plane is drawn as
-     * two quads with opposite winding so it's visible from both sides without
-     * needing to disable backface culling.
+     * viewed from above), like grass tufts, flowers and torches. Each plane is
+     * drawn as two quads with opposite winding so it's visible from both sides
+     * without needing to disable backface culling.
      */
     private void emitCross(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
-                            int wx, int wy, int wz, BlockType block, TextureAtlas atlas) {
+                            int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
         float[] uv = atlas.getUV(block.topTile);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
         float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
@@ -245,20 +303,20 @@ public class Chunk {
         float[][] planeA = {{x0, y0, z0}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z0}};
         float[][] planeB = {{x0, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x0, y1, z1}};
 
-        emitQuadBothSides(vertices, indices, vertexCounter, planeA, uvs, light);
-        emitQuadBothSides(vertices, indices, vertexCounter, planeB, uvs, light);
+        emitQuadBothSides(vertices, indices, vertexCounter, planeA, uvs, light, blockLight);
+        emitQuadBothSides(vertices, indices, vertexCounter, planeB, uvs, light, blockLight);
     }
 
     private void emitQuadBothSides(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
-                                    float[][] positions, float[][] uvs, float light) {
-        emitQuad(vertices, indices, vertexCounter, positions, uvs, light);
+                                    float[][] positions, float[][] uvs, float light, float blockLight) {
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
         float[][] reversed = {positions[3], positions[2], positions[1], positions[0]};
         float[][] uvsReversed = {uvs[3], uvs[2], uvs[1], uvs[0]};
-        emitQuad(vertices, indices, vertexCounter, reversed, uvsReversed, light);
+        emitQuad(vertices, indices, vertexCounter, reversed, uvsReversed, light, blockLight);
     }
 
     private void emitQuad(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
-                           float[][] positions, float[][] uvs, float light) {
+                           float[][] positions, float[][] uvs, float light, float blockLight) {
         int base = vertexCounter[0];
         for (int i = 0; i < 4; i++) {
             vertices.add(positions[i][0]);
@@ -267,6 +325,7 @@ public class Chunk {
             vertices.add(uvs[i][0]);
             vertices.add(uvs[i][1]);
             vertices.add(light);
+            vertices.add(blockLight);
         }
         indices.add(base);
         indices.add(base + 1);

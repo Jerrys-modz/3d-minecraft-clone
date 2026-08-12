@@ -2,6 +2,7 @@
 
 in vec2 fragUv;
 in float fragLight;
+in float fragBlockLight;
 in float fragViewDistance;
 
 uniform sampler2D atlas;
@@ -18,7 +19,11 @@ void main() {
         discard;
     }
 
-    vec3 shaded = texColor.rgb * fragLight * ambientBrightness;
+    // Local light sources (torches) set a brightness floor independent of
+    // the day/night cycle, the same way Minecraft-style block light isn't
+    // dimmed by the sky - a torch-lit wall stays lit at midnight.
+    float ambient = max(ambientBrightness, fragBlockLight);
+    vec3 shaded = texColor.rgb * fragLight * ambient;
 
     float fogFactor = clamp((fragViewDistance - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
     vec3 finalColor = mix(shaded, fogColor, fogFactor);

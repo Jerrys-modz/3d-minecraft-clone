@@ -66,6 +66,7 @@ public final class Mining {
         put(BlockType.FLOWER_RED, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_YELLOW, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.BERRY_BUSH, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.TORCH, 0f, ToolKind.NONE, TIER_HAND);
 
         // Wood - axe helps but isn't required.
         put(BlockType.WOOD_LOG, 1.5f, ToolKind.AXE, TIER_HAND);

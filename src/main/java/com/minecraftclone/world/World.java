@@ -72,6 +72,7 @@ public class World implements BlockAccessor {
         if (chunk == null) return;
         int lx = Math.floorMod(worldX, Chunk.SIZE);
         int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        BlockType old = chunk.getLocal(lx, worldY, lz);
         chunk.setLocalFromPlayer(lx, worldY, lz, type);
 
         // If we touched a boundary column, the neighbor chunk's culled faces
@@ -80,11 +81,45 @@ public class World implements BlockAccessor {
         if (lx == Chunk.SIZE - 1) markNeighborDirty(cx + 1, cz);
         if (lz == 0) markNeighborDirty(cx, cz - 1);
         if (lz == Chunk.SIZE - 1) markNeighborDirty(cx, cz + 1);
+
+        // Placing/removing a light source (e.g. a torch) can change the baked glow
+        // in every chunk within its radius, not just literal boundary columns - the
+        // light radius is well under a chunk's width, so the immediate 3x3 chunk
+        // neighborhood is always enough to cover it.
+        if (old.isLightSource() || type.isLightSource()) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    markNeighborDirty(cx + dx, cz + dz);
+                }
+            }
+        }
     }
 
     private void markNeighborDirty(int cx, int cz) {
         Chunk c = getChunk(cx, cz);
         if (c != null) c.markDirty();
+    }
+
+    /**
+     * Every light-emitting block within reach of chunk {@code center}, as world-space
+     * {wx, wy, wz, lightLevel} - gathered from the chunk itself plus its 8 immediate
+     * neighbors (the light falloff radius is well under a chunk's width, so nothing
+     * farther away can reach in). Passed to {@link Chunk#rebuildMesh} to bake local glow.
+     */
+    private List<int[]> collectNearbyLights(ChunkPos center) {
+        List<int[]> result = new ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                Chunk c = getChunk(center.x() + dx, center.z() + dz);
+                if (c == null) continue;
+                int ox = c.getOriginX();
+                int oz = c.getOriginZ();
+                for (int[] local : c.getLocalLightSources()) {
+                    result.add(new int[]{ox + local[0], local[1], oz + local[2], local[3]});
+                }
+            }
+        }
+        return result;
     }
 
     /** Height of the highest non-air block at the given world column (or SEA_LEVEL if the chunk isn't loaded). */
@@ -156,7 +191,8 @@ public class World implements BlockAccessor {
         }
         dirty.sort((a, b) -> Double.compare(a.getPos().distanceSq(pcx, pcz), b.getPos().distanceSq(pcx, pcz)));
         for (int i = 0; i < Math.min(MAX_MESH_PER_TICK, dirty.size()); i++) {
-            dirty.get(i).rebuildMesh(this, atlas);
+            Chunk c = dirty.get(i);
+            c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()));
         }
     }
 
