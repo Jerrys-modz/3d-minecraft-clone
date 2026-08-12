@@ -32,6 +32,10 @@ public class Hud {
     private static final float HOTBAR_BOTTOM_MARGIN = 0.06f; // distance from the bottom edge to the slot row's bottom
     private static final float HOTBAR_PADDING = 0.015f;      // background panel padding beyond the slots
 
+    private static final float STAT_BAR_HEIGHT = 0.022f;
+    private static final float STAT_BAR_GAP = 0.007f;          // gap between stacked bars
+    private static final float STAT_BAR_STACK_MARGIN = 0.014f; // gap between the bar stack and the hotbar panel below it
+
     private final Shader lineShader;
     private final Shader hudShader;
 
@@ -40,6 +44,8 @@ public class Hud {
     private final LineMesh hotbarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh hotbarHighlight = new LineMesh(GL_LINES);
     private final IconMesh hotbarIcons = new IconMesh();
+    private final LineMesh statBarBackground = new LineMesh(GL_TRIANGLES);
+    private final LineMesh statBarFill = new LineMesh(GL_TRIANGLES);
 
     private final Matrix4f identity = new Matrix4f();
     private final Matrix4f modelMatrix = new Matrix4f();
@@ -110,15 +116,23 @@ public class Hud {
         lineShader.unbind();
     }
 
+    private float hotbarWidth(int count) {
+        return count * HOTBAR_SLOT_SIZE + (count - 1) * HOTBAR_SLOT_GAP;
+    }
+
     /** X-center of hotbar slot {@code i} out of {@code count}, in logical (-1..1, square-viewport) space. */
     private float slotCenterX(int i, int count) {
-        float totalWidth = count * HOTBAR_SLOT_SIZE + (count - 1) * HOTBAR_SLOT_GAP;
-        float leftEdge = -totalWidth / 2f;
+        float leftEdge = -hotbarWidth(count) / 2f;
         return leftEdge + i * (HOTBAR_SLOT_SIZE + HOTBAR_SLOT_GAP) + HOTBAR_SLOT_SIZE / 2f;
     }
 
     private float slotCenterY() {
         return -1f + HOTBAR_BOTTOM_MARGIN + HOTBAR_SLOT_SIZE / 2f;
+    }
+
+    /** Y of the top edge of the hotbar's background panel, in logical space - the stat bars stack upward from here. */
+    private float hotbarPanelTopY() {
+        return slotCenterY() + HOTBAR_SLOT_SIZE / 2f + HOTBAR_PADDING;
     }
 
     public void renderHotbar(TextureAtlas atlas, BlockType[] hotbar, Inventory inventory, int selectedSlot, float aspectRatio) {
@@ -130,7 +144,7 @@ public class Hud {
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         // Background panel behind the whole row.
-        float totalWidth = count * HOTBAR_SLOT_SIZE + (count - 1) * HOTBAR_SLOT_GAP;
+        float totalWidth = hotbarWidth(count);
         float bgMinX = -totalWidth / 2f - HOTBAR_PADDING;
         float bgMaxX = totalWidth / 2f + HOTBAR_PADDING;
         float bgMinY = centerY - HOTBAR_SLOT_SIZE / 2f - HOTBAR_PADDING;
@@ -209,6 +223,57 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    /** Health (red), hunger (orange) and stamina (yellow) bars, stacked above the hotbar. */
+    public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
+                                  float stamina, float maxStamina, int hotbarSlotCount, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
+        float width = hotbarWidth(hotbarSlotCount);
+        float minX = -width / 2f;
+        float maxX = width / 2f;
+        float y = hotbarPanelTopY() + STAT_BAR_STACK_MARGIN;
+
+        // Bottom to top: stamina, hunger, health - health ends up on top, most prominent.
+        y = renderStatBar(minX, maxX, y, stamina / maxStamina, new Vector4f(0.92f, 0.80f, 0.15f, 0.95f));
+        y = renderStatBar(minX, maxX, y, hunger / maxHunger, new Vector4f(0.85f, 0.55f, 0.15f, 0.95f));
+        renderStatBar(minX, maxX, y, health / maxHealth, new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
+
+        lineShader.unbind();
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Draws one bar (dark background + colored fill proportional to {@code fraction}) and returns the y just above it. */
+    private float renderStatBar(float minX, float maxX, float bottomY, float fraction, Vector4f fillColor) {
+        float topY = bottomY + STAT_BAR_HEIGHT;
+        float[] bg = {
+                minX, bottomY, 0, maxX, bottomY, 0, maxX, topY, 0,
+                minX, bottomY, 0, maxX, topY, 0, minX, topY, 0,
+        };
+        statBarBackground.upload(bg);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.45f));
+        statBarBackground.render();
+
+        float clamped = Math.max(0f, Math.min(1f, fraction));
+        if (clamped > 0f) {
+            float fillMaxX = minX + (maxX - minX) * clamped;
+            float[] fill = {
+                    minX, bottomY, 0, fillMaxX, bottomY, 0, fillMaxX, topY, 0,
+                    minX, bottomY, 0, fillMaxX, topY, 0, minX, topY, 0,
+            };
+            statBarFill.upload(fill);
+            lineShader.setUniform("color", fillColor);
+            statBarFill.render();
+        }
+
+        return topY + STAT_BAR_GAP;
+    }
+
     private void addQuad(List<Float> vertices, List<Integer> indices, int[] vertexCounter,
                           float minX, float minY, float maxX, float maxY, float[] uv) {
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
@@ -228,5 +293,7 @@ public class Hud {
         hotbarBackground.destroy();
         hotbarHighlight.destroy();
         hotbarIcons.destroy();
+        statBarBackground.destroy();
+        statBarFill.destroy();
     }
 }

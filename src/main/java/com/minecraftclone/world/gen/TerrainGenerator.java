@@ -191,11 +191,14 @@ public class TerrainGenerator {
         return BlockType.STONE;
     }
 
-    /** Tall grass tufts and the occasional flower, scattered on plains/forest grass. */
+    /** Tall grass tufts, the occasional flower, and rarer berry bushes (a foraged food source), scattered on plains/forest grass. */
     private void placeGroundCover(Chunk chunk, int x, int y, int z, Random rnd, boolean dense) {
+        int bushChance = dense ? 70 : 140;
         int grassChance = dense ? 5 : 10;
         int flowerChance = dense ? 24 : 45;
-        if (rnd.nextInt(flowerChance) == 0) {
+        if (rnd.nextInt(bushChance) == 0) {
+            chunk.setLocal(x, y, z, BlockType.BERRY_BUSH);
+        } else if (rnd.nextInt(flowerChance) == 0) {
             chunk.setLocal(x, y, z, rnd.nextBoolean() ? BlockType.FLOWER_RED : BlockType.FLOWER_YELLOW);
         } else if (rnd.nextInt(grassChance) == 0) {
             chunk.setLocal(x, y, z, BlockType.TALL_GRASS);

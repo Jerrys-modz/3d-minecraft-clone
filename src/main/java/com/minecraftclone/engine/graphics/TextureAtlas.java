@@ -92,6 +92,12 @@ public class TextureAtlas {
             paintDigit(image, digitTile(d), DIGIT_GLYPHS[d], 0xFFFFFF);
         }
 
+        paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
+        paintGlassPanes(image, 34);
+        paintApple(image, 35);
+        paintBerries(image, 36);
+        paintBerryBush(image, 37, rnd);
+
         return image;
     }
 
@@ -235,6 +241,76 @@ public class TextureAtlas {
             img.setRGB(ox + x, oy + y, 0xFF000000 | petalColor);
         }
         img.setRGB(ox + stemX, oy + headY, 0xFF000000 | centerColor);
+    }
+
+    /** Thin pane-divider lines (border + cross) over the base fill, for the glass block. */
+    private void paintGlassPanes(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int line = 0x8FB9BC;
+        for (int i = 0; i < TILE_PX; i++) {
+            img.setRGB(ox + i, oy, 0xFF000000 | line);
+            img.setRGB(ox + i, oy + TILE_PX - 1, 0xFF000000 | line);
+            img.setRGB(ox, oy + i, 0xFF000000 | line);
+            img.setRGB(ox + TILE_PX - 1, oy + i, 0xFF000000 | line);
+        }
+        int mid = TILE_PX / 2;
+        for (int i = 0; i < TILE_PX; i++) {
+            img.setRGB(ox + mid, oy + i, 0xFF000000 | line);
+            img.setRGB(ox + i, oy + mid, 0xFF000000 | line);
+        }
+    }
+
+    /** A small round red apple with a stem, on a transparent background - a foraged food item. */
+    private void paintApple(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        double cx = 8, cy = 9.5, r = 4.5;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                if (Math.hypot(x - cx, y - cy) <= r) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | 0xC62828);
+                }
+            }
+        }
+        img.setRGB(ox + 8, oy + 4, 0xFF000000 | 0x5B3A21);
+        img.setRGB(ox + 9, oy + 3, 0xFF000000 | 0x4C8C2C);
+        img.setRGB(ox + 10, oy + 3, 0xFF000000 | 0x4C8C2C);
+    }
+
+    /** A small cluster of dark berries on a stem, on a transparent background - a foraged food item. */
+    private void paintBerries(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int berry = 0x7A2048;
+        int[][] blobs = {{6, 7}, {9, 7}, {7, 9}, {10, 9}, {8, 11}};
+        for (int[] o : blobs) {
+            for (int dy = 0; dy < 2; dy++) {
+                for (int dx = 0; dx < 2; dx++) {
+                    img.setRGB(ox + o[0] + dx, oy + o[1] + dy, 0xFF000000 | berry);
+                }
+            }
+        }
+        for (int y = 4; y < 7; y++) {
+            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x4C8C2C);
+        }
+    }
+
+    /** A round leafy bush silhouette speckled with berries, on a transparent background - the harvestable world decoration. */
+    private void paintBerryBush(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        double cx = 8, cy = 10, r = 6.5;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                double d = Math.hypot(x - cx, (y - cy) * 1.3);
+                if (d <= r) {
+                    float roll = rnd.nextFloat();
+                    int color = roll < 0.15f ? 0x9C2B4E : (roll < 0.55f ? 0x3E8E35 : 0x2F701F);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                }
+            }
+        }
     }
 
     /**
