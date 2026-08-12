@@ -28,7 +28,7 @@ public class Player {
     private static final float GRAVITY = 24.0f;
     private static final float TERMINAL_VELOCITY = -50f;
 
-    private static final float MOUSE_SENSITIVITY = 0.12f;
+    private static final float DEFAULT_MOUSE_SENSITIVITY = 0.12f;
 
     /** Feet position: bottom-center of the player's bounding box. */
     private final Vector3f position = new Vector3f();
@@ -37,6 +37,8 @@ public class Player {
     private final Inventory inventory = new Inventory();
     private final PlayerStats stats = new PlayerStats();
     private final ToolDurability durability = new ToolDurability();
+
+    private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
 
     private boolean onGround = false;
     private boolean flying = false;
@@ -83,6 +85,11 @@ public class Player {
         return flying;
     }
 
+    /** Overrides mouse-look sensitivity (from the settings menu). */
+    public void setMouseSensitivity(float value) {
+        this.mouseSensitivity = value;
+    }
+
     /** Attempts to eat one unit of {@code food} from the inventory. Returns false if it's not food or there's none held. */
     public boolean eat(BlockType food) {
         if (!food.isEdible()) return false;
@@ -108,7 +115,7 @@ public class Player {
     private void updateLook(Input input) {
         float dx = (float) input.getDeltaX();
         float dy = (float) input.getDeltaY();
-        camera.addRotation(dx * MOUSE_SENSITIVITY, -dy * MOUSE_SENSITIVITY);
+        camera.addRotation(dx * mouseSensitivity, -dy * mouseSensitivity);
         input.resetMouseDelta();
     }
 

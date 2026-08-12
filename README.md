@@ -19,7 +19,13 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a no-clip flight mode.
 - **Block interaction**: raycast-based block breaking/placing (reach limited to 6 blocks) with a wireframe outline on the targeted block, gated by a real inventory - breaking a block adds it to your count, placing spends one, and bedrock is unbreakable. Starts empty, so you gather before you build.
 - **On-screen HUD**: a hotbar (35 slots) with block icons batched from the game's shared texture atlas and item icons (food/tools) drawn from their own individual PNGs, live inventory counts drawn with a tiny procedural pixel font (its own small atlas, no external font/text-rendering library), a highlight border on the selected slot, health/hunger/stamina bars above it, transient on-screen messages (death, crafting, tool breakage), and an `F3`-toggled debug overlay (FPS, position, selected item).
-- **Settings menu**: `Esc` pauses the game and opens an in-game settings menu (keyboard-navigated - arrows/WASD to move, Enter/Space to toggle) for graphics options. The first one is **see-through leaves**: with it on, leaves use an alpha-cutout texture with holes punched through them and stop occluding faces behind them, so you can actually see through a tree canopy (the classic "fast leaves" look); off, they're the default opaque cubes. Toggling it live-rebuilds loaded chunk meshes, so the change streams in while you're looking at it.
+- **Settings menu**: `Esc` pauses the game and opens an in-game settings menu (arrows/WASD to move the highlight, `Enter`/`Space`/`Left`/`Right` to change a setting, `Esc` to close). Graphics options:
+  - **See-through leaves**: with it on, leaves use an alpha-cutout texture with holes punched through them and stop occluding faces behind them, so you can actually see through a tree canopy (the classic "fast leaves" look); off, they're the default opaque cubes. Toggling it live-rebuilds loaded chunk meshes, so the change streams in while you're looking at it.
+  - **Render distance** (3-12): chunk streaming radius, so fewer blocks to draw for speed or more view for looks.
+  - **VSync**: cap the framerate to the monitor's refresh or uncap it.
+  - **Field of view** (60-110): camera zoom.
+  - **Mouse sensitivity** (0.03-0.40): mouse-look speed.
+  - All of these apply immediately, while the menu is open.
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, torches, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 
 ## Requirements

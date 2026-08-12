@@ -144,4 +144,10 @@ public class Window {
             glfwSetInputMode(handle, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
         }
     }
+
+    /** Toggles vertical sync (1 = cap framerate to the monitor's refresh). */
+    public void setVsync(boolean enabled) {
+        this.vsync = enabled;
+        glfwSwapInterval(enabled ? 1 : 0);
+    }
 }

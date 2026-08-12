@@ -46,7 +46,6 @@ import static org.lwjgl.opengl.GL11.*;
 public class Main {
 
     private static final float REACH_DISTANCE = 6.0f;
-    private static final float FOV_DEGREES = 75f;
     private static final float NEAR_PLANE = 0.05f;
     private static final float FAR_PLANE = 400f;
     private static final float AUTOSAVE_INTERVAL_SECONDS = 60f;
@@ -74,9 +73,12 @@ public class Main {
         messages.add(new Hud.Message(text, color, duration));
     }
 
-    /** Pushes the current in-memory {@link Settings} into the world/renderer. */
-    private void applySettings(Settings settings, World world) {
+    /** Pushes the current in-memory {@link Settings} into the world/renderer/player. */
+    private void applySettings(Settings settings, World world, Player player, Window window) {
         world.setLeavesTransparent(settings.isLeavesTransparent());
+        world.setRenderDistance(settings.getRenderDistance());
+        window.setVsync(settings.isVsync());
+        player.setMouseSensitivity(settings.getMouseSensitivity());
     }
 
     public static void main(String[] args) {
@@ -132,6 +134,9 @@ public class Main {
 
         window.setCursorCaptured(true);
 
+        // Ensure the renderer/player start consistent with the settings defaults.
+        applySettings(settings, world, player, window);
+
         int[] selectedSlot = {0};
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
@@ -178,18 +183,25 @@ public class Main {
             }
 
             if (menuOpen[0]) {
-                // Pause menu: navigate with arrows/WASD, toggle the highlighted
-                // setting with Enter/Space/Left/Right.
+                // Pause menu: navigate with arrows/WASD; toggle boolean settings or
+                // step range settings with Enter/Space/Left/Right.
                 if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
                     menuSelection[0] = Math.floorMod(menuSelection[0] - 1, Settings.ROW_COUNT);
                 }
                 if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
                     menuSelection[0] = Math.floorMod(menuSelection[0] + 1, Settings.ROW_COUNT);
                 }
-                if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)
-                        || input.isKeyJustPressed(GLFW_KEY_RIGHT) || input.isKeyJustPressed(GLFW_KEY_LEFT)) {
-                    settings.toggles[menuSelection[0]] = !settings.toggles[menuSelection[0]];
-                    applySettings(settings, world);
+                if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
+                    settings.adjust(menuSelection[0], -1);
+                    applySettings(settings, world, player, window);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
+                    settings.adjust(menuSelection[0], +1);
+                    applySettings(settings, world, player, window);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                    settings.adjust(menuSelection[0], +1);
+                    applySettings(settings, world, player, window);
                 }
             }
 
@@ -301,7 +313,7 @@ public class Main {
             window.setClearColor(skyColor.x, skyColor.y, skyColor.z, 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            Matrix4f projection = player.getCamera().getProjectionMatrix(FOV_DEGREES, window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
+            Matrix4f projection = player.getCamera().getProjectionMatrix(settings.getFov(), window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
             Matrix4f view = player.getCamera().getViewMatrix();
 
             chunkShader.bind();

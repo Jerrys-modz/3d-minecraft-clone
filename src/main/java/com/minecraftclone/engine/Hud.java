@@ -433,16 +433,28 @@ public class Hud {
 
     /**
      * Draws the pause/settings menu: a semi-transparent panel with a title, one
-     * row per toggle in {@link Settings}, and a highlighted selection marker.
+     * row per setting in {@link Settings}, and a highlighted selection marker.
+     * The panel sizes itself to the widest row so labels never overflow it.
      * {@code selectedIndex} points at the currently-highlighted row.
      */
     public void renderSettingsMenu(Settings settings, int selectedIndex, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
-        String[] labels = settings.ROW_LABELS;
-        int rows = labels.length;
-        float panelW = 0.58f;
+        int rows = settings.ROW_COUNT;
+        float size = 0.034f;
+        float leftPad = 0.075f;   // panel-left edge to label start
+        float rightPad = 0.07f;   // panel-right edge to value end
+        float labelValueGap = 0.1f;
+
+        // Panel width adapts to the longest row so nothing ever overflows.
+        float widest = 0f;
+        for (int i = 0; i < rows; i++) {
+            widest = Math.max(widest,
+                    text.measure(settings.label(i), size) + labelValueGap + text.measure(settings.valueText(i), size));
+        }
+        float panelW = widest + leftPad + rightPad;
+
         float rowH = 0.05f;
         float titleH = 0.07f;
         float pad = 0.035f;
@@ -466,24 +478,25 @@ public class Hud {
         lineShader.unbind();
 
         // Title, centered near the top of the panel.
-        drawCenteredText("Settings", 0f, top - pad - 0.045f, 0.045f, WHITE);
+        drawCenteredText("Settings", 0f, top - pad - 0.04f, 0.042f, WHITE);
 
-        // One row per setting: a ">" marker + label on the left, ON/OFF on the right.
+        // One row per setting: ">" marker + label on the left, value on the right.
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
         for (int i = 0; i < rows; i++) {
             float rowTop = top - pad - titleH - i * rowH;
-            float baseline = rowTop - rowH + 0.015f;
+            float baseline = rowTop - rowH + 0.013f;
             boolean selected = i == selectedIndex;
-            drawTextAt(selected ? ">" : " ", left + 0.05f, baseline, 0.038f, selected ? highlight : idle);
-            drawTextAt(labels[i], left + 0.09f, baseline, 0.038f, selected ? highlight : idle);
-            String value = settings.toggles[i] ? "ON" : "OFF";
-            float valueWidth = text.measure(value, 0.038f);
-            drawTextAt(value, left + panelW - 0.06f - valueWidth, baseline, 0.038f, selected ? highlight : idleValue);
+            String value = settings.valueText(i);
+            float valueWidth = text.measure(value, size);
+            drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+            drawTextAt(settings.label(i), left + leftPad, baseline, size, selected ? highlight : idle);
+            drawTextAt(value, left + panelW - rightPad - valueWidth, baseline, size, selected ? highlight : idleValue);
         }
 
-        drawCenteredText("Enter/Space: toggle    Esc: close", 0f, centerY - panelH / 2f - 0.05f, 0.028f, idleValue);
+        drawCenteredText("Up/Down: select    Left/Right: change    Esc: close",
+                0f, centerY - panelH / 2f - 0.045f, 0.026f, idleValue);
 
         glEnable(GL_DEPTH_TEST);
     }
