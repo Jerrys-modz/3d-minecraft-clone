@@ -47,7 +47,9 @@ public class ChunkStorage {
             byte[] data = in.readAllBytes();
             chunk.setRawBlocks(data);
             chunk.markGenerated();
-            chunk.markModifiedByPlayer(); // already-saved chunk: keep re-saving it on future unloads too
+            // Note: deliberately NOT marking the chunk modified-by-player here - its
+            // data is already on disk, so it only needs to be re-saved if the player
+            // actually edits it (which setLocalFromPlayer handles).
         } catch (IOException e) {
             System.err.println("Failed to load saved chunk " + chunk.getPos() + ": " + e.getMessage());
         }
