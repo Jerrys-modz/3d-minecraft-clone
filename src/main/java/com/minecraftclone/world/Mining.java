@@ -75,6 +75,7 @@ public final class Mining {
         // Stone family - pickaxe helps but bare hands still work (just slow).
         put(BlockType.STONE, 2.5f, ToolKind.PICKAXE, TIER_HAND);
         put(BlockType.GLASS, 0.5f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.LAMP, 0.5f, ToolKind.NONE, TIER_HAND);
 
         // Ores - a pickaxe of at least the given tier is required, not just faster.
         put(BlockType.COAL_ORE, 2.5f, ToolKind.PICKAXE, TIER_WOOD);

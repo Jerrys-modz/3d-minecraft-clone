@@ -33,6 +33,8 @@ public class TextureAtlas {
 
     /** Tile index of the alpha-cutout leaves texture used when the "see-through leaves" setting is on. */
     public static final int LEAVES_CUTOUT_TILE = 24;
+    /** Tile index of the full-cube lamp texture. */
+    public static final int LAMP_TILE = 25;
 
     private int textureId;
 
@@ -77,6 +79,7 @@ public class TextureAtlas {
         paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
         paintGlassPanes(image, 34);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
+        paintLamp(image, LAMP_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
 
@@ -280,6 +283,29 @@ public class TextureAtlas {
                         img.setRGB(px, py, hole ? 0x00000000 : (0xFF000000 | base));
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * A glowing full-cube lamp: a warm light panel with a bright center and a
+     * darker frame, on an opaque background. The lamp itself emits light (see
+     * {@link com.minecraftclone.world.BlockType#LAMP}), so this tile just gives
+     * it a distinct "lit fixture" look; nearby blocks are brightened by the
+     * light baking in {@link com.minecraftclone.world.Chunk}.
+     */
+    private void paintLamp(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int frame = 0x6E4A2A;  // dark wood/graphite border
+        int warm = 0xFFE08A;   // warm glow body
+        int core = 0xFFFFF0;   // bright center
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                boolean edge = x < 2 || x >= TILE_PX - 2 || y < 2 || y >= TILE_PX - 2;
+                boolean center = x >= 5 && x < 11 && y >= 5 && y < 11;
+                int color = edge ? frame : (center ? core : warm);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }
     }

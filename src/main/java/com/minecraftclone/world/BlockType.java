@@ -32,6 +32,7 @@ public enum BlockType {
     GLASS(21, true, false, 34, 34, 34),
     BERRY_BUSH(22, false, true, 37),
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
+    LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -74,6 +75,11 @@ public enum BlockType {
 
     /** Full-cube block with a food value (not currently used - cubes aren't eaten - but kept symmetric). */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue) {
+        this(id, solid, transparent, topTile, sideTile, bottomTile, foodValue, 0);
+    }
+
+    /** Full-cube block that also emits light (e.g. a lamp), plus an (unused) food value. */
+    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue, int lightLevel) {
         this.id = (byte) id;
         this.solid = solid;
         this.transparent = transparent;
@@ -83,7 +89,7 @@ public enum BlockType {
         this.bottomTile = bottomTile;
         this.foodValue = foodValue;
         this.isItem = false;
-        this.lightLevel = 0;
+        this.lightLevel = lightLevel;
     }
 
     /** Cross-shaped (billboard-X) world decoration block, e.g. grass/flowers/berry bush: one atlas tile, never collides. */
