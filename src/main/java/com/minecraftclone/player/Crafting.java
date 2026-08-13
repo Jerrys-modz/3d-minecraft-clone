@@ -24,24 +24,25 @@ public final class Crafting {
         register(new Recipe(BlockType.WOOD_LOG, 1, null, 0, BlockType.PLANKS, 4));
         register(new Recipe(BlockType.SAND, 2, null, 0, BlockType.GLASS, 1));
         register(new Recipe(BlockType.PLANKS, 2, null, 0, BlockType.STICK, 4));
+        register(new Recipe(BlockType.STONE, 8, null, 0, BlockType.FURNACE, 1));
         register(new Recipe(BlockType.STICK, 1, BlockType.COAL_ORE, 1, BlockType.TORCH, 4));
         register(new Recipe(BlockType.GLASS, 1, BlockType.TORCH, 1, BlockType.LAMP, 1));
 
         register(new Recipe(BlockType.PLANKS, 3, BlockType.STICK, 2, BlockType.WOOD_PICKAXE, 1));
         register(new Recipe(BlockType.STONE, 3, BlockType.STICK, 2, BlockType.STONE_PICKAXE, 1));
-        register(new Recipe(BlockType.IRON_ORE, 3, BlockType.STICK, 2, BlockType.IRON_PICKAXE, 1));
-        register(new Recipe(BlockType.DIAMOND_ORE, 3, BlockType.STICK, 2, BlockType.DIAMOND_PICKAXE, 1));
+        register(new Recipe(BlockType.IRON_INGOT, 3, BlockType.STICK, 2, BlockType.IRON_PICKAXE, 1));
+        register(new Recipe(BlockType.DIAMOND, 3, BlockType.STICK, 2, BlockType.DIAMOND_PICKAXE, 1));
 
         register(new Recipe(BlockType.PLANKS, 3, BlockType.STICK, 2, BlockType.WOOD_AXE, 1));
         register(new Recipe(BlockType.STONE, 3, BlockType.STICK, 2, BlockType.STONE_AXE, 1));
-        register(new Recipe(BlockType.IRON_ORE, 3, BlockType.STICK, 2, BlockType.IRON_AXE, 1));
-        register(new Recipe(BlockType.DIAMOND_ORE, 3, BlockType.STICK, 2, BlockType.DIAMOND_AXE, 1));
+        register(new Recipe(BlockType.IRON_INGOT, 3, BlockType.STICK, 2, BlockType.IRON_AXE, 1));
+        register(new Recipe(BlockType.DIAMOND, 3, BlockType.STICK, 2, BlockType.DIAMOND_AXE, 1));
 
         // Swords are lighter than pickaxes/axes: 2 material + 1 stick instead of 3 + 2.
         register(new Recipe(BlockType.PLANKS, 2, BlockType.STICK, 1, BlockType.WOOD_SWORD, 1));
         register(new Recipe(BlockType.STONE, 2, BlockType.STICK, 1, BlockType.STONE_SWORD, 1));
-        register(new Recipe(BlockType.IRON_ORE, 2, BlockType.STICK, 1, BlockType.IRON_SWORD, 1));
-        register(new Recipe(BlockType.DIAMOND_ORE, 2, BlockType.STICK, 1, BlockType.DIAMOND_SWORD, 1));
+        register(new Recipe(BlockType.IRON_INGOT, 2, BlockType.STICK, 1, BlockType.IRON_SWORD, 1));
+        register(new Recipe(BlockType.DIAMOND, 2, BlockType.STICK, 1, BlockType.DIAMOND_SWORD, 1));
     }
 
     private static void register(Recipe recipe) {

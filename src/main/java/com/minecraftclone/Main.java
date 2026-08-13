@@ -8,6 +8,7 @@ import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
+import com.minecraftclone.player.Smelting;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
@@ -56,8 +57,8 @@ public class Main {
             BlockType.GRAVEL, BlockType.SNOW,
             BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
             BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
-            BlockType.LAVA, BlockType.GLASS, BlockType.TORCH, BlockType.LAMP, BlockType.APPLE, BlockType.BERRIES,
-            BlockType.STICK,
+            BlockType.LAVA, BlockType.GLASS, BlockType.TORCH, BlockType.LAMP, BlockType.FURNACE, BlockType.APPLE, BlockType.BERRIES,
+            BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
             BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
             BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
             BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD
@@ -261,15 +262,25 @@ public class Main {
                     selectedSlot[0] = Math.floorMod(selectedSlot[0] - (int) Math.signum(scroll), HOTBAR.length);
                 }
 
+                hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
+
                 if (input.isKeyJustPressed(GLFW_KEY_C)) {
                     BlockType selected = HOTBAR[selectedSlot[0]];
-                    if (Crafting.craft(player.getInventory(), selected)) {
+                    // Smelting: pressing C while aiming at a furnace smelts the selected
+                    // ore into its ingot/gem (consuming coal as fuel) instead of crafting.
+                    BlockType targeted = hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
+                    if (targeted == BlockType.FURNACE && Smelting.isSmeltable(selected)) {
+                        if (Smelting.smelt(player.getInventory(), selected) != null) {
+                            System.out.println("Smelted " + selected);
+                            showMessage(messages, "Smelted " + selected, new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
+                        } else {
+                            showMessage(messages, "Smelting needs ore and coal", new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+                        }
+                    } else if (Crafting.craft(player.getInventory(), selected)) {
                         System.out.println("Crafted " + selected + " (now have " + player.getInventory().getCount(selected) + ")");
                         showMessage(messages, "Crafted " + selected, new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
                     }
                 }
-
-                hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 BlockType targetType = hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
                 BlockType heldItem = HOTBAR[selectedSlot[0]];
