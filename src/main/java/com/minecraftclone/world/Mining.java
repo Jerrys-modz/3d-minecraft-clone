@@ -81,6 +81,7 @@ public final class Mining {
         put(BlockType.MYCELIUM, 0.6f, ToolKind.NONE, TIER_HAND);
         put(BlockType.ICE, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.PACKED_ICE, 0.5f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.PUMPKIN, 0.5f, ToolKind.NONE, TIER_HAND);
 
         // Fluids - sources are quick to pick back up; flow is transient and instant.
         put(BlockType.WATER_SOURCE, 0.2f, ToolKind.NONE, TIER_HAND);

@@ -329,37 +329,63 @@ public class TerrainGenerator {
 
                 switch (biome) {
                     case DESERT -> {
-                        if (surface == BlockType.SAND && featureRandom.nextInt(180) == 0) {
-                            placeCactus(chunk, x, height + 1, z, featureRandom);
+                        if (surface == BlockType.SAND) {
+                            if (featureRandom.nextInt(160) == 0) {
+                                placeCactus(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(90) == 0) {
+                                placeDeadBush(chunk, x, height + 1, z);
+                            }
                         }
                     }
                     case TAIGA -> {
-                        if ((surface == BlockType.SNOW || surface == BlockType.GRASS) && featureRandom.nextInt(28) == 0) {
-                            placePineTree(chunk, x, height + 1, z, featureRandom);
+                        if (surface == BlockType.SNOW || surface == BlockType.GRASS) {
+                            if (featureRandom.nextInt(25) == 0) {
+                                placePineTree(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(40) == 0) {
+                                placeMushroom(chunk, x, height + 1, z, featureRandom);
+                            }
                         }
                     }
                     case MOUNTAIN -> {
-                        if (surface == BlockType.STONE && featureRandom.nextInt(45) == 0) {
-                            placePineTree(chunk, x, height + 1, z, featureRandom);
+                        if (surface == BlockType.STONE) {
+                            if (featureRandom.nextInt(45) == 0) {
+                                placePineTree(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(30) == 0) {
+                                placeBoulder(chunk, x, height + 1, z, featureRandom);
+                            }
                         }
                     }
                     case FOREST -> {
                         if (surface == BlockType.GRASS) {
                             if (featureRandom.nextInt(18) == 0) {
                                 placeTree(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(60) == 0) {
+                                placeFallenLog(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(80) == 0) {
+                                placeMushroom(chunk, x, height + 1, z, featureRandom);
                             } else {
                                 placeGroundCover(chunk, x, height + 1, z, featureRandom, true);
                             }
                         }
                     }
                     case SAVANNA -> {
-                        if (surface == BlockType.GRASS && featureRandom.nextInt(70) == 0) {
-                            placeTree(chunk, x, height + 1, z, featureRandom);
+                        if (surface == BlockType.GRASS) {
+                            if (featureRandom.nextInt(70) == 0) {
+                                placeTree(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(90) == 0) {
+                                placeDeadBush(chunk, x, height + 1, z);
+                            } else if (featureRandom.nextInt(40) == 0) {
+                                chunk.setLocal(x, height + 1, z, BlockType.TALL_GRASS);
+                            }
                         }
                     }
                     case SWAMP -> {
-                        if (surface == BlockType.SWAMP_GRASS && featureRandom.nextInt(40) == 0) {
-                            placeDeadTree(chunk, x, height + 1, z, featureRandom);
+                        if (surface == BlockType.SWAMP_GRASS) {
+                            if (featureRandom.nextInt(30) == 0) {
+                                placeDeadTree(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(50) == 0) {
+                                placeMushroom(chunk, x, height + 1, z, featureRandom);
+                            }
                         }
                     }
                     case JUNGLE -> {
@@ -368,6 +394,8 @@ public class TerrainGenerator {
                                 placeJungleTree(chunk, x, height + 1, z, featureRandom);
                             } else if (featureRandom.nextInt(30) == 0) {
                                 placeBamboo(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(60) == 0) {
+                                placeFallenLog(chunk, x, height + 1, z, featureRandom);
                             }
                         }
                     }
@@ -392,9 +420,9 @@ public class TerrainGenerator {
                     }
                     case BADLANDS -> {
                         if (surface == BlockType.RED_CLAY) {
-                            if (featureRandom.nextInt(70) == 0) {
+                            if (featureRandom.nextInt(60) == 0) {
                                 placeDeadBush(chunk, x, height + 1, z);
-                            } else if (featureRandom.nextInt(120) == 0) {
+                            } else if (featureRandom.nextInt(110) == 0) {
                                 placeCactus(chunk, x, height + 1, z, featureRandom);
                             }
                         }
@@ -404,18 +432,31 @@ public class TerrainGenerator {
                             placeMushroom(chunk, x, height + 1, z, featureRandom);
                         }
                     }
+                    case TUNDRA -> {
+                        if (surface == BlockType.GRASS) {
+                            if (featureRandom.nextInt(90) == 0) {
+                                placeDeadBush(chunk, x, height + 1, z);
+                            } else if (featureRandom.nextInt(120) == 0) {
+                                placeBoulder(chunk, x, height + 1, z, featureRandom);
+                            }
+                        }
+                    }
                     case PLAINS -> {
                         if (surface == BlockType.GRASS) {
                             if (featureRandom.nextInt(85) == 0) {
                                 placeTree(chunk, x, height + 1, z, featureRandom);
-                            } else if (featureRandom.nextInt(140) == 0) {
+                            } else if (featureRandom.nextInt(130) == 0) {
                                 placeBoulder(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(160) == 0) {
+                                placePumpkin(chunk, x, height + 1, z);
+                            } else if (featureRandom.nextInt(120) == 0) {
+                                placeMushroom(chunk, x, height + 1, z, featureRandom);
                             } else {
                                 placeGroundCover(chunk, x, height + 1, z, featureRandom, false);
                             }
                         }
                     }
-                    default -> { /* beach / snowy: nothing grows */ }
+                    default -> { /* beach / ocean / frozen ocean: nothing grows */ }
                 }
             }
         }
@@ -524,6 +565,24 @@ public class TerrainGenerator {
         for (int i = 0; i < h; i++) {
             chunk.setLocal(x, y + i, z, BlockType.WOOD_LOG);
         }
+    }
+
+    /** A fallen log lying flat on the ground - a couple of wood blocks laid end to end. */
+    private void placeFallenLog(Chunk chunk, int x, int y, int z, Random rnd) {
+        int len = 2 + rnd.nextInt(2);
+        boolean alongX = rnd.nextBoolean();
+        for (int i = 0; i < len; i++) {
+            int px = alongX ? x + i : x;
+            int pz = alongX ? z : z + i;
+            if (chunk.getLocal(px, y, pz) == BlockType.AIR) {
+                chunk.setLocal(px, y, pz, BlockType.WOOD_LOG);
+            }
+        }
+    }
+
+    /** A pumpkin on the grass - rare plains/forest flavor. */
+    private void placePumpkin(Chunk chunk, int x, int y, int z) {
+        chunk.setLocal(x, y, z, BlockType.PUMPKIN);
     }
 
     /** A tall jungle tree: a longer trunk and a bigger, lusher canopy than the oak. */

@@ -94,6 +94,7 @@ public class TextureAtlas {
         paintTile(image, 41, rnd, 0xA5DBEE, 0x8AC6DE, true);   // packed ice
         paintBamboo(image, 42, rnd);
         paintLilyPad(image, 43, rnd);
+        paintTile(image, 44, rnd, 0xE08A2E, 0xC7731F, true);   // pumpkin
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);

@@ -69,6 +69,7 @@ public enum BlockType {
     PACKED_ICE(59, true, false, 41),
     BAMBOO(60, false, true, 42),
     LILY_PAD(61, false, true, 43),
+    PUMPKIN(62, true, false, 44, 44, 44),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
