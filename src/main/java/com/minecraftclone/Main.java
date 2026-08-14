@@ -142,6 +142,7 @@ public class Main {
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
         int[] menuSelection = {0};
+        int[] sliderDragRow = {-1};
         CraftingGrid craftingGrid = new CraftingGrid();
         InventoryController inventoryController = new InventoryController(player.getInventory(), craftingGrid);
         boolean[] inventoryOpen = {false};
@@ -321,6 +322,41 @@ public class Main {
                     settings.adjust(menuSelection[0], +1);
                     applySettings(settings, world, player, window);
                     settings.save(settingsFile);
+                }
+
+                // Mouse: hover to select, click a toggle, click or drag a slider.
+                float sLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                float sLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                int hoverRow = hud.settingsRowAt(sLx, sLy);
+                if (hoverRow >= 0) {
+                    menuSelection[0] = hoverRow;
+                }
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+                    int clicked = hud.settingsRowAt(sLx, sLy);
+                    if (clicked >= 0) {
+                        if (Settings.isToggle(clicked)) {
+                            settings.adjust(clicked, +1);
+                            applySettings(settings, world, player, window);
+                            settings.save(settingsFile);
+                        } else {
+                            float frac = hud.settingsTrackAt(sLx, sLy);
+                            if (frac >= 0f) {
+                                settings.setFromFraction(clicked, frac);
+                                applySettings(settings, world, player, window);
+                                settings.save(settingsFile);
+                                sliderDragRow[0] = clicked;
+                            }
+                        }
+                    }
+                }
+                if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && sliderDragRow[0] >= 0) {
+                    float frac = hud.settingsSliderAt(sLx, sliderDragRow[0]);
+                    settings.setFromFraction(sliderDragRow[0], frac);
+                    applySettings(settings, world, player, window);
+                    settings.save(settingsFile);
+                }
+                if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+                    sliderDragRow[0] = -1;
                 }
             }
 
