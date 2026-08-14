@@ -42,14 +42,19 @@ public class World implements BlockAccessor {
     private static final int MAX_MESH_PER_TICK = 4;
     // world.update() (and so updateFluids()) runs once per rendered frame, so
     // recomputing the flood-fill every single call made "one ring per tick"
-    // (see FluidSim) mean one ring per *frame* - at 60fps a 7-block spread
-    // reached full extent in about a tenth of a second, reading as instant
-    // rather than gradual. Only actually recomputing the fluid field once
-    // every FLUID_TICK_INTERVAL calls throttles it to a real, watchable pace
-    // without needing a wall-clock timer - consistent with how chunk
-    // generation/meshing already ration themselves per call above.
-    private static final int FLUID_TICK_INTERVAL = 12;
-    private int fluidTickCounter = 0;
+    // (see FluidSim) mean one ring per *frame*. A fixed *frame-count*
+    // throttle (e.g. "every 12 calls") was tried first, on the assumption of
+    // a steady ~60fps - but frame rate isn't a constant: vsync caps to
+    // whatever the display's actual refresh rate is (which can be well over
+    // 60Hz), and it's frequently not enforced at all under a software/
+    // headless renderer, so "every 12 frames" could mean anywhere from
+    // "every fifth of a second" to "every couple of milliseconds" depending
+    // entirely on how fast frames happen to be rendering right now - not
+    // actually throttled at all in the worst case. Timed off the real clock
+    // instead (like the flow texture's own scroll animation already is),
+    // this is independent of frame rate altogether.
+    private static final double FLUID_TICK_SECONDS = 0.15;
+    private double lastFluidTickNanos = Double.NaN;
 
     // Dropped item entities (from breaking blocks / death). Transient - not saved.
     private final List<ItemEntity> items = new ArrayList<>();
@@ -348,11 +353,12 @@ public class World implements BlockAccessor {
         }
 
         // Flow after streaming so newly loaded chunks participate in the field -
-        // throttled to a real, watchable pace (see FLUID_TICK_INTERVAL) rather
+        // throttled to a real, watchable pace (see FLUID_TICK_SECONDS) rather
         // than every single frame. Newly-loaded chunks just sit as they are
         // (already-generated fluid, if any) until the next fluid tick lands.
-        if (++fluidTickCounter >= FLUID_TICK_INTERVAL) {
-            fluidTickCounter = 0;
+        double nowNanos = System.nanoTime();
+        if (Double.isNaN(lastFluidTickNanos) || (nowNanos - lastFluidTickNanos) / 1e9 >= FLUID_TICK_SECONDS) {
+            lastFluidTickNanos = nowNanos;
             updateFluids();
         }
 
