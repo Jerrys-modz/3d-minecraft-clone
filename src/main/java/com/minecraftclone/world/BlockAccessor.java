@@ -16,4 +16,15 @@ public interface BlockAccessor {
     default int getFluidLevel(int worldX, int worldY, int worldZ) {
         return 0;
     }
+
+    /**
+     * A decoration layered <em>inside</em> this cell alongside its primary
+     * block - e.g. seaweed growing inside a water cell, the way Minecraft's
+     * waterlogged plants sit inside a fluid block rather than replacing it.
+     * {@link BlockType#AIR} means no overlay. Defaulted so existing
+     * BlockAccessor implementations (like tests) don't need to know about it.
+     */
+    default BlockType getOverlay(int worldX, int worldY, int worldZ) {
+        return BlockType.AIR;
+    }
 }

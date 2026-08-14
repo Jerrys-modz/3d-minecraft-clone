@@ -8,7 +8,9 @@ import org.joml.Vector3i;
 /**
  * Voxel ray traversal (Amanatides & Woo DDA) used for block picking (break/place
  * reach). Water is treated as pass-through, so you can reach the block behind
- * it; every other non-air block stops the ray.
+ * it; every other non-air block stops the ray - including a cell whose primary
+ * block passes through but which holds an overlay decoration (e.g. seaweed
+ * inside a water cell), so it can still be aimed at and broken on its own.
  */
 public final class Raycaster {
 
@@ -41,8 +43,8 @@ public final class Raycaster {
         int z = (int) Math.floor(origin.z);
 
         BlockType start = world.getBlock(x, y, z);
-        if (!start.isPassThrough()) {
-            // Origin is already inside a solid block.
+        if (!start.isPassThrough() || world.getOverlay(x, y, z) != BlockType.AIR) {
+            // Origin is already inside a solid block (or an overlay decoration).
             return new Hit(new Vector3i(x, y, z), new Vector3i(x, y, z), new Vector3f(origin));
         }
 
@@ -82,7 +84,7 @@ public final class Raycaster {
             if (t > maxDistance) break;
 
             BlockType block = world.getBlock(x, y, z);
-            if (!block.isPassThrough()) {
+            if (!block.isPassThrough() || world.getOverlay(x, y, z) != BlockType.AIR) {
                 return new Hit(new Vector3i(x, y, z), new Vector3i(prevX, prevY, prevZ),
                         new Vector3f(origin.x + dx * t, origin.y + dy * t, origin.z + dz * t));
             }

@@ -42,6 +42,15 @@ public class Chunk {
     // distance. Not persisted (flow cells themselves aren't saved either), and
     // default-zero everywhere else is exactly what a non-flow cell should read.
     private final byte[] fluidLevels = new byte[SIZE * HEIGHT * SIZE];
+    // Decoration layered *inside* a cell alongside its primary block - e.g.
+    // seaweed growing inside a water cell instead of replacing it, the way
+    // Minecraft's waterlogged plants work (see BlockType#isSubmersible). AIR
+    // (0) means no overlay; a full parallel array rather than a sparse list
+    // since it's read once per rebuilt cell right next to blocks[] anyway.
+    // Persisted alongside blocks[] (see getRawOverlays/setRawOverlays) -
+    // unlike fluidLevels, this isn't cheap to regenerate on load (world-gen
+    // only runs once, when a chunk is first created).
+    private final byte[] overlays = new byte[SIZE * HEIGHT * SIZE];
 
     private volatile boolean dirty = true;
     private boolean generated = false;
@@ -113,6 +122,14 @@ public class Chunk {
         fluidLevels[index(x, y, z)] = (byte) level;
         if (type.isLightSource()) lightSources.add(new int[]{x, y, z, type.lightLevel});
         if (type.isFlowingFluid()) fluidBlocks.add(new int[]{x, y, z});
+        // An overlay decoration (see #overlays) only makes sense growing inside a
+        // fluid cell - if this cell's primary block just became something else
+        // (solid stone, air, ...), any overlay it had stops making sense too and
+        // would otherwise sit there forever, invisibly baked into whatever
+        // replaced the fluid (and rendering right through a solid replacement).
+        if (!type.isFluid() && overlays[index(x, y, z)] != BlockType.AIR.id) {
+            overlays[index(x, y, z)] = BlockType.AIR.id;
+        }
         dirty = true;
     }
 
@@ -120,6 +137,25 @@ public class Chunk {
     public int getFluidLevel(int x, int y, int z) {
         if (!inBounds(x, y, z)) return 0;
         return fluidLevels[index(x, y, z)];
+    }
+
+    /** The decoration layered inside this cell (see {@link #overlays}); {@link BlockType#AIR} if none. */
+    public BlockType getOverlay(int x, int y, int z) {
+        if (!inBounds(x, y, z)) return BlockType.AIR;
+        return BlockType.byId(overlays[index(x, y, z)]);
+    }
+
+    /**
+     * Sets (or clears, with {@link BlockType#AIR}) the decoration layered
+     * inside this cell, independent of whatever its primary block is - see
+     * {@link #overlays}. Doesn't touch {@link #blocks} at all, so placing or
+     * clearing an overlay never disturbs the fluid (or whatever else) it's
+     * sitting inside.
+     */
+    public void setOverlay(int x, int y, int z, BlockType type) {
+        if (!inBounds(x, y, z)) return;
+        overlays[index(x, y, z)] = type.id;
+        dirty = true;
     }
 
     private void removeLightSource(int x, int y, int z) {
@@ -143,6 +179,12 @@ public class Chunk {
     /** Like {@link #setLocal}, but also flags the chunk as needing to be saved to disk when it unloads. */
     public void setLocalFromPlayer(int x, int y, int z, BlockType type) {
         setLocal(x, y, z, type);
+        modifiedByPlayer = true;
+    }
+
+    /** Like {@link #setOverlay}, but also flags the chunk as needing to be saved to disk when it unloads. */
+    public void setOverlayFromPlayer(int x, int y, int z, BlockType type) {
+        setOverlay(x, y, z, type);
         modifiedByPlayer = true;
     }
 
@@ -172,6 +214,20 @@ public class Chunk {
         dirty = true;
         rebuildLightSourceIndex();
         rebuildFluidIndex();
+    }
+
+    /** Raw overlay-id array for serialization (see {@link #overlays}). Returns the live backing array - treat as read-only. */
+    public byte[] getRawOverlays() {
+        return overlays;
+    }
+
+    /** Replaces this chunk's overlay data wholesale, e.g. when loading a saved chunk from disk. */
+    public void setRawOverlays(byte[] data) {
+        if (data.length != overlays.length) {
+            throw new IllegalArgumentException("Expected " + overlays.length + " bytes, got " + data.length);
+        }
+        System.arraycopy(data, 0, overlays, 0, overlays.length);
+        dirty = true;
     }
 
     /** Full O(chunk volume) rescan of light sources - only needed after a wholesale block replacement (disk load). */
@@ -225,12 +281,24 @@ public class Chunk {
             for (int z = 0; z < SIZE; z++) {
                 for (int x = 0; x < SIZE; x++) {
                     BlockType block = getLocal(x, y, z);
-                    if (block == BlockType.AIR) continue;
+                    BlockType overlay = getOverlay(x, y, z);
+                    if (block == BlockType.AIR && overlay == BlockType.AIR) continue;
 
                     int wx = originX + x;
                     int wy = y;
                     int wz = originZ + z;
                     float blockLight = computeBlockLight(nearbyLights, wx + 0.5f, wy + 0.5f, wz + 0.5f);
+
+                    if (overlay != BlockType.AIR) {
+                        // A decoration living inside its cell's primary block (see
+                        // BlockType#isSubmersible) - e.g. seaweed inside a water cell,
+                        // drawn the same way any other cross-shaped decoration is.
+                        // Emitted before the primary block below so it's still drawn
+                        // even on the rare cell whose "primary" is AIR (an overlay
+                        // whose fluid was somehow removed without clearing it too).
+                        emitCross(vertices, indices, vertexCounter, wx, wy, wz, overlay, atlas, blockLight);
+                    }
+                    if (block == BlockType.AIR) continue;
 
                     if (block.cross) {
                         // Decoration (grass/flowers): two crossed planes, always fully

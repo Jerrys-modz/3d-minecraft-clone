@@ -128,6 +128,34 @@ public class World implements BlockAccessor {
         return chunk.getFluidLevel(lx, worldY, lz);
     }
 
+    @Override
+    public BlockType getOverlay(int worldX, int worldY, int worldZ) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return BlockType.AIR;
+        Chunk chunk = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
+        if (chunk == null) return BlockType.AIR;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        return chunk.getOverlay(lx, worldY, lz);
+    }
+
+    /**
+     * Sets (or clears, with {@link BlockType#AIR}) the decoration layered
+     * inside a cell - e.g. seaweed inside a water cell - without touching
+     * whatever its primary block is. See {@link Chunk#setOverlay}. Doesn't
+     * need the neighbor-chunk-dirtying or light/fluid-promotion handling
+     * {@link #setBlock} does: an overlay is a cross-shaped decoration, which
+     * never occludes a face (so it can't change a neighbor chunk's culling)
+     * and is never a light source or a fluid source/flow itself.
+     */
+    public void setOverlay(int worldX, int worldY, int worldZ, BlockType type) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return;
+        Chunk chunk = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
+        if (chunk == null) return;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        chunk.setOverlayFromPlayer(lx, worldY, lz, type);
+    }
+
     public void setBlock(int worldX, int worldY, int worldZ, BlockType type) {
         if (worldY < 0 || worldY >= Chunk.HEIGHT) return;
         int cx = worldToChunk(worldX);
