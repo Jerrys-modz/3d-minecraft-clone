@@ -16,6 +16,17 @@ public final class Door {
         return t == BlockType.DOOR || t == BlockType.DOOR_OPEN;
     }
 
+    public static boolean isTrapdoor(BlockType t) {
+        return t == BlockType.TRAPDOOR || t == BlockType.TRAPDOOR_OPEN;
+    }
+
+    /** Toggles a single trapdoor block open/closed. */
+    public static void toggleSingle(BlockAccessor get, BlockSetter set, int x, int y, int z) {
+        BlockType cur = get.getBlock(x, y, z);
+        if (cur == BlockType.TRAPDOOR) set.set(x, y, z, BlockType.TRAPDOOR_OPEN);
+        else if (cur == BlockType.TRAPDOOR_OPEN) set.set(x, y, z, BlockType.TRAPDOOR);
+    }
+
     /** Y of the door column's bottom half, resolving either half to the shared pair. */
     public static int bottomHalf(BlockAccessor world, int x, int y, int z) {
         if (isDoor(world.getBlock(x, y - 1, z))) return y - 1;

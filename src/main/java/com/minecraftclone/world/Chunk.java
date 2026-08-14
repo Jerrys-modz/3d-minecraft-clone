@@ -321,6 +321,12 @@ public class Chunk {
                                 getOrientation(x, y, z), block == BlockType.DOOR_OPEN, atlas, blockLight);
                         continue;
                     }
+                    // Trapdoors: a flat horizontal hatch when closed, a vertical panel when open.
+                    if (block.isTrapdoor()) {
+                        emitTrapdoorPanel(vertices, indices, vertexCounter, wx, wy, wz,
+                                block == BlockType.TRAPDOOR_OPEN, atlas, blockLight);
+                        continue;
+                    }
                     if (block.cross) {
                         // Decoration (grass/flowers): two crossed planes, always fully
                         // visible - no face culling, since it never covers a whole cell.
@@ -786,6 +792,25 @@ public class Chunk {
         float[][] positions = doorPlane(wx, wy, wz, plane);
         float light = (plane == 2 || plane == 3) ? LIGHT_EAST_WEST : LIGHT_NORTH_SOUTH;
         float[] uv = atlas.getUV(BlockType.DOOR.topTile);
+        float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
+        emitQuadBothSides(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
+    }
+
+    /** A trapdoor: a thin flat hatch across the top of its cell (closed) or a vertical panel (open). */
+    private void emitTrapdoorPanel(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                                   int wx, int wy, int wz, boolean open, TextureAtlas atlas, float blockLight) {
+        float thin = 0.12f;
+        float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + 1, z0 = wz, z1 = wz + 1;
+        float[][] positions;
+        float light;
+        if (open) {
+            positions = new float[][]{{x0, y0, z0 + thin}, {x1, y0, z0 + thin}, {x1, y1, z0 + thin}, {x0, y1, z0 + thin}};
+            light = LIGHT_NORTH_SOUTH;
+        } else {
+            positions = new float[][]{{x0, y1 - thin, z0}, {x1, y1 - thin, z0}, {x1, y1 - thin, z1}, {x0, y1 - thin, z1}};
+            light = LIGHT_TOP;
+        }
+        float[] uv = atlas.getUV(BlockType.TRAPDOOR.topTile);
         float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
         emitQuadBothSides(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
     }

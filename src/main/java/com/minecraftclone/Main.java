@@ -836,8 +836,9 @@ public class Main {
                             } else if (targetType == BlockType.BERRY_BUSH) {
                                 world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
                             } else {
-                                // An open door drops the closed-door item.
-                                BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR : targetType;
+                                // An open door/trapdoor drops the closed item.
+                                BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR
+                                        : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR : targetType;
                                 world.spawnItem(bx, by, bz, drop, 1, loot);
                                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
                                     world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);

@@ -96,6 +96,7 @@ public class TextureAtlas {
         paintTile(image, 44, rnd, 0xE08A2E, 0xC7731F, true);   // pumpkin
         paintSeaweed(image, 45, rnd);
         paintDoor(image, 46, rnd);
+        paintTrapdoor(image, 47, rnd);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
@@ -467,6 +468,30 @@ public class TextureAtlas {
             img.setRGB(ox + x, oy + 9, 0xFF000000 | dark);
         }
         img.setRGB(ox + 13, oy + 11, 0xFF000000 | 0x4A3018);
+    }
+
+    /** A trapdoor top: planks with a metal hinge strip and a frame, for the flat hatch. */
+    private void paintTrapdoor(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int plank = 0xC69A56, dark = 0x8E6A34, metal = 0x8A8A8A;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.15f ? dark : plank));
+            }
+        }
+        // Frame border.
+        for (int i = 0; i < TILE_PX; i++) {
+            img.setRGB(ox + i, oy, 0xFF000000 | dark);
+            img.setRGB(ox + i, oy + TILE_PX - 1, 0xFF000000 | dark);
+            img.setRGB(ox, oy + i, 0xFF000000 | dark);
+            img.setRGB(ox + TILE_PX - 1, oy + i, 0xFF000000 | dark);
+        }
+        // Metal hinge strip along one edge.
+        for (int i = 0; i < TILE_PX; i++) {
+            img.setRGB(ox + i, oy + 2, 0xFF000000 | metal);
+            img.setRGB(ox + i, oy + 3, 0xFF000000 | metal);
+        }
     }
 
     private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {

@@ -73,6 +73,8 @@ public enum BlockType {
     SEAWEED(63, false, true, 45),
     DOOR(64, true, false, 46, 46, 46),
     DOOR_OPEN(65, false, true, 46),
+    TRAPDOOR(66, true, false, 47, 47, 47),
+    TRAPDOOR_OPEN(67, false, true, 47),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -295,6 +297,11 @@ public enum BlockType {
     /** True for either half of a functional door (closed solid, or open walk-through). */
     public boolean isDoor() {
         return this == DOOR || this == DOOR_OPEN;
+    }
+
+    /** True for a functional trapdoor (closed solid panel, or open walk-through). */
+    public boolean isTrapdoor() {
+        return this == TRAPDOOR || this == TRAPDOOR_OPEN;
     }
 
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */

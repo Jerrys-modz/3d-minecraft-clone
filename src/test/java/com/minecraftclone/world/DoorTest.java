@@ -58,4 +58,15 @@ class DoorTest {
         assertTrue(BlockType.DOOR_OPEN.isDoor());
         assertTrue(!BlockType.PLANKS.isDoor());
     }
+
+    @Test
+    void trapdoorTogglesSingleBlock() {
+        Stub s = new Stub();
+        s.set(10, 5, 10, BlockType.TRAPDOOR);
+        Door.toggleSingle(s, s, 10, 5, 10);
+        assertEquals(BlockType.TRAPDOOR_OPEN, s.getBlock(10, 5, 10));
+        Door.toggleSingle(s, s, 10, 5, 10);
+        assertEquals(BlockType.TRAPDOOR, s.getBlock(10, 5, 10));
+        assertTrue(BlockType.TRAPDOOR.isTrapdoor());
+    }
 }
