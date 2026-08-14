@@ -49,6 +49,13 @@ public enum BlockType {
     FURNACE(40, true, false, 4, 26, 4), // smelting station: stone top/bottom, furnace-face sides (tile 26)
     STONE_SLAB(44, true, false, true, 4),   // bottom-half slab, stone texture
     PLANKS_SLAB(45, true, false, true, 11), // bottom-half slab, planks texture
+    // Fluids: SOURCE variants are placeable and flow (see FluidSim); the WATER/LAVA
+    // above are the static terrain fills that don't move. FLOW variants are the
+    // transient flowing cells the simulation fills in and dries up.
+    WATER_SOURCE(46, false, true, 6, 6, 6),
+    WATER_FLOW(47, false, true, 6, 6, 6),
+    LAVA_SOURCE(48, false, true, 20, 20, 20),
+    LAVA_FLOW(49, false, true, 20, 20, 20),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -208,5 +215,40 @@ public enum BlockType {
 
     public boolean isLightSource() {
         return lightLevel > 0;
+    }
+
+    /** True for any water-family block (static, source, or flow). */
+    public boolean isWater() {
+        return this == WATER || this == WATER_SOURCE || this == WATER_FLOW;
+    }
+
+    /** True for any lava-family block (static, source, or flow). */
+    public boolean isLava() {
+        return this == LAVA || this == LAVA_SOURCE || this == LAVA_FLOW;
+    }
+
+    /** True for any fluid (water or lava), including static and flowing variants. */
+    public boolean isFluid() {
+        return isWater() || isLava();
+    }
+
+    /** True for the placeable, flowing fluid source blocks. */
+    public boolean isFluidSource() {
+        return this == WATER_SOURCE || this == LAVA_SOURCE;
+    }
+
+    /** True for the transient flowing cells the fluid simulation fills and dries. */
+    public boolean isFluidFlow() {
+        return this == WATER_FLOW || this == LAVA_FLOW;
+    }
+
+    /** True for source or flow fluid (i.e. the flowing kinds, not the static terrain fills). */
+    public boolean isFlowingFluid() {
+        return isFluidSource() || isFluidFlow();
+    }
+
+    /** True if a ray should pass straight through this block (air, static water, or transient flow). */
+    public boolean isPassThrough() {
+        return this == AIR || this == WATER || this == WATER_FLOW || this == LAVA_FLOW;
     }
 }

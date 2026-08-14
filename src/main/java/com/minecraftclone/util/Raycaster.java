@@ -41,7 +41,7 @@ public final class Raycaster {
         int z = (int) Math.floor(origin.z);
 
         BlockType start = world.getBlock(x, y, z);
-        if (start != BlockType.AIR && start != BlockType.WATER) {
+        if (!start.isPassThrough()) {
             // Origin is already inside a solid block.
             return new Hit(new Vector3i(x, y, z), new Vector3i(x, y, z), new Vector3f(origin));
         }
@@ -82,7 +82,7 @@ public final class Raycaster {
             if (t > maxDistance) break;
 
             BlockType block = world.getBlock(x, y, z);
-            if (block != BlockType.AIR && block != BlockType.WATER) {
+            if (!block.isPassThrough()) {
                 return new Hit(new Vector3i(x, y, z), new Vector3i(prevX, prevY, prevZ),
                         new Vector3f(origin.x + dx * t, origin.y + dy * t, origin.z + dz * t));
             }

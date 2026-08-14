@@ -32,6 +32,9 @@ public class Chunk {
     // rare enough that a flat list beats a spatial index; consulted by rebuildMesh to bake
     // a static, non-occlusion-aware glow around each one (see World.collectNearbyLights).
     private final List<int[]> lightSources = new ArrayList<>();
+    // Local positions of every flowing-fluid block (source or flow) currently in
+    // this chunk, kept incrementally up to date - consulted by World's fluid sim.
+    private final List<int[]> fluidBlocks = new ArrayList<>();
 
     private volatile boolean dirty = true;
     private boolean generated = false;
@@ -88,8 +91,10 @@ public class Chunk {
         if (!inBounds(x, y, z)) return;
         BlockType old = getLocal(x, y, z);
         if (old.isLightSource()) removeLightSource(x, y, z);
+        if (old.isFlowingFluid()) removeFluid(x, y, z);
         blocks[index(x, y, z)] = type.id;
         if (type.isLightSource()) lightSources.add(new int[]{x, y, z, type.lightLevel});
+        if (type.isFlowingFluid()) fluidBlocks.add(new int[]{x, y, z});
         dirty = true;
     }
 
@@ -97,9 +102,18 @@ public class Chunk {
         lightSources.removeIf(s -> s[0] == x && s[1] == y && s[2] == z);
     }
 
+    private void removeFluid(int x, int y, int z) {
+        fluidBlocks.removeIf(s -> s[0] == x && s[1] == y && s[2] == z);
+    }
+
     /** Local positions of every light-emitting block in this chunk, as {x, y, z, lightLevel}. Treat as read-only. */
     public List<int[]> getLocalLightSources() {
         return lightSources;
+    }
+
+    /** Local positions of every flowing-fluid block (source or flow) in this chunk, as {x, y, z}. Treat as read-only. */
+    public List<int[]> getLocalFluidBlocks() {
+        return fluidBlocks;
     }
 
     /** Like {@link #setLocal}, but also flags the chunk as needing to be saved to disk when it unloads. */
@@ -129,6 +143,7 @@ public class Chunk {
         System.arraycopy(data, 0, blocks, 0, blocks.length);
         dirty = true;
         rebuildLightSourceIndex();
+        rebuildFluidIndex();
     }
 
     /** Full O(chunk volume) rescan of light sources - only needed after a wholesale block replacement (disk load). */
@@ -139,6 +154,18 @@ public class Chunk {
                 for (int x = 0; x < SIZE; x++) {
                     BlockType t = getLocal(x, y, z);
                     if (t.isLightSource()) lightSources.add(new int[]{x, y, z, t.lightLevel});
+                }
+            }
+        }
+    }
+
+    /** Full rescan of flowing-fluid blocks - only needed after a wholesale block replacement (disk load). */
+    private void rebuildFluidIndex() {
+        fluidBlocks.clear();
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int z = 0; z < SIZE; z++) {
+                for (int x = 0; x < SIZE; x++) {
+                    if (getLocal(x, y, z).isFlowingFluid()) fluidBlocks.add(new int[]{x, y, z});
                 }
             }
         }

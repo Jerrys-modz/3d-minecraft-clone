@@ -68,6 +68,12 @@ public final class Mining {
         put(BlockType.BERRY_BUSH, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.TORCH, 0f, ToolKind.NONE, TIER_HAND);
 
+        // Fluids - sources are quick to pick back up; flow is transient and instant.
+        put(BlockType.WATER_SOURCE, 0.2f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.LAVA_SOURCE, 0.2f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.WATER_FLOW, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.LAVA_FLOW, 0f, ToolKind.NONE, TIER_HAND);
+
         // Wood - axe helps but isn't required.
         put(BlockType.WOOD_LOG, 1.5f, ToolKind.AXE, TIER_HAND);
         put(BlockType.PLANKS, 1.0f, ToolKind.AXE, TIER_HAND);
