@@ -304,38 +304,64 @@ public class Chunk {
 
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
 
+    /**
+     * Fluid surface height (above its cell's floor, 0..1): 0.9 for a static/source
+     * block, full height for an unsupported (falling) flow, otherwise a shorter
+     * resting "puddle" height.
+     */
+    private float fluidTop(BlockAccessor world, int wx, int wy, int wz, BlockType type) {
+        if (type == BlockType.WATER || type == BlockType.LAVA || type.isFluidSource()) return 0.9f;
+        return world.getBlock(wx, wy - 1, wz) == BlockType.AIR ? 1f : 0.78f;
+    }
+
     /** Emits a lowered translucent surface for fluid instead of a solid full cube. */
     private void emitFluid(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
-        float top = (block == BlockType.WATER || block == BlockType.LAVA || block.isFluidSource()) ? 0.9f
-                : (world.getBlock(wx, wy - 1, wz) == BlockType.AIR ? 1f : 0.78f);
+        float top = fluidTop(world, wx, wy, wz, block);
         float[] uv = atlas.getUV(block.topTile);
         float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
         float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + top, z1 = wz + 1;
+        // Only the transient flowing kind animates - a still source/static body doesn't.
+        float flow = block.isFluidFlow() ? 1f : 0f;
 
         if (isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
-                    uvs, LIGHT_TOP, blockLight);
+                    uvs, LIGHT_TOP, blockLight, flow);
         }
         if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
-                    uvs, LIGHT_BOTTOM, blockLight);
+                    uvs, LIGHT_BOTTOM, blockLight, flow);
         }
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.EAST, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.WEST, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.SOUTH, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.NORTH, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, flow, Face.EAST, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, flow, Face.WEST, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, flow, Face.SOUTH, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, flow, Face.NORTH, uvs);
     }
 
     private void emitFluidSide(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
-                                int wx, int wy, int wz, BlockType block, float blockLight, float top,
+                                int wx, int wy, int wz, BlockType block, float blockLight, float top, float flow,
                                 Face face, float[][] uvs) {
         int nx = wx + (face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0);
         int nz = wz + (face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0);
-        if (!isFaceVisible(world, nx - getOriginX(), wy, nz - getOriginZ(), nx, wy, nz, block)) return;
-        float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + top, z0 = wz, z1 = wz + 1;
+        int nlx = nx - getOriginX(), nlz = nz - getOriginZ();
+
+        float bottom = 0f;
+        BlockType neighbor = inBounds(nlx, wy, nlz) ? getLocal(nlx, wy, nlz) : world.getBlock(nx, wy, nz);
+        if ((block.isWater() && neighbor.isWater()) || (block.isLava() && neighbor.isLava())) {
+            // Same fluid family, but possibly a different surface height (e.g. a
+            // low-lying resting flow next to a full source or a falling column) -
+            // only the exposed sliver above the shorter one's surface needs a face.
+            // Culling the whole side here (like plain water-vs-water always did)
+            // left that step as a see-through gap whenever the heights didn't match.
+            float neighborTop = fluidTop(world, nx, wy, nz, neighbor);
+            if (neighborTop >= top) return;
+            bottom = neighborTop;
+        } else if (!isFaceVisible(world, nlx, wy, nlz, nx, wy, nz, block)) {
+            return;
+        }
+        float x0 = wx, x1 = wx + 1, y0 = wy + bottom, y1 = wy + top, z0 = wz, z1 = wz + 1;
         float[][] positions = switch (face) {
             case EAST -> new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}};
             case WEST -> new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}};
@@ -344,7 +370,7 @@ public class Chunk {
             default -> throw new IllegalArgumentException("Fluid side must be horizontal");
         };
         float light = face == Face.NORTH || face == Face.SOUTH ? LIGHT_NORTH_SOUTH : LIGHT_EAST_WEST;
-        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, flow);
     }
 
     private void emitFace(FloatArray vertices, IntArray indices, int[] vertexCounter,
@@ -472,6 +498,11 @@ public class Chunk {
 
     private void emitQuad(FloatArray vertices, IntArray indices, int[] vertexCounter,
                            float[][] positions, float[][] uvs, float light, float blockLight) {
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, 0f);
+    }
+
+    private void emitQuad(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                           float[][] positions, float[][] uvs, float light, float blockLight, float fluidFlow) {
         int base = vertexCounter[0];
         for (int i = 0; i < 4; i++) {
             vertices.add(positions[i][0]);
@@ -481,6 +512,7 @@ public class Chunk {
             vertices.add(uvs[i][1]);
             vertices.add(light);
             vertices.add(blockLight);
+            vertices.add(fluidFlow);
         }
         indices.add(base);
         indices.add(base + 1);

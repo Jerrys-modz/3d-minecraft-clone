@@ -4,6 +4,7 @@ layout (location = 0) in vec3 inPosition;
 layout (location = 1) in vec2 inUv;
 layout (location = 2) in float inLight;
 layout (location = 3) in float inBlockLight;
+layout (location = 4) in float inFluidFlow;
 
 uniform mat4 projection;
 uniform mat4 view;
@@ -11,6 +12,7 @@ uniform mat4 view;
 out vec2 fragUv;
 out float fragLight;
 out float fragBlockLight;
+out float fragFluidFlow;
 out float fragViewDistance;
 
 void main() {
@@ -19,5 +21,6 @@ void main() {
     fragUv = inUv;
     fragLight = inLight;
     fragBlockLight = inBlockLight;
+    fragFluidFlow = inFluidFlow;
     fragViewDistance = length(viewPos.xyz);
 }

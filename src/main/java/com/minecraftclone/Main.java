@@ -159,6 +159,7 @@ public class Main {
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
         MiningController mining = new MiningController();
+        float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl sprint, F fly (creative only),");
         System.out.println("          hold Left-click to mine (speed/possibility depends on your tool),");
@@ -194,6 +195,7 @@ public class Main {
             float dt = timer.getDeltaTime();
             timer.updateFps(dt);
             dayNightCycle.update(dt);
+            animTime[0] += dt;
 
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 if (inventoryOpen[0]) {
@@ -521,6 +523,8 @@ public class Main {
             chunkShader.setUniform("fogStart", (world.getRenderDistance() - 2) * 16f);
             chunkShader.setUniform("fogEnd", world.getRenderDistance() * 16f);
             chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness());
+            chunkShader.setUniform("time", animTime[0]);
+            chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
             world.render(chunkShader);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
