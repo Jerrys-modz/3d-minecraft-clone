@@ -20,6 +20,7 @@ import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
+import com.minecraftclone.world.gen.WorldGenSettings;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
@@ -73,8 +74,10 @@ public class Main {
 
     /** Pushes the current in-memory {@link Settings} into the world/renderer/player. */
     private void applySettings(Settings settings, World world, Player player, Window window) {
-        world.setLeavesTransparent(settings.isLeavesTransparent());
-        world.setRenderDistance(settings.getRenderDistance());
+        if (world != null) {
+            world.setLeavesTransparent(settings.isLeavesTransparent());
+            world.setRenderDistance(settings.getRenderDistance());
+        }
         window.setVsync(settings.isVsync());
         player.setMouseSensitivity(settings.getMouseSensitivity());
         player.setGameMode(settings.getGameMode());
@@ -128,24 +131,15 @@ public class Main {
 
         Path saveDir = Paths.get(System.getenv().getOrDefault("MCCLONE_SAVE_DIR", "saves/world"));
         Path settingsFile = saveDir.resolve("settings.txt");
-        long seed = loadOrCreateSeed(saveDir);
         Settings settings = Settings.load(settingsFile);
-        System.out.println("World seed: " + seed + " (save directory: " + saveDir.toAbsolutePath() + ")");
-        World world = new World(seed, atlas, saveDir);
-        world.setRenderDistance(settings.getRenderDistance());
-        world.setLeavesTransparent(settings.isLeavesTransparent());
-
-        // Warm up: generate/mesh the spawn area synchronously before the player drops in,
-        // so they don't fall through an empty world.
-        for (int i = 0; i < 200; i++) {
-            world.update(0, 0);
-        }
-
+        WorldGenSettings genSettings = settings.getWorldGen();
+        System.out.println("Save directory: " + saveDir.toAbsolutePath());
         Player player = new Player();
-        // Land on a sensible spawn: the origin itself may be ocean, so scan outward
-        // for the nearest dry, non-mountain biome.
-        float[] spawn = findSpawn(world);
-        player.spawn(world, spawn[0], spawn[1]);
+        player.setKeyBinds(settings.getKeyBinds());
+        // The world is created lazily when the player presses Play, using the
+        // world-generation settings chosen on the main menu.
+        World world = null;
+        boolean[] started = {false};
 
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
@@ -161,8 +155,13 @@ public class Main {
         boolean[] creativeOpen = {false};
         int[] creativeTab = {0};
         int[] hoveredSlot = {-1};
+        boolean[] mainMenuOpen = {true};
+        boolean[] worldGenOpen = {false};
+        int[] mainMenuSelection = {Hud.MENU_PLAY};
+        int[] worldGenSelection = {0};
+        boolean[] editingSeed = {false};
 
-        window.setCursorCaptured(true);
+        window.setCursorCaptured(false); // free cursor in the main menu
 
         // Ensure the renderer/player/window all match the loaded settings.
         applySettings(settings, world, player, window);
@@ -206,6 +205,20 @@ public class Main {
         if (System.getenv("MCCLONE_AUTOTEST_MENU") != null) {
             menuOpen[0] = true;
         }
+        if (autoTest && System.getenv("MCCLONE_AUTOTEST_SHOW_MENU") == null) {
+            // Auto-play for the headless smoke test (unless the menu is being screenshotted).
+            long seed = genSettings.resolveSeed();
+            world = new World(seed, genSettings, atlas, saveDir);
+            world.setRenderDistance(settings.getRenderDistance());
+            world.setLeavesTransparent(settings.isLeavesTransparent());
+            for (int i = 0; i < 200; i++) world.update(0, 0);
+            float[] spawn = findSpawn(world);
+            player.spawn(world, spawn[0], spawn[1]);
+            for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+            System.out.println("World seed: " + seed);
+            started[0] = true;
+            mainMenuOpen[0] = false;
+        }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
 
@@ -223,7 +236,99 @@ public class Main {
             timer.updateFps(dt);
             dayNightCycle.update(dt);
             animTime[0] += dt;
+            Raycaster.Hit hit = null;
+            float breakFraction = 0f;
+            boolean screenshotRequested = false;
 
+            // Main menu / world-gen page input (before the world exists).
+            if (!started[0]) {
+                if (worldGenOpen[0]) {
+                    if (editingSeed[0]) {
+                        String typed = input.consumeTypedChars();
+                        StringBuilder sb = new StringBuilder(genSettings.getSeedText());
+                        for (int i = 0; i < typed.length(); i++) {
+                            char ch = typed.charAt(i);
+                            if (Character.isLetterOrDigit(ch) || ch == '-') sb.append(ch);
+                        }
+                        genSettings.setSeedText(sb.toString());
+                        if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE)) {
+                            String s = genSettings.getSeedText();
+                            if (!s.isEmpty()) genSettings.setSeedText(s.substring(0, s.length() - 1));
+                        }
+                        settings.save(settingsFile);
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                            editingSeed[0] = false;
+                        }
+                    } else {
+                        if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                            worldGenSelection[0] = Math.floorMod(worldGenSelection[0] - 1, WorldGenSettings.ROW_COUNT + 1);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                            worldGenSelection[0] = Math.floorMod(worldGenSelection[0] + 1, WorldGenSettings.ROW_COUNT + 1);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
+                            genSettings.adjust(worldGenSelection[0], -1);
+                            settings.save(settingsFile);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
+                            genSettings.adjust(worldGenSelection[0], +1);
+                            settings.save(settingsFile);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                            if (worldGenSelection[0] == WorldGenSettings.ROW_SEED) {
+                                editingSeed[0] = true;
+                                input.consumeTypedChars();
+                            } else if (worldGenSelection[0] == WorldGenSettings.ROW_COUNT) {
+                                worldGenOpen[0] = false;
+                                mainMenuSelection[0] = Hud.MENU_WORLD_GEN;
+                            } else {
+                                genSettings.adjust(worldGenSelection[0], +1);
+                                settings.save(settingsFile);
+                            }
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                            worldGenOpen[0] = false;
+                            mainMenuSelection[0] = Hud.MENU_WORLD_GEN;
+                        }
+                    }
+                } else {
+                    if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                        mainMenuSelection[0] = Math.floorMod(mainMenuSelection[0] - 1, Hud.MENU_COUNT);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                        mainMenuSelection[0] = Math.floorMod(mainMenuSelection[0] + 1, Hud.MENU_COUNT);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                        if (mainMenuSelection[0] == Hud.MENU_PLAY) {
+                            long seed = genSettings.resolveSeed();
+                            if (genSettings.isSeedBlank()) {
+                                genSettings.setSeedText(Long.toString(seed));
+                                settings.save(settingsFile);
+                            }
+                            world = new World(seed, genSettings, atlas, saveDir);
+                            world.setRenderDistance(settings.getRenderDistance());
+                            world.setLeavesTransparent(settings.isLeavesTransparent());
+                            for (int i = 0; i < 200; i++) world.update(0, 0);
+                            float[] spawn = findSpawn(world);
+                            player.spawn(world, spawn[0], spawn[1]);
+                            for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+                            System.out.println("World seed: " + seed);
+                            started[0] = true;
+                            mainMenuOpen[0] = false;
+                            window.setCursorCaptured(true);
+                            input.resetMouseDelta();
+                        } else if (mainMenuSelection[0] == Hud.MENU_WORLD_GEN) {
+                            worldGenOpen[0] = true;
+                            worldGenSelection[0] = 0;
+                        } else if (mainMenuSelection[0] == Hud.MENU_QUIT) {
+                            glfwSetWindowShouldClose(window.getHandle(), true);
+                        }
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                        glfwSetWindowShouldClose(window.getHandle(), true);
+                    }
+                }
+            } else {
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 if (bindingAction[0] >= 0) {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
@@ -423,7 +528,7 @@ public class Main {
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.DEBUG))) {
                 showDebug[0] = !showDebug[0];
             }
-            boolean screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
+            screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 player.update(dt, input, world);
@@ -466,11 +571,11 @@ public class Main {
             timeSinceAutosave += dt;
             if (timeSinceAutosave >= AUTOSAVE_INTERVAL_SECONDS) {
                 timeSinceAutosave = 0f;
-                world.saveAllModified();
+                if (world != null) world.saveAllModified();
             }
 
-            Raycaster.Hit hit = null;
-            float breakFraction = 0f;
+            hit = null;
+            breakFraction = 0f;
 
             // Block selection via number keys / scroll wheel - the hotbar is the
             // first 9 inventory slots (only in gameplay).
@@ -569,6 +674,8 @@ public class Main {
                 }
             }
 
+            }
+
             // --- Render ---
             Matrix4f projection = player.getCamera().getProjectionMatrix(settings.getFov(), window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
             Matrix4f view = player.getCamera().getViewMatrix();
@@ -589,6 +696,7 @@ public class Main {
                     dayNightCycle.getNightZenithColor(), dayNightCycle.getSunColor(), dayNightCycle.getMoonColor());
             glEnable(GL_DEPTH_TEST);
 
+            if (started[0]) {
             chunkShader.bind();
             chunkShader.setUniform("projection", projection);
             chunkShader.setUniform("view", view);
@@ -603,8 +711,9 @@ public class Main {
             world.render(chunkShader);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             chunkShader.unbind();
+            }
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 if (hit != null) {
                     float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
                     hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
@@ -639,6 +748,13 @@ public class Main {
             if (menuOpen[0]) {
                 hud.renderSettingsMenu(settings, menuSelection[0], bindingAction[0], window.getAspectRatio());
             }
+            if (!started[0]) {
+                if (worldGenOpen[0]) {
+                    hud.renderWorldGenMenu(genSettings, worldGenSelection[0], editingSeed[0], window.getAspectRatio());
+                } else {
+                    hud.renderMainMenu(mainMenuSelection[0], window.getAspectRatio());
+                }
+            }
             if (inventoryOpen[0]) {
                 // Scale mouse X back by aspect to match the HUD's logical-square space.
                 float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
@@ -669,7 +785,7 @@ public class Main {
             }
         }
 
-        world.saveAllModified();
+        if (world != null) world.saveAllModified();
         settings.save(settingsFile);
 
         hud.destroy();
@@ -682,7 +798,7 @@ public class Main {
         atlas.destroy();
         itemTextures.destroy();
         font.destroy();
-        world.destroy();
+        if (world != null) world.destroy();
         window.close();
     }
 

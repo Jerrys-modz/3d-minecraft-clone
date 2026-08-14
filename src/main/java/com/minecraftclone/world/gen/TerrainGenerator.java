@@ -24,12 +24,13 @@ import java.util.Random;
  */
 public class TerrainGenerator {
 
-    public static final int SEA_LEVEL = 42;
+    /** The default sea/water level in blocks; configurable via {@link WorldGenSettings}. */
+    public static final int DEFAULT_SEA_LEVEL = 42;
     private static final int BASE_HEIGHT = 44;
     private static final int SNOW_LINE = 60;
-    private static final int MOUNTAIN_LINE = SEA_LEVEL + 16; // above this: mountain biome
-    private static final int LAVA_LEVEL = 10;                // cave pockets at/below this fill with lava instead of air
-    private static final int RIVER_ZONE = 6;                 // rivers only form in lowland within this of sea level, so they never become ravines
+    private static final int MOUNTAIN_OFFSET = 16; // sea level + this: mountain biome
+    private static final int LAVA_LEVEL = 10;      // cave pockets at/below this fill with lava instead of air
+    private static final int RIVER_ZONE = 6;       // rivers only form in lowland within this of sea level, so they never become ravines
 
     /** The biomes a column can be assigned, from its temperature, moisture and height. */
     public enum Biome {
@@ -44,15 +45,30 @@ public class TerrainGenerator {
     private final Noise riverNoise;
     private final Noise oreNoise;
     private final long seed;
+    private final int seaLevel;
+    private final boolean structures;
+    private final boolean superflat;
+    private final float terrainSize;
+    /** Superflat world: the fixed height of the grass surface (a flat plain just above sea level). */
+    private final int flatHeight;
 
-    public TerrainGenerator(long seed) {
+    public TerrainGenerator(long seed, WorldGenSettings settings) {
         this.seed = seed;
+        this.seaLevel = settings.getSeaLevel();
+        this.structures = settings.hasStructures();
+        this.superflat = settings.isSuperflat();
+        this.terrainSize = settings.getTerrainSize();
+        this.flatHeight = seaLevel + 4;
         this.heightNoise = new Noise(seed);
         this.moistureNoise = new Noise(seed ^ 0x9E3779B97F4A7C15L);
         this.tempNoise = new Noise(seed ^ 0xC2B2AE3D27D4EB4FL);
         this.caveNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
         this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
         this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
+    }
+
+    public int getSeaLevel() {
+        return seaLevel;
     }
 
     /**
@@ -62,13 +78,13 @@ public class TerrainGenerator {
      * between frozen and temperate so snow never butts straight up against lush
      * plains, and moisture picks forest vs plains / desert vs savanna.
      */
-    public static Biome biomeAt(double temperature, double moisture, int height) {
-        if (height < SEA_LEVEL) return temperature < -0.25 ? Biome.FROZEN_OCEAN : Biome.OCEAN;
-        if (height <= SEA_LEVEL + 1) return Biome.BEACH;
-        if (height > MOUNTAIN_LINE) return Biome.MOUNTAIN;
+    public Biome biomeAt(double temperature, double moisture, int height) {
+        if (height < seaLevel) return temperature < -0.25 ? Biome.FROZEN_OCEAN : Biome.OCEAN;
+        if (height <= seaLevel + 1) return Biome.BEACH;
+        if (height > seaLevel + MOUNTAIN_OFFSET) return Biome.MOUNTAIN;
         if (temperature < -0.28) return moisture > 0.05 ? Biome.TAIGA : Biome.SNOWY;
         if (temperature < -0.04) return Biome.TUNDRA;
-        if (moisture > 0.42 && height <= SEA_LEVEL + 6) return Biome.SWAMP;
+        if (moisture > 0.42 && height <= seaLevel + 6) return Biome.SWAMP;
         if (temperature > 0.18) {
             if (moisture > 0.18) return Biome.JUNGLE;
             if (moisture < -0.12) return Biome.DESERT;
@@ -104,11 +120,11 @@ public class TerrainGenerator {
     }
 
     /** True if any of a column's in-chunk orthogonal neighbors sits below sea level. */
-    private static boolean neighborBelowSea(int[][] heights, int x, int z) {
-        return (x > 0 && heights[x - 1][z] < SEA_LEVEL)
-                || (x < heights.length - 1 && heights[x + 1][z] < SEA_LEVEL)
-                || (z > 0 && heights[x][z - 1] < SEA_LEVEL)
-                || (z < heights.length - 1 && heights[x][z + 1] < SEA_LEVEL);
+    private boolean neighborBelowSea(int[][] heights, int x, int z) {
+        return (x > 0 && heights[x - 1][z] < seaLevel)
+                || (x < heights.length - 1 && heights[x + 1][z] < seaLevel)
+                || (z > 0 && heights[x][z - 1] < seaLevel)
+                || (z < heights.length - 1 && heights[x][z + 1] < seaLevel);
     }
 
     /**
@@ -118,8 +134,8 @@ public class TerrainGenerator {
      */
     private Biome biomeForColumn(int[][] heights, int x, int z, double temperature, double moisture,
                                  int height, int wx, int wz) {
-        if (height < SEA_LEVEL) return biomeAt(temperature, moisture, height);
-        if (height <= SEA_LEVEL + 1 && neighborBelowSea(heights, x, z)) return Biome.BEACH;
+        if (height < seaLevel) return biomeAt(temperature, moisture, height);
+        if (height <= seaLevel + 1 && neighborBelowSea(heights, x, z)) return Biome.BEACH;
         Biome b = biomeForClimate(temperature, moisture, height, wx, wz);
         return b == Biome.BEACH ? Biome.PLAINS : b;
     }
@@ -130,21 +146,24 @@ public class TerrainGenerator {
      * Matches what {@link #generate} fills, so biome queries agree with the world.
      */
     public int terrainHeight(int wx, int wz) {
+        if (superflat) {
+            return flatHeight;
+        }
         double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
         // Real mountains: a low-frequency range, sharpened into tall peaks by the
         // power so only the core of a range reaches high altitude.
         double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 2, 0.5, 2.0);
         double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
-        int height = BASE_HEIGHT + (int) Math.round(
-                continent * 16 + h * 18 + Math.pow(Math.max(0, mountains - 0.02), 1.6) * 420);
+        int height = BASE_HEIGHT + (int) Math.round(terrainSize * (
+                continent * 16 + h * 18 + Math.pow(Math.max(0, mountains - 0.02), 1.6) * 420));
         // Rivers only cut through lowland near sea level, so their water sits level
         // with the land instead of carving deep ravines through high terrain.
-        boolean river = isRiver(wx, wz) && height <= SEA_LEVEL + RIVER_ZONE;
+        boolean river = isRiver(wx, wz) && height <= seaLevel + RIVER_ZONE;
         if (river) {
-            height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed
+            height = Math.min(height, seaLevel - 1); // shallow riverbed
         }
         height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
-        if (height < SEA_LEVEL && !river) {
+        if (height < seaLevel && !river) {
             double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
             height = Math.max(2, height - (int) (depth * 5));
         }
@@ -160,24 +179,28 @@ public class TerrainGenerator {
         double temperature = temperatureAt(wx, wz);
         double moisture = moistureAt(wx, wz);
         int height = terrainHeight(wx, wz);
-        if (height < SEA_LEVEL && !neighborBelowSeaWorld(wx, wz)) {
-            height = SEA_LEVEL; // an isolated dip isn't a puddle
+        if (height < seaLevel && !neighborBelowSeaWorld(wx, wz)) {
+            height = seaLevel; // an isolated dip isn't a puddle
         }
-        if (height < SEA_LEVEL) return biomeAt(temperature, moisture, height);
-        if (height <= SEA_LEVEL + 1 && neighborBelowSeaWorld(wx, wz)) return Biome.BEACH;
+        if (height < seaLevel) return biomeAt(temperature, moisture, height);
+        if (height <= seaLevel + 1 && neighborBelowSeaWorld(wx, wz)) return Biome.BEACH;
         Biome b = biomeForClimate(temperature, moisture, height, wx, wz);
         return b == Biome.BEACH ? Biome.PLAINS : b;
     }
 
     /** True if any orthogonal neighbor of a world column sits below sea level. */
     private boolean neighborBelowSeaWorld(int wx, int wz) {
-        return terrainHeight(wx - 1, wz) < SEA_LEVEL
-                || terrainHeight(wx + 1, wz) < SEA_LEVEL
-                || terrainHeight(wx, wz - 1) < SEA_LEVEL
-                || terrainHeight(wx, wz + 1) < SEA_LEVEL;
+        return terrainHeight(wx - 1, wz) < seaLevel
+                || terrainHeight(wx + 1, wz) < seaLevel
+                || terrainHeight(wx, wz - 1) < seaLevel
+                || terrainHeight(wx, wz + 1) < seaLevel;
     }
 
     public void generate(Chunk chunk) {
+        if (superflat) {
+            generateSuperflat(chunk);
+            return;
+        }
         int originX = chunk.getOriginX();
         int originZ = chunk.getOriginZ();
         Random featureRandom = new Random(seed ^ ((long) chunk.getPos().x() * 341873128712L) ^ ((long) chunk.getPos().z() * 132897987541L));
@@ -203,19 +226,19 @@ public class TerrainGenerator {
                 temperature[x][z] = temperatureAt(wx, wz);
                 moisture[x][z] = moistureAt(wx, wz);
 
-                int height = BASE_HEIGHT + (int) Math.round(
-                        continent * 16 + h * 18 + Math.pow(Math.max(0, mountains - 0.02), 1.6) * 420);
+                int height = BASE_HEIGHT + (int) Math.round(terrainSize * (
+                        continent * 16 + h * 18 + Math.pow(Math.max(0, mountains - 0.02), 1.6) * 420));
                 // Rivers only cut through lowland near sea level (see RIVER_ZONE).
-                boolean river = isRiver(wx, wz) && height <= SEA_LEVEL + RIVER_ZONE;
+                boolean river = isRiver(wx, wz) && height <= seaLevel + RIVER_ZONE;
                 rivers[x][z] = river;
                 if (river) {
-                    height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed
+                    height = Math.min(height, seaLevel - 1); // shallow riverbed
                 }
                 height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
 
                 // Deepen oceans with a slow depth noise so open water is more than a
                 // puddle; rivers stay shallow so their water sits level with the land.
-                if (height < SEA_LEVEL && !river) {
+                if (height < seaLevel && !river) {
                     double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
                     height = Math.max(2, height - (int) (depth * 5));
                 }
@@ -250,7 +273,7 @@ public class TerrainGenerator {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 int d = riverDist[x][z];
                 if (d >= 1 && d <= 4) {
-                    int target = SEA_LEVEL + d + 1; // 1 away: +2 above water, up to 5 away: +5
+                    int target = seaLevel + d + 1; // 1 away: +2 above water, up to 5 away: +5
                     if (heights[x][z] > target) {
                         heights[x][z] = target;
                     }
@@ -265,8 +288,8 @@ public class TerrainGenerator {
                 // A tiny isolated dip below sea would otherwise become a stray 1-2
                 // block puddle; flatten it to sea level so water only forms real
                 // bodies that connect to a neighbor.
-                if (height < SEA_LEVEL && !neighborBelowSea(heights, x, z)) {
-                    height = SEA_LEVEL;
+                if (height < seaLevel && !neighborBelowSea(heights, x, z)) {
+                    height = seaLevel;
                     heights[x][z] = height;
                 }
                 Biome biome = biomeForColumn(heights, x, z, temperature[x][z], moisture[x][z],
@@ -303,17 +326,17 @@ public class TerrainGenerator {
 
                 // Fill water up to sea level for low terrain (oceans, rivers, lakes).
                 // Frozen oceans cap the surface with ice; swamps get the odd lily pad.
-                if (height < SEA_LEVEL) {
+                if (height < seaLevel) {
                     boolean frozen = biome == Biome.FROZEN_OCEAN;
-                    for (int y = height + 1; y <= SEA_LEVEL; y++) {
-                        BlockType fill = frozen && y == SEA_LEVEL ? BlockType.ICE : BlockType.WATER;
-                        if (y == SEA_LEVEL && biome == Biome.SWAMP && featureRandom.nextInt(6) == 0) {
+                    for (int y = height + 1; y <= seaLevel; y++) {
+                        BlockType fill = frozen && y == seaLevel ? BlockType.ICE : BlockType.WATER;
+                        if (y == seaLevel && biome == Biome.SWAMP && featureRandom.nextInt(6) == 0) {
                             fill = BlockType.LILY_PAD;
                         }
                         chunk.setLocal(x, y, z, fill);
                     }
                     // Seaweed on shallow, warm ocean floors.
-                    if (biome == Biome.OCEAN && height >= SEA_LEVEL - 8 && featureRandom.nextInt(4) == 0) {
+                    if (biome == Biome.OCEAN && height >= seaLevel - 8 && featureRandom.nextInt(4) == 0) {
                         for (int i = 1; i <= 2; i++) {
                             if (chunk.getLocal(x, height + i, z) == BlockType.WATER) {
                                 chunk.setLocal(x, height + i, z, BlockType.SEAWEED);
@@ -326,11 +349,13 @@ public class TerrainGenerator {
 
         // Surface dressing: trees / cacti / boulders / ground cover per biome. Kept
         // fully inside the chunk (margin 2) so tree canopies never spill into a
-        // not-yet-generated neighboring chunk.
-        for (int x = 2; x < Chunk.SIZE - 2; x++) {
+        // not-yet-generated neighboring chunk. Skipped entirely when structures
+        // are disabled (WorldGenSettings).
+        if (structures) {
+            for (int x = 2; x < Chunk.SIZE - 2; x++) {
             for (int z = 2; z < Chunk.SIZE - 2; z++) {
                 int height = heights[x][z];
-                if (height < SEA_LEVEL) continue; // ocean floor gets no dressing
+                if (height < seaLevel) continue; // ocean floor gets no dressing
 
                 Biome biome = biomes[x][z];
                 BlockType surface = chunk.getLocal(x, height, z);
@@ -468,7 +493,46 @@ public class TerrainGenerator {
                 }
             }
         }
+        }
 
+        chunk.markGenerated();
+        chunk.markDirty();
+    }
+
+    /**
+     * Superflat world: a featureless grass plain. Bedrock at the floor, a few
+     * stone/dirt layers, a grass surface just above sea level, and no water,
+     * caves, ores, trees or decoration.
+     */
+    private void generateSuperflat(Chunk chunk) {
+        int originX = chunk.getOriginX();
+        int originZ = chunk.getOriginZ();
+        Random featureRandom = new Random(seed ^ ((long) chunk.getPos().x() * 341873128712L) ^ ((long) chunk.getPos().z() * 132897987541L));
+        for (int x = 0; x < Chunk.SIZE; x++) {
+            for (int z = 0; z < Chunk.SIZE; z++) {
+                for (int y = 0; y <= flatHeight; y++) {
+                    BlockType type;
+                    if (y == 0) {
+                        type = BlockType.BEDROCK;
+                    } else if (y < flatHeight - 3) {
+                        type = BlockType.STONE;
+                    } else if (y < flatHeight) {
+                        type = BlockType.DIRT;
+                    } else {
+                        type = BlockType.GRASS;
+                    }
+                    chunk.setLocal(x, y, z, type);
+                }
+            }
+        }
+        // The occasional tall grass tuft so the plain isn't totally sterile.
+        if (structures) {
+            for (int i = 0; i < 8; i++) {
+                int x = featureRandom.nextInt(Chunk.SIZE - 4) + 2;
+                int z = featureRandom.nextInt(Chunk.SIZE - 4) + 2;
+                chunk.setLocal(x, flatHeight + 1, z, BlockType.TALL_GRASS);
+            }
+        }
         chunk.markGenerated();
         chunk.markDirty();
     }
@@ -487,7 +551,7 @@ public class TerrainGenerator {
     }
 
     /** The top surface block for a biome (oceans get their sea-floor material). */
-    private static BlockType surfaceFor(Biome b, int height) {
+    private BlockType surfaceFor(Biome b, int height) {
         return switch (b) {
             case BEACH, DESERT -> BlockType.SAND;
             case SNOWY, TAIGA -> BlockType.SNOW;
@@ -495,13 +559,13 @@ public class TerrainGenerator {
             case SWAMP -> BlockType.SWAMP_GRASS;
             case BADLANDS -> BlockType.RED_CLAY;
             case MUSHROOM_FIELD -> BlockType.MYCELIUM;
-            case OCEAN, FROZEN_OCEAN -> height < SEA_LEVEL - 5 ? BlockType.GRAVEL : BlockType.SAND;
+            case OCEAN, FROZEN_OCEAN -> height < seaLevel - 5 ? BlockType.GRAVEL : BlockType.SAND;
             default -> BlockType.GRASS;
         };
     }
 
     /** The block just under the surface. */
-    private static BlockType subsurfaceFor(Biome b, int height) {
+    private BlockType subsurfaceFor(Biome b, int height) {
         return switch (b) {
             case BEACH, DESERT, OCEAN, FROZEN_OCEAN -> BlockType.SAND;
             case BADLANDS -> BlockType.RED_CLAY;

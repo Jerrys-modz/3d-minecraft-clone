@@ -1,6 +1,7 @@
 package com.minecraftclone;
 
 import com.minecraftclone.engine.KeyBindings;
+import com.minecraftclone.world.gen.WorldGenSettings;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -34,6 +35,7 @@ public class Settings {
     private final boolean[] toggles = new boolean[ROW_COUNT];
     private final float[] ranges = new float[ROW_COUNT];
     private final KeyBindings keyBinds = new KeyBindings();
+    private final WorldGenSettings worldGen = new WorldGenSettings();
 
     public Settings() {
         toggles[VSYNC] = true; // matches the window's default state
@@ -182,6 +184,7 @@ public class Settings {
         lines.add("cloud_speed=" + getCloudSpeed());
         lines.add("stars=" + (toggles[STARS] ? 1 : 0));
         keyBinds.saveLines(lines);
+        worldGen.saveLines(lines);
         try {
             if (file.getParent() != null) {
                 Files.createDirectories(file.getParent());
@@ -217,7 +220,10 @@ public class Settings {
                         case "clouds" -> s.ranges[CLOUDS] = clamp(CLOUDS, Float.parseFloat(value));
                         case "cloud_speed" -> s.ranges[CLOUD_SPEED] = clamp(CLOUD_SPEED, Float.parseFloat(value));
                         case "stars" -> s.toggles[STARS] = parseBool(value);
-                        default -> s.keyBinds.loadEntry(key, value);
+                        default -> {
+                            s.keyBinds.loadEntry(key, value);
+                            s.worldGen.loadEntry(key, value);
+                        }
                     }
                 } catch (NumberFormatException ignored) {
                     // Malformed value: keep the default for that entry.
@@ -271,6 +277,11 @@ public class Settings {
 
     public boolean isStars() {
         return toggles[STARS];
+    }
+
+    /** World-generation settings for new worlds (see {@link WorldGenSettings}). */
+    public WorldGenSettings getWorldGen() {
+        return worldGen;
     }
 
     /** Remappable gameplay key bindings (see {@link KeyBindings}). */

@@ -38,6 +38,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
   - **Stars** (ON/OFF): whether the procedural night sky draws its star field (the moon still appears).
   - **Keybinds**: a separate section below the settings lists every rebindable action (move/jump/sprint, fly, inventory, smelt, debug, screenshot) with its current key. Select a keybind row and press `Enter`/`Space` (or click it), then press a key to rebind it - `Esc` cancels. Bindings are saved to `settings.txt`.
   - All of these apply immediately, while the menu is open.
+- **Main menu & world generation**: on launch a main menu (Play / World Generation / Quit) appears. The world-generation page lets you set a seed, world type (Default/Superflat), whether structures (trees, cacti, ...) generate, the sea level, and terrain size before pressing Play - Minecraft-style. Choices persist to settings.txt.
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, torches, lamps, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 
 ## Requirements

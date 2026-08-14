@@ -14,6 +14,7 @@ import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.ToolDurability;
+import com.minecraftclone.world.gen.WorldGenSettings;
 import com.minecraftclone.util.FloatArray;
 import com.minecraftclone.util.IntArray;
 import com.minecraftclone.world.BlockType;
@@ -614,6 +615,91 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+
+    /** Main menu button indices. */
+    public static final int MENU_PLAY = 0;
+    public static final int MENU_WORLD_GEN = 1;
+    public static final int MENU_QUIT = 2;
+    public static final int MENU_COUNT = 3;
+
+    /** The main menu (title screen) shown before a world is created. */
+    public void renderMainMenu(int selectedIndex, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+        Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
+        Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
+        drawCenteredText("3D Minecraft Clone", 0f, 0.5f, 0.085f, WHITE);
+        String[] items = {"Play", "World Generation", "Quit"};
+        for (int i = 0; i < items.length; i++) {
+            boolean selected = i == selectedIndex;
+            float y = 0.05f - i * 0.1f;
+            drawCenteredText(items[i], 0f, y, 0.045f, selected ? highlight : idle);
+            if (selected) {
+                float w = text.measure(items[i], 0.045f);
+                drawCenteredText(">", -w / 2f - 0.06f, y, 0.045f, highlight);
+            }
+        }
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** The world-generation settings page (Minecraft-style "More World Options"). */
+    public void renderWorldGenMenu(WorldGenSettings wgs, int selectedIndex, boolean editingSeed, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        int rows = WorldGenSettings.ROW_COUNT + 1; // options + Done
+        float size = SETTINGS_SIZE;
+        float panelW = 0.95f;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
+        float left = -panelW / 2f;
+        float top = SETTINGS_CENTER_Y + panelH / 2f;
+
+        float[] panel = {
+                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y - panelH / 2f, 0,
+                left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                left, SETTINGS_CENTER_Y + panelH / 2f, 0,
+        };
+        settingsPanel.upload(panel);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.6f));
+        settingsPanel.render();
+        lineShader.unbind();
+
+        drawCenteredText("World Generation", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
+
+        Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
+        Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
+        Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
+        for (int i = 0; i < rows; i++) {
+            float baseline = settingsRowTop(i) - SETTINGS_ROW_H + 0.013f;
+            boolean selected = i == selectedIndex;
+            if (i < WorldGenSettings.ROW_COUNT) {
+                boolean seedRow = i == WorldGenSettings.ROW_SEED;
+                boolean activeSeed = seedRow && editingSeed;
+                Vector4f color = selected ? highlight : (activeSeed ? highlight : idle);
+                drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+                drawTextAt(WorldGenSettings.label(i), left + SETTINGS_LEFT_PAD, baseline, size, color);
+                String value = activeSeed ? wgs.getSeedText() + "_" : wgs.valueText(i);
+                float valueWidth = text.measure(value, size);
+                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                        activeSeed ? highlight : idleValue);
+            } else {
+                // Done / back button.
+                drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+                drawTextAt("Done", left + SETTINGS_LEFT_PAD, baseline, size, selected ? highlight : idle);
+            }
+        }
+
+        drawCenteredText(editingSeed ? "Type a seed (backspace deletes, Enter to keep)"
+                : "Select a row, Enter to edit; Esc to close",
+                0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
+
+        glEnable(GL_DEPTH_TEST);
+    }
     /** Interactive rows in the settings menu: settings rows + keybinds header + one row per keybind. */
     private static int settingsTotalRows() {
         return Settings.ROW_COUNT + 1 + KeyBindings.COUNT;
