@@ -131,11 +131,12 @@ public class Hud {
     }
 
     /** @param breakFraction 0 (just looking at it) to 1 (about to break) - tints the outline red and thickens it as it climbs. */
-    public void renderBlockOutline(Matrix4f projection, Matrix4f view, Vector3i blockPos, float breakFraction) {
+    public void renderBlockOutline(Matrix4f projection, Matrix4f view, Vector3i blockPos, float breakFraction, float height) {
         lineShader.bind();
         lineShader.setUniform("projection", projection);
         lineShader.setUniform("view", view);
-        Matrix4f model = modelMatrix.identity().translate(blockPos.x, blockPos.y, blockPos.z);
+        // Scale Y by the block's height so slabs get a half-height outline.
+        Matrix4f model = modelMatrix.identity().translate(blockPos.x, blockPos.y, blockPos.z).scale(1f, height, 1f);
         lineShader.setUniform("model", model);
         float p = Math.max(0f, Math.min(1f, breakFraction));
         lineShader.setUniform("color", new Vector4f(p, 0f, 0f, 0.6f + p * 0.35f));
