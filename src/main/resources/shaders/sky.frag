@@ -74,17 +74,27 @@ void main() {
         sky += star * vec3(0.9, 0.95, 1.0);
     }
 
-    // Clouds: a layer of fbm noise across the lower sky. They drift across the
-    // sky as cloudTime advances, and each in-game day gets a different cloud
-    // cover (from a per-day hash), so the sky keeps changing day to day.
+    // Clouds: an organic field of domain-warped fbm that drifts with cloudTime
+    // and changes its amount of cover from day to day (per-day hash). Thick
+    // centers shade bright white and thin edges soft gray for a puffy,
+    // lit-from-above look, and clouds thin out toward the zenith.
     if (daylight > 0.1) {
-        float band = smoothstep(0.0, 0.1, dir.y) * (1.0 - smoothstep(0.55, 0.8, dir.y));
-        float dayIndex = floor(cloudTime / 30.0);
-        float dayCover = hash(vec3(dayIndex, 0.0, 0.0));
-        float cloud = fbm(dir.xz * 4.0 + vec2(cloudTime, cloudTime * 0.55));
-        float threshold = 0.44 + 0.16 * dayCover;
-        float cover = smoothstep(threshold, threshold + 0.14, cloud) * band * daylight;
-        sky = mix(sky, vec3(0.85, 0.88, 0.93), cover * 0.75);
+        float fade = smoothstep(0.0, 0.04, dir.y) * (1.0 - smoothstep(0.5, 0.85, dir.y));
+        if (fade > 0.0) {
+            float dayIndex = floor(cloudTime / 30.0);
+            float dayCover = hash(vec3(dayIndex, 0.0, 0.0));
+
+            vec2 p = dir.xz * 6.0 + vec2(cloudTime, cloudTime * 0.55);
+            vec2 q = vec2(fbm(p), fbm(p + vec2(7.3, 3.1)));
+            float cloud = fbm(p + 1.1 * q);
+
+            float threshold = 0.50 + 0.12 * dayCover;
+            float cover = smoothstep(threshold, threshold + 0.18, cloud) * fade * daylight;
+
+            vec3 cloudColor = mix(vec3(0.62, 0.66, 0.71), vec3(1.0, 0.99, 0.97),
+                                  smoothstep(0.32, 0.8, cloud));
+            sky = mix(sky, cloudColor, cover * 0.85);
+        }
     }
 
     outColor = vec4(sky, 1.0);
