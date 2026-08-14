@@ -80,6 +80,22 @@ public class TextureAtlas {
 
         paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
         paintGlassPanes(image, 34);
+        paintTile(image, 27, rnd, 0x2F6B2F, 0x245424, true);                 // swamp grass top
+        paintTile(image, 28, rnd, 0x8B5A2B, 0x6E4623, true, 0x2F6B2F, 0.28f); // swamp grass side
+        paintTile(image, 29, rnd, 0xB5532B, 0x94411F, true);                 // red clay (badlands)
+        paintTile(image, 30, rnd, 0x8A6FA0, 0x6E5584, true);                 // mycelium top
+        paintTile(image, 31, rnd, 0x8B5A2B, 0x6E4623, true, 0x8A6FA0, 0.28f); // mycelium side
+        paintFluidTile(image, 32, 0x9ADBEA, 0x7FC4D6, 200);                  // ice
+        paintDeadBush(image, 33, rnd);
+        paintMushroom(image, 35, rnd, 0xD0392B, 0xB3251C);                   // red mushroom
+        paintMushroom(image, 36, rnd, 0x8B5A2B, 0x6E4623);                   // brown mushroom
+        paintVine(image, 39, rnd);
+        paintTile(image, 40, rnd, 0xE8A0B4, 0xC97E97, true);   // cherry leaves (pink)
+        paintTile(image, 41, rnd, 0xA5DBEE, 0x8AC6DE, true);   // packed ice
+        paintBamboo(image, 42, rnd);
+        paintLilyPad(image, 43, rnd);
+        paintTile(image, 44, rnd, 0xE08A2E, 0xC7731F, true);   // pumpkin
+        paintSeaweed(image, 45, rnd);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
@@ -285,6 +301,113 @@ public class TextureAtlas {
      * lets the world behind the canopy show through. Painted with its own draw
      * from the shared seeded Random, so the hole pattern differs from tile 9's.
      */
+    /** A dead, dried-out twig clump on a transparent background - the badlands decoration. */
+    private void paintDeadBush(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int color = 0x6E5428;
+        for (int b = 0; b < 6; b++) {
+            int bx = 2 + rnd.nextInt(TILE_PX - 4);
+            int height = 4 + rnd.nextInt(5);
+            int topY = TILE_PX - height;
+            int sway = rnd.nextInt(3) - 1;
+            for (int y = topY; y < TILE_PX; y++) {
+                int t = y - topY;
+                int x = bx + (sway * t) / Math.max(1, height - 1);
+                if (x < 0 || x >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** A simple stem + rounded cap on a transparent background, for red/brown mushrooms. */
+    private void paintMushroom(BufferedImage img, int index, Random rnd, int capColor, int capDark) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int stemColor = 0xD9D2C0;
+        int stemX = TILE_PX / 2;
+        for (int y = TILE_PX - 7; y < TILE_PX - 1; y++) {
+            img.setRGB(ox + stemX, oy + y, 0xFF000000 | stemColor);
+            img.setRGB(ox + stemX + 1, oy + y, 0xFF000000 | stemColor);
+        }
+        double cx = TILE_PX / 2.0, cy = TILE_PX - 9.0;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                double d = Math.hypot(x - cx, (y - cy) * 1.5);
+                if (d <= 5.5) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.3f ? capDark : capColor));
+                }
+            }
+        }
+    }
+
+    /** A thin green vine strand with a few leaves, on a transparent background - hangs from jungle canopies. */
+    private void paintVine(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x2F6B2F);
+            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x2F6B2F);
+        }
+        for (int i = 0; i < 7; i++) {
+            int x = 5 + rnd.nextInt(6);
+            int y = 2 + rnd.nextInt(TILE_PX - 4);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x3E8E35);
+        }
+    }
+
+    /** A tall green bamboo stalk with segment rings and a few leaves, on a transparent background. */
+    private void paintBamboo(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x5FA84C);
+            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x5FA84C);
+        }
+        for (int y = 2; y < TILE_PX; y += 5) {
+            img.setRGB(ox + 6, oy + y, 0xFF000000 | 0x4A8A3A);
+            img.setRGB(ox + 9, oy + y, 0xFF000000 | 0x4A8A3A);
+        }
+        for (int i = 0; i < 4; i++) {
+            int x = 3 + rnd.nextInt(9);
+            int y = 1 + rnd.nextInt(TILE_PX - 4);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x3E8E35);
+        }
+    }
+
+    /** A flat elliptical pad floating on water, on a transparent background - swamp lily pads. */
+    private void paintLilyPad(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        double cx = 8, cy = 10, r = 6;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                double d = Math.hypot(x - cx, (y - cy) * 0.5);
+                if (d <= r) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.3f ? 0x3E8E35 : 0x2F701F));
+                }
+            }
+        }
+    }
+
+    /** Wavy green strands of seaweed, on a transparent background - grows on ocean floors. */
+    private void paintSeaweed(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int b = 0; b < 3; b++) {
+            int bx = 3 + b * 4 + rnd.nextInt(2);
+            int height = 9 + rnd.nextInt(6);
+            int topY = TILE_PX - height;
+            int sway = (rnd.nextBoolean() ? 1 : -1) * (1 + rnd.nextInt(2));
+            for (int y = topY; y < TILE_PX; y++) {
+                int t = y - topY;
+                int x = bx + (sway * t * t) / Math.max(1, height * height);
+                if (x < 0 || x >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | 0x2F8F3A);
+            }
+        }
+    }
+
     private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);
         int oy = tileY(index);
