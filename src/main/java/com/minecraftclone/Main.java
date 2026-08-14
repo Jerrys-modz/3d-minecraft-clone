@@ -4,6 +4,7 @@ import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
+import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Inventory;
@@ -129,6 +130,10 @@ public class Main {
         Shader hudShader = new Shader(
                 ResourceLoader.loadAsString("/shaders/hud.vert"),
                 ResourceLoader.loadAsString("/shaders/hud.frag"));
+        Shader skyShader = new Shader(
+                ResourceLoader.loadAsString("/shaders/sky.vert"),
+                ResourceLoader.loadAsString("/shaders/sky.frag"));
+        SkyRenderer skyRenderer = new SkyRenderer();
 
         TextureAtlas atlas = new TextureAtlas();
         atlas.generate();
@@ -193,6 +198,12 @@ public class Main {
         String autoTestPath = System.getenv().getOrDefault("MCCLONE_AUTOTEST_PATH", "screenshot.png");
         if (System.getenv("MCCLONE_AUTOTEST_TIME") != null) {
             dayNightCycle.setTime(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_TIME")));
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_PITCH") != null) {
+            player.getCamera().setPitch(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_PITCH")));
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_YAW") != null) {
+            player.getCamera().setYaw(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_YAW")));
         }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
@@ -429,18 +440,27 @@ public class Main {
             }
 
             // --- Render ---
-            Vector3f skyColor = dayNightCycle.getSkyColor();
-            window.setClearColor(skyColor.x, skyColor.y, skyColor.z, 1f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
             Matrix4f projection = player.getCamera().getProjectionMatrix(settings.getFov(), window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
             Matrix4f view = player.getCamera().getViewMatrix();
+
+            Vector3f horizonColor = dayNightCycle.getHorizonColor();
+            window.setClearColor(horizonColor.x, horizonColor.y, horizonColor.z, 1f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            // Procedural sky (gradient, sun/moon, stars, clouds), pinned to the far
+            // plane so the world always draws in front of it.
+            glDisable(GL_DEPTH_TEST);
+            skyRenderer.render(skyShader, projection, view,
+                    dayNightCycle.getSunDirection(), dayNightCycle.getDaylightFactor(),
+                    dayNightCycle.getZenithColor(), dayNightCycle.getHorizonColor(),
+                    dayNightCycle.getNightZenithColor(), dayNightCycle.getSunColor(), dayNightCycle.getMoonColor());
+            glEnable(GL_DEPTH_TEST);
 
             chunkShader.bind();
             chunkShader.setUniform("projection", projection);
             chunkShader.setUniform("view", view);
             chunkShader.setUniform("atlas", 0);
-            chunkShader.setUniform("fogColor", skyColor);
+            chunkShader.setUniform("fogColor", horizonColor);
             chunkShader.setUniform("fogStart", (world.getRenderDistance() - 2) * 16f);
             chunkShader.setUniform("fogEnd", world.getRenderDistance() * 16f);
             chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness());
@@ -511,6 +531,8 @@ public class Main {
         chunkShader.destroy();
         lineShader.destroy();
         hudShader.destroy();
+        skyShader.destroy();
+        skyRenderer.destroy();
         atlas.destroy();
         itemTextures.destroy();
         font.destroy();
