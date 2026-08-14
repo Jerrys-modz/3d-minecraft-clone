@@ -154,6 +154,7 @@ public class Main {
         boolean[] menuOpen = {false};
         int[] menuSelection = {0};
         int[] sliderDragRow = {-1};
+        int[] bindingAction = {-1}; // >= 0: capturing a key for this action (settings menu)
         CraftingGrid craftingGrid = new CraftingGrid();
         InventoryController inventoryController = new InventoryController(player.getInventory(), craftingGrid);
         boolean[] inventoryOpen = {false};
@@ -202,6 +203,9 @@ public class Main {
         if (System.getenv("MCCLONE_AUTOTEST_YAW") != null) {
             player.getCamera().setYaw(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_YAW")));
         }
+        if (System.getenv("MCCLONE_AUTOTEST_MENU") != null) {
+            menuOpen[0] = true;
+        }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
 
@@ -221,7 +225,9 @@ public class Main {
             animTime[0] += dt;
 
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
-                if (inventoryOpen[0]) {
+                if (bindingAction[0] >= 0) {
+                    bindingAction[0] = -1; // Esc cancels a keybind capture
+                } else if (inventoryOpen[0]) {
                     closeInventory(inventoryController, inventoryOpen);
                 } else if (creativeOpen[0]) {
                     closeCreative(inventoryController, creativeOpen);
@@ -232,7 +238,7 @@ public class Main {
                 input.resetMouseDelta();
             }
 
-            if (input.isKeyJustPressed(GLFW_KEY_E)) {
+            if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY))) {
                 if (inventoryOpen[0]) {
                     closeInventory(inventoryController, inventoryOpen);
                 } else if (creativeOpen[0]) {
@@ -325,52 +331,81 @@ public class Main {
                     inventoryController.endDrag(hoveredSlot[0]);
                 }
             } else if (menuOpen[0]) {
-                // Pause menu: navigate with arrows/WASD; toggle boolean settings or
-                // step range settings with Enter/Space/Left/Right.
-                if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
-                    menuSelection[0] = Math.floorMod(menuSelection[0] - 1, Settings.ROW_COUNT);
-                }
-                if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
-                    menuSelection[0] = Math.floorMod(menuSelection[0] + 1, Settings.ROW_COUNT);
-                }
-                if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
-                    settings.adjust(menuSelection[0], -1);
-                    applySettings(settings, world, player, window);
-                    settings.save(settingsFile);
-                }
-                if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
-                    settings.adjust(menuSelection[0], +1);
-                    applySettings(settings, world, player, window);
-                    settings.save(settingsFile);
-                }
-                if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
-                    settings.adjust(menuSelection[0], +1);
-                    applySettings(settings, world, player, window);
-                    settings.save(settingsFile);
+                int totalMenuRows = Settings.ROW_COUNT + 1 + KeyBindings.COUNT;
+                if (bindingAction[0] >= 0) {
+                    // Capturing a key for a keybind row: bind the next non-modifier
+                    // key press (Esc cancels).
+                    int pressed = input.consumeLastKeyPressed();
+                    if (pressed == GLFW_KEY_ESCAPE) {
+                        bindingAction[0] = -1;
+                    } else if (pressed != GLFW_KEY_UNKNOWN && !KeyBindings.isModifierKey(pressed)) {
+                        settings.getKeyBinds().set(bindingAction[0], pressed);
+                        settings.save(settingsFile);
+                        bindingAction[0] = -1;
+                    }
+                } else {
+                    // Navigate with arrows/WASD; toggle/step settings or start a
+                    // keybind capture with Enter/Space/Left/Right.
+                    if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                        menuSelection[0] = Math.floorMod(menuSelection[0] - 1, totalMenuRows);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                        menuSelection[0] = Math.floorMod(menuSelection[0] + 1, totalMenuRows);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
+                        if (menuSelection[0] < Settings.ROW_COUNT) {
+                            settings.adjust(menuSelection[0], -1);
+                            applySettings(settings, world, player, window);
+                            settings.save(settingsFile);
+                        }
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
+                        if (menuSelection[0] < Settings.ROW_COUNT) {
+                            settings.adjust(menuSelection[0], +1);
+                            applySettings(settings, world, player, window);
+                            settings.save(settingsFile);
+                        }
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                        if (menuSelection[0] < Settings.ROW_COUNT) {
+                            settings.adjust(menuSelection[0], +1);
+                            applySettings(settings, world, player, window);
+                            settings.save(settingsFile);
+                        } else if (menuSelection[0] > Settings.ROW_COUNT) {
+                            bindingAction[0] = menuSelection[0] - Settings.ROW_COUNT - 1;
+                            input.consumeLastKeyPressed(); // discard the Enter/Space that started capture
+                        }
+                    }
                 }
 
-                // Mouse: hover to select, click a toggle, click or drag a slider.
+                // Mouse: hover to select, click a toggle, click or drag a slider,
+                // or click a keybind row to start capturing it.
                 float sLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float sLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
                 int hoverRow = hud.settingsRowAt(sLx, sLy);
                 if (hoverRow >= 0) {
                     menuSelection[0] = hoverRow;
                 }
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+                if (bindingAction[0] < 0 && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
                     int clicked = hud.settingsRowAt(sLx, sLy);
                     if (clicked >= 0) {
-                        if (Settings.isToggle(clicked)) {
-                            settings.adjust(clicked, +1);
-                            applySettings(settings, world, player, window);
-                            settings.save(settingsFile);
-                        } else {
-                            float frac = hud.settingsTrackAt(sLx, sLy);
-                            if (frac >= 0f) {
-                                settings.setFromFraction(clicked, frac);
+                        if (clicked < Settings.ROW_COUNT) {
+                            if (Settings.isToggle(clicked)) {
+                                settings.adjust(clicked, +1);
                                 applySettings(settings, world, player, window);
                                 settings.save(settingsFile);
-                                sliderDragRow[0] = clicked;
+                            } else {
+                                float frac = hud.settingsTrackAt(sLx, sLy);
+                                if (frac >= 0f) {
+                                    settings.setFromFraction(clicked, frac);
+                                    applySettings(settings, world, player, window);
+                                    settings.save(settingsFile);
+                                    sliderDragRow[0] = clicked;
+                                }
                             }
+                        } else if (clicked > Settings.ROW_COUNT) {
+                            bindingAction[0] = clicked - Settings.ROW_COUNT - 1;
+                            input.consumeLastKeyPressed();
                         }
                     }
                 }
@@ -385,10 +420,10 @@ public class Main {
                 }
             }
 
-            if (input.isKeyJustPressed(GLFW_KEY_F3)) {
+            if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.DEBUG))) {
                 showDebug[0] = !showDebug[0];
             }
-            boolean screenshotRequested = input.isKeyJustPressed(GLFW_KEY_F2);
+            boolean screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 player.update(dt, input, world);
@@ -454,7 +489,7 @@ public class Main {
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
-                if (input.isKeyJustPressed(GLFW_KEY_C)) {
+                if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SMELT))) {
                     BlockType selected = player.getInventory().typeOf(selectedSlot[0]);
                     // Smelting: pressing C while aiming at a furnace smelts the selected
                     // ore into its ingot/gem (consuming coal as fuel).
@@ -547,6 +582,9 @@ public class Main {
             glDisable(GL_DEPTH_TEST);
             skyRenderer.render(skyShader, projection, view,
                     dayNightCycle.getSunDirection(), dayNightCycle.getDaylightFactor(), dayNightCycle.getCloudPhase(),
+                    settings.getCloudAmount() / 3f,
+                    0.5f + settings.getCloudSpeed() * 0.5f,
+                    settings.isStars() ? 1f : 0f,
                     dayNightCycle.getZenithColor(), dayNightCycle.getHorizonColor(),
                     dayNightCycle.getNightZenithColor(), dayNightCycle.getSunColor(), dayNightCycle.getMoonColor());
             glEnable(GL_DEPTH_TEST);
@@ -599,7 +637,7 @@ public class Main {
                         -0.95f, y - 3f * step, textSize, WHITE, aspect);
             }
             if (menuOpen[0]) {
-                hud.renderSettingsMenu(settings, menuSelection[0], window.getAspectRatio());
+                hud.renderSettingsMenu(settings, menuSelection[0], bindingAction[0], window.getAspectRatio());
             }
             if (inventoryOpen[0]) {
                 // Scale mouse X back by aspect to match the HUD's logical-square space.

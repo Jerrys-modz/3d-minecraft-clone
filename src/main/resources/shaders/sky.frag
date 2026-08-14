@@ -11,6 +11,9 @@ uniform mat4 invView;       // view inverse -> world space (rotation part used)
 uniform vec3 sunDir;        // normalized world-space sun direction
 uniform float daylight;     // 0 = night, 1 = noon
 uniform float cloudTime;    // drifting cloud phase (noise units), advances with the clock
+uniform float cloudDensity; // 0..1 cloud amount (0 = no clouds)
+uniform float cloudSpeed;   // cloud drift speed multiplier
+uniform float stars;        // 1 = stars on, 0 = off
 uniform vec3 zenithColor;   // sky at the top of the sky
 uniform vec3 horizonColor;  // sky at the horizon
 uniform vec3 nightColor;    // night sky at the top
@@ -67,7 +70,7 @@ void main() {
     sky += moonColor * smoothstep(0.9994, 0.9997, moonDot) * (1.0 - daylight);
 
     // Stars: sparse hash grid, only above the horizon and fading out by day.
-    if (dir.y > 0.05) {
+    if (stars > 0.5 && dir.y > 0.05) {
         vec3 cell = floor(dir * 500.0);
         float star = step(0.9986, hash(cell));
         star *= 1.0 - smoothstep(0.05, 0.55, daylight);
@@ -77,18 +80,19 @@ void main() {
     // Clouds: an organic field of domain-warped fbm that drifts with cloudTime
     // and changes its amount of cover from day to day (per-day hash). Thick
     // centers shade bright white and thin edges soft gray for a puffy,
-    // lit-from-above look, and clouds thin out toward the zenith.
-    if (daylight > 0.1) {
+    // lit-from-above look, and clouds thin out toward the zenith. Density is a
+    // settings-controlled threshold: 0 = off, higher = more/fuller clouds.
+    if (daylight > 0.1 && cloudDensity > 0.0) {
         float fade = smoothstep(0.0, 0.04, dir.y) * (1.0 - smoothstep(0.5, 0.85, dir.y));
         if (fade > 0.0) {
             float dayIndex = floor(cloudTime / 30.0);
             float dayCover = hash(vec3(dayIndex, 0.0, 0.0));
 
-            vec2 p = dir.xz * 6.0 + vec2(cloudTime, cloudTime * 0.55);
+            vec2 p = dir.xz * 6.0 + vec2(cloudTime * cloudSpeed, cloudTime * cloudSpeed * 0.55);
             vec2 q = vec2(fbm(p), fbm(p + vec2(7.3, 3.1)));
             float cloud = fbm(p + 1.1 * q);
 
-            float threshold = 0.50 + 0.12 * dayCover;
+            float threshold = 0.62 - 0.20 * cloudDensity + 0.12 * dayCover;
             float cover = smoothstep(threshold, threshold + 0.18, cloud) * fade * daylight;
 
             vec3 cloudColor = mix(vec3(0.62, 0.66, 0.71), vec3(1.0, 0.99, 0.97),

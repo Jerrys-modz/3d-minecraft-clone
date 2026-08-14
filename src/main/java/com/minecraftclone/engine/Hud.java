@@ -1,6 +1,7 @@
 package com.minecraftclone.engine;
 
 import com.minecraftclone.Settings;
+import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.IconMesh;
 import com.minecraftclone.engine.graphics.ItemTextures;
@@ -492,11 +493,11 @@ public class Hud {
      * The panel sizes itself to the widest row so labels never overflow it.
      * {@code selectedIndex} points at the currently-highlighted row.
      */
-    public void renderSettingsMenu(Settings settings, int selectedIndex, float aspectRatio) {
+    public void renderSettingsMenu(Settings settings, int selectedIndex, int capturingAction, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
-        int rows = Settings.ROW_COUNT;
+        int rows = settingsTotalRows();
         float size = SETTINGS_SIZE;
         float panelW = settingsPanelWidth();
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
@@ -527,22 +528,38 @@ public class Hud {
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
-        for (int i = 0; i < rows; i++) {
+        for (int i = 0; i < Settings.ROW_COUNT; i++) {
             float baseline = settingsRowTop(i) - SETTINGS_ROW_H + 0.013f;
             boolean selected = i == selectedIndex;
             drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
             drawTextAt(Settings.label(i), left + SETTINGS_LEFT_PAD, baseline, size, selected ? highlight : idle);
-            // The current value, always visible beside the control.
+            // The current value, always visible beside the control, in the same
+            // font size as the labels so every row reads consistently.
             String value = settings.valueText(i);
-            if (Settings.isToggle(i)) {
-                float valueWidth = text.measure(value, size);
-                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
-                        selected ? highlight : idleValue);
-            } else {
-                float valueWidth = text.measure(value, 0.024f);
-                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, 0.024f,
-                        selected ? highlight : idleValue);
-            }
+            float valueWidth = text.measure(value, size);
+            drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                    selected ? highlight : idleValue);
+        }
+
+        // "Keybinds" section header.
+        drawTextAt("Keybinds", left + SETTINGS_LEFT_PAD,
+                settingsRowTop(Settings.ROW_COUNT) - SETTINGS_ROW_H + 0.013f, size, idleValue);
+
+        // Keybind rows: action name on the left, bound key on the right. While a
+        // row is being captured ("?" shown), it's highlighted and the next key
+        // press (in Main) re-binds it.
+        for (int action = 0; action < KeyBindings.COUNT; action++) {
+            int i = settingsKeybindRow(action);
+            float baseline = settingsRowTop(i) - SETTINGS_ROW_H + 0.013f;
+            boolean selected = i == selectedIndex;
+            boolean capturing = action == capturingAction;
+            Vector4f rowColor = selected || capturing ? highlight : idle;
+            drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+            drawTextAt(KeyBindings.name(action), left + SETTINGS_LEFT_PAD, baseline, size, rowColor);
+            String keyText = capturing ? "?" : KeyBindings.keyName(settings.getKeyBinds().get(action));
+            float valueWidth = text.measure(keyText, size);
+            drawTextAt(keyText, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                    capturing ? highlight : idleValue);
         }
 
         // Sliders for the range rows, drawn together with one line-shader pass.
@@ -551,7 +568,7 @@ public class Hud {
         lineShader.setUniform("projection", identity);
         lineShader.setUniform("view", identity);
         lineShader.setUniform("model", hudTransform);
-        for (int i = 0; i < rows; i++) {
+        for (int i = 0; i < Settings.ROW_COUNT; i++) {
             if (Settings.isToggle(i)) continue;
             float trackY = settingsRowTop(i) - SETTINGS_ROW_H / 2f;
             float trackH = 0.012f;
@@ -591,10 +608,20 @@ public class Hud {
         }
         lineShader.unbind();
 
-        drawCenteredText("Click to select, drag sliders, Esc to close",
+        drawCenteredText("Click/Enter: toggle or rebind    Esc: close",
                 0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
 
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Interactive rows in the settings menu: settings rows + keybinds header + one row per keybind. */
+    private static int settingsTotalRows() {
+        return Settings.ROW_COUNT + 1 + KeyBindings.COUNT;
+    }
+
+    /** The settings-menu row index for a keybind {@code action}. */
+    private static int settingsKeybindRow(int action) {
+        return Settings.ROW_COUNT + 1 + action;
     }
 
     /** Width of the settings panel: widest label + room for a slider track and its value text. */
@@ -603,13 +630,16 @@ public class Hud {
         for (int i = 0; i < Settings.ROW_COUNT; i++) {
             widest = Math.max(widest, text.measure(Settings.label(i), SETTINGS_SIZE));
         }
+        for (int a = 0; a < KeyBindings.COUNT; a++) {
+            widest = Math.max(widest, text.measure(KeyBindings.name(a), SETTINGS_SIZE));
+        }
         return widest + SETTINGS_LABEL_GAP + SETTINGS_TRACK_W + SETTINGS_VALUE_GAP + SETTINGS_VALUE_W
                 + SETTINGS_LEFT_PAD + SETTINGS_RIGHT_PAD;
     }
 
     /** Top edge (logical y) of settings row {@code i}. */
     private float settingsRowTop(int i) {
-        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + Settings.ROW_COUNT * SETTINGS_ROW_H;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + settingsTotalRows() * SETTINGS_ROW_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - i * SETTINGS_ROW_H;
     }
@@ -622,11 +652,11 @@ public class Hud {
         return new float[]{right - SETTINGS_TRACK_W, right};
     }
 
-    /** The settings row under the mouse, or -1. */
+    /** The settings-menu row under the mouse, or -1. */
     public int settingsRowAt(float logicalX, float logicalY) {
         float panelW = settingsPanelWidth();
         float left = -panelW / 2f;
-        for (int i = 0; i < Settings.ROW_COUNT; i++) {
+        for (int i = 0; i < settingsTotalRows(); i++) {
             float rowTop = settingsRowTop(i);
             if (logicalX >= left && logicalX <= left + panelW
                     && logicalY <= rowTop && logicalY >= rowTop - SETTINGS_ROW_H) {
@@ -639,7 +669,7 @@ public class Hud {
     /** If the mouse is over a range row's slider track, the click fraction (0..1); otherwise -1. */
     public float settingsTrackAt(float logicalX, float logicalY) {
         int row = settingsRowAt(logicalX, logicalY);
-        if (row < 0 || Settings.isToggle(row)) return -1f;
+        if (row < 0 || row >= Settings.ROW_COUNT || Settings.isToggle(row)) return -1f;
         float[] cx = settingsControlX();
         if (logicalX < cx[0] - 0.012f || logicalX > cx[1] + 0.012f) return -1f;
         return settingsSliderAt(logicalX, row);

@@ -33,6 +33,10 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
   - **Field of view** (60-110): camera zoom.
   - **Mouse sensitivity** (0.03-0.40): mouse-look speed.
   - **Game mode** (Survival / Creative / Adventure / Spectator): the four Minecraft modes - see Game modes below.
+  - **Clouds** (Off / Light / Normal / Heavy): how much cloud cover the procedural skybox has (Off skips clouds entirely).
+  - **Cloud speed** (Slow / Normal / Fast): how quickly the skybox's drifting clouds slide across the sky.
+  - **Stars** (ON/OFF): whether the procedural night sky draws its star field (the moon still appears).
+  - **Keybinds**: a separate section below the settings lists every rebindable action (move/jump/sprint, fly, inventory, smelt, debug, screenshot) with its current key. Select a keybind row and press `Enter`/`Space` (or click it), then press a key to rebind it - `Esc` cancels. Bindings are saved to `settings.txt`.
   - All of these apply immediately, while the menu is open.
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, torches, lamps, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 

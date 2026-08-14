@@ -3,12 +3,11 @@ package com.minecraftclone.player;
 import com.minecraftclone.GameMode;
 import com.minecraftclone.engine.Camera;
 import com.minecraftclone.engine.Input;
+import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.World;
 import org.joml.Vector3f;
-
-import static org.lwjgl.glfw.GLFW.*;
 
 /**
  * First-person player controller: walking/flying physics, AABB-vs-voxel
@@ -45,6 +44,11 @@ public class Player {
 
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
     private GameMode gameMode = GameMode.SURVIVAL;
+    private KeyBindings keyBinds = new KeyBindings();
+
+    public void setKeyBinds(KeyBindings keyBinds) {
+        this.keyBinds = keyBinds;
+    }
 
     private boolean onGround = false;
     private boolean flying = false;
@@ -153,7 +157,7 @@ public class Player {
     }
 
     private void updateFlyToggle(Input input) {
-        if (input.isKeyJustPressed(GLFW_KEY_F)) {
+        if (input.isKeyJustPressed(keyBinds.get(KeyBindings.FLY_TOGGLE))) {
             flying = !flying;
             velocity.y = 0;
         }
@@ -183,7 +187,7 @@ public class Player {
     }
 
     private void updateDoubleTapW(Input input, float dt) {
-        boolean doubleTapped = wTapDetector.tick(dt, input.isKeyJustPressed(GLFW_KEY_W));
+        boolean doubleTapped = wTapDetector.tick(dt, input.isKeyJustPressed(keyBinds.get(KeyBindings.FORWARD)));
         switch (decideDoubleTapWAction(doubleTapped, flying, gameMode.isCreative())) {
             case START_FLYING -> {
                 flying = true;
@@ -192,7 +196,7 @@ public class Player {
             case SPRINT -> sprintLatched = true;
             case NONE -> {}
         }
-        if (!input.isKeyDown(GLFW_KEY_W)) {
+        if (!input.isKeyDown(keyBinds.get(KeyBindings.FORWARD))) {
             sprintLatched = false;
         }
     }
@@ -203,10 +207,10 @@ public class Player {
         Vector3f right = new Vector3f(-front.z, 0, front.x); // matches Camera.getRight()'s front-cross-up convention
 
         float moveX = 0, moveZ = 0;
-        if (input.isKeyDown(GLFW_KEY_W)) { moveX += front.x; moveZ += front.z; }
-        if (input.isKeyDown(GLFW_KEY_S)) { moveX -= front.x; moveZ -= front.z; }
-        if (input.isKeyDown(GLFW_KEY_D)) { moveX += right.x; moveZ += right.z; }
-        if (input.isKeyDown(GLFW_KEY_A)) { moveX -= right.x; moveZ -= right.z; }
+        if (input.isKeyDown(keyBinds.get(KeyBindings.FORWARD))) { moveX += front.x; moveZ += front.z; }
+        if (input.isKeyDown(keyBinds.get(KeyBindings.BACK))) { moveX -= front.x; moveZ -= front.z; }
+        if (input.isKeyDown(keyBinds.get(KeyBindings.RIGHT))) { moveX += right.x; moveZ += right.z; }
+        if (input.isKeyDown(keyBinds.get(KeyBindings.LEFT))) { moveX -= right.x; moveZ -= right.z; }
 
         boolean moving = (moveX * moveX + moveZ * moveZ) > 0.0001f;
         float len = (float) Math.sqrt(moveX * moveX + moveZ * moveZ);
@@ -215,7 +219,7 @@ public class Player {
             moveZ /= len;
         }
 
-        boolean sprinting = (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || sprintLatched) && stats.canSprint();
+        boolean sprinting = (input.isKeyDown(keyBinds.get(KeyBindings.SPRINT)) || sprintLatched) && stats.canSprint();
         float speed;
         if (flying) {
             speed = sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
@@ -228,13 +232,13 @@ public class Player {
 
         if (flying) {
             float vy = 0;
-            if (input.isKeyDown(GLFW_KEY_SPACE)) vy += speed;
-            if (input.isKeyDown(GLFW_KEY_LEFT_SHIFT)) vy -= speed;
+            if (input.isKeyDown(keyBinds.get(KeyBindings.JUMP))) vy += speed;
+            if (input.isKeyDown(keyBinds.get(KeyBindings.FLY_DOWN))) vy -= speed;
             velocity.y = vy;
         } else {
             velocity.y -= GRAVITY * dt;
             velocity.y = Math.max(velocity.y, TERMINAL_VELOCITY);
-            if (onGround && input.isKeyDown(GLFW_KEY_SPACE)) {
+            if (onGround && input.isKeyDown(keyBinds.get(KeyBindings.JUMP))) {
                 velocity.y = JUMP_VELOCITY;
                 onGround = false;
             }
