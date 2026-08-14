@@ -21,12 +21,18 @@ public final class Smelting {
     private static final Map<BlockType, BlockType> OUTPUTS = new EnumMap<>(BlockType.class);
 
     static {
-        OUTPUTS.put(BlockType.IRON_ORE, BlockType.IRON_INGOT);
-        OUTPUTS.put(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);
-        OUTPUTS.put(BlockType.DIAMOND_ORE, BlockType.DIAMOND);
+        // Add a smelting recipe with one line: ore -> refined output.
+        smelt(BlockType.IRON_ORE, BlockType.IRON_INGOT);
+        smelt(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);
+        smelt(BlockType.DIAMOND_ORE, BlockType.DIAMOND);
     }
 
     private Smelting() {
+    }
+
+    /** Registers a smelting recipe: one {@code ore} (plus fuel) yields one {@code output}. */
+    private static void smelt(BlockType ore, BlockType output) {
+        OUTPUTS.put(ore, output);
     }
 
     /** True if {@code ore} can be smelted (has a known output). */
