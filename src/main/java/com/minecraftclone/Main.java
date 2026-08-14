@@ -236,7 +236,7 @@ public class Main {
                     }
                 }
                 if (input.isKeyJustPressed(GLFW_KEY_C)) {
-                    Crafting.ShapedRecipe recipe = Crafting.match(craftingGrid.snapshot());
+                    Crafting.Recipe recipe = Crafting.match(craftingGrid.snapshot());
                     if (recipe != null) {
                         player.getInventory().add(recipe.output(), recipe.outputAmount());
                         craftingGrid.reset();
@@ -436,7 +436,7 @@ public class Main {
                 hud.renderSettingsMenu(settings, menuSelection[0], window.getAspectRatio());
             }
             if (craftingOpen[0]) {
-                Crafting.ShapedRecipe recipe = Crafting.match(craftingGrid.snapshot());
+                Crafting.Recipe recipe = Crafting.match(craftingGrid.snapshot());
                 hud.renderCraftingGrid(craftingGrid, recipe == null ? null : recipe.output(),
                         craftingCursor[0], HOTBAR[selectedSlot[0]], player.getInventory(),
                         atlas, itemTextures, window.getAspectRatio());

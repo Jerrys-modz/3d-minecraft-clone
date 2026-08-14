@@ -3,29 +3,55 @@ package com.minecraftclone.player;
 import com.minecraftclone.world.BlockType;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Shaped crafting: recipes are 3x3 grid patterns (like Minecraft's crafting
- * table) rather than a flat list of ingredients. The player arranges items in
- * the in-game crafting grid (press `E`), and the shape determines the output.
+ * Minecraft-style crafting: a 3x3 grid where either the shape of the
+ * ingredients (shaped recipes) or just their combination (shapeless recipes)
+ * determines the output.
  * <p>
- * Each recipe is stored in its minimal (top-left) bounding-box form, and a
- * player's grid is normalized the same way before matching, so a recipe can
- * sit anywhere in the 3x3 grid and still match.
+ * Adding a recipe is a one-liner - see the two registration helpers:
+ * <pre>
+ *   shaped("III", ".S.", ".S.", BlockType.IRON_PICKAXE, 1);   // 3x3 pattern, '.' = empty
+ *   shapeless(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND); // any arrangement
+ * </pre>
+ * Shaped recipes match like Minecraft's: the pattern may sit anywhere in the
+ * grid, and it's also matched under horizontal mirroring (so an axe works with
+ * its handle on either side). Shapeless recipes match on the multiset of
+ * ingredients, ignoring arrangement.
  */
 public final class Crafting {
 
-    /** A shaped recipe: a 3x3 row-major pattern (null = empty) and its output. */
-    public record ShapedRecipe(BlockType[] pattern, BlockType output, int outputAmount) {
+    /** A craftable recipe that can be matched against the player's 3x3 grid. */
+    public interface Recipe {
+        BlockType output();
+
+        int outputAmount();
+
+        boolean matches(BlockType[] grid);
     }
 
-    private static final List<ShapedRecipe> RECIPES = new ArrayList<>();
+    public record ShapedRecipe(BlockType[] pattern, BlockType output, int outputAmount) implements Recipe {
+        @Override
+        public boolean matches(BlockType[] grid) {
+            return matchesShaped(grid, pattern);
+        }
+    }
 
-    // Single-character codes for readable 3x3 pattern strings.
+    public record ShapelessRecipe(BlockType[] ingredients, BlockType output, int outputAmount) implements Recipe {
+        @Override
+        public boolean matches(BlockType[] grid) {
+            return matchesShapeless(grid, ingredients);
+        }
+    }
+
+    private static final List<Recipe> RECIPES = new ArrayList<>();
+
+    // Single-character codes used by the shaped() pattern strings. Add a code
+    // here (and a new BlockType) to use it in a pattern.
     private static final Map<Character, BlockType> CHARS = new HashMap<>();
 
     static {
@@ -41,83 +67,131 @@ public final class Crafting {
         CHARS.put('I', BlockType.IRON_INGOT);
         CHARS.put('D', BlockType.DIAMOND);
 
-        // Basic blocks & materials.
-        register(p("W..", "...", "..."), BlockType.PLANKS, 4);        // log -> planks
-        register(p("P..", "P..", "..."), BlockType.STICK, 4);         // 2 planks -> sticks
-        register(p("NN.", "...", "..."), BlockType.GLASS, 1);         // 2 sand -> glass
-        register(p("KKK", "K.K", "KKK"), BlockType.FURNACE, 1);       // stone ring -> furnace
-        register(p(".C.", ".S.", "..."), BlockType.TORCH, 4);         // coal over stick -> torches
-        register(p(".G.", ".T.", "..."), BlockType.LAMP, 1);          // glass over torch -> lamp
-        register(p("KKK", "...", "..."), BlockType.STONE_SLAB, 6);    // 3 stone -> slabs
-        register(p("PPP", "...", "..."), BlockType.PLANKS_SLAB, 6);   // 3 planks -> slabs
+        // --- Shaped recipes: three 3-character rows ('.' = empty). ---
+        shaped("W..", "...", "...", BlockType.PLANKS, 4);        // log -> planks
+        shaped("P..", "P..", "...", BlockType.STICK, 4);         // 2 planks -> sticks
+        shaped("KKK", "K.K", "KKK", BlockType.FURNACE, 1);       // stone ring -> furnace
+        shaped(".C.", ".S.", "...", BlockType.TORCH, 4);         // coal over stick -> torches
+        shaped(".G.", ".T.", "...", BlockType.LAMP, 1);          // glass over torch -> lamp
+        shaped("KKK", "...", "...", BlockType.STONE_SLAB, 6);    // 3 stone -> slabs
+        shaped("PPP", "...", "...", BlockType.PLANKS_SLAB, 6);   // 3 planks -> slabs
 
-        // Tools: pickaxe (3 mat + 2 stick), axe (3 mat + 2 stick), sword (2 mat + 1 stick).
-        registerTools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD);
-        registerTools('K', BlockType.STONE_PICKAXE, BlockType.STONE_AXE, BlockType.STONE_SWORD);
-        registerTools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD);
-        registerTools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD);
+        // Tools (mirrored matching lets an axe be built either way round).
+        tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD);
+        tools('K', BlockType.STONE_PICKAXE, BlockType.STONE_AXE, BlockType.STONE_SWORD);
+        tools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD);
+        tools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD);
+
+        // --- Shapeless recipes: any arrangement of the given ingredients. ---
+        shapeless(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
     }
 
     private Crafting() {
     }
 
-    private static void registerTools(char m, BlockType pickaxe, BlockType axe, BlockType sword) {
-        register(p("" + m + m + m, ".S.", ".S."), pickaxe, 1);
-        register(p("" + m + m + ".", "" + m + "S.", ".S."), axe, 1);
-        register(p("." + m + ".", "." + m + ".", ".S."), sword, 1);
+    /** Registers a shaped recipe from three 3-character rows ('.' = empty). */
+    private static void shaped(String r0, String r1, String r2, BlockType output, int amount) {
+        RECIPES.add(new ShapedRecipe(cells(r0, r1, r2), output, amount));
     }
 
-    /** Builds a 3x3 pattern from three 3-character strings (' . ' = empty). */
-    private static BlockType[] p(String r0, String r1, String r2) {
-        BlockType[] cells = new BlockType[9];
+    /** Registers a shapeless recipe that matches any arrangement of {@code ingredients}. */
+    private static void shapeless(BlockType output, int amount, BlockType... ingredients) {
+        RECIPES.add(new ShapelessRecipe(ingredients, output, amount));
+    }
+
+    /** Registers the three tool recipes for one material character (pickaxe/axe/sword). */
+    private static void tools(char m, BlockType pickaxe, BlockType axe, BlockType sword) {
+        shaped("" + m + m + m, ".S.", ".S.", pickaxe, 1);
+        shaped("" + m + m + ".", "" + m + "S.", ".S.", axe, 1);
+        shaped("." + m + ".", "." + m + ".", ".S.", sword, 1);
+    }
+
+    private static BlockType[] cells(String r0, String r1, String r2) {
+        BlockType[] out = new BlockType[9];
         String[] rows = {r0, r1, r2};
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
-                cells[r * 3 + c] = CHARS.get(rows[r].charAt(c));
-            }
-        }
-        return cells;
-    }
-
-    private static void register(BlockType[] pattern, BlockType output, int outputAmount) {
-        RECIPES.add(new ShapedRecipe(normalize(pattern), output, outputAmount));
-    }
-
-    /** Shifts a 3x3 grid so its non-empty cells are in the top-left (its minimal bounding box). */
-    private static BlockType[] normalize(BlockType[] cells) {
-        int minR = 3, minC = 3, maxR = -1, maxC = -1;
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                if (cells[r * 3 + c] != null) {
-                    minR = Math.min(minR, r);
-                    maxR = Math.max(maxR, r);
-                    minC = Math.min(minC, c);
-                    maxC = Math.max(maxC, c);
-                }
-            }
-        }
-        if (minR > maxR) return new BlockType[9]; // empty grid
-        BlockType[] out = new BlockType[9];
-        for (int r = minR; r <= maxR; r++) {
-            for (int c = minC; c <= maxC; c++) {
-                out[(r - minR) * 3 + (c - minC)] = cells[r * 3 + c];
+                out[r * 3 + c] = CHARS.get(rows[r].charAt(c));
             }
         }
         return out;
     }
 
-    /**
-     * Finds the shaped recipe matching the given 3x3 grid (row-major, null =
-     * empty), or null if no recipe matches. The grid is normalized to its
-     * bounding box first, so recipes match regardless of where they're placed.
-     */
-    public static ShapedRecipe match(BlockType[] grid) {
-        BlockType[] norm = normalize(grid);
-        for (ShapedRecipe recipe : RECIPES) {
-            if (Arrays.equals(norm, recipe.pattern())) {
+    /** Finds the recipe matching the given 3x3 grid (row-major, null = empty), or null. */
+    public static Recipe match(BlockType[] grid) {
+        for (Recipe recipe : RECIPES) {
+            if (recipe.matches(grid)) {
                 return recipe;
             }
         }
         return null;
+    }
+
+    /** Shaped match: pattern may be placed anywhere in the grid, and the grid is also mirrored horizontally. */
+    private static boolean matchesShaped(BlockType[] grid, BlockType[] pattern) {
+        int maxR = 0, maxC = 0;
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                if (pattern[r * 3 + c] != null) {
+                    maxR = Math.max(maxR, r);
+                    maxC = Math.max(maxC, c);
+                }
+            }
+        }
+        // Mirror the grid (not the pattern) so the pattern's bounding box stays valid.
+        BlockType[] mirroredGrid = mirrorHorizontal(grid);
+        for (int dr = 0; dr + maxR < 3; dr++) {
+            for (int dc = 0; dc + maxC < 3; dc++) {
+                if (fits(grid, pattern, dr, dc) || fits(mirroredGrid, pattern, dr, dc)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** True if the pattern, placed with its top-left at (dr, dc), exactly covers the grid's items. */
+    private static boolean fits(BlockType[] grid, BlockType[] pattern, int dr, int dc) {
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                int pr = r - dr, pc = c - dc;
+                BlockType pat = (pr >= 0 && pc >= 0) ? pattern[pr * 3 + pc] : null;
+                BlockType cell = grid[r * 3 + c];
+                if (pat == null ? cell != null : pat != cell) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static BlockType[] mirrorHorizontal(BlockType[] pattern) {
+        BlockType[] out = new BlockType[9];
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                out[r * 3 + c] = pattern[r * 3 + (2 - c)];
+            }
+        }
+        return out;
+    }
+
+    /** Shapeless match: the grid and ingredients hold the same multiset of block types. */
+    private static boolean matchesShapeless(BlockType[] grid, BlockType[] ingredients) {
+        Map<BlockType, Integer> counts = new EnumMap<>(BlockType.class);
+        for (BlockType b : grid) {
+            if (b != null) counts.merge(b, 1, Integer::sum);
+        }
+        for (BlockType b : ingredients) {
+            Integer remaining = counts.get(b);
+            if (remaining == null || remaining == 0) {
+                return false;
+            }
+            if (remaining == 1) {
+                counts.remove(b);
+            } else {
+                counts.put(b, remaining - 1);
+            }
+        }
+        return counts.isEmpty();
     }
 }
