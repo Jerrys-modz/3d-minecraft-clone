@@ -1,0 +1,48 @@
+package com.minecraftclone.player;
+
+import com.minecraftclone.world.BlockType;
+
+/**
+ * The creative-mode item catalog, organized into Minecraft-style tabs. Each
+ * tab lists every item in that category; the creative inventory screen renders
+ * the selected tab as a grid you click to add items to the hotbar.
+ * <p>
+ * Add a new block to a tab here when you add a new {@link BlockType}, so
+ * creative mode can hand it out.
+ */
+public final class CreativeCatalog {
+
+    /** One creative tab: a display label and the items it contains. */
+    public record Tab(String label, BlockType[] items) {
+    }
+
+    public static final Tab[] TABS = {
+            new Tab("Building", new BlockType[]{
+                    BlockType.STONE, BlockType.DIRT, BlockType.GRASS, BlockType.SAND,
+                    BlockType.WOOD_LOG, BlockType.PLANKS, BlockType.LEAVES, BlockType.GRAVEL, BlockType.SNOW,
+                    BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
+                    BlockType.CACTUS, BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE,
+            }),
+            new Tab("Decoration", new BlockType[]{
+                    BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,
+                    BlockType.BERRY_BUSH, BlockType.TORCH,
+            }),
+            new Tab("Materials", new BlockType[]{
+                    BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
+                    BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
+            }),
+            new Tab("Tools", new BlockType[]{
+                    BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
+                    BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
+            }),
+            new Tab("Combat", new BlockType[]{
+                    BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD,
+            }),
+            new Tab("Food", new BlockType[]{
+                    BlockType.APPLE, BlockType.BERRIES,
+            }),
+    };
+
+    private CreativeCatalog() {
+    }
+}
