@@ -72,6 +72,17 @@ public enum BlockType {
     PUMPKIN(62, true, false, 44, 44, 44),
     SEAWEED(63, false, true, 45),
 
+    // Dimension blocks: Nether terrain, End terrain, and the portal blocks that
+    // link the dimensions (see DimensionType.portalDestination). Portals are
+    // non-solid glowing swirls you walk into to teleport.
+    NETHERRACK(64, true, false, 46, 46, 46),
+    SOUL_SAND(65, true, false, 47, 47, 47),
+    GLOWSTONE(66, true, false, 48, 48, 48, 0, 15), // dim self-light source
+    NETHER_PORTAL(67, false, true, 49, 49, 49, 0, 15),
+    END_STONE(68, true, false, 50, 50, 50),
+    OBSIDIAN(69, true, false, 51, 51, 51),
+    END_PORTAL(70, false, true, 52, 52, 52, 0, 15),
+
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
     // see com.minecraftclone.engine.graphics.ItemTextures. Mining stats for
@@ -235,6 +246,11 @@ public enum BlockType {
     /** True for any water-family block (static, source, or flow). */
     public boolean isWater() {
         return this == WATER || this == WATER_SOURCE || this == WATER_FLOW;
+    }
+
+    /** True for the portal blocks that teleport the player between dimensions. */
+    public boolean isPortal() {
+        return this == NETHER_PORTAL || this == END_PORTAL;
     }
 
     /** True for any lava-family block (static, source, or flow). */

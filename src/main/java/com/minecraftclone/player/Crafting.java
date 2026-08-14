@@ -66,6 +66,8 @@ public final class Crafting {
         CHARS.put('N', BlockType.SAND);
         CHARS.put('I', BlockType.IRON_INGOT);
         CHARS.put('D', BlockType.DIAMOND);
+        CHARS.put('O', BlockType.OBSIDIAN);
+        CHARS.put('L', BlockType.GLOWSTONE);
 
         // --- Shaped recipes: three 3-character rows ('.' = empty). ---
         shaped("W..", "...", "...", BlockType.PLANKS, 4);        // log -> planks
@@ -82,8 +84,15 @@ public final class Crafting {
         tools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD);
         tools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD);
 
+        // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
+        // itself is made by quenching a lava source with a water source (see
+        // shapeless below), so the Nether is reachable from raw overworld finds.
+        shaped("OOO", "O.O", "OOO", BlockType.NETHER_PORTAL, 1); // obsidian ring -> nether portal
+        shaped("OLO", "L.L", "OLO", BlockType.END_PORTAL, 1);    // obsidian + glowstone ring -> end portal
+
         // --- Shapeless recipes: any arrangement of the given ingredients. ---
         shapeless(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
+        shapeless(BlockType.OBSIDIAN, 1, BlockType.LAVA_SOURCE, BlockType.WATER_SOURCE); // quench lava -> obsidian
     }
 
     private Crafting() {

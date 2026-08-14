@@ -22,7 +22,7 @@ import java.util.Random;
  * veins ore into remaining stone (with lava pooling in the deepest cave pockets).
  * Everything is deterministic from the world seed.
  */
-public class TerrainGenerator {
+public class TerrainGenerator implements WorldGenerator {
 
     public static final int SEA_LEVEL = 42;
     private static final int BASE_HEIGHT = 44;
@@ -34,7 +34,9 @@ public class TerrainGenerator {
     /** The biomes a column can be assigned, from its temperature, moisture and height. */
     public enum Biome {
         OCEAN, FROZEN_OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, BADLANDS, JUNGLE,
-        TAIGA, SNOWY, TUNDRA, SWAMP, MUSHROOM_FIELD, CHERRY_GROVE, FLOWER_MEADOW, MOUNTAIN
+        TAIGA, SNOWY, TUNDRA, SWAMP, MUSHROOM_FIELD, CHERRY_GROVE, FLOWER_MEADOW, MOUNTAIN,
+        /** Stand-in biome reported for non-overworld dimensions (see NetherGenerator/EndGenerator). */
+        NETHER, END
     }
 
     private final Noise heightNoise;
@@ -53,6 +55,11 @@ public class TerrainGenerator {
         this.caveNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
         this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
         this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
+    }
+
+    @Override
+    public int seaLevel() {
+        return SEA_LEVEL;
     }
 
     /**
@@ -156,6 +163,7 @@ public class TerrainGenerator {
      * generator applies (isolated dips stay dry, neighbor-aware beaches included) -
      * for the F3 debug overlay and any other world-coordinate biome queries.
      */
+    @Override
     public Biome biomeAtWorld(int wx, int wz) {
         double temperature = temperatureAt(wx, wz);
         double moisture = moistureAt(wx, wz);

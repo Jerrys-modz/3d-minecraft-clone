@@ -23,7 +23,8 @@ public final class CreativeCatalog {
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
                     BlockType.CACTUS, BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE,
                     BlockType.SWAMP_GRASS, BlockType.RED_CLAY, BlockType.MYCELIUM, BlockType.ICE, BlockType.PACKED_ICE,
-                    BlockType.PUMPKIN,
+                    BlockType.PUMPKIN, BlockType.NETHERRACK, BlockType.SOUL_SAND, BlockType.GLOWSTONE,
+                    BlockType.END_STONE, BlockType.OBSIDIAN, BlockType.NETHER_PORTAL, BlockType.END_PORTAL,
             }),
             new Tab("Decoration", new BlockType[]{
                     BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,

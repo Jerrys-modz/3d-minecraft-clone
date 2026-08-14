@@ -26,7 +26,10 @@ public class Chunk {
 
     private final ChunkPos pos;
     private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
-    private final Mesh mesh = new Mesh();
+    // Created lazily on first mesh/upload, so a Chunk can be constructed (and even
+    // fully generated) without a live GL context - e.g. from a unit test, or off
+    // the main thread later. Only the GL thread ever touches it.
+    private Mesh mesh;
     // Local positions (+ light level) of every light-emitting block (torches) currently
     // in this chunk, kept incrementally up to date - see setLocal/setRawBlocks. Small and
     // rare enough that a flat list beats a spatial index; consulted by rebuildMesh to bake
@@ -244,6 +247,9 @@ public class Chunk {
             }
         }
 
+        if (mesh == null) {
+            mesh = new Mesh();
+        }
         mesh.upload(vertices.toArray(), indices.toArray());
         hasMeshData = indices.size() > 0;
         dirty = false;
@@ -524,12 +530,15 @@ public class Chunk {
     }
 
     public void render() {
-        if (hasMeshData) {
+        if (mesh != null && hasMeshData) {
             mesh.render();
         }
     }
 
     public void destroy() {
-        mesh.destroy();
+        if (mesh != null) {
+            mesh.destroy();
+            mesh = null;
+        }
     }
 }

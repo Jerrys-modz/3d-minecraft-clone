@@ -108,6 +108,15 @@ public final class Mining {
         put(BlockType.GOLD_ORE, 4.0f, ToolKind.PICKAXE, TIER_IRON);
         put(BlockType.DIAMOND_ORE, 6.0f, ToolKind.PICKAXE, TIER_IRON);
 
+        // Dimension blocks.
+        put(BlockType.NETHERRACK, 1.2f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.SOUL_SAND, 0.5f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.GLOWSTONE, 0.6f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.END_STONE, 2.2f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.OBSIDIAN, 8.0f, ToolKind.PICKAXE, TIER_IRON); // tough - needs at least an iron pickaxe
+        put(BlockType.NETHER_PORTAL, 0.1f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.END_PORTAL, 0.1f, ToolKind.NONE, TIER_HAND);
+
         // Bedrock is handled separately (unbreakable) by Main, not through hardness.
     }
 
