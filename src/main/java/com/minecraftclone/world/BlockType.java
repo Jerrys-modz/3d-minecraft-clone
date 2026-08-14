@@ -268,6 +268,11 @@ public enum BlockType {
         return this == AIR || this == WATER || this == WATER_FLOW || this == LAVA_FLOW;
     }
 
+    /** True if this block is drawn in the see-through translucent render pass (glass, ice). */
+    public boolean isTranslucent() {
+        return this == GLASS || this == ICE;
+    }
+
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */
     public String displayName() {
         StringBuilder sb = new StringBuilder(name().length());
