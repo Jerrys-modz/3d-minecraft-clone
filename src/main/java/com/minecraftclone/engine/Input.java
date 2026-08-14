@@ -10,6 +10,9 @@ public class Input {
     private final boolean[] keysDown = new boolean[GLFW_KEY_LAST + 1];
     private final boolean[] keysDownPrev = new boolean[GLFW_KEY_LAST + 1];
 
+    /** Most recently pressed key code, for capturing keybinds (reset on consume). */
+    private int lastKeyPressed = GLFW_KEY_UNKNOWN;
+
     private final boolean[] mouseDown = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
     private final boolean[] mouseDownPrev = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
 
@@ -25,8 +28,12 @@ public class Input {
 
         glfwSetKeyCallback(windowHandle, (win, key, scancode, action, mods) -> {
             if (key < 0 || key > GLFW_KEY_LAST) return;
-            if (action == GLFW_PRESS) keysDown[key] = true;
-            else if (action == GLFW_RELEASE) keysDown[key] = false;
+            if (action == GLFW_PRESS) {
+                keysDown[key] = true;
+                lastKeyPressed = key;
+            } else if (action == GLFW_RELEASE) {
+                keysDown[key] = false;
+            }
         });
 
         glfwSetMouseButtonCallback(windowHandle, (win, button, action, mods) -> {
@@ -72,6 +79,13 @@ public class Input {
 
     public boolean isKeyJustPressed(int key) {
         return keysDown[key] && !keysDownPrev[key];
+    }
+
+    /** Returns the most recently pressed key (for keybind capture) and clears it. */
+    public int consumeLastKeyPressed() {
+        int key = lastKeyPressed;
+        lastKeyPressed = GLFW_KEY_UNKNOWN;
+        return key;
     }
 
     public boolean isMouseDown(int button) {

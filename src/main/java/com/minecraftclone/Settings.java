@@ -1,5 +1,7 @@
 package com.minecraftclone;
 
+import com.minecraftclone.engine.KeyBindings;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -31,6 +33,7 @@ public class Settings {
 
     private final boolean[] toggles = new boolean[ROW_COUNT];
     private final float[] ranges = new float[ROW_COUNT];
+    private final KeyBindings keyBinds = new KeyBindings();
 
     public Settings() {
         toggles[VSYNC] = true; // matches the window's default state
@@ -178,6 +181,7 @@ public class Settings {
         lines.add("clouds=" + getCloudAmount());
         lines.add("cloud_speed=" + getCloudSpeed());
         lines.add("stars=" + (toggles[STARS] ? 1 : 0));
+        keyBinds.saveLines(lines);
         try {
             if (file.getParent() != null) {
                 Files.createDirectories(file.getParent());
@@ -213,7 +217,7 @@ public class Settings {
                         case "clouds" -> s.ranges[CLOUDS] = clamp(CLOUDS, Float.parseFloat(value));
                         case "cloud_speed" -> s.ranges[CLOUD_SPEED] = clamp(CLOUD_SPEED, Float.parseFloat(value));
                         case "stars" -> s.toggles[STARS] = parseBool(value);
-                        default -> { /* ignore unknown keys for forward compatibility */ }
+                        default -> s.keyBinds.loadEntry(key, value);
                     }
                 } catch (NumberFormatException ignored) {
                     // Malformed value: keep the default for that entry.
@@ -267,5 +271,10 @@ public class Settings {
 
     public boolean isStars() {
         return toggles[STARS];
+    }
+
+    /** Remappable gameplay key bindings (see {@link KeyBindings}). */
+    public KeyBindings getKeyBinds() {
+        return keyBinds;
     }
 }
