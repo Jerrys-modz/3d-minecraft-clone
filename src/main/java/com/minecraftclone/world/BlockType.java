@@ -6,6 +6,19 @@ package com.minecraftclone.world;
  * plus a few gameplay flags (solidity, transparency, cross-shape, food value).
  * <p>
  * Atlas tile indices refer to {@link com.minecraftclone.engine.graphics.TextureAtlas}.
+ * <p>
+ * <b>Adding a new block</b> (5 steps, all one-liners except the texture):
+ * <ol>
+ *   <li>Add an enum constant here with a <b>unique, never-reused id</b> - ids are
+ *       persisted in save files, so reusing an old id would corrupt existing worlds
+ *       (a duplicate id fails fast at startup).</li>
+ *   <li>Paint its texture in {@code TextureAtlas.buildImage()} (or point it at an
+ *       existing tile index).</li>
+ *   <li>Give it break times in {@link com.minecraftclone.world.Mining}: {@code put(type, hardness, tool, tier)}.</li>
+ *   <li>Add a {@link com.minecraftclone.player.Crafting#shaped} / {@code #shapeless}
+ *       or {@code Smelting#smelt} recipe if it's made from ingredients.</li>
+ *   <li>Add it to {@code Main.HOTBAR} so the player can select it.</li>
+ * </ol>
  */
 public enum BlockType {
     AIR(0, false, true, 0, 0, 0),
@@ -169,6 +182,10 @@ public enum BlockType {
         }
         BY_ID = new BlockType[maxId + 1];
         for (BlockType t : values()) {
+            if (BY_ID[t.id] != null) {
+                // Fail fast on a duplicate id - a re-used id would silently corrupt save files.
+                throw new IllegalStateException("Duplicate block id " + t.id + ": " + t + " and " + BY_ID[t.id]);
+            }
             BY_ID[t.id] = t;
         }
     }
