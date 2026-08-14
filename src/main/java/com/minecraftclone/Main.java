@@ -916,6 +916,8 @@ public class Main {
                 }
             }
 
+            }
+
             // --- Render ---
             Matrix4f projection = player.getCamera().getProjectionMatrix(settings.getFov(), window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
             Matrix4f view = player.getCamera().getViewMatrix();
