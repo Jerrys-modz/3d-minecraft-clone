@@ -1,0 +1,150 @@
+package com.minecraftclone.player;
+
+import com.minecraftclone.world.BlockType;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class InventoryControllerTest {
+
+    private static int firstEmptySlot(Inventory inv) {
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inv.isEmpty(i)) return i;
+        }
+        return -1;
+    }
+
+    @Test
+    void leftClickLiftsAndPlacesWholeStacks() {
+        Inventory inv = new Inventory();
+        inv.setSlot(5, BlockType.DIRT, 64);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(5, false, false);
+        assertTrue(inv.isEmpty(5));
+        assertEquals(64, c.cursorCount());
+        c.click(9, false, false);
+        assertEquals(64, inv.countOf(9));
+        assertFalse(c.hasCursorItem());
+    }
+
+    @Test
+    void rightClickLiftsHalfAndPlacesOne() {
+        Inventory inv = new Inventory();
+        inv.setSlot(9, BlockType.DIRT, 32);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(9, true, false);
+        assertEquals(16, c.cursorCount());
+        assertEquals(16, inv.countOf(9));
+        c.click(10, true, false);
+        assertEquals(1, inv.countOf(10));
+        assertEquals(15, c.cursorCount());
+    }
+
+    @Test
+    void shiftClickQuickMovesBetweenHotbarAndInventory() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        inv.setSlot(0, BlockType.STONE, 40);
+        c.click(0, false, true);
+        assertTrue(inv.isEmpty(0));
+        assertEquals(40, inv.getCount(BlockType.STONE));
+    }
+
+    @Test
+    void craftsFromTheGridIntoTheCursor() {
+        Inventory inv = new Inventory();
+        CraftingGrid grid = new CraftingGrid();
+        grid.set(0, BlockType.PLANKS);
+        grid.set(3, BlockType.PLANKS);
+        InventoryController c = new InventoryController(inv, grid);
+        assertEquals(BlockType.STICK, Crafting.match(grid.snapshot()).output());
+        c.click(InventoryController.OUTPUT_SLOT, false, false);
+        assertEquals(BlockType.STICK, c.cursorType());
+        assertEquals(4, c.cursorCount());
+        assertTrue(grid.isEmpty());
+    }
+
+    @Test
+    void craftRefusesWhenCursorHoldsAnIncompatibleItem() {
+        Inventory inv = new Inventory();
+        CraftingGrid grid = new CraftingGrid();
+        grid.set(0, BlockType.PLANKS);
+        grid.set(3, BlockType.PLANKS);
+        InventoryController c = new InventoryController(inv, grid);
+        inv.setSlot(5, BlockType.DIRT, 5);
+        c.click(5, false, false);
+        c.click(InventoryController.OUTPUT_SLOT, false, false);
+        assertEquals(BlockType.DIRT, c.cursorType());
+        assertFalse(grid.isEmpty());
+    }
+
+    @Test
+    void dragSpreadsOneItemPerSlot() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        inv.setSlot(10, BlockType.SAND, 3);
+        c.beginDrag(10);
+        assertEquals(3, c.cursorCount());
+        c.continueDrag(11);
+        c.continueDrag(12);
+        c.continueDrag(13);
+        assertEquals(1, inv.countOf(11));
+        assertEquals(1, inv.countOf(12));
+        assertEquals(1, inv.countOf(13));
+        assertFalse(c.hasCursorItem());
+    }
+
+    @Test
+    void closingReturnsCursorAndGridItems() {
+        Inventory inv = new Inventory();
+        CraftingGrid grid = new CraftingGrid();
+        grid.set(1, BlockType.DIRT);
+        InventoryController c = new InventoryController(inv, grid);
+        inv.setSlot(15, BlockType.GRASS, 2);
+        c.click(15, false, false);
+        c.returnCursorToInventory();
+        c.returnGridToInventory();
+        assertEquals(2, inv.getCount(BlockType.GRASS));
+        assertEquals(1, inv.getCount(BlockType.DIRT));
+        assertFalse(c.hasCursorItem());
+        assertTrue(grid.isEmpty());
+    }
+
+    @Test
+    void creativeClickGivesFullStackOnCursor() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.pickCreativeItem(BlockType.DIRT, false);
+        assertEquals(BlockType.DIRT, c.cursorType());
+        assertEquals(64, c.cursorCount());
+        c.pickCreativeItem(BlockType.DIAMOND_PICKAXE, false);
+        assertEquals(1, c.cursorCount(), "tools are single-stack");
+        assertEquals(64, inv.getCount(BlockType.DIRT), "replaced cursor item returns to inventory");
+    }
+
+    @Test
+    void creativeShiftClickMovesStackIntoHotbar() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.pickCreativeItem(BlockType.STONE, true);
+        assertEquals(BlockType.STONE, inv.typeOf(0));
+        assertEquals(64, inv.countOf(0));
+        assertFalse(c.hasCursorItem());
+    }
+
+    @Test
+    void destroyClearsTheCursor() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.pickCreativeItem(BlockType.APPLE, false);
+        assertTrue(c.hasCursorItem());
+        c.destroyCursor();
+        assertFalse(c.hasCursorItem());
+    }
+
+    @Test
+    void firstEmptySlotHelperWorks() {
+        Inventory inv = new Inventory();
+        assertEquals(0, firstEmptySlot(inv));
+    }
+}

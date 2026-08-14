@@ -178,11 +178,13 @@ If you've got a specific one of these in mind, just say which and it jumps the q
 
 ## Testing a PR
 
-Every push to a pull request automatically builds a runnable fat jar and uploads it as a build **artifact** — open the PR's **Actions** tab and download `minecraft-clone-pr-N.jar` from the latest run. You can also comment `/build` on a PR to trigger a fresh build of that PR's head on demand (see `.github/workflows/pr-build.yml`). Download it and run:
+Every push to a pull request automatically runs the JUnit 5 unit tests (`src/test/`, covering inventory/stacking, click/drag/craft interactions, game-mode flight rules, crafting recipes and the fluid sim), builds a runnable fat jar, and uploads it as a build **artifact** — open the PR's **Actions** tab and download `minecraft-clone-pr-N.jar` from the latest run. You can also comment `/build` on a PR to trigger a fresh build of that PR's head on demand, and a headless smoke test renders a few frames to a screenshot each run (see `.github/workflows/pr-build.yml`). Download it and run:
 
 ```bash
 java -jar minecraft-clone-pr-N.jar
 ```
+
+Run the tests locally with `mvn test`.
 
 ## Automated smoke testing
 
