@@ -17,7 +17,7 @@ package com.minecraftclone.world;
  *   <li>Give it break times in {@link com.minecraftclone.world.Mining}: {@code put(type, hardness, tool, tier)}.</li>
  *   <li>Add a {@link com.minecraftclone.player.Crafting#shaped} / {@code #shapeless}
  *       or {@code Smelting#smelt} recipe if it's made from ingredients.</li>
- *   <li>Add it to {@code Main.HOTBAR} so the player can select it.</li>
+ *   <li>Add it to {@code Main.CREATIVE_ITEMS} so creative mode offers it.</li>
  * </ol>
  */
 public enum BlockType {
