@@ -6,6 +6,7 @@ import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.CraftingGrid;
+import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.MiningController;
@@ -56,21 +57,6 @@ public class Main {
     private static final float FAR_PLANE = 400f;
     private static final float AUTOSAVE_INTERVAL_SECONDS = 60f;
 
-    private static final BlockType[] CREATIVE_ITEMS = {
-            BlockType.STONE, BlockType.DIRT, BlockType.GRASS, BlockType.SAND,
-            BlockType.WOOD_LOG, BlockType.PLANKS, BlockType.LEAVES,
-            BlockType.GRAVEL, BlockType.SNOW,
-            BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
-            BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
-            BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE, BlockType.GLASS, BlockType.TORCH, BlockType.LAMP, BlockType.FURNACE,
-            BlockType.STONE_SLAB, BlockType.PLANKS_SLAB,
-            BlockType.APPLE, BlockType.BERRIES,
-            BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
-            BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
-            BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
-            BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD
-    };
-
     private static final int APPLE_DROP_CHANCE = 8;    // 1 in 8 leaves broken also yield an apple
     private static final int BERRIES_PER_BUSH = 2;
 
@@ -88,17 +74,6 @@ public class Main {
         window.setVsync(settings.isVsync());
         player.setMouseSensitivity(settings.getMouseSensitivity());
         player.setGameMode(settings.getGameMode());
-        // Creative starts with the full catalog; it never depletes (free placement).
-        if (settings.getGameMode().isCreative() && player.getInventory().isEmpty()) {
-            fillCreative(player.getInventory());
-        }
-    }
-
-    /** Seeds the inventory with every obtainable item - used for creative mode, which places for free. */
-    private static void fillCreative(Inventory inventory) {
-        for (BlockType type : CREATIVE_ITEMS) {
-            inventory.add(type, Inventory.maxStack(type));
-        }
     }
 
     /** Closes the inventory screen, returning any cursor/grid items to the inventory. */
@@ -106,6 +81,12 @@ public class Main {
         controller.returnGridToInventory();
         controller.returnCursorToInventory();
         inventoryOpen[0] = false;
+    }
+
+    /** Closes the creative screen, returning any cursor item to the inventory. */
+    private void closeCreative(InventoryController controller, boolean[] creativeOpen) {
+        controller.returnCursorToInventory();
+        creativeOpen[0] = false;
     }
 
     public static void main(String[] args) {
@@ -164,6 +145,8 @@ public class Main {
         CraftingGrid craftingGrid = new CraftingGrid();
         InventoryController inventoryController = new InventoryController(player.getInventory(), craftingGrid);
         boolean[] inventoryOpen = {false};
+        boolean[] creativeOpen = {false};
+        int[] creativeTab = {0};
         int[] hoveredSlot = {-1};
 
         window.setCursorCaptured(true);
@@ -214,25 +197,79 @@ public class Main {
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 if (inventoryOpen[0]) {
                     closeInventory(inventoryController, inventoryOpen);
+                } else if (creativeOpen[0]) {
+                    closeCreative(inventoryController, creativeOpen);
                 } else {
                     menuOpen[0] = !menuOpen[0];
                 }
-                window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0]);
+                window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
                 input.resetMouseDelta();
             }
 
             if (input.isKeyJustPressed(GLFW_KEY_E)) {
                 if (inventoryOpen[0]) {
                     closeInventory(inventoryController, inventoryOpen);
+                } else if (creativeOpen[0]) {
+                    closeCreative(inventoryController, creativeOpen);
+                } else if (settings.getGameMode().isCreative()) {
+                    creativeOpen[0] = true;
+                    menuOpen[0] = false;
                 } else {
                     inventoryOpen[0] = true;
                     menuOpen[0] = false;
                 }
-                window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0]);
+                window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
                 input.resetMouseDelta();
             }
 
-            if (inventoryOpen[0]) {
+            if (creativeOpen[0]) {
+                // Creative catalog: click a tab to switch category, click an item to
+                // put it on the cursor (shift-click moves it straight to a hotbar
+                // slot), the destroy slot drops the cursor, and the hotbar behaves
+                // like the survival inventory.
+                float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                boolean shift = input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT);
+
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+                    int tab = hud.creativeTabAt(logicalX, logicalY);
+                    if (tab >= 0) {
+                        creativeTab[0] = tab;
+                    } else {
+                        int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0]);
+                        if (item >= 0) {
+                            inventoryController.pickCreativeItem(CreativeCatalog.TABS[creativeTab[0]].items()[item], shift);
+                        } else if (hud.destroySlotAt(logicalX, logicalY)) {
+                            inventoryController.destroyCursor();
+                        } else {
+                            int hb = hud.hotbarSlotAt(logicalX, logicalY);
+                            if (hb >= 0) {
+                                if (shift) {
+                                    inventoryController.click(hb, false, true);
+                                } else {
+                                    inventoryController.beginDrag(hb);
+                                }
+                            }
+                        }
+                    }
+                }
+                if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+                    inventoryController.continueDrag(hud.hotbarSlotAt(logicalX, logicalY));
+                }
+                if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+                    inventoryController.endDrag();
+                }
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)) {
+                    int hb = hud.hotbarSlotAt(logicalX, logicalY);
+                    if (hb >= 0) {
+                        inventoryController.click(hb, true, false);
+                    }
+                    int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0]);
+                    if (item >= 0) {
+                        inventoryController.pickCreativeItem(CreativeCatalog.TABS[creativeTab[0]].items()[item], false);
+                    }
+                }
+            } else if (inventoryOpen[0]) {
                 // Mouse-driven inventory: resolve the hovered slot and apply clicks/drag.
                 // The HUD draws in logical-square space then scales X by 1/aspect, so the
                 // mouse's normalized X must be scaled back by aspect to hit-test correctly.
@@ -288,7 +325,7 @@ public class Main {
             }
             boolean screenshotRequested = input.isKeyJustPressed(GLFW_KEY_F2);
 
-            if (!menuOpen[0] && !inventoryOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 player.update(dt, input, world);
             }
 
@@ -337,7 +374,7 @@ public class Main {
 
             // Block selection via number keys / scroll wheel - the hotbar is the
             // first 9 inventory slots (only in gameplay).
-            if (!menuOpen[0] && !inventoryOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
                     if (input.isKeyJustPressed(GLFW_KEY_1 + i)) {
                         selectedSlot[0] = i;
@@ -349,7 +386,7 @@ public class Main {
                 }
             }
 
-            if (!menuOpen[0] && !inventoryOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 if (input.isKeyJustPressed(GLFW_KEY_C)) {
@@ -449,7 +486,7 @@ public class Main {
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             chunkShader.unbind();
 
-            if (!menuOpen[0] && !inventoryOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 if (hit != null) {
                     float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
                     hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
@@ -484,6 +521,12 @@ public class Main {
                 float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
                 hud.renderInventory(player.getInventory(), craftingGrid, inventoryController, hoveredSlot[0],
+                        atlas, itemTextures, player.getDurability(), window.getAspectRatio(), logicalX, logicalY);
+            }
+            if (creativeOpen[0]) {
+                float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                hud.renderCreative(player.getInventory(), inventoryController, creativeTab[0], selectedSlot[0],
                         atlas, itemTextures, player.getDurability(), window.getAspectRatio(), logicalX, logicalY);
             }
 
