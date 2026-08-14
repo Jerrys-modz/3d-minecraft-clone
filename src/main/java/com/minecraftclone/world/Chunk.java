@@ -356,6 +356,18 @@ public class Chunk {
         // shorter - puddle height instead of full, a visibly banded, gappy
         // waterfall.
         if (below == BlockType.AIR || below.cross || below.isFluid()) return 1f;
+        // The one cell this doesn't cover: the very bottom of a fall, where it
+        // lands on solid ground. Its own below is solid, so the checks above
+        // graded it down like a resting puddle even though it's still being
+        // actively fed from directly above - the falling column's box always
+        // starts at this cell's own ceiling (y+1), so anything less than full
+        // height here left a visible sliver gap right at the point of impact,
+        // and with corner-averaging pulling its other corners toward the
+        // puddle it had started spreading into, that sliver read as a short,
+        // disconnected panel rather than water reaching the ground. A cell
+        // with fluid directly above it must be full height to meet it with no
+        // gap, regardless of what's below.
+        if (world.getBlock(wx, wy + 1, wz).isFluid()) return 1f;
         int maxLevel = type.isWater() ? FluidSim.WATER_FLOW_DISTANCE : FluidSim.LAVA_FLOW_DISTANCE;
         float t = Math.min(world.getFluidLevel(wx, wy, wz), maxLevel) / (float) maxLevel;
         return FLOW_TOP_NEAR - t * (FLOW_TOP_NEAR - FLOW_TOP_FAR);
