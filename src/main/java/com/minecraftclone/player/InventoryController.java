@@ -25,7 +25,13 @@ public class InventoryController {
     private BlockType cursorType;
     private int cursorCount;
 
+    // Click/drag state: a mouse press starts a session that resolves on release -
+    // a single touched slot is a plain click, several touched slots is a drag that
+    // spreads the cursor stack one item per slot.
     private boolean dragging;
+    private int dragStart = -1;
+    private boolean dragRight;
+    private int dragDistinct;
     private final boolean[] dragVisited = new boolean[OUTPUT_SLOT + 1];
 
     public InventoryController(Inventory inventory, CraftingGrid grid) {
@@ -124,7 +130,10 @@ public class InventoryController {
                 if (cursorCount <= 0) clearCursor();
             }
         } else {
-            // Different type: swap the two stacks.
+            // Different type: only a left-click swaps; right-click does nothing
+            // (right-click means "one item at a time", never a swap - so the
+            // crafting grid can't be scrambled by a mis-click either).
+            if (right) return;
             setSlot(slotId, cursorType, isGrid ? 1 : cursorCount);
             cursorType = st;
             cursorCount = isGrid ? 1 : sc;
@@ -132,27 +141,66 @@ public class InventoryController {
     }
 
     /**
-     * Begins a left-button drag: performs a normal left-click on the pressed
-     * slot (picking up its stack), then subsequent {@link #continueDrag} calls
-     * spread one item per newly-entered slot.
+     * Mouse press: starts a click/drag session without touching the inventory yet.
+     * On release, a single touched slot resolves as a normal {@link #click}, while
+     * several touched slots resolve as a drag that spreads the cursor stack one
+     * item per slot.
      */
-    public void beginDrag(int slotId) {
+    public void beginDrag(int slotId, boolean right) {
         if (slotId < 0 || slotId > OUTPUT_SLOT) return;
         dragging = true;
+        dragStart = slotId;
+        dragRight = right;
+        dragDistinct = 1;
         for (int i = 0; i < dragVisited.length; i++) dragVisited[i] = false;
-        if (slotId != OUTPUT_SLOT) {
-            click(slotId, false, false);
-            dragVisited[slotId] = true;
-        }
+        dragVisited[slotId] = true;
     }
 
-    /** Spreads one cursor item into {@code slotId} if the drag hasn't already touched it. */
+    /** Mouse move over a slot while the button is held: record it for the drag resolution. */
     public void continueDrag(int slotId) {
         if (!dragging || slotId < 0 || slotId == OUTPUT_SLOT) return;
         if (dragVisited[slotId]) return;
         dragVisited[slotId] = true;
-        if (!hasCursorItem()) return;
+        dragDistinct++;
+    }
 
+    /** Mouse release: resolve the session as a click (one slot) or a drag (several). */
+    public void endDrag(int releaseSlot) {
+        if (!dragging) return;
+        if (releaseSlot >= 0 && releaseSlot != OUTPUT_SLOT && !dragVisited[releaseSlot]) {
+            dragVisited[releaseSlot] = true;
+            dragDistinct++;
+        }
+        if (dragDistinct <= 1) {
+            click(dragStart, dragRight, false);
+        } else {
+            resolveDrag();
+        }
+        dragging = false;
+        dragStart = -1;
+        dragDistinct = 0;
+        dragRight = false;
+    }
+
+    /**
+     * Distributes a drag: if the cursor is empty it first lifts the stack from the
+     * pressed slot, then spreads one item into each touched slot (skipping slots
+     * holding a different item, like Minecraft's drag).
+     */
+    private void resolveDrag() {
+        if (!hasCursorItem() && dragStart != OUTPUT_SLOT && slotType(dragStart) != null) {
+            click(dragStart, false, false);
+        }
+        if (!hasCursorItem()) return;
+        for (int i = 0; i < dragVisited.length; i++) {
+            if (i != OUTPUT_SLOT && dragVisited[i]) {
+                depositOne(i);
+            }
+        }
+    }
+
+    /** Places one cursor item into {@code slotId} (or merges it onto a same-type stack). */
+    private void depositOne(int slotId) {
         BlockType st = slotType(slotId);
         if (st == null) {
             setSlot(slotId, cursorType, 1);
@@ -166,10 +214,6 @@ public class InventoryController {
         }
         // Different type: skip the slot (like Minecraft, which doesn't overwrite on drag).
         if (cursorCount <= 0) clearCursor();
-    }
-
-    public void endDrag() {
-        dragging = false;
     }
 
     /** Shift-click: quick-move a stack between hotbar and inventory, or a grid cell back to the inventory. */

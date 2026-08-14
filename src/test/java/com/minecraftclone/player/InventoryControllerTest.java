@@ -83,15 +83,39 @@ class InventoryControllerTest {
         Inventory inv = new Inventory();
         InventoryController c = new InventoryController(inv, new CraftingGrid());
         inv.setSlot(10, BlockType.SAND, 3);
-        c.beginDrag(10);
-        assertEquals(3, c.cursorCount());
+        c.beginDrag(10, false);
         c.continueDrag(11);
         c.continueDrag(12);
         c.continueDrag(13);
+        c.endDrag(13);
+        assertEquals(1, inv.countOf(10));
         assertEquals(1, inv.countOf(11));
         assertEquals(1, inv.countOf(12));
-        assertEquals(1, inv.countOf(13));
+        assertEquals(0, inv.countOf(13), "only 3 sand to spread");
         assertFalse(c.hasCursorItem());
+    }
+
+    @Test
+    void clickOnPressAndReleaseSameSlotIsStillAClick() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        inv.setSlot(5, BlockType.DIRT, 64);
+        c.beginDrag(5, false);
+        c.endDrag(5);
+        assertTrue(inv.isEmpty(5));
+        assertEquals(64, c.cursorCount());
+    }
+
+    @Test
+    void rightClickNeverSwapsDifferentTypes() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        inv.setSlot(0, BlockType.DIRT, 5);
+        c.pickCreativeItem(BlockType.STONE, false);
+        c.click(0, true, false);
+        assertEquals(BlockType.DIRT, inv.typeOf(0), "right-click leaves a different-type slot alone");
+        assertEquals(5, inv.countOf(0));
+        assertEquals(BlockType.STONE, c.cursorType());
     }
 
     @Test
