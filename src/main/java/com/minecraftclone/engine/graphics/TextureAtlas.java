@@ -80,6 +80,15 @@ public class TextureAtlas {
 
         paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
         paintGlassPanes(image, 34);
+        paintTile(image, 27, rnd, 0x2F6B2F, 0x245424, true);                 // swamp grass top
+        paintTile(image, 28, rnd, 0x8B5A2B, 0x6E4623, true, 0x2F6B2F, 0.28f); // swamp grass side
+        paintTile(image, 29, rnd, 0xB5532B, 0x94411F, true);                 // red clay (badlands)
+        paintTile(image, 30, rnd, 0x8A6FA0, 0x6E5584, true);                 // mycelium top
+        paintTile(image, 31, rnd, 0x8B5A2B, 0x6E4623, true, 0x8A6FA0, 0.28f); // mycelium side
+        paintFluidTile(image, 32, 0x9ADBEA, 0x7FC4D6, 200);                  // ice
+        paintDeadBush(image, 33, rnd);
+        paintMushroom(image, 35, rnd, 0xD0392B, 0xB3251C);                   // red mushroom
+        paintMushroom(image, 36, rnd, 0x8B5A2B, 0x6E4623);                   // brown mushroom
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
@@ -285,6 +294,46 @@ public class TextureAtlas {
      * lets the world behind the canopy show through. Painted with its own draw
      * from the shared seeded Random, so the hole pattern differs from tile 9's.
      */
+    /** A dead, dried-out twig clump on a transparent background - the badlands decoration. */
+    private void paintDeadBush(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int color = 0x6E5428;
+        for (int b = 0; b < 6; b++) {
+            int bx = 2 + rnd.nextInt(TILE_PX - 4);
+            int height = 4 + rnd.nextInt(5);
+            int topY = TILE_PX - height;
+            int sway = rnd.nextInt(3) - 1;
+            for (int y = topY; y < TILE_PX; y++) {
+                int t = y - topY;
+                int x = bx + (sway * t) / Math.max(1, height - 1);
+                if (x < 0 || x >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** A simple stem + rounded cap on a transparent background, for red/brown mushrooms. */
+    private void paintMushroom(BufferedImage img, int index, Random rnd, int capColor, int capDark) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int stemColor = 0xD9D2C0;
+        int stemX = TILE_PX / 2;
+        for (int y = TILE_PX - 7; y < TILE_PX - 1; y++) {
+            img.setRGB(ox + stemX, oy + y, 0xFF000000 | stemColor);
+            img.setRGB(ox + stemX + 1, oy + y, 0xFF000000 | stemColor);
+        }
+        double cx = TILE_PX / 2.0, cy = TILE_PX - 9.0;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                double d = Math.hypot(x - cx, (y - cy) * 1.5);
+                if (d <= 5.5) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.3f ? capDark : capColor));
+                }
+            }
+        }
+    }
+
     private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);
         int oy = tileY(index);

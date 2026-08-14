@@ -56,6 +56,14 @@ public enum BlockType {
     WATER_FLOW(47, false, true, 6, 6, 6),
     LAVA_SOURCE(48, false, true, 20, 20, 20),
     LAVA_FLOW(49, false, true, 20, 20, 20),
+    // Biome-specific surface blocks and decorations.
+    SWAMP_GRASS(50, true, false, 27, 28, 3),
+    RED_CLAY(51, true, false, 29, 29, 29),
+    MYCELIUM(52, true, false, 30, 31, 3),
+    ICE(53, true, true, 32, 32, 32),
+    DEAD_BUSH(54, false, true, 33),
+    MUSHROOM_RED(55, false, true, 35),
+    MUSHROOM_BROWN(56, false, true, 36),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
