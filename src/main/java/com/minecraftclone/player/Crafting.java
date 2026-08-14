@@ -2,78 +2,122 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
 
-import java.util.EnumMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * A small, fixed recipe table: each recipe converts some amount of one or
- * two raw materials into some amount of a refined block. There's no
- * crafting-grid UI - press 'C' with the desired output selected in the
- * hotbar, and if you have enough of its input(s), it's crafted directly
- * into your inventory.
+ * Shaped crafting: recipes are 3x3 grid patterns (like Minecraft's crafting
+ * table) rather than a flat list of ingredients. The player arranges items in
+ * the in-game crafting grid (press `E`), and the shape determines the output.
+ * <p>
+ * Each recipe is stored in its minimal (top-left) bounding-box form, and a
+ * player's grid is normalized the same way before matching, so a recipe can
+ * sit anywhere in the 3x3 grid and still match.
  */
 public final class Crafting {
 
-    /** {@code input2} is null for single-ingredient recipes; {@code amount2} is meaningless when it is. */
-    public record Recipe(BlockType input1, int amount1, BlockType input2, int amount2, BlockType output, int outputAmount) {
+    /** A shaped recipe: a 3x3 row-major pattern (null = empty) and its output. */
+    public record ShapedRecipe(BlockType[] pattern, BlockType output, int outputAmount) {
     }
 
-    private static final Map<BlockType, Recipe> BY_OUTPUT = new EnumMap<>(BlockType.class);
+    private static final List<ShapedRecipe> RECIPES = new ArrayList<>();
+
+    // Single-character codes for readable 3x3 pattern strings.
+    private static final Map<Character, BlockType> CHARS = new HashMap<>();
 
     static {
-        register(new Recipe(BlockType.WOOD_LOG, 1, null, 0, BlockType.PLANKS, 4));
-        register(new Recipe(BlockType.SAND, 2, null, 0, BlockType.GLASS, 1));
-        register(new Recipe(BlockType.PLANKS, 2, null, 0, BlockType.STICK, 4));
-        register(new Recipe(BlockType.STONE, 8, null, 0, BlockType.FURNACE, 1));
-        register(new Recipe(BlockType.STONE, 3, null, 0, BlockType.STONE_SLAB, 6));
-        register(new Recipe(BlockType.PLANKS, 3, null, 0, BlockType.PLANKS_SLAB, 6));
-        register(new Recipe(BlockType.STICK, 1, BlockType.COAL_ORE, 1, BlockType.TORCH, 4));
-        register(new Recipe(BlockType.GLASS, 1, BlockType.TORCH, 1, BlockType.LAMP, 1));
+        CHARS.put('.', null);
+        CHARS.put('W', BlockType.WOOD_LOG);
+        CHARS.put('P', BlockType.PLANKS);
+        CHARS.put('S', BlockType.STICK);
+        CHARS.put('C', BlockType.COAL_ORE);
+        CHARS.put('G', BlockType.GLASS);
+        CHARS.put('T', BlockType.TORCH);
+        CHARS.put('K', BlockType.STONE);
+        CHARS.put('N', BlockType.SAND);
+        CHARS.put('I', BlockType.IRON_INGOT);
+        CHARS.put('D', BlockType.DIAMOND);
 
-        register(new Recipe(BlockType.PLANKS, 3, BlockType.STICK, 2, BlockType.WOOD_PICKAXE, 1));
-        register(new Recipe(BlockType.STONE, 3, BlockType.STICK, 2, BlockType.STONE_PICKAXE, 1));
-        register(new Recipe(BlockType.IRON_INGOT, 3, BlockType.STICK, 2, BlockType.IRON_PICKAXE, 1));
-        register(new Recipe(BlockType.DIAMOND, 3, BlockType.STICK, 2, BlockType.DIAMOND_PICKAXE, 1));
+        // Basic blocks & materials.
+        register(p("W..", "...", "..."), BlockType.PLANKS, 4);        // log -> planks
+        register(p("P..", "P..", "..."), BlockType.STICK, 4);         // 2 planks -> sticks
+        register(p("NN.", "...", "..."), BlockType.GLASS, 1);         // 2 sand -> glass
+        register(p("KKK", "K.K", "KKK"), BlockType.FURNACE, 1);       // stone ring -> furnace
+        register(p(".C.", ".S.", "..."), BlockType.TORCH, 4);         // coal over stick -> torches
+        register(p(".G.", ".T.", "..."), BlockType.LAMP, 1);          // glass over torch -> lamp
+        register(p("KKK", "...", "..."), BlockType.STONE_SLAB, 6);    // 3 stone -> slabs
+        register(p("PPP", "...", "..."), BlockType.PLANKS_SLAB, 6);   // 3 planks -> slabs
 
-        register(new Recipe(BlockType.PLANKS, 3, BlockType.STICK, 2, BlockType.WOOD_AXE, 1));
-        register(new Recipe(BlockType.STONE, 3, BlockType.STICK, 2, BlockType.STONE_AXE, 1));
-        register(new Recipe(BlockType.IRON_INGOT, 3, BlockType.STICK, 2, BlockType.IRON_AXE, 1));
-        register(new Recipe(BlockType.DIAMOND, 3, BlockType.STICK, 2, BlockType.DIAMOND_AXE, 1));
-
-        // Swords are lighter than pickaxes/axes: 2 material + 1 stick instead of 3 + 2.
-        register(new Recipe(BlockType.PLANKS, 2, BlockType.STICK, 1, BlockType.WOOD_SWORD, 1));
-        register(new Recipe(BlockType.STONE, 2, BlockType.STICK, 1, BlockType.STONE_SWORD, 1));
-        register(new Recipe(BlockType.IRON_INGOT, 2, BlockType.STICK, 1, BlockType.IRON_SWORD, 1));
-        register(new Recipe(BlockType.DIAMOND, 2, BlockType.STICK, 1, BlockType.DIAMOND_SWORD, 1));
-    }
-
-    private static void register(Recipe recipe) {
-        BY_OUTPUT.put(recipe.output(), recipe);
+        // Tools: pickaxe (3 mat + 2 stick), axe (3 mat + 2 stick), sword (2 mat + 1 stick).
+        registerTools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD);
+        registerTools('K', BlockType.STONE_PICKAXE, BlockType.STONE_AXE, BlockType.STONE_SWORD);
+        registerTools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD);
+        registerTools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD);
     }
 
     private Crafting() {
     }
 
-    public static Recipe recipeFor(BlockType output) {
-        return BY_OUTPUT.get(output);
+    private static void registerTools(char m, BlockType pickaxe, BlockType axe, BlockType sword) {
+        register(p("" + m + m + m, ".S.", ".S."), pickaxe, 1);
+        register(p("" + m + m + ".", "" + m + "S.", ".S."), axe, 1);
+        register(p("." + m + ".", "." + m + ".", ".S."), sword, 1);
     }
 
-    /** Attempts to craft one batch of {@code output}'s recipe from {@code inventory}. Returns false if there's no recipe or not enough input. */
-    public static boolean craft(Inventory inventory, BlockType output) {
-        Recipe recipe = BY_OUTPUT.get(output);
-        if (recipe == null) return false;
-
-        boolean hasSecond = recipe.input2() != null;
-        // Check both requirements before removing anything, so a recipe never
-        // partially consumes ingredient 1 and then fails on ingredient 2.
-        if (inventory.getCount(recipe.input1()) < recipe.amount1()) return false;
-        if (hasSecond && inventory.getCount(recipe.input2()) < recipe.amount2()) return false;
-
-        inventory.remove(recipe.input1(), recipe.amount1());
-        if (hasSecond) {
-            inventory.remove(recipe.input2(), recipe.amount2());
+    /** Builds a 3x3 pattern from three 3-character strings (' . ' = empty). */
+    private static BlockType[] p(String r0, String r1, String r2) {
+        BlockType[] cells = new BlockType[9];
+        String[] rows = {r0, r1, r2};
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                cells[r * 3 + c] = CHARS.get(rows[r].charAt(c));
+            }
         }
-        inventory.add(recipe.output(), recipe.outputAmount());
-        return true;
+        return cells;
+    }
+
+    private static void register(BlockType[] pattern, BlockType output, int outputAmount) {
+        RECIPES.add(new ShapedRecipe(normalize(pattern), output, outputAmount));
+    }
+
+    /** Shifts a 3x3 grid so its non-empty cells are in the top-left (its minimal bounding box). */
+    private static BlockType[] normalize(BlockType[] cells) {
+        int minR = 3, minC = 3, maxR = -1, maxC = -1;
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                if (cells[r * 3 + c] != null) {
+                    minR = Math.min(minR, r);
+                    maxR = Math.max(maxR, r);
+                    minC = Math.min(minC, c);
+                    maxC = Math.max(maxC, c);
+                }
+            }
+        }
+        if (minR > maxR) return new BlockType[9]; // empty grid
+        BlockType[] out = new BlockType[9];
+        for (int r = minR; r <= maxR; r++) {
+            for (int c = minC; c <= maxC; c++) {
+                out[(r - minR) * 3 + (c - minC)] = cells[r * 3 + c];
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Finds the shaped recipe matching the given 3x3 grid (row-major, null =
+     * empty), or null if no recipe matches. The grid is normalized to its
+     * bounding box first, so recipes match regardless of where they're placed.
+     */
+    public static ShapedRecipe match(BlockType[] grid) {
+        BlockType[] norm = normalize(grid);
+        for (ShapedRecipe recipe : RECIPES) {
+            if (Arrays.equals(norm, recipe.pattern())) {
+                return recipe;
+            }
+        }
+        return null;
     }
 }

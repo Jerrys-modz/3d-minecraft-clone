@@ -5,6 +5,8 @@ import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Crafting;
+import com.minecraftclone.player.CraftingGrid;
+import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
@@ -85,6 +87,12 @@ public class Main {
         player.setMouseSensitivity(settings.getMouseSensitivity());
     }
 
+    /** Closes the crafting grid, returning any items still placed in it to the inventory. */
+    private void closeCrafting(CraftingGrid grid, Inventory inventory, boolean[] craftingOpen) {
+        grid.clearAll(inventory);
+        craftingOpen[0] = false;
+    }
+
     public static void main(String[] args) {
         new Main().run();
     }
@@ -137,6 +145,9 @@ public class Main {
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
         int[] menuSelection = {0};
+        CraftingGrid craftingGrid = new CraftingGrid();
+        boolean[] craftingOpen = {false};
+        int[] craftingCursor = {0};
 
         window.setCursorCaptured(true);
 
@@ -151,7 +162,7 @@ public class Main {
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl sprint, F fly toggle,");
         System.out.println("          hold Left-click to mine (speed/possibility depends on your tool),");
         System.out.println("          Right-click place (or eat, if selected item is food),");
-        System.out.println("          C craft selected item, 1-9/scroll select block, F3 debug, Esc settings menu.");
+        System.out.println("          E crafting grid, C smelt (aim at a furnace), 1-9/scroll select, F3 debug, Esc settings.");
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -183,12 +194,58 @@ public class Main {
             dayNightCycle.update(dt);
 
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
-                menuOpen[0] = !menuOpen[0];
-                window.setCursorCaptured(!menuOpen[0]);
+                if (craftingOpen[0]) {
+                    closeCrafting(craftingGrid, player.getInventory(), craftingOpen);
+                } else {
+                    menuOpen[0] = !menuOpen[0];
+                }
+                window.setCursorCaptured(!menuOpen[0] && !craftingOpen[0]);
                 input.resetMouseDelta();
             }
 
-            if (menuOpen[0]) {
+            if (input.isKeyJustPressed(GLFW_KEY_E)) {
+                if (craftingOpen[0]) {
+                    closeCrafting(craftingGrid, player.getInventory(), craftingOpen);
+                } else {
+                    craftingOpen[0] = true;
+                    menuOpen[0] = false;
+                    craftingCursor[0] = 0;
+                }
+                window.setCursorCaptured(!menuOpen[0] && !craftingOpen[0]);
+                input.resetMouseDelta();
+            }
+
+            if (craftingOpen[0]) {
+                if (input.isKeyJustPressed(GLFW_KEY_UP)) {
+                    if (craftingCursor[0] >= 3) craftingCursor[0] -= 3;
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_DOWN)) {
+                    if (craftingCursor[0] < 6) craftingCursor[0] += 3;
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
+                    if (craftingCursor[0] % 3 > 0) craftingCursor[0]--;
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
+                    if (craftingCursor[0] % 3 < 2) craftingCursor[0]++;
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_SPACE) || input.isKeyJustPressed(GLFW_KEY_ENTER)) {
+                    if (craftingGrid.isOccupied(craftingCursor[0])) {
+                        craftingGrid.clear(craftingCursor[0], player.getInventory());
+                    } else {
+                        craftingGrid.place(craftingCursor[0], player.getInventory(), HOTBAR[selectedSlot[0]]);
+                    }
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_C)) {
+                    Crafting.ShapedRecipe recipe = Crafting.match(craftingGrid.snapshot());
+                    if (recipe != null) {
+                        player.getInventory().add(recipe.output(), recipe.outputAmount());
+                        craftingGrid.reset();
+                        System.out.println("Crafted " + recipe.output());
+                        showMessage(messages, "Crafted " + recipe.output(),
+                                new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
+                    }
+                }
+            } else if (menuOpen[0]) {
                 // Pause menu: navigate with arrows/WASD; toggle boolean settings or
                 // step range settings with Enter/Space/Left/Right.
                 if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
@@ -219,7 +276,7 @@ public class Main {
             }
             boolean screenshotRequested = input.isKeyJustPressed(GLFW_KEY_F2);
 
-            if (!menuOpen[0]) {
+            if (!menuOpen[0] && !craftingOpen[0]) {
                 player.update(dt, input, world);
             }
 
@@ -253,8 +310,10 @@ public class Main {
 
             Raycaster.Hit hit = null;
             float breakFraction = 0f;
+
+            // Block selection via number keys - works in gameplay and in the
+            // crafting grid (to pick which item to place).
             if (!menuOpen[0]) {
-                // Block selection via number keys.
                 for (int i = 0; i < HOTBAR.length && i < 9; i++) {
                     if (input.isKeyJustPressed(GLFW_KEY_1 + i)) {
                         selectedSlot[0] = i;
@@ -264,13 +323,16 @@ public class Main {
                 if (scroll != 0) {
                     selectedSlot[0] = Math.floorMod(selectedSlot[0] - (int) Math.signum(scroll), HOTBAR.length);
                 }
+            }
 
+            if (!menuOpen[0] && !craftingOpen[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 if (input.isKeyJustPressed(GLFW_KEY_C)) {
                     BlockType selected = HOTBAR[selectedSlot[0]];
                     // Smelting: pressing C while aiming at a furnace smelts the selected
-                    // ore into its ingot/gem (consuming coal as fuel) instead of crafting.
+                    // ore into its ingot/gem (consuming coal as fuel). Crafting itself
+                    // now happens in the shaped crafting grid (press E).
                     BlockType targeted = hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
                     if (targeted == BlockType.FURNACE && Smelting.isSmeltable(selected)) {
                         if (Smelting.smelt(player.getInventory(), selected) != null) {
@@ -279,9 +341,6 @@ public class Main {
                         } else {
                             showMessage(messages, "Smelting needs ore and coal", new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
                         }
-                    } else if (Crafting.craft(player.getInventory(), selected)) {
-                        System.out.println("Crafted " + selected + " (now have " + player.getInventory().getCount(selected) + ")");
-                        showMessage(messages, "Crafted " + selected, new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
                     }
                 }
 
@@ -375,6 +434,12 @@ public class Main {
             }
             if (menuOpen[0]) {
                 hud.renderSettingsMenu(settings, menuSelection[0], window.getAspectRatio());
+            }
+            if (craftingOpen[0]) {
+                Crafting.ShapedRecipe recipe = Crafting.match(craftingGrid.snapshot());
+                hud.renderCraftingGrid(craftingGrid, recipe == null ? null : recipe.output(),
+                        craftingCursor[0], HOTBAR[selectedSlot[0]], player.getInventory(),
+                        atlas, itemTextures, window.getAspectRatio());
             }
 
             frameCount++;
