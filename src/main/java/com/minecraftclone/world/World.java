@@ -13,6 +13,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.lwjgl.opengl.GL11.glDepthMask;
+
 /**
  * Owns all loaded chunks: streaming (load/unload around the player), meshing,
  * block access and raycasting.
@@ -318,6 +320,14 @@ public class World implements BlockAccessor {
         for (Chunk chunk : chunks.values()) {
             chunk.render();
         }
+        // See-through geometry (glass/ice) draws after everything opaque and blends
+        // over it; depth writes are off so overlapping translucent faces don't cull
+        // each other.
+        glDepthMask(false);
+        for (Chunk chunk : chunks.values()) {
+            chunk.renderTranslucent();
+        }
+        glDepthMask(true);
     }
 
     /** Spawns a dropped item of {@code type} at the given block position (centered, with a small random kick). */

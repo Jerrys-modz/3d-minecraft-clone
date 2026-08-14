@@ -3,6 +3,8 @@ package com.minecraftclone.world;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockTypeTest {
 
@@ -13,5 +15,12 @@ class BlockTypeTest {
         assertEquals("Stone Slab", BlockType.STONE_SLAB.displayName());
         assertEquals("Water Source", BlockType.WATER_SOURCE.displayName());
         assertEquals("Tall Grass", BlockType.TALL_GRASS.displayName());
+    }
+
+    @Test
+    void glassAndIceAreTranslucent() {
+        assertTrue(BlockType.GLASS.isTranslucent());
+        assertTrue(BlockType.ICE.isTranslucent());
+        assertFalse(BlockType.STONE.isTranslucent());
     }
 }
