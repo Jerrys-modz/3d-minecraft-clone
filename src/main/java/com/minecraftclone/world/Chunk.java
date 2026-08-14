@@ -374,14 +374,15 @@ public class Chunk {
     }
 
     /**
-     * The direction (in tile-UV space) the flow's surface animation should
-     * travel, so the water texture visibly creeps away from its source instead
-     * of always scrolling straight down. The cell flows away from its neighbor
-     * with the lowest stored level (nearest the source); a source or a cell with
-     * no lower neighbor is still, so it returns (0,0) and doesn't animate.
-     * Sides are deliberately left still (returned for the top face only) - a
-     * vertical wall scrolling the banded tile looked wrong when water started
-     * flowing.
+     * The direction (in tile-UV space) the flow's <em>top</em> surface
+     * animation should travel, so the water texture visibly creeps away
+     * from its source instead of always scrolling straight down. The cell
+     * flows away from its neighbor with the lowest stored level (nearest
+     * the source); a source or a cell with no lower neighbor is still, so
+     * it returns (0,0) and doesn't animate. Side faces don't use this - a
+     * vertical wall has no horizontal "away from source" direction to
+     * follow, so they always just scroll straight down instead (see
+     * {@link #emitFluidSide}).
      */
     private static float[] fluidFlowDir(BlockAccessor world, int wx, int wy, int wz, BlockType block) {
         if (block.isFluidSource()) return new float[]{0f, 0f};
@@ -488,9 +489,23 @@ public class Chunk {
         // applies - two full cells stacked really do hide the seam.
         float minCorner = Math.min(Math.min(yNW, yNE), Math.min(ySE, ySW));
         if (minCorner < wy + 1f || isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
-            emitQuad(vertices, indices, vertexCounter,
-                    new float[][]{{x0, ySW, z1}, {x1, ySE, z1}, {x1, yNE, z0}, {x0, yNW, z0}},
-                    uvs, LIGHT_TOP, blockLight, flow, flowDir[0], flowDir[1]);
+            // A quad with 4 independently-graded corners usually isn't flat, so
+            // splitting it into 2 triangles always bends it a little along
+            // whichever diagonal gets picked - the two triangles meet there at
+            // an angle, which reads as a faint crease/seam in the surface.
+            // Always splitting along SW-NE (the fixed order below) put that
+            // crease on whichever diagonal happened to have the *bigger* height
+            // difference just as often as the smaller one, making it obvious.
+            // Picking whichever diagonal's 2 endpoints are closer in height
+            // keeps the bend as shallow as it can be for this corner data.
+            boolean altDiagonal = Math.abs(ySE - yNW) < Math.abs(ySW - yNE);
+            float[][] topPositions = altDiagonal
+                    ? new float[][]{{x1, ySE, z1}, {x1, yNE, z0}, {x0, yNW, z0}, {x0, ySW, z1}}
+                    : new float[][]{{x0, ySW, z1}, {x1, ySE, z1}, {x1, yNE, z0}, {x0, yNW, z0}};
+            float[][] topUvs = altDiagonal
+                    ? new float[][]{uvs[1], uvs[2], uvs[3], uvs[0]}
+                    : uvs;
+            emitQuad(vertices, indices, vertexCounter, topPositions, topUvs, LIGHT_TOP, blockLight, flow, flowDir[0], flowDir[1]);
         }
         if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
@@ -569,7 +584,16 @@ public class Chunk {
             default -> throw new IllegalArgumentException("Fluid side must be horizontal");
         };
         float light = face == Face.NORTH || face == Face.SOUTH ? LIGHT_NORTH_SOUTH : LIGHT_EAST_WEST;
-        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, flow);
+        // Every side face's V axis runs the same way regardless of which
+        // direction it faces (see the uvs order above: v1 at the bottom
+        // corners, v0 at the top ones), so a flowing side always scrolls
+        // straight down its own texture - unlike the top face, there's no
+        // horizontal "away from source" direction for a vertical wall to
+        // follow. Previously these were left at (0,0) - always static -
+        // because scrolling the *old* flat-banded tile sideways looked
+        // wrong; now that it's a genuine vertical scroll on the wavy tile,
+        // it reads as falling water instead.
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, flow, 0f, flow > 0.5f ? 1f : 0f);
     }
 
     private void emitFace(FloatArray vertices, IntArray indices, int[] vertexCounter,
