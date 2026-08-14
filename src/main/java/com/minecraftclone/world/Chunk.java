@@ -300,6 +300,11 @@ public class Chunk {
                     }
                     if (block == BlockType.AIR) continue;
 
+                    // A closed door is a thin panel in its cell, not a full cube.
+                    if (block == BlockType.DOOR) {
+                        emitDoorPanel(vertices, indices, vertexCounter, wx, wy, wz, atlas, blockLight);
+                        continue;
+                    }
                     if (block.cross) {
                         // Decoration (grass/flowers): two crossed planes, always fully
                         // visible - no face culling, since it never covers a whole cell.
@@ -733,6 +738,20 @@ public class Chunk {
      * drawn as two quads with opposite winding so it's visible from both sides
      * without needing to disable backface culling.
      */
+    /** A closed door: a thin vertical panel against the front of its cell, both sides visible. */
+    private void emitDoorPanel(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                               int wx, int wy, int wz, TextureAtlas atlas, float blockLight) {
+        float[] uv = atlas.getUV(BlockType.DOOR.topTile);
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+        float thin = 0.06f;
+        float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + 1, z0 = wz, z1 = wz + 1;
+        float[][] positions = {
+                {x0, y0, z1 - thin}, {x1, y0, z1 - thin}, {x1, y1, z1 - thin}, {x0, y1, z1 - thin},
+        };
+        emitQuadBothSides(vertices, indices, vertexCounter, positions, uvs, LIGHT_NORTH_SOUTH, blockLight);
+    }
+
     private void emitCross(FloatArray vertices, IntArray indices, int[] vertexCounter,
                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
         float[] uv = atlas.getUV(block.topTile);
