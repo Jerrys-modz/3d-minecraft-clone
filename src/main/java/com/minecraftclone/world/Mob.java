@@ -3,16 +3,20 @@ package com.minecraftclone.world;
 import com.minecraftclone.util.AABB;
 import org.joml.Vector3f;
 
+import java.util.List;
 import java.util.Random;
 
 /**
  * A passive animal wandering the surface - pigs, cows and sheep that idle and
  * stroll around on grass, making the world feel lived-in. Mobs are lightweight:
- * a position/velocity pair plus a tiny wander brain (gravity, AABB-vs-voxel
- * collision resolved per axis, and a "don't walk off cliffs or into walls"
- * check when choosing where to go). They spawn on grass surfaces near the
- * player and despawn once they're far away. Transient - not saved, like
- * dropped items.
+ * a position/velocity pair plus a tiny brain. Instead of blindly bumping into
+ * the world, a mob picks a random walkable destination nearby, finds a path to
+ * it with {@link Pathfinder} (2D A* over walkable columns, allowing single-block
+ * steps and routing around walls and ledges), and follows the waypoints with
+ * gravity and per-axis AABB-vs-voxel collision. If the terrain changes under it
+ * or a path goes stale it re-routes. Mobs spawn on grass surfaces near the
+ * player and despawn once they're far away. Transient - not saved, like dropped
+ * items.
  */
 public class Mob {
 
@@ -35,6 +39,9 @@ public class Mob {
 
     private static final float GRAVITY = 30f;
     private static final float TERMINAL_VELOCITY = -40f;
+    private static final float WAYPOINT_REACH = 0.4f;  // feet within this of a waypoint center: advance
+    private static final float STUCK_THRESHOLD = 0.5f; // blocked this long: give up and re-route
+    private static final int MAX_PATH_NODES = 800;     // A* budget per route search
 
     public final Type type;
     /** Body center of the mob. */
@@ -44,13 +51,15 @@ public class Mob {
 
     private boolean onGround;
     private boolean moving;
-    private float wanderTimer; // time until the next wander decision
-    private float moveX, moveZ; // current wander heading (0 or +/-1)
+    private float wanderTimer;  // time until the mob picks a new destination
+    private float stuckTimer;   // how long we've been wedged against something
+    private List<int[]> path;   // waypoints {x, floorY, z}, from Pathfinder
+    private int pathIndex;      // next waypoint to reach
 
     public Mob(Type type, float x, float y, float z) {
         this.type = type;
         this.position.set(x, y, z);
-        this.wanderTimer = 0f; // decide on the first tick
+        this.wanderTimer = 0f; // decide on the first grounded tick
     }
 
     public boolean isMoving() {
@@ -64,76 +73,112 @@ public class Mob {
     }
 
     /**
-     * Advances the mob one tick: gravity, a periodic wander decision, and
-     * movement resolved against solid blocks one axis at a time. Pure logic
-     * (only {@link BlockAccessor} is used) so it can be tested without GL.
+     * Advances the mob one tick: gravity, a periodic "pick a new destination"
+     * decision, path following (steering toward the next waypoint), and movement
+     * resolved against solid blocks one axis at a time. Pure logic (only
+     * {@link BlockAccessor} is used) so it can be tested without GL.
      */
     public void update(float dt, BlockAccessor world, Random rnd) {
         age += dt;
-
         wanderTimer -= dt;
-        if (onGround && wanderTimer <= 0f) {
-            chooseWander(world, rnd);
+
+        // When the mob has nothing to walk toward (arrived, or no goal yet), decide
+        // where to go next - but only once it's settled on the ground.
+        if (onGround && (path == null || pathIndex >= path.size()) && wanderTimer <= 0f) {
+            pickNewGoal(world, rnd);
         }
 
-        // Cliff/wall guard mid-stride too: the goal was picked while the ground
-        // ahead was solid, but if it runs out before the wander timer does (walking
-        // off a ledge), stop and re-decide instead of stepping into thin air.
-        if (onGround && moving && !canWalkAhead(world, (int) moveX, (int) moveZ)) {
-            moving = false;
-            moveX = 0f;
-            moveZ = 0f;
-            wanderTimer = Math.min(wanderTimer, 0.4f);
-        }
+        followPath();
 
         velocity.y -= GRAVITY * dt;
         if (velocity.y < TERMINAL_VELOCITY) {
             velocity.y = TERMINAL_VELOCITY;
         }
 
-        moveAndCollide(world, moveX * type.walkSpeed * dt, velocity.y * dt, moveZ * type.walkSpeed * dt);
+        boolean blocked = moveAndCollide(world, velocity.x * dt, velocity.y * dt, velocity.z * dt);
+        if (blocked) {
+            // Wedged against something the path didn't expect (e.g. terrain changed) -
+            // give up after a moment and pick a new goal.
+            stuckTimer += dt;
+            if (stuckTimer > STUCK_THRESHOLD) {
+                stuckTimer = 0f;
+                path = null;
+                if (wanderTimer > 0.4f) {
+                    wanderTimer = 0.4f;
+                }
+            }
+        } else {
+            stuckTimer = 0f;
+        }
     }
 
-    /** Picks a new wander goal: stand still, or walk one of the four cardinal directions. */
-    private void chooseWander(BlockAccessor world, Random rnd) {
-        moving = false;
-        moveX = 0f;
-        moveZ = 0f;
-        if (rnd.nextFloat() < 0.3f) {
+    /** Picks a random walkable destination and paths to it; sometimes just idles. */
+    private void pickNewGoal(BlockAccessor world, Random rnd) {
+        path = null;
+        if (rnd.nextFloat() < 0.25f) {
             // Pause and look around for a moment.
-            wanderTimer = 1f + rnd.nextFloat() * 2.5f;
+            wanderTimer = 1.5f + rnd.nextFloat() * 2.5f;
             return;
         }
-        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-        int[] d = dirs[rnd.nextInt(dirs.length)];
-        if (canWalkAhead(world, d[0], d[1])) {
-            moveX = d[0];
-            moveZ = d[1];
-            moving = true;
-            wanderTimer = 1f + rnd.nextFloat() * 2.5f;
-        } else {
-            // Cliff or wall that way - re-decide shortly.
-            wanderTimer = 0.4f;
+        int bx = (int) Math.floor(position.x);
+        int bz = (int) Math.floor(position.z);
+        int floor = (int) Math.floor(position.y - type.height / 2f);
+        int radius = 6 + rnd.nextInt(8);
+        for (int attempt = 0; attempt < 8; attempt++) {
+            int gx = bx + rnd.nextInt(radius * 2 + 1) - radius;
+            int gz = bz + rnd.nextInt(radius * 2 + 1) - radius;
+            if (gx == bx && gz == bz) continue;
+            if (Pathfinder.floorAt(world, gx, gz, floor) == Pathfinder.NO_FLOOR) continue;
+            List<int[]> waypoints = Pathfinder.findPath(world, bx, bz, gx, gz, floor, MAX_PATH_NODES);
+            if (waypoints != null && waypoints.size() > 1) {
+                path = waypoints;
+                pathIndex = 1; // already standing on the start column
+                wanderTimer = 4f + rnd.nextFloat() * 4f;
+                return;
+            }
         }
+        // Nothing reachable nearby - pause briefly, then try somewhere else.
+        wanderTimer = 1f + rnd.nextFloat() * 2f;
     }
 
-    /**
-     * True if a step in direction (sx, sz) is safe: the ground at the destination
-     * is solid (no walking off a cliff) and there's headroom (no walking into a
-     * wall). This keeps mobs on the surface without a collision detector.
-     */
-    private boolean canWalkAhead(BlockAccessor world, int sx, int sz) {
-        float look = 0.6f + type.width * 0.4f;
-        int bx = (int) Math.floor(position.x + sx * look);
-        int bz = (int) Math.floor(position.z + sz * look);
+    /** Steers toward the next waypoint, advancing along the path as waypoints are reached. */
+    private void followPath() {
+        moving = false;
+        velocity.x = 0f;
+        velocity.z = 0f;
+        if (path == null || pathIndex >= path.size()) return;
+
+        int[] wp = path.get(pathIndex);
+
+        // Re-validate the waypoint's floor against where the mob actually is -
+        // terrain edits can invalidate a path mid-walk (a floor caved in, a wall
+        // appeared). Difference of one is a normal step up/down; more means the
+        // path is stale, so abandon it and let the next decision re-route.
         int feetY = (int) Math.floor(position.y - type.height / 2f);
-        return world.getBlock(bx, feetY - 1, bz).isCollidable()
-                && !world.getBlock(bx, feetY, bz).isCollidable()
-                && !world.getBlock(bx, feetY + 1, bz).isCollidable();
+        if (Math.abs(wp[1] - feetY) > 1) {
+            path = null;
+            return;
+        }
+
+        float tx = wp[0] + 0.5f;
+        float tz = wp[2] + 0.5f;
+        float dx = tx - position.x;
+        float dz = tz - position.z;
+        float dist = (float) Math.sqrt(dx * dx + dz * dz);
+        if (dist < WAYPOINT_REACH) {
+            pathIndex++;
+            if (pathIndex >= path.size()) {
+                path = null;
+            }
+            return;
+        }
+        moving = true;
+        velocity.x = dx / dist * type.walkSpeed;
+        velocity.z = dz / dist * type.walkSpeed;
     }
 
     /** Moves by (dx, dy, dz), resolving collisions one axis at a time. */
-    private void moveAndCollide(BlockAccessor world, float dx, float dy, float dz) {
+    private boolean moveAndCollide(BlockAccessor world, float dx, float dy, float dz) {
         onGround = false;
         boolean blocked = false;
 
@@ -169,10 +214,7 @@ public class Mob {
             position.z += dz;
         }
 
-        // Wedged against a wall (didn't actually move) - re-decide where to go soon.
-        if ((dx != 0f || dz != 0f) && blocked) {
-            wanderTimer = Math.min(wanderTimer, 0.3f);
-        }
+        return blocked;
     }
 
     private boolean collidesAt(BlockAccessor world, AABB box) {

@@ -124,4 +124,29 @@ class MobTest {
         }
         assertEquals(groundY, m.position.y, 0.2f, "grounded mob should not sink or float");
     }
+
+    @Test
+    void mobNavigatesAlongACorridorWithoutLeavingIt() {
+        // A long corridor along X (floor grass at y=0, stone walls at z=±3):
+        // the pathfinding should route the mob along it, never through the walls.
+        StubWorld w = new StubWorld();
+        for (int x = -14; x <= 14; x++) {
+            for (int z = -2; z <= 2; z++) {
+                w.set(x, 0, z, BlockType.GRASS);
+            }
+            for (int y = 1; y <= 2; y++) {
+                w.set(x, y, -3, BlockType.STONE);
+                w.set(x, y, 3, BlockType.STONE);
+            }
+        }
+        Mob m = new Mob(Mob.Type.SHEEP, 0f, 1f + Mob.Type.SHEEP.height / 2f, 0f);
+        float startX = m.position.x;
+        Random rnd = new Random(21);
+        for (int i = 0; i < 900; i++) {
+            m.update(DT, w, rnd);
+        }
+        assertTrue(Math.abs(m.position.z) <= 2.4f, "left the corridor: z=" + m.position.z);
+        assertTrue(Math.abs(m.position.x - startX) > 0.5f,
+                "should wander along the corridor: dx=" + (m.position.x - startX));
+    }
 }
