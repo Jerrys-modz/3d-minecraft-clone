@@ -24,17 +24,71 @@ import java.util.Random;
  */
 public class TerrainGenerator {
 
-    public static final int SEA_LEVEL = 42;
+    /** The default sea/water level in blocks; configurable via {@link WorldGenSettings}. */
+    public static final int DEFAULT_SEA_LEVEL = 42;
     private static final int BASE_HEIGHT = 44;
     private static final int SNOW_LINE = 60;
-    private static final int MOUNTAIN_LINE = SEA_LEVEL + 16; // above this: mountain biome
-    private static final int LAVA_LEVEL = 10;                // cave pockets at/below this fill with lava instead of air
-    private static final int RIVER_ZONE = 6;                 // rivers only form in lowland within this of sea level, so they never become ravines
+    private static final int MOUNTAIN_OFFSET = 16; // sea level + this: mountain biome
+    private static final int LAVA_LEVEL = 10;      // cave pockets at/below this fill with lava instead of air
+    private static final int RIVER_ZONE = 6;       // rivers only form in lowland within this of sea level, so they never become ravines
+
+    private static final int VILLAGE_SPACING = 36;           // ~1 in 36 chunks can be a village origin
+    private static final int VILLAGE_RADIUS = 3;             // chunks away a village origin is still detected
+    private static final int VILLAGE_EXTENT = 14;            // plaza half-width in blocks around the village center
 
     /** The biomes a column can be assigned, from its temperature, moisture and height. */
     public enum Biome {
         OCEAN, FROZEN_OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, BADLANDS, JUNGLE,
         TAIGA, SNOWY, TUNDRA, SWAMP, MUSHROOM_FIELD, CHERRY_GROVE, FLOWER_MEADOW, MOUNTAIN
+    }
+
+    /** A small generated structure that can appear in a biome, placed at a flat surface cell. */
+    public enum StructureType {
+        NONE, DESERT_TEMPLE, IGLOO, CABIN, WITCH_HUT, STONE_RUIN
+    }
+
+    /** A building type used inside villages, chosen per plot. */
+    enum BuildingType {
+        HOUSE, TALL_HOUSE, BLACKSMITH, TOWER
+    }
+
+    /** Picks a village building type deterministically from the village position and plot index. */
+    static BuildingType buildingTypeFor(int centerX, int centerZ, int plot) {
+        int h = (int) ((centerX * 31L + centerZ * 17L + plot * 13L) & 0xFFFF);
+        return switch (h % 5) {
+            case 2 -> BuildingType.TALL_HOUSE;
+            case 3 -> BuildingType.BLACKSMITH;
+            case 4 -> BuildingType.TOWER;
+            default -> BuildingType.HOUSE;
+        };
+    }
+
+    /** The structure a biome tends to spawn, or {@link StructureType#NONE} if it spawns nothing. */
+    public static StructureType structureFor(Biome b) {
+        return switch (b) {
+            case DESERT -> StructureType.DESERT_TEMPLE;
+            case SNOWY, TUNDRA -> StructureType.IGLOO;
+            case FOREST, PLAINS, TAIGA, CHERRY_GROVE, FLOWER_MEADOW -> StructureType.CABIN;
+            case SWAMP -> StructureType.WITCH_HUT;
+            case MOUNTAIN, BADLANDS -> StructureType.STONE_RUIN;
+            default -> StructureType.NONE;
+        };
+    }
+
+    /** True if this chunk coordinate is the origin of a village, deterministically. */
+    public static boolean isVillageChunk(long seed, int cx, int cz) {
+        long h = seed ^ (cx * 0x9E3779B97F4A7C15L) ^ (cz * 0xBF58476D1CE4E5B9L);
+        h ^= h >>> 33;
+        h *= 0xFF51AFD7ED558CCDL;
+        h ^= h >>> 33;
+        return (h & 0xFFFF) % VILLAGE_SPACING == 0;
+    }
+
+    /** Biomes villages can appear in (flat, buildable lowlands). */
+    public static boolean villageBiome(Biome b) {
+        return b == Biome.PLAINS || b == Biome.DESERT || b == Biome.SAVANNA
+                || b == Biome.TAIGA || b == Biome.TUNDRA || b == Biome.FLOWER_MEADOW
+                || b == Biome.CHERRY_GROVE;
     }
 
     private final Noise heightNoise;
@@ -44,15 +98,30 @@ public class TerrainGenerator {
     private final Noise riverNoise;
     private final Noise oreNoise;
     private final long seed;
+    private final int seaLevel;
+    private final boolean structures;
+    private final boolean superflat;
+    private final float terrainSize;
+    /** Superflat world: the fixed height of the grass surface (a flat plain just above sea level). */
+    private final int flatHeight;
 
-    public TerrainGenerator(long seed) {
+    public TerrainGenerator(long seed, WorldGenSettings settings) {
         this.seed = seed;
+        this.seaLevel = settings.getSeaLevel();
+        this.structures = settings.hasStructures();
+        this.superflat = settings.isSuperflat();
+        this.terrainSize = settings.getTerrainSize();
+        this.flatHeight = seaLevel + 4;
         this.heightNoise = new Noise(seed);
         this.moistureNoise = new Noise(seed ^ 0x9E3779B97F4A7C15L);
         this.tempNoise = new Noise(seed ^ 0xC2B2AE3D27D4EB4FL);
         this.caveNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
         this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
         this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
+    }
+
+    public int getSeaLevel() {
+        return seaLevel;
     }
 
     /**
@@ -62,13 +131,13 @@ public class TerrainGenerator {
      * between frozen and temperate so snow never butts straight up against lush
      * plains, and moisture picks forest vs plains / desert vs savanna.
      */
-    public static Biome biomeAt(double temperature, double moisture, int height) {
-        if (height < SEA_LEVEL) return temperature < -0.25 ? Biome.FROZEN_OCEAN : Biome.OCEAN;
-        if (height <= SEA_LEVEL + 1) return Biome.BEACH;
-        if (height > MOUNTAIN_LINE) return Biome.MOUNTAIN;
+    public Biome biomeAt(double temperature, double moisture, int height) {
+        if (height < seaLevel) return temperature < -0.25 ? Biome.FROZEN_OCEAN : Biome.OCEAN;
+        if (height <= seaLevel + 1) return Biome.BEACH;
+        if (height > seaLevel + MOUNTAIN_OFFSET) return Biome.MOUNTAIN;
         if (temperature < -0.28) return moisture > 0.05 ? Biome.TAIGA : Biome.SNOWY;
         if (temperature < -0.04) return Biome.TUNDRA;
-        if (moisture > 0.42 && height <= SEA_LEVEL + 6) return Biome.SWAMP;
+        if (moisture > 0.42 && height <= seaLevel + 6) return Biome.SWAMP;
         if (temperature > 0.18) {
             if (moisture > 0.18) return Biome.JUNGLE;
             if (moisture < -0.12) return Biome.DESERT;
@@ -104,11 +173,11 @@ public class TerrainGenerator {
     }
 
     /** True if any of a column's in-chunk orthogonal neighbors sits below sea level. */
-    private static boolean neighborBelowSea(int[][] heights, int x, int z) {
-        return (x > 0 && heights[x - 1][z] < SEA_LEVEL)
-                || (x < heights.length - 1 && heights[x + 1][z] < SEA_LEVEL)
-                || (z > 0 && heights[x][z - 1] < SEA_LEVEL)
-                || (z < heights.length - 1 && heights[x][z + 1] < SEA_LEVEL);
+    private boolean neighborBelowSea(int[][] heights, int x, int z) {
+        return (x > 0 && heights[x - 1][z] < seaLevel)
+                || (x < heights.length - 1 && heights[x + 1][z] < seaLevel)
+                || (z > 0 && heights[x][z - 1] < seaLevel)
+                || (z < heights.length - 1 && heights[x][z + 1] < seaLevel);
     }
 
     /**
@@ -118,8 +187,8 @@ public class TerrainGenerator {
      */
     private Biome biomeForColumn(int[][] heights, int x, int z, double temperature, double moisture,
                                  int height, int wx, int wz) {
-        if (height < SEA_LEVEL) return biomeAt(temperature, moisture, height);
-        if (height <= SEA_LEVEL + 1 && neighborBelowSea(heights, x, z)) return Biome.BEACH;
+        if (height < seaLevel) return biomeAt(temperature, moisture, height);
+        if (height <= seaLevel + 1 && neighborBelowSea(heights, x, z)) return Biome.BEACH;
         Biome b = biomeForClimate(temperature, moisture, height, wx, wz);
         return b == Biome.BEACH ? Biome.PLAINS : b;
     }
@@ -130,21 +199,24 @@ public class TerrainGenerator {
      * Matches what {@link #generate} fills, so biome queries agree with the world.
      */
     public int terrainHeight(int wx, int wz) {
+        if (superflat) {
+            return flatHeight;
+        }
         double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
         // Real mountains: a low-frequency range, sharpened into tall peaks by the
         // power so only the core of a range reaches high altitude.
         double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 2, 0.5, 2.0);
         double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
-        int height = BASE_HEIGHT + (int) Math.round(
-                continent * 16 + h * 18 + Math.pow(Math.max(0, mountains - 0.02), 1.6) * 420);
+        int height = BASE_HEIGHT + (int) Math.round(terrainSize * (
+                continent * 16 + h * 18 + Math.pow(Math.max(0, mountains - 0.02), 1.6) * 420));
         // Rivers only cut through lowland near sea level, so their water sits level
         // with the land instead of carving deep ravines through high terrain.
-        boolean river = isRiver(wx, wz) && height <= SEA_LEVEL + RIVER_ZONE;
+        boolean river = isRiver(wx, wz) && height <= seaLevel + RIVER_ZONE;
         if (river) {
-            height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed
+            height = Math.min(height, seaLevel - 1); // shallow riverbed
         }
         height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
-        if (height < SEA_LEVEL && !river) {
+        if (height < seaLevel && !river) {
             double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
             height = Math.max(2, height - (int) (depth * 5));
         }
@@ -160,24 +232,28 @@ public class TerrainGenerator {
         double temperature = temperatureAt(wx, wz);
         double moisture = moistureAt(wx, wz);
         int height = terrainHeight(wx, wz);
-        if (height < SEA_LEVEL && !neighborBelowSeaWorld(wx, wz)) {
-            height = SEA_LEVEL; // an isolated dip isn't a puddle
+        if (height < seaLevel && !neighborBelowSeaWorld(wx, wz)) {
+            height = seaLevel; // an isolated dip isn't a puddle
         }
-        if (height < SEA_LEVEL) return biomeAt(temperature, moisture, height);
-        if (height <= SEA_LEVEL + 1 && neighborBelowSeaWorld(wx, wz)) return Biome.BEACH;
+        if (height < seaLevel) return biomeAt(temperature, moisture, height);
+        if (height <= seaLevel + 1 && neighborBelowSeaWorld(wx, wz)) return Biome.BEACH;
         Biome b = biomeForClimate(temperature, moisture, height, wx, wz);
         return b == Biome.BEACH ? Biome.PLAINS : b;
     }
 
     /** True if any orthogonal neighbor of a world column sits below sea level. */
     private boolean neighborBelowSeaWorld(int wx, int wz) {
-        return terrainHeight(wx - 1, wz) < SEA_LEVEL
-                || terrainHeight(wx + 1, wz) < SEA_LEVEL
-                || terrainHeight(wx, wz - 1) < SEA_LEVEL
-                || terrainHeight(wx, wz + 1) < SEA_LEVEL;
+        return terrainHeight(wx - 1, wz) < seaLevel
+                || terrainHeight(wx + 1, wz) < seaLevel
+                || terrainHeight(wx, wz - 1) < seaLevel
+                || terrainHeight(wx, wz + 1) < seaLevel;
     }
 
     public void generate(Chunk chunk) {
+        if (superflat) {
+            generateSuperflat(chunk);
+            return;
+        }
         int originX = chunk.getOriginX();
         int originZ = chunk.getOriginZ();
         Random featureRandom = new Random(seed ^ ((long) chunk.getPos().x() * 341873128712L) ^ ((long) chunk.getPos().z() * 132897987541L));
@@ -203,19 +279,19 @@ public class TerrainGenerator {
                 temperature[x][z] = temperatureAt(wx, wz);
                 moisture[x][z] = moistureAt(wx, wz);
 
-                int height = BASE_HEIGHT + (int) Math.round(
-                        continent * 16 + h * 18 + Math.pow(Math.max(0, mountains - 0.02), 1.6) * 420);
+                int height = BASE_HEIGHT + (int) Math.round(terrainSize * (
+                        continent * 16 + h * 18 + Math.pow(Math.max(0, mountains - 0.02), 1.6) * 420));
                 // Rivers only cut through lowland near sea level (see RIVER_ZONE).
-                boolean river = isRiver(wx, wz) && height <= SEA_LEVEL + RIVER_ZONE;
+                boolean river = isRiver(wx, wz) && height <= seaLevel + RIVER_ZONE;
                 rivers[x][z] = river;
                 if (river) {
-                    height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed
+                    height = Math.min(height, seaLevel - 1); // shallow riverbed
                 }
                 height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
 
                 // Deepen oceans with a slow depth noise so open water is more than a
                 // puddle; rivers stay shallow so their water sits level with the land.
-                if (height < SEA_LEVEL && !river) {
+                if (height < seaLevel && !river) {
                     double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
                     height = Math.max(2, height - (int) (depth * 5));
                 }
@@ -250,7 +326,7 @@ public class TerrainGenerator {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 int d = riverDist[x][z];
                 if (d >= 1 && d <= 4) {
-                    int target = SEA_LEVEL + d + 1; // 1 away: +2 above water, up to 5 away: +5
+                    int target = seaLevel + d + 1; // 1 away: +2 above water, up to 5 away: +5
                     if (heights[x][z] > target) {
                         heights[x][z] = target;
                     }
@@ -265,8 +341,8 @@ public class TerrainGenerator {
                 // A tiny isolated dip below sea would otherwise become a stray 1-2
                 // block puddle; flatten it to sea level so water only forms real
                 // bodies that connect to a neighbor.
-                if (height < SEA_LEVEL && !neighborBelowSea(heights, x, z)) {
-                    height = SEA_LEVEL;
+                if (height < seaLevel && !neighborBelowSea(heights, x, z)) {
+                    height = seaLevel;
                     heights[x][z] = height;
                 }
                 Biome biome = biomeForColumn(heights, x, z, temperature[x][z], moisture[x][z],
@@ -303,20 +379,22 @@ public class TerrainGenerator {
 
                 // Fill water up to sea level for low terrain (oceans, rivers, lakes).
                 // Frozen oceans cap the surface with ice; swamps get the odd lily pad.
-                if (height < SEA_LEVEL) {
+                if (height < seaLevel) {
                     boolean frozen = biome == Biome.FROZEN_OCEAN;
-                    for (int y = height + 1; y <= SEA_LEVEL; y++) {
-                        BlockType fill = frozen && y == SEA_LEVEL ? BlockType.ICE : BlockType.WATER;
-                        if (y == SEA_LEVEL && biome == Biome.SWAMP && featureRandom.nextInt(6) == 0) {
+                    for (int y = height + 1; y <= seaLevel; y++) {
+                        BlockType fill = frozen && y == seaLevel ? BlockType.ICE : BlockType.WATER;
+                        if (y == seaLevel && biome == Biome.SWAMP && featureRandom.nextInt(6) == 0) {
                             fill = BlockType.LILY_PAD;
                         }
                         chunk.setLocal(x, y, z, fill);
                     }
-                    // Seaweed on shallow, warm ocean floors.
-                    if (biome == Biome.OCEAN && height >= SEA_LEVEL - 8 && featureRandom.nextInt(4) == 0) {
+                    // Seaweed on shallow, warm ocean floors - grows *inside* the water
+                    // cell (an overlay, like Minecraft's waterlogged seagrass) rather
+                    // than replacing it, so the water is still there around it.
+                    if (biome == Biome.OCEAN && height >= seaLevel - 8 && featureRandom.nextInt(4) == 0) {
                         for (int i = 1; i <= 2; i++) {
                             if (chunk.getLocal(x, height + i, z) == BlockType.WATER) {
-                                chunk.setLocal(x, height + i, z, BlockType.SEAWEED);
+                                chunk.setOverlay(x, height + i, z, BlockType.SEAWEED);
                             }
                         }
                     }
@@ -326,11 +404,13 @@ public class TerrainGenerator {
 
         // Surface dressing: trees / cacti / boulders / ground cover per biome. Kept
         // fully inside the chunk (margin 2) so tree canopies never spill into a
-        // not-yet-generated neighboring chunk.
-        for (int x = 2; x < Chunk.SIZE - 2; x++) {
+        // not-yet-generated neighboring chunk. Skipped entirely when structures
+        // are disabled (WorldGenSettings).
+        if (structures) {
+            for (int x = 2; x < Chunk.SIZE - 2; x++) {
             for (int z = 2; z < Chunk.SIZE - 2; z++) {
                 int height = heights[x][z];
-                if (height < SEA_LEVEL) continue; // ocean floor gets no dressing
+                if (height < seaLevel) continue; // ocean floor gets no dressing
 
                 Biome biome = biomes[x][z];
                 BlockType surface = chunk.getLocal(x, height, z);
@@ -468,7 +548,56 @@ public class TerrainGenerator {
                 }
             }
         }
+        }
 
+        // Structures: rare, biome-gated, built at a flat surface cell (kept well
+        // inside the chunk so a structure never spills into a neighbor).
+        if (featureRandom.nextInt(12) == 0) {
+            placeStructure(chunk, featureRandom, heights, biomes);
+        }
+
+        // Villages: deterministic multi-chunk clusters - each chunk builds the
+        // portion of every nearby village that falls inside it.
+        placeVillages(chunk, originX, originZ);
+
+        chunk.markGenerated();
+        chunk.markDirty();
+    }
+
+    /**
+     * Superflat world: a featureless grass plain. Bedrock at the floor, a few
+     * stone/dirt layers, a grass surface just above sea level, and no water,
+     * caves, ores, trees or decoration.
+     */
+    private void generateSuperflat(Chunk chunk) {
+        int originX = chunk.getOriginX();
+        int originZ = chunk.getOriginZ();
+        Random featureRandom = new Random(seed ^ ((long) chunk.getPos().x() * 341873128712L) ^ ((long) chunk.getPos().z() * 132897987541L));
+        for (int x = 0; x < Chunk.SIZE; x++) {
+            for (int z = 0; z < Chunk.SIZE; z++) {
+                for (int y = 0; y <= flatHeight; y++) {
+                    BlockType type;
+                    if (y == 0) {
+                        type = BlockType.BEDROCK;
+                    } else if (y < flatHeight - 3) {
+                        type = BlockType.STONE;
+                    } else if (y < flatHeight) {
+                        type = BlockType.DIRT;
+                    } else {
+                        type = BlockType.GRASS;
+                    }
+                    chunk.setLocal(x, y, z, type);
+                }
+            }
+        }
+        // The occasional tall grass tuft so the plain isn't totally sterile.
+        if (structures) {
+            for (int i = 0; i < 8; i++) {
+                int x = featureRandom.nextInt(Chunk.SIZE - 4) + 2;
+                int z = featureRandom.nextInt(Chunk.SIZE - 4) + 2;
+                chunk.setLocal(x, flatHeight + 1, z, BlockType.TALL_GRASS);
+            }
+        }
         chunk.markGenerated();
         chunk.markDirty();
     }
@@ -487,7 +616,7 @@ public class TerrainGenerator {
     }
 
     /** The top surface block for a biome (oceans get their sea-floor material). */
-    private static BlockType surfaceFor(Biome b, int height) {
+    private BlockType surfaceFor(Biome b, int height) {
         return switch (b) {
             case BEACH, DESERT -> BlockType.SAND;
             case SNOWY, TAIGA -> BlockType.SNOW;
@@ -495,13 +624,13 @@ public class TerrainGenerator {
             case SWAMP -> BlockType.SWAMP_GRASS;
             case BADLANDS -> BlockType.RED_CLAY;
             case MUSHROOM_FIELD -> BlockType.MYCELIUM;
-            case OCEAN, FROZEN_OCEAN -> height < SEA_LEVEL - 5 ? BlockType.GRAVEL : BlockType.SAND;
+            case OCEAN, FROZEN_OCEAN -> height < seaLevel - 5 ? BlockType.GRAVEL : BlockType.SAND;
             default -> BlockType.GRASS;
         };
     }
 
     /** The block just under the surface. */
-    private static BlockType subsurfaceFor(Biome b, int height) {
+    private BlockType subsurfaceFor(Biome b, int height) {
         return switch (b) {
             case BEACH, DESERT, OCEAN, FROZEN_OCEAN -> BlockType.SAND;
             case BADLANDS -> BlockType.RED_CLAY;
@@ -603,6 +732,273 @@ public class TerrainGenerator {
     /** A pumpkin on the grass - rare plains/forest flavor. */
     private void placePumpkin(Chunk chunk, int x, int y, int z) {
         chunk.setLocal(x, y, z, BlockType.PUMPKIN);
+    }
+
+    /** Half-width (in blocks) of a structure's footprint, for flatness checks. */
+    private static int footprint(StructureType s) {
+        return switch (s) {
+            case DESERT_TEMPLE, IGLOO, CABIN -> 3;
+            case WITCH_HUT, STONE_RUIN -> 2;
+            default -> 0;
+        };
+    }
+
+    /** True if the ground around (x, z) is flat enough (within 2 blocks) to build on. */
+    private static boolean flatArea(int[][] heights, int x, int z, int fp) {
+        for (int dx = -fp; dx <= fp; dx++) {
+            for (int dz = -fp; dz <= fp; dz++) {
+                int nx = x + dx, nz = z + dz;
+                if (nx < 0 || nx >= Chunk.SIZE || nz < 0 || nz >= Chunk.SIZE) return false;
+                if (Math.abs(heights[nx][nz] - heights[x][z]) > 2) return false;
+            }
+        }
+        return true;
+    }
+
+    /** Picks a biome-appropriate structure on a flat spot and builds it. */
+    private void placeStructure(Chunk chunk, Random rnd, int[][] heights, Biome[][] biomes) {
+        for (int t = 0; t < 10; t++) {
+            int x = 4 + rnd.nextInt(Chunk.SIZE - 8);
+            int z = 4 + rnd.nextInt(Chunk.SIZE - 8);
+            StructureType s = structureFor(biomes[x][z]);
+            if (s == StructureType.NONE) continue;
+            int height = heights[x][z];
+            if (height < seaLevel || height >= Chunk.HEIGHT - 12) continue;
+            if (!flatArea(heights, x, z, footprint(s))) continue;
+            buildStructure(chunk, s, x, height + 1, z, rnd);
+            return;
+        }
+    }
+
+    private void buildStructure(Chunk chunk, StructureType s, int x, int y, int z, Random rnd) {
+        switch (s) {
+            case DESERT_TEMPLE -> buildDesertTemple(chunk, x, y, z);
+            case IGLOO -> buildIgloo(chunk, x, y, z);
+            case CABIN -> buildCabin(chunk, x, y, z, rnd);
+            case WITCH_HUT -> buildWitchHut(chunk, x, y, z);
+            case STONE_RUIN -> buildStoneRuin(chunk, x, y, z, rnd);
+            default -> { }
+        }
+    }
+
+    /** A hollow stepped sand pyramid with a front entrance and a stone treasure inside. */
+    private void buildDesertTemple(Chunk chunk, int x, int y, int z) {
+        int[][] layers = {{7, 3}, {5, 2}, {3, 1}, {1, 0}}; // {size, hollow interior half}
+        for (int layer = 0; layer < layers.length; layer++) {
+            int size = layers[layer][0];
+            int half = size / 2;
+            int hollow = layers[layer][1];
+            for (int dx = -half; dx <= half; dx++) {
+                for (int dz = -half; dz <= half; dz++) {
+                    if (layer == 0 && dx == half && dz == 0) continue;      // front entrance
+                    if (Math.abs(dx) < hollow && Math.abs(dz) < hollow) continue; // hollow core
+                    chunk.setLocal(x + dx, y + layer, z + dz, BlockType.SAND);
+                }
+            }
+        }
+        chunk.setLocal(x, y + 1, z, BlockType.STONE); // hidden treasure
+    }
+
+    /** A small hollow snow dome with a door, for snowy plains and tundra. */
+    private void buildIgloo(Chunk chunk, int x, int y, int z) {
+        int[][] rings = {{3, 0}, {2, 1}, {1, 2}}; // {radius, height above base}
+        for (int[] ring : rings) {
+            int rr = ring[0], ly = y + ring[1];
+            for (int dx = -rr; dx <= rr; dx++) {
+                for (int dz = -rr; dz <= rr; dz++) {
+                    if (dx * dx + dz * dz > (rr + 0.4f) * (rr + 0.4f)) continue; // round it
+                    if (ring[1] == 0 && dx == rr && dz == 0) continue; // entrance
+                    if (Math.abs(dx) < rr && Math.abs(dz) < rr) continue; // hollow inside
+                    chunk.setLocal(x + dx, ly, z + dz, BlockType.SNOW);
+                }
+            }
+        }
+        chunk.setLocal(x, y + 3, z, BlockType.SNOW); // cap
+    }
+
+    /** A small ruined log-and-plank cabin with a flat roof and a doorway. */
+    private void buildCabin(Chunk chunk, int x, int y, int z, Random rnd) {
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (Math.abs(dx) != 2 && Math.abs(dz) != 1) continue; // walls only
+                for (int h = 0; h < 2; h++) {
+                    if (rnd.nextInt(4) == 0) continue; // ruined gap
+                    chunk.setLocal(x + dx, y + h, z + dz, BlockType.PLANKS);
+                }
+            }
+        }
+        chunk.setLocal(x - 2, y, z, BlockType.AIR);     // doorway
+        chunk.setLocal(x - 2, y + 1, z, BlockType.AIR);
+        for (int dx = -1; dx <= 1; dx++) {
+            chunk.setLocal(x + dx, y + 2, z - 1, BlockType.PLANKS); // roof remnant
+        }
+        chunk.setLocal(x, y + 2, z, BlockType.PLANKS);
+    }
+
+    /** A plank hut on log stilts with a flat roof and a front door, for the swamp. */
+    private void buildWitchHut(Chunk chunk, int x, int y, int z) {
+        for (int dx = -1; dx <= 1; dx++) {
+            chunk.setLocal(x + dx, y - 2, z, BlockType.WOOD_LOG);
+            chunk.setLocal(x + dx, y - 1, z, BlockType.WOOD_LOG);
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                chunk.setLocal(x + dx, y, z + dz, BlockType.PLANKS); // floor
+            }
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                boolean wall = Math.abs(dx) == 1 || Math.abs(dz) == 1;
+                if (wall && !(dx == 0 && dz == 1)) {
+                    chunk.setLocal(x + dx, y + 1, z + dz, BlockType.PLANKS);
+                }
+            }
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                chunk.setLocal(x + dx, y + 2, z + dz, BlockType.PLANKS); // roof
+            }
+        }
+    }
+
+    /** A few cracked stone pillars with a lintel, for mountain and badlands slopes. */
+    private void buildStoneRuin(Chunk chunk, int x, int y, int z, Random rnd) {
+        int[][] pillars = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+        for (int[] p : pillars) {
+            int h = 1 + rnd.nextInt(3);
+            for (int i = 0; i < h; i++) {
+                chunk.setLocal(x + p[0], y + i, z + p[1], BlockType.STONE);
+            }
+        }
+        chunk.setLocal(x - 1, y + 2, z - 1, BlockType.STONE);
+        chunk.setLocal(x, y + 2, z - 1, BlockType.STONE);
+        chunk.setLocal(x + 1, y + 2, z - 1, BlockType.STONE);
+    }
+
+    /** Writes a block at a world position, silently ignoring anything outside this chunk. */
+    private void setWorldBlock(Chunk chunk, int originX, int originZ, int wx, int wy, int wz, BlockType t) {
+        int lx = wx - originX, lz = wz - originZ;
+        if (lx < 0 || lx >= Chunk.SIZE || lz < 0 || lz >= Chunk.SIZE) return;
+        if (wy < 0 || wy >= Chunk.HEIGHT) return;
+        chunk.setLocal(lx, wy, lz, t);
+    }
+
+    /**
+     * Builds every nearby village's portion of this chunk. Village origins are a
+     * deterministic hash of the chunk coords, so all the chunks a village spans
+     * agree on the layout and each flatten/build only their own slice.
+     */
+    private void placeVillages(Chunk chunk, int originX, int originZ) {
+        int cx = originX >> 4, cz = originZ >> 4;
+        for (int dx = -VILLAGE_RADIUS; dx <= VILLAGE_RADIUS; dx++) {
+            for (int dz = -VILLAGE_RADIUS; dz <= VILLAGE_RADIUS; dz++) {
+                int vx = cx + dx, vz = cz + dz;
+                if (isVillageChunk(seed, vx, vz)) {
+                    buildVillage(chunk, originX, originZ, vx * Chunk.SIZE + 8, vz * Chunk.SIZE + 8);
+                }
+            }
+        }
+    }
+
+    /** Flattens a plaza around the village center, then places houses and a well. */
+    private void buildVillage(Chunk chunk, int originX, int originZ, int centerX, int centerZ) {
+        Biome b = biomeAtWorld(centerX, centerZ);
+        if (!villageBiome(b)) return;
+        int floor = terrainHeight(centerX, centerZ);
+        if (floor < seaLevel || floor > seaLevel + 12) return; // not on buildable lowland
+
+        boolean sand = b == Biome.DESERT || b == Biome.SAVANNA;
+        BlockType surfaceBlock = sand ? BlockType.SAND : BlockType.GRASS;
+
+        // Flatten the plaza and fill any dips.
+        for (int wx = centerX - VILLAGE_EXTENT; wx <= centerX + VILLAGE_EXTENT; wx++) {
+            for (int wz = centerZ - VILLAGE_EXTENT; wz <= centerZ + VILLAGE_EXTENT; wz++) {
+                int lx = wx - originX, lz = wz - originZ;
+                if (lx < 0 || lx >= Chunk.SIZE || lz < 0 || lz >= Chunk.SIZE) continue;
+                for (int y = floor + 14; y > floor; y--) {
+                    if (chunk.getLocal(lx, y, lz) != BlockType.AIR) {
+                        chunk.setLocal(lx, y, lz, BlockType.AIR);
+                    }
+                }
+                chunk.setLocal(lx, floor, lz, surfaceBlock);
+                for (int y = floor - 1; y >= floor - 3; y--) {
+                    if (chunk.getLocal(lx, y, lz) == BlockType.AIR) {
+                        chunk.setLocal(lx, y, lz, BlockType.DIRT);
+                    }
+                }
+            }
+        }
+
+        // A handful of houses around the plaza, each a distinct building type.
+        int[][] houses = {{4, -4}, {-4, -4}, {4, 4}, {-4, 4}, {0, 6}};
+        for (int i = 0; i < houses.length; i++) {
+            buildVillageHouse(chunk, originX, originZ, centerX + houses[i][0], centerZ + houses[i][1],
+                    floor + 1, sand, buildingTypeFor(centerX, centerZ, i));
+        }
+
+        // A well at the center.
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (Math.abs(dx) == 1 || Math.abs(dz) == 1) {
+                    setWorldBlock(chunk, originX, originZ, centerX + dx, floor + 1, centerZ + dz, BlockType.STONE);
+                }
+            }
+        }
+        setWorldBlock(chunk, originX, originZ, centerX, floor + 1, centerZ, BlockType.WATER_SOURCE);
+    }
+
+    /** True if the wall cell (dx, dz) of a halfX-by-halfZ footprint is a window. */
+    private static boolean isWindow(int dx, int dz, int halfX, int halfZ) {
+        if (Math.abs(dz) == halfZ && halfX >= 2 && (dx == halfX - 1 || dx == -(halfX - 1))) return true;
+        if (Math.abs(dx) == halfX && halfZ >= 2 && (dz == halfZ - 1 || dz == -(halfZ - 1))) return true;
+        return false;
+    }
+
+    /** Builds a village building of the given type, all clipped to this chunk. */
+    private void buildVillageHouse(Chunk chunk, int originX, int originZ, int wx, int wz, int baseY,
+                                   boolean sand, BuildingType t) {
+        int halfX, halfZ, wallH;
+        switch (t) {
+            case TALL_HOUSE -> { halfX = 3; halfZ = 2; wallH = 3; }
+            case BLACKSMITH -> { halfX = 2; halfZ = 1; wallH = 2; }
+            case TOWER -> { halfX = 1; halfZ = 1; wallH = 4; }
+            default -> { halfX = 3; halfZ = 2; wallH = 2; } // HOUSE
+        }
+        boolean stoneWall = t == BuildingType.BLACKSMITH || t == BuildingType.TOWER;
+        BlockType wall = sand ? BlockType.SAND : (stoneWall ? BlockType.STONE : BlockType.PLANKS);
+        BlockType roof = sand ? BlockType.SAND : BlockType.PLANKS;
+
+        for (int h = 0; h < wallH; h++) {
+            for (int dx = -halfX; dx <= halfX; dx++) {
+                for (int dz = -halfZ; dz <= halfZ; dz++) {
+                    if (Math.abs(dx) != halfX && Math.abs(dz) != halfZ) continue; // interior
+                    if (dx == 0 && dz == halfZ && h < 2) continue; // door opening
+                    if (h == 1 && isWindow(dx, dz, halfX, halfZ)) {
+                        setWorldBlock(chunk, originX, originZ, wx + dx, baseY + h, wz + dz, BlockType.GLASS);
+                        continue;
+                    }
+                    setWorldBlock(chunk, originX, originZ, wx + dx, baseY + h, wz + dz, wall);
+                }
+            }
+        }
+
+        // Door panels filling the front opening.
+        if (t != BuildingType.TOWER) {
+            setWorldBlock(chunk, originX, originZ, wx, baseY, wz + halfZ, BlockType.DOOR);
+            setWorldBlock(chunk, originX, originZ, wx, baseY + 1, wz + halfZ, BlockType.DOOR);
+        }
+
+        // Blacksmith forge against the side wall.
+        if (t == BuildingType.BLACKSMITH) {
+            setWorldBlock(chunk, originX, originZ, wx + 1, baseY, wz, BlockType.FURNACE);
+        }
+
+        // Flat roof over the whole footprint.
+        for (int dx = -halfX; dx <= halfX; dx++) {
+            for (int dz = -halfZ; dz <= halfZ; dz++) {
+                setWorldBlock(chunk, originX, originZ, wx + dx, baseY + wallH, wz + dz, roof);
+            }
+        }
     }
 
     /** A tall jungle tree: a longer trunk and a bigger, lusher canopy than the oak. */

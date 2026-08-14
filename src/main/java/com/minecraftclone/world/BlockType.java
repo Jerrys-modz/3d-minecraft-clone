@@ -71,6 +71,7 @@ public enum BlockType {
     LILY_PAD(61, false, true, 43),
     PUMPKIN(62, true, false, 44, 44, 44),
     SEAWEED(63, false, true, 45),
+    DOOR(64, false, true, 46),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -96,12 +97,12 @@ public enum BlockType {
     GOLD_INGOT(42, 0), // smelted from gold ore
     DIAMOND(43, 0),    // smelted from diamond ore
     // Raw meat - dropped by passive mobs when killed (see World.damageMob), edible.
-    RAW_PORKCHOP(64, 16),
-    RAW_BEEF(65, 16),
-    MUTTON(66, 12),
+    RAW_PORKCHOP(65, 16),
+    RAW_BEEF(66, 16),
+    MUTTON(67, 12),
     // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
-    ROTTEN_FLESH(67, 4),
-    BONES(68, 0);
+    ROTTEN_FLESH(68, 4),
+    BONES(69, 0);
 
     public final byte id;
     public final boolean solid;
@@ -272,6 +273,22 @@ public enum BlockType {
     /** True if a ray should pass straight through this block (air, static water, or transient flow). */
     public boolean isPassThrough() {
         return this == AIR || this == WATER || this == WATER_FLOW || this == LAVA_FLOW;
+    }
+
+    /** True if this block is drawn in the see-through translucent render pass (glass, ice). */
+    public boolean isTranslucent() {
+        return this == GLASS || this == ICE;
+    }
+
+    /**
+     * True for decoration that grows/sits <em>inside</em> a fluid cell rather
+     * than needing to replace it - Minecraft's "waterlogged" plants (seagrass,
+     * kelp) work the same way. World-gen and manual placement both route this
+     * into the target cell's overlay slot instead of overwriting the water
+     * there - see {@link Chunk#setOverlay} and {@link BlockAccessor#getOverlay}.
+     */
+    public boolean isSubmersible() {
+        return this == SEAWEED;
     }
 
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */

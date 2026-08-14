@@ -13,6 +13,9 @@ public class Input {
     /** Most recently pressed key code, for capturing keybinds (reset on consume). */
     private int lastKeyPressed = GLFW_KEY_UNKNOWN;
 
+    /** Characters typed this frame (for text fields like the world seed), reset on consume. */
+    private final StringBuilder typedChars = new StringBuilder();
+
     private final boolean[] mouseDown = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
     private final boolean[] mouseDownPrev = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
 
@@ -45,6 +48,10 @@ public class Input {
         glfwSetCursorPosCallback(windowHandle, (win, xpos, ypos) -> {
             mouseX = xpos;
             mouseY = ypos;
+        });
+
+        glfwSetCharCallback(windowHandle, (win, codepoint) -> {
+            typedChars.append((char) codepoint);
         });
 
         glfwSetScrollCallback(windowHandle, (win, xoffset, yoffset) -> scrollDelta += yoffset);
@@ -87,6 +94,14 @@ public class Input {
         lastKeyPressed = GLFW_KEY_UNKNOWN;
         return key;
     }
+
+    /** Returns and clears any characters typed since the last consume. */
+    public String consumeTypedChars() {
+        String s = typedChars.toString();
+        typedChars.setLength(0);
+        return s;
+    }
+
 
     public boolean isMouseDown(int button) {
         return mouseDown[button];
