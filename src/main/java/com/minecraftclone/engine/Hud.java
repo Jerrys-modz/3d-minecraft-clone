@@ -92,6 +92,7 @@ public class Hud {
     private final LineMesh inventoryPanel = new LineMesh(GL_TRIANGLES);
     private final LineMesh inventorySlotBg = new LineMesh(GL_TRIANGLES);
     private final LineMesh inventoryHover = new LineMesh(GL_LINES);
+    private final LineMesh tooltipPanel = new LineMesh(GL_TRIANGLES);
 
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
@@ -763,6 +764,19 @@ public class Hud {
                     cursorLx + 0.02f, cursorLy - 0.02f);
         }
 
+        // Tooltip for the hovered slot (inventory, grid cell or crafting output).
+        BlockType tip = null;
+        if (hoveredSlot == InventoryController.OUTPUT_SLOT) {
+            tip = recipe != null ? recipe.output() : null;
+        } else if (hoveredSlot >= Inventory.SIZE) {
+            tip = grid.get(hoveredSlot - Inventory.SIZE);
+        } else if (hoveredSlot >= 0) {
+            tip = inventory.typeOf(hoveredSlot);
+        }
+        if (tip != null) {
+            renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
+        }
+
         // Title + hint line.
         drawCenteredText("Inventory", 0f, panelTop - 0.05f, 0.045f, WHITE);
         drawCenteredText("Left: pick up    Right: one    Shift-click: move    Drag: split    Esc: close",
@@ -809,6 +823,58 @@ public class Hud {
         float digitSize = 0.028f;
         text.add(countText, cx + half - text.measure(countText, digitSize), cy - half, digitSize);
         text.render(hudTransform, WHITE);
+    }
+
+    /** The tooltip lines for an item: its display name, plus durability for tools. */
+    private String[] tooltipLines(BlockType type, ToolDurability durability) {
+        if (Mining.isTool(type)) {
+            int max = Mining.toolStats(type).maxUses();
+            int rem = durability.remaining(type);
+            return new String[]{type.displayName(), "Durability: " + rem + " / " + max};
+        }
+        return new String[]{type.displayName()};
+    }
+
+    /**
+     * Draws a small Minecraft-style tooltip panel with {@code lines}, positioned
+     * below-right of the mouse and clamped to stay on screen. Drawn last so it
+     * sits on top of the cursor stack.
+     */
+    public void renderTooltip(String[] lines, float logicalX, float logicalY, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        float size = 0.024f;
+        float lineH = size + 0.002f;
+        float pad = 0.022f;
+        float w = 0f;
+        for (String line : lines) {
+            w = Math.max(w, text.measure(line, size));
+        }
+        w += pad * 2f;
+        float h = lines.length * lineH + pad * 2f - 0.002f;
+
+        float x = Math.max(-1f + w / 2f, Math.min(1f - w / 2f, logicalX + 0.06f));
+        float y = Math.max(-1f, Math.min(1f - h, logicalY - 0.06f - h));
+        float left = x - w / 2f;
+
+        float[] panel = {
+                left, y, 0, left + w, y, 0, left + w, y + h, 0,
+                left, y, 0, left + w, y + h, 0, left, y + h, 0,
+        };
+        tooltipPanel.upload(panel);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0.08f, 0.08f, 0.1f, 0.92f));
+        tooltipPanel.render();
+        lineShader.unbind();
+
+        for (int i = 0; i < lines.length; i++) {
+            drawTextAt(lines[i], left + pad, y + pad + i * lineH, size, WHITE);
+        }
+        glEnable(GL_DEPTH_TEST);
     }
 
     /**
@@ -968,6 +1034,19 @@ public class Hud {
                     cursorLx + 0.02f, cursorLy - 0.02f);
         }
 
+        // Tooltip for the hovered catalog item or hotbar slot.
+        BlockType tip = null;
+        int hb = hotbarSlotAt(cursorLx, cursorLy);
+        int ci = creativeItemAt(cursorLx, cursorLy, selectedTab);
+        if (hb >= 0) {
+            tip = inventory.typeOf(hb);
+        } else if (ci >= 0) {
+            tip = CreativeCatalog.TABS[selectedTab].items()[ci];
+        }
+        if (tip != null) {
+            renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
+        }
+
         drawCenteredText("Creative    Click: add to cursor    Shift-click: to hotbar    X: delete",
                 0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
@@ -990,5 +1069,6 @@ public class Hud {
         inventoryPanel.destroy();
         inventorySlotBg.destroy();
         inventoryHover.destroy();
+        tooltipPanel.destroy();
     }
 }

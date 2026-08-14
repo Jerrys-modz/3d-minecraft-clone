@@ -251,4 +251,21 @@ public enum BlockType {
     public boolean isPassThrough() {
         return this == AIR || this == WATER || this == WATER_FLOW || this == LAVA_FLOW;
     }
+
+    /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */
+    public String displayName() {
+        StringBuilder sb = new StringBuilder(name().length());
+        boolean upper = true;
+        for (int i = 0; i < name().length(); i++) {
+            char c = name().charAt(i);
+            if (c == '_') {
+                sb.append(' ');
+                upper = true;
+            } else {
+                sb.append(upper ? Character.toUpperCase(c) : Character.toLowerCase(c));
+                upper = false;
+            }
+        }
+        return sb.toString();
+    }
 }
