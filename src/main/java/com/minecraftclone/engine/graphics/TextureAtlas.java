@@ -96,6 +96,7 @@ public class TextureAtlas {
         paintLilyPad(image, 43, rnd);
         paintTile(image, 44, rnd, 0xE08A2E, 0xC7731F, true);   // pumpkin
         paintSeaweed(image, 45, rnd);
+        paintDoor(image, 46, rnd);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
@@ -406,6 +407,27 @@ public class TextureAtlas {
                 img.setRGB(ox + x, oy + y, 0xFF000000 | 0x2F8F3A);
             }
         }
+    }
+
+    /** A wooden door panel: plank fill with grooves, a crossbar and a handle. */
+    private void paintDoor(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int plank = 0xC69A56, dark = 0x8E6A34;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.15f ? dark : plank));
+            }
+        }
+        for (int x = 3; x < TILE_PX; x += 4) {
+            for (int y = 0; y < TILE_PX; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
+            }
+        }
+        for (int x = 0; x < TILE_PX; x++) {
+            img.setRGB(ox + x, oy + 9, 0xFF000000 | dark);
+        }
+        img.setRGB(ox + 13, oy + 11, 0xFF000000 | 0x4A3018);
     }
 
     private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {

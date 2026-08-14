@@ -881,66 +881,56 @@ public class TerrainGenerator {
         setWorldBlock(chunk, originX, originZ, centerX, floor + 1, centerZ, BlockType.WATER_SOURCE);
     }
 
-    /** Writes a single wall layer (a hollow ring with a door gap) clipped to this chunk. */
-    private void placeWallRing(Chunk chunk, int originX, int originZ, int wx, int wz, int y,
-                               int halfX, int halfZ, BlockType mat) {
-        for (int dx = -halfX; dx <= halfX; dx++) {
-            for (int dz = -halfZ; dz <= halfZ; dz++) {
-                boolean wall = Math.abs(dx) == halfX || Math.abs(dz) == halfZ;
-                if (wall && !(dx == 0 && dz == halfZ)) { // leave a door on the front
-                    setWorldBlock(chunk, originX, originZ, wx + dx, y, wz + dz, mat);
-                }
-            }
-        }
+    /** True if the wall cell (dx, dz) of a halfX-by-halfZ footprint is a window. */
+    private static boolean isWindow(int dx, int dz, int halfX, int halfZ) {
+        if (Math.abs(dz) == halfZ && halfX >= 2 && (dx == halfX - 1 || dx == -(halfX - 1))) return true;
+        if (Math.abs(dx) == halfX && halfZ >= 2 && (dz == halfZ - 1 || dz == -(halfZ - 1))) return true;
+        return false;
     }
 
     /** Builds a village building of the given type, all clipped to this chunk. */
     private void buildVillageHouse(Chunk chunk, int originX, int originZ, int wx, int wz, int baseY,
                                    boolean sand, BuildingType t) {
-        BlockType stone = BlockType.STONE;
-        BlockType wall = sand ? BlockType.SAND : (t == BuildingType.BLACKSMITH || t == BuildingType.TOWER ? stone : BlockType.PLANKS);
-        BlockType roof = sand ? BlockType.SAND : BlockType.PLANKS;
+        int halfX, halfZ, wallH;
         switch (t) {
-            case TALL_HOUSE -> {
-                for (int h = 0; h < 3; h++) {
-                    placeWallRing(chunk, originX, originZ, wx, wz, baseY + h, 2, 1, wall);
-                }
-                for (int dx = -2; dx <= 2; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        setWorldBlock(chunk, originX, originZ, wx + dx, baseY + 3, wz + dz, roof);
+            case TALL_HOUSE -> { halfX = 3; halfZ = 2; wallH = 3; }
+            case BLACKSMITH -> { halfX = 2; halfZ = 1; wallH = 2; }
+            case TOWER -> { halfX = 1; halfZ = 1; wallH = 4; }
+            default -> { halfX = 3; halfZ = 2; wallH = 2; } // HOUSE
+        }
+        boolean stoneWall = t == BuildingType.BLACKSMITH || t == BuildingType.TOWER;
+        BlockType wall = sand ? BlockType.SAND : (stoneWall ? BlockType.STONE : BlockType.PLANKS);
+        BlockType roof = sand ? BlockType.SAND : BlockType.PLANKS;
+
+        for (int h = 0; h < wallH; h++) {
+            for (int dx = -halfX; dx <= halfX; dx++) {
+                for (int dz = -halfZ; dz <= halfZ; dz++) {
+                    if (Math.abs(dx) != halfX && Math.abs(dz) != halfZ) continue; // interior
+                    if (dx == 0 && dz == halfZ && h < 2) continue; // door opening
+                    if (h == 1 && isWindow(dx, dz, halfX, halfZ)) {
+                        setWorldBlock(chunk, originX, originZ, wx + dx, baseY + h, wz + dz, BlockType.GLASS);
+                        continue;
                     }
+                    setWorldBlock(chunk, originX, originZ, wx + dx, baseY + h, wz + dz, wall);
                 }
             }
-            case BLACKSMITH -> {
-                for (int h = 0; h < 2; h++) {
-                    placeWallRing(chunk, originX, originZ, wx, wz, baseY + h, 2, 1, wall);
-                }
-                for (int dx = -2; dx <= 2; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        setWorldBlock(chunk, originX, originZ, wx + dx, baseY + 2, wz + dz, roof);
-                    }
-                }
-                setWorldBlock(chunk, originX, originZ, wx + 1, baseY, wz - 1, BlockType.FURNACE); // forge
-            }
-            case TOWER -> {
-                for (int h = 0; h < 4; h++) {
-                    placeWallRing(chunk, originX, originZ, wx, wz, baseY + h, 1, 1, wall);
-                }
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        setWorldBlock(chunk, originX, originZ, wx + dx, baseY + 4, wz + dz, roof);
-                    }
-                }
-            }
-            default -> { // HOUSE
-                for (int h = 0; h < 2; h++) {
-                    placeWallRing(chunk, originX, originZ, wx, wz, baseY + h, 2, 1, wall);
-                }
-                for (int dx = -2; dx <= 2; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        setWorldBlock(chunk, originX, originZ, wx + dx, baseY + 2, wz + dz, roof);
-                    }
-                }
+        }
+
+        // Door panels filling the front opening.
+        if (t != BuildingType.TOWER) {
+            setWorldBlock(chunk, originX, originZ, wx, baseY, wz + halfZ, BlockType.DOOR);
+            setWorldBlock(chunk, originX, originZ, wx, baseY + 1, wz + halfZ, BlockType.DOOR);
+        }
+
+        // Blacksmith forge against the side wall.
+        if (t == BuildingType.BLACKSMITH) {
+            setWorldBlock(chunk, originX, originZ, wx + 1, baseY, wz, BlockType.FURNACE);
+        }
+
+        // Flat roof over the whole footprint.
+        for (int dx = -halfX; dx <= halfX; dx++) {
+            for (int dz = -halfZ; dz <= halfZ; dz++) {
+                setWorldBlock(chunk, originX, originZ, wx + dx, baseY + wallH, wz + dz, roof);
             }
         }
     }
