@@ -646,10 +646,22 @@ public class TerrainGenerator {
         return Math.abs(r) < 0.03;
     }
 
+    // caveAt/oreAt run for every underground block in every generated chunk -
+    // by far the hottest path in world-gen (profiling: ~74% of generate()'s
+    // time, mostly because oreAt independently samples up to 4 separate 3D
+    // noise fields per block). fbm3's cost is roughly linear in octave count,
+    // so these use a single octave instead of the usual 3 - still real 3D
+    // Perlin noise (not a flat step function), just without the extra fine-
+    // detail layers a threshold-gated blob feature barely benefits from at
+    // block resolution. A single octave has a wider value distribution than
+    // a 3-octave sum, though, so the thresholds below aren't the old ones -
+    // they're recalibrated (empirically, by sampling millions of points) to
+    // trigger at close to the same rate the original 3-octave thresholds did,
+    // so caves/veins stay about as common as before.
     private boolean caveAt(int wx, int y, int wz) {
         if (y < 4 || y > 60) return false;
-        double n = caveNoise.fbm3(wx * 0.045, y * 0.07, wz * 0.045, 3, 0.5, 2.0);
-        return n > 0.26; // ~top 9% of the observed noise distribution (see calibration notes on oreAt)
+        double n = caveNoise.fbm3(wx * 0.045, y * 0.07, wz * 0.045, 1, 0.5, 2.0);
+        return n > 0.40; // recalibrated for 1 octave - see caveAt/oreAt's shared comment above
     }
 
     /**
@@ -659,16 +671,16 @@ public class TerrainGenerator {
      * favor of the rarer one. Falls back to plain stone.
      */
     private BlockType oreAt(int wx, int y, int wz) {
-        if (y >= 5 && y <= 16 && oreNoise.fbm3(wx * 0.11 + 1000, y * 0.11, wz * 0.11 + 1000, 3, 0.5, 2.0) > 0.55) {
+        if (y >= 5 && y <= 16 && oreNoise.fbm3(wx * 0.11 + 1000, y * 0.11, wz * 0.11 + 1000, 1, 0.5, 2.0) > 0.786) {
             return BlockType.DIAMOND_ORE;
         }
-        if (y >= 5 && y <= 32 && oreNoise.fbm3(wx * 0.10 + 2000, y * 0.10, wz * 0.10 + 2000, 3, 0.5, 2.0) > 0.48) {
+        if (y >= 5 && y <= 32 && oreNoise.fbm3(wx * 0.10 + 2000, y * 0.10, wz * 0.10 + 2000, 1, 0.5, 2.0) > 0.692) {
             return BlockType.GOLD_ORE;
         }
-        if (y >= 5 && y <= 64 && oreNoise.fbm3(wx * 0.10 + 3000, y * 0.10, wz * 0.10 + 3000, 3, 0.5, 2.0) > 0.40) {
+        if (y >= 5 && y <= 64 && oreNoise.fbm3(wx * 0.10 + 3000, y * 0.10, wz * 0.10 + 3000, 1, 0.5, 2.0) > 0.594) {
             return BlockType.IRON_ORE;
         }
-        if (y >= 5 && y <= 100 && oreNoise.fbm3(wx * 0.09 + 4000, y * 0.09, wz * 0.09 + 4000, 3, 0.5, 2.0) > 0.30) {
+        if (y >= 5 && y <= 100 && oreNoise.fbm3(wx * 0.09 + 4000, y * 0.09, wz * 0.09 + 4000, 1, 0.5, 2.0) > 0.460) {
             return BlockType.COAL_ORE;
         }
         return BlockType.STONE;

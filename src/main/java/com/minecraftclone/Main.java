@@ -361,6 +361,9 @@ public class Main {
         if (System.getenv("MCCLONE_AUTOTEST_WORLDGEN") != null) {
             worldGenOpen[0] = true;
         }
+        if (System.getenv("MCCLONE_AUTOTEST_DEBUG") != null) {
+            showDebug[0] = true;
+        }
         if (autoTest && System.getenv("MCCLONE_AUTOTEST_SHOW_MENU") == null) {
             // Auto-play for the headless smoke test (unless the menu is being screenshotted).
             Path autoDir = saveDirEnv != null ? Paths.get(saveDirEnv) : saveRoot.resolve("world");
@@ -950,7 +953,7 @@ public class Main {
             chunkShader.setUniform("time", animTime[0]);
             chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
-            world.render(chunkShader);
+            world.render(chunkShader, projection, view);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
             chunkShader.unbind();
@@ -979,14 +982,67 @@ public class Main {
                 float textSize = 0.035f;
                 float y = 0.95f;
                 float step = 0.052f;
-                hud.drawTextLeft("FPS: " + timer.getFps(), -0.95f, y, textSize, WHITE, aspect);
+                int line = 0;
+                hud.drawTextLeft(String.format(Locale.ROOT, "FPS: %d (%.1f ms/frame)", timer.getFps(), timer.getDeltaTime() * 1000f),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "XYZ: %.1f / %.1f / %.1f", pos.x, pos.y, pos.z),
-                        -0.95f, y - step, textSize, WHITE, aspect);
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                int chunkX = World.worldToChunk((int) Math.floor(pos.x));
+                int chunkZ = World.worldToChunk((int) Math.floor(pos.z));
+                hud.drawTextLeft(String.format(Locale.ROOT, "Chunk: %d, %d (local %d, %d)",
+                                chunkX, chunkZ, Math.floorMod((int) Math.floor(pos.x), 16), Math.floorMod((int) Math.floor(pos.z), 16)),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                Vector3f front = player.getCamera().getFront();
+                String facing = Math.abs(front.x) >= Math.abs(front.z)
+                        ? (front.x >= 0 ? "east (+X)" : "west (-X)")
+                        : (front.z >= 0 ? "south (+Z)" : "north (-Z)");
+                hud.drawTextLeft(String.format(Locale.ROOT, "Facing: %s (yaw %.1f, pitch %.1f)",
+                                facing, player.getCamera().getYaw(), player.getCamera().getPitch()),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
-                        -0.95f, y - 2f * step, textSize, WHITE, aspect);
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft("Biome: " + world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z)),
-                        -0.95f, y - 3f * step, textSize, WHITE, aspect);
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
+                                world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Entities: %d mobs, %d items", world.getMobs().size(), world.getItems().size()),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                Runtime rt = Runtime.getRuntime();
+                long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+                long maxMb = rt.maxMemory() / (1024 * 1024);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Memory: %d / %d MB", usedMb, maxMb),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+
+                // Whatever the crosshair is currently aimed at, recomputed independently
+                // of the break/place handling above (which only runs with no menu open) -
+                // the debug overlay should keep showing the last-aimed block even while a
+                // menu's open, same as the crosshair target itself doesn't move.
+                if (hit != null) {
+                    Vector3i bp = hit.blockPos;
+                    BlockType primary = world.getBlock(bp.x, bp.y, bp.z);
+                    BlockType overlay = world.getOverlay(bp.x, bp.y, bp.z);
+                    BlockType looking = overlay != BlockType.AIR ? overlay : primary;
+                    hud.drawTextLeft(String.format(Locale.ROOT, "Looking at: %s @ %d, %d, %d", looking, bp.x, bp.y, bp.z),
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                    if (overlay != BlockType.AIR) {
+                        hud.drawTextLeft("  (growing in " + primary + ")",
+                                -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                    }
+                    if (primary.isFluid()) {
+                        hud.drawTextLeft("  Fluid level: " + world.getFluidLevel(bp.x, bp.y, bp.z),
+                                -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                    }
+                    BlockType heldItem = player.getInventory().typeOf(selectedSlot[0]);
+                    String breakInfo = Mining.canBreak(looking, heldItem)
+                            ? String.format(Locale.ROOT, "  Break time: %.2fs", Mining.breakTimeSeconds(looking, heldItem))
+                            : "  Cannot break with current tool";
+                    hud.drawTextLeft(breakInfo, -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                } else {
+                    hud.drawTextLeft("Looking at: nothing in range",
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
             }
             if (menuOpen[0]) {
                 hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio());

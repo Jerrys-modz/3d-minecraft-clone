@@ -54,6 +54,34 @@ public class Chunk {
     // only runs once, when a chunk is first created).
     private final byte[] overlays = new byte[SIZE * HEIGHT * SIZE];
 
+    // Highest Y that's ever held a non-air block, updated incrementally in
+    // setLocal - lets rebuildMesh skip scanning the (often large) stretch of
+    // empty sky above the terrain instead of always walking the full 128-tall
+    // column. Deliberately a *high-water mark*, not a live "current highest
+    // block": breaking the topmost block doesn't lower it back down, since
+    // that would need an expensive rescan to find the new true top - it just
+    // means rebuildMesh scans a few needless empty layers until something
+    // taller is eventually built there, which is always safe (never causes a
+    // real block above it to be skipped).
+    private int highestNonAirY = -1;
+
+    // rebuildMesh's scratch vertex/index buffers, kept as reused instance
+    // state instead of freshly allocated on every call. A chunk that's
+    // remeshed repeatedly - a fluid pool re-flowing, a torch dirtying its
+    // neighbors, the "see-through leaves" toggle marking every loaded chunk
+    // dirty at once - used to pay for both the allocation and the geometric
+    // regrowth (several doubling reallocations + array copies, since a fresh
+    // FloatArray/IntArray always restarts at its small initial capacity)
+    // again from scratch each time, even though the mesh is usually a
+    // similar size to last time. Reused buffers only pay that growth cost
+    // once, the first time a chunk's mesh reaches its largest-ever size -
+    // rebuildMesh always calls clear() before refilling them, so stale data
+    // from a previous build never leaks through.
+    private final FloatArray meshVertices = new FloatArray(4096);
+    private final IntArray meshIndices = new IntArray(4096);
+    private final FloatArray meshTransVertices = new FloatArray(1024);
+    private final IntArray meshTransIndices = new IntArray(1024);
+
     private volatile boolean dirty = true;
     private boolean generated = false;
     private boolean hasMeshData = false;
@@ -134,6 +162,7 @@ public class Chunk {
         if (old.isFlowingFluid()) removeFluid(x, y, z);
         blocks[index(x, y, z)] = type.id;
         fluidLevels[index(x, y, z)] = (byte) level;
+        if (type != BlockType.AIR && y > highestNonAirY) highestNonAirY = y;
         if (type.isLightSource()) lightSources.add(new int[]{x, y, z, type.lightLevel});
         if (type.isFlowingFluid()) fluidBlocks.add(new int[]{x, y, z});
         // An overlay decoration (see #overlays) only makes sense growing inside a
@@ -190,6 +219,11 @@ public class Chunk {
         return fluidBlocks;
     }
 
+    /** See {@link #highestNonAirY}: the top Y rebuildMesh needs to scan up to (inclusive). */
+    public int getHighestNonAirY() {
+        return highestNonAirY;
+    }
+
     /** Like {@link #setLocal}, but also flags the chunk as needing to be saved to disk when it unloads. */
     public void setLocalFromPlayer(int x, int y, int z, BlockType type) {
         setLocal(x, y, z, type);
@@ -244,14 +278,21 @@ public class Chunk {
         dirty = true;
     }
 
-    /** Full O(chunk volume) rescan of light sources - only needed after a wholesale block replacement (disk load). */
+    /**
+     * Full O(chunk volume) rescan of light sources and the mesh-scan height
+     * bound (see {@link #highestNonAirY}) - only needed after a wholesale
+     * block replacement (disk load), which bypasses setLocal's incremental
+     * bookkeeping. Combined into one pass since both need to visit every cell.
+     */
     private void rebuildLightSourceIndex() {
         lightSources.clear();
+        highestNonAirY = -1;
         for (int y = 0; y < HEIGHT; y++) {
             for (int z = 0; z < SIZE; z++) {
                 for (int x = 0; x < SIZE; x++) {
                     BlockType t = getLocal(x, y, z);
                     if (t.isLightSource()) lightSources.add(new int[]{x, y, z, t.lightLevel});
+                    if (t != BlockType.AIR && y > highestNonAirY) highestNonAirY = y;
                 }
             }
         }
@@ -281,17 +322,26 @@ public class Chunk {
      */
     public void rebuildMesh(BlockAccessor world, TextureAtlas atlas, List<int[]> nearbyLights, boolean leavesTransparent) {
         this.leavesTransparent = leavesTransparent;
-        FloatArray vertices = new FloatArray(4096);
-        IntArray indices = new IntArray(4096);
+        FloatArray vertices = meshVertices;
+        IntArray indices = meshIndices;
+        vertices.clear();
+        indices.clear();
         int[] vertexCounter = {0};
-        FloatArray transVertices = new FloatArray(1024);
-        IntArray transIndices = new IntArray(1024);
+        FloatArray transVertices = meshTransVertices;
+        IntArray transIndices = meshTransIndices;
+        transVertices.clear();
+        transIndices.clear();
         int[] transCounter = {0};
 
         int originX = getOriginX();
         int originZ = getOriginZ();
 
-        for (int y = 0; y < HEIGHT; y++) {
+        // Skip scanning the empty sky above the terrain (see highestNonAirY) -
+        // ocean/plains chunks in particular can leave well over half of the
+        // 128-tall column as air that would otherwise be walked on every
+        // single rebuild for nothing.
+        int topY = Math.min(HEIGHT - 1, highestNonAirY);
+        for (int y = 0; y <= topY; y++) {
             for (int z = 0; z < SIZE; z++) {
                 for (int x = 0; x < SIZE; x++) {
                     BlockType block = getLocal(x, y, z);

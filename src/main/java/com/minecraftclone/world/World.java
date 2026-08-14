@@ -6,6 +6,8 @@ import com.minecraftclone.player.Inventory;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import com.minecraftclone.world.gen.WorldGenSettings;
+import org.joml.FrustumIntersection;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.nio.file.Path;
@@ -41,8 +43,21 @@ public class World implements BlockAccessor {
 
     private int renderDistance = 6;
     private boolean leavesTransparent = false;
-    private static final int MAX_GENERATE_PER_TICK = 4;
-    private static final int MAX_MESH_PER_TICK = 4;
+    // Generation and meshing used to be budgeted by a fixed chunk *count* per
+    // frame (generate/mesh up to N, however long that takes). That has the
+    // same flaw the fluid-tick throttle below already learned the hard way:
+    // per-chunk cost isn't constant (profiling found some chunks taking many
+    // times longer than others - cave/ore-heavy terrain is far pricier than a
+    // flat plain), so a handful of expensive chunks landing in one frame's
+    // fixed-size batch could still blow the frame budget wide open, which is
+    // exactly the "lags kinda bad at max render distance during world gen"
+    // symptom. Budgeted by wall-clock time instead: keep generating/meshing
+    // until the time budget is spent, not until a chunk count is reached.
+    // Each loop still always does at least one unit of work when something is
+    // pending, so streaming can't stall completely even if a single chunk
+    // alone exceeds the budget.
+    private static final double GENERATE_BUDGET_SECONDS = 0.006;
+    private static final double MESH_BUDGET_SECONDS = 0.004;
     // world.update() (and so updateFluids()) runs once per rendered frame, so
     // recomputing the flood-fill every single call made "one ring per tick"
     // (see FluidSim) mean one ring per *frame*. A fixed *frame-count*
@@ -58,6 +73,14 @@ public class World implements BlockAccessor {
     // this is independent of frame rate altogether.
     private static final double FLUID_TICK_SECONDS = 0.15;
     private double lastFluidTickNanos = Double.NaN;
+
+    // Reused across frames (see render) rather than allocated fresh each call -
+    // frustum culling runs every single frame regardless of whether anything
+    // actually changed, so its own bookkeeping shouldn't add GC churn on top
+    // of whatever it saves by skipping off-screen chunks.
+    private final Matrix4f viewProjection = new Matrix4f();
+    private final FrustumIntersection frustum = new FrustumIntersection();
+    private final List<Chunk> visibleChunks = new ArrayList<>();
 
     // Dropped item entities (from breaking blocks / death). Transient - not saved.
     private final List<ItemEntity> items = new ArrayList<>();
@@ -367,13 +390,17 @@ public class World implements BlockAccessor {
         int pcx = worldToChunk((int) Math.floor(playerWorldX));
         int pcz = worldToChunk((int) Math.floor(playerWorldZ));
 
-        // Load / generate.
+        // Load / generate, budgeted by wall-clock time (see GENERATE_BUDGET_SECONDS
+        // above for why this isn't a fixed chunk count anymore).
+        long generateDeadline = System.nanoTime() + (long) (GENERATE_BUDGET_SECONDS * 1e9);
         int generated = 0;
-        for (int dx = -renderDistance; dx <= renderDistance && generated < MAX_GENERATE_PER_TICK; dx++) {
-            for (int dz = -renderDistance; dz <= renderDistance && generated < MAX_GENERATE_PER_TICK; dz++) {
+        outer:
+        for (int dx = -renderDistance; dx <= renderDistance; dx++) {
+            for (int dz = -renderDistance; dz <= renderDistance; dz++) {
                 if (dx * dx + dz * dz > renderDistance * renderDistance) continue;
                 int cx = pcx + dx, cz = pcz + dz;
                 if (!chunks.containsKey(key(cx, cz))) {
+                    if (generated > 0 && System.nanoTime() >= generateDeadline) break outer;
                     Chunk chunk = new Chunk(new ChunkPos(cx, cz));
                     chunks.put(key(cx, cz), chunk);
                     if (storage.hasSavedChunk(chunk.getPos())) {
@@ -392,20 +419,24 @@ public class World implements BlockAccessor {
             }
         }
 
-        // Unload far chunks.
+        // Unload far chunks. Most frames unload nothing, so the removal list
+        // is only allocated once something actually needs to go.
         int unloadRadius = renderDistance + 2;
-        List<Chunk> toRemove = new ArrayList<>();
+        List<Chunk> toRemove = null;
         for (Chunk c : chunks.values()) {
             if (c.getPos().distanceSq(pcx, pcz) > (double) unloadRadius * unloadRadius) {
+                if (toRemove == null) toRemove = new ArrayList<>();
                 toRemove.add(c);
             }
         }
-        for (Chunk c : toRemove) {
-            chunks.remove(key(c.getPos().x(), c.getPos().z()));
-            if (c.isModifiedByPlayer()) {
-                storage.save(c);
+        if (toRemove != null) {
+            for (Chunk c : toRemove) {
+                chunks.remove(key(c.getPos().x(), c.getPos().z()));
+                if (c.isModifiedByPlayer()) {
+                    storage.save(c);
+                }
+                c.destroy();
             }
-            c.destroy();
         }
 
         // Flow after streaming so newly loaded chunks participate in the field -
@@ -418,30 +449,55 @@ public class World implements BlockAccessor {
             updateFluids();
         }
 
-        // Remesh a limited number of dirty chunks per tick, nearest first.
+        // Remesh dirty chunks nearest-first, budgeted by wall-clock time (see
+        // MESH_BUDGET_SECONDS above) rather than a fixed count per tick.
         List<Chunk> dirty = new ArrayList<>();
         for (Chunk c : chunks.values()) {
             if (c.isDirty()) dirty.add(c);
         }
         dirty.sort((a, b) -> Double.compare(a.getPos().distanceSq(pcx, pcz), b.getPos().distanceSq(pcx, pcz)));
-        for (int i = 0; i < Math.min(MAX_MESH_PER_TICK, dirty.size()); i++) {
+        long meshDeadline = System.nanoTime() + (long) (MESH_BUDGET_SECONDS * 1e9);
+        for (int i = 0; i < dirty.size(); i++) {
+            if (i > 0 && System.nanoTime() >= meshDeadline) break;
             Chunk c = dirty.get(i);
             c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
         }
     }
 
-    public void render(Shader shader) {
+    /**
+     * Renders every loaded chunk whose bounding box is inside {@code projection * view}'s
+     * view frustum - at max render distance, most of the (up to a few hundred) loaded
+     * chunks are behind or well off to the side of the camera at any given moment, so
+     * skipping those avoids paying for their draw calls (and the GL state changes/vertex
+     * shader invocations that go with them) every single frame for geometry that was
+     * never going to end up on screen anyway.
+     */
+    public void render(Shader shader, Matrix4f projection, Matrix4f view) {
+        projection.mul(view, viewProjection);
+        frustum.set(viewProjection);
+
+        visibleChunks.clear();
         for (Chunk chunk : chunks.values()) {
+            if (isChunkVisible(chunk)) visibleChunks.add(chunk);
+        }
+
+        for (Chunk chunk : visibleChunks) {
             chunk.render();
         }
         // See-through geometry (glass/ice) draws after everything opaque and blends
         // over it; depth writes are off so overlapping translucent faces don't cull
         // each other.
         glDepthMask(false);
-        for (Chunk chunk : chunks.values()) {
+        for (Chunk chunk : visibleChunks) {
             chunk.renderTranslucent();
         }
         glDepthMask(true);
+    }
+
+    private boolean isChunkVisible(Chunk chunk) {
+        int originX = chunk.getOriginX();
+        int originZ = chunk.getOriginZ();
+        return frustum.testAab(originX, 0, originZ, originX + Chunk.SIZE, Chunk.HEIGHT, originZ + Chunk.SIZE);
     }
 
     /** Spawns a dropped item of {@code type} at the given block position (centered, with a small random kick). */
@@ -504,6 +560,11 @@ public class World implements BlockAccessor {
 
     public int getLoadedChunkCount() {
         return chunks.size();
+    }
+
+    /** How many loaded chunks actually passed the frustum test in the most recent {@link #render}. */
+    public int getVisibleChunkCount() {
+        return visibleChunks.size();
     }
 
     /** All currently-alive mobs (read-only; rendered by the caller). */
