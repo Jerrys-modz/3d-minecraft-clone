@@ -25,11 +25,14 @@ public class Player {
     private static final float WALK_SPEED = 4.3f;
     private static final float SPRINT_SPEED = 6.6f;
     private static final float FLY_SPEED = 12.0f;
+    private static final float FLY_SPRINT_SPEED = 20.0f;
     private static final float JUMP_VELOCITY = 8.2f;
     private static final float GRAVITY = 24.0f;
     private static final float TERMINAL_VELOCITY = -50f;
 
     private static final float DEFAULT_MOUSE_SENSITIVITY = 0.12f;
+    /** Max gap between two W presses for it to count as a double-tap (sprint, or fly-toggle in creative). */
+    private static final float DOUBLE_TAP_WINDOW = 0.3f;
 
     /** Feet position: bottom-center of the player's bounding box. */
     private final Vector3f position = new Vector3f();
@@ -46,6 +49,8 @@ public class Player {
     private boolean onGround = false;
     private boolean flying = false;
     private float lastFallImpactSpeed = 0f;
+    private final DoubleTapDetector wTapDetector = new DoubleTapDetector(DOUBLE_TAP_WINDOW);
+    private boolean sprintLatched = false; // sprint started by a double-tap, held until W is released
 
     public void spawn(World world, float x, float z) {
         int surfaceY = world.getSurfaceHeight((int) Math.floor(x), (int) Math.floor(z));
@@ -124,6 +129,7 @@ public class Player {
         } else if (gameMode.isCreative()) {
             updateFlyToggle(input); // F toggles flight in creative only
         }
+        updateDoubleTapW(input, dt);
         boolean sprintingAndMoving = updateMovement(dt, input, world);
         camera.setPosition(position.x, position.y + EYE_HEIGHT, position.z);
 
@@ -153,6 +159,44 @@ public class Player {
         }
     }
 
+    /** What a completed double-tap of W should do, decided by {@link #decideDoubleTapWAction}. */
+    enum WTapAction {NONE, START_FLYING, SPRINT}
+
+    /**
+     * Pure decision for what a double-tap of W means: in creative, while not
+     * already flying, it takes off (same as {@code F}); while already
+     * flying, it instead latches on a faster flying speed (the flight
+     * equivalent of ground sprint); on the ground (any mode) it latches
+     * ground sprint on - Minecraft-style, without needing to hold anything.
+     * <p>
+     * Deliberately never turns flight itself off - {@code alreadyFlying}
+     * always yields {@code SPRINT}, never a fly-toggle. A double-tap that
+     * could switch flight off too meant any stray double-tap while just
+     * trying to move forward mid-flight - easy to do by accident - dropped
+     * you straight out of the sky. {@code F} is still the deliberate way to
+     * land. No GLFW/Input dependency, so this is directly unit testable.
+     */
+    static WTapAction decideDoubleTapWAction(boolean doubleTapped, boolean alreadyFlying, boolean creative) {
+        if (!doubleTapped) return WTapAction.NONE;
+        if (alreadyFlying) return WTapAction.SPRINT;
+        return creative ? WTapAction.START_FLYING : WTapAction.SPRINT;
+    }
+
+    private void updateDoubleTapW(Input input, float dt) {
+        boolean doubleTapped = wTapDetector.tick(dt, input.isKeyJustPressed(GLFW_KEY_W));
+        switch (decideDoubleTapWAction(doubleTapped, flying, gameMode.isCreative())) {
+            case START_FLYING -> {
+                flying = true;
+                velocity.y = 0;
+            }
+            case SPRINT -> sprintLatched = true;
+            case NONE -> {}
+        }
+        if (!input.isKeyDown(GLFW_KEY_W)) {
+            sprintLatched = false;
+        }
+    }
+
     /** Returns true if the player is sprinting and actually moving this frame (for stamina/hunger drain). */
     private boolean updateMovement(float dt, Input input, World world) {
         Vector3f front = camera.getFrontFlat();
@@ -171,8 +215,13 @@ public class Player {
             moveZ /= len;
         }
 
-        boolean sprinting = input.isKeyDown(GLFW_KEY_LEFT_CONTROL) && stats.canSprint();
-        float speed = flying ? FLY_SPEED : (sprinting ? SPRINT_SPEED : WALK_SPEED);
+        boolean sprinting = (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || sprintLatched) && stats.canSprint();
+        float speed;
+        if (flying) {
+            speed = sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
+        } else {
+            speed = sprinting ? SPRINT_SPEED : WALK_SPEED;
+        }
 
         velocity.x = moveX * speed;
         velocity.z = moveZ * speed;
