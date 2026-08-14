@@ -177,6 +177,14 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 
 If you've got a specific one of these in mind, just say which and it jumps the queue.
 
+## Testing a PR
+
+Every push to a pull request automatically builds a runnable fat jar and uploads it as a build **artifact** — open the PR's **Actions** tab and download `minecraft-clone-pr-N.jar` from the latest run. You can also comment `/build` on a PR to trigger a fresh build of that PR's head on demand (see `.github/workflows/pr-build.yml`). Download it and run:
+
+```bash
+java -jar minecraft-clone-pr-N.jar
+```
+
 ## Automated smoke testing
 
 The game supports a headless self-test mode (used to verify rendering in CI/sandboxes without a real display):
