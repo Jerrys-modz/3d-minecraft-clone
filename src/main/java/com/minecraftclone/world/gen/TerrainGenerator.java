@@ -34,7 +34,7 @@ public class TerrainGenerator {
     /** The biomes a column can be assigned, from its temperature, moisture and height. */
     public enum Biome {
         OCEAN, FROZEN_OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, BADLANDS, JUNGLE,
-        TAIGA, SNOWY, TUNDRA, SWAMP, MUSHROOM_FIELD, MOUNTAIN
+        TAIGA, SNOWY, TUNDRA, SWAMP, MUSHROOM_FIELD, CHERRY_GROVE, FLOWER_MEADOW, MOUNTAIN
     }
 
     private final Noise heightNoise;
@@ -79,14 +79,21 @@ public class TerrainGenerator {
     }
 
     /**
-     * The climate biome for a column, plus the rare mushroom-field gate (extra-wet
-     * temperate patches seeded by a separate low-frequency noise).
+     * The climate biome for a column, plus the rare patchy biome gates (mushroom
+     * fields, cherry groves and flower meadows) seeded by separate low-frequency
+     * noises so they appear as scattered pockets rather than whole regions.
      */
     private Biome biomeForClimate(double temperature, double moisture, int height, int wx, int wz) {
         Biome b = biomeAt(temperature, moisture, height);
-        if ((b == Biome.FOREST || b == Biome.PLAINS)
-                && moisture > 0.30
-                && heightNoise.fbm2(wx * 0.008 + 77, wz * 0.008 + 77, 2, 0.5, 2.0) > 0.12) {
+        double patch = heightNoise.fbm2(wx * 0.008 + 77, wz * 0.008 + 77, 2, 0.5, 2.0);
+        if ((b == Biome.FOREST || b == Biome.PLAINS) && moisture > 0.15 && moisture < 0.35 && patch > 0.12) {
+            return Biome.CHERRY_GROVE;
+        }
+        double patch2 = heightNoise.fbm2(wx * 0.008 + 456, wz * 0.008 + 456, 2, 0.5, 2.0);
+        if (b == Biome.PLAINS && moisture < 0.12 && patch2 > 0.10) {
+            return Biome.FLOWER_MEADOW;
+        }
+        if ((b == Biome.FOREST || b == Biome.PLAINS) && moisture > 0.30 && patch > 0.22) {
             return Biome.MUSHROOM_FIELD;
         }
         return b;
@@ -295,11 +302,15 @@ public class TerrainGenerator {
                 }
 
                 // Fill water up to sea level for low terrain (oceans, rivers, lakes).
-                // Frozen oceans cap the surface with ice so you can walk on them.
+                // Frozen oceans cap the surface with ice; swamps get the odd lily pad.
                 if (height < SEA_LEVEL) {
                     boolean frozen = biome == Biome.FROZEN_OCEAN;
                     for (int y = height + 1; y <= SEA_LEVEL; y++) {
-                        chunk.setLocal(x, y, z, frozen && y == SEA_LEVEL ? BlockType.ICE : BlockType.WATER);
+                        BlockType fill = frozen && y == SEA_LEVEL ? BlockType.ICE : BlockType.WATER;
+                        if (y == SEA_LEVEL && biome == Biome.SWAMP && featureRandom.nextInt(6) == 0) {
+                            fill = BlockType.LILY_PAD;
+                        }
+                        chunk.setLocal(x, y, z, fill);
                     }
                 }
             }
@@ -352,8 +363,31 @@ public class TerrainGenerator {
                         }
                     }
                     case JUNGLE -> {
-                        if (surface == BlockType.GRASS && featureRandom.nextInt(14) == 0) {
-                            placeJungleTree(chunk, x, height + 1, z, featureRandom);
+                        if (surface == BlockType.GRASS) {
+                            if (featureRandom.nextInt(14) == 0) {
+                                placeJungleTree(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(30) == 0) {
+                                placeBamboo(chunk, x, height + 1, z, featureRandom);
+                            }
+                        }
+                    }
+                    case CHERRY_GROVE -> {
+                        if (surface == BlockType.GRASS && featureRandom.nextInt(20) == 0) {
+                            placeCherryTree(chunk, x, height + 1, z, featureRandom);
+                        }
+                    }
+                    case FLOWER_MEADOW -> {
+                        if (surface == BlockType.GRASS) {
+                            if (featureRandom.nextInt(160) == 0) {
+                                placeTree(chunk, x, height + 1, z, featureRandom);
+                            } else {
+                                placeFlowerCover(chunk, x, height + 1, z, featureRandom);
+                            }
+                        }
+                    }
+                    case SNOWY -> {
+                        if (surface == BlockType.SNOW && featureRandom.nextInt(60) == 0) {
+                            placeIceSpike(chunk, x, height + 1, z, featureRandom);
                         }
                     }
                     case BADLANDS -> {
@@ -542,6 +576,63 @@ public class TerrainGenerator {
     /** A red or brown mushroom on the mycelium floor. */
     private void placeMushroom(Chunk chunk, int x, int y, int z, Random rnd) {
         chunk.setLocal(x, y, z, rnd.nextBoolean() ? BlockType.MUSHROOM_RED : BlockType.MUSHROOM_BROWN);
+    }
+
+    /** A cherry tree: a wood trunk crowned with pink blossom leaves, like the oak but pink. */
+    private void placeCherryTree(Chunk chunk, int x, int y, int z, Random rnd) {
+        int trunkHeight = 4 + rnd.nextInt(2);
+        for (int i = 0; i < trunkHeight; i++) {
+            chunk.setLocal(x, y + i, z, BlockType.WOOD_LOG);
+        }
+        int canopyBase = y + trunkHeight - 2;
+        for (int cy = 0; cy <= 2; cy++) {
+            int radius = (cy == 2) ? 1 : 2;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx == 0 && dz == 0 && cy < 2) continue;
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius == 2) continue;
+                    BlockType existing = chunk.getLocal(x + dx, canopyBase + cy, z + dz);
+                    if (existing == BlockType.AIR) {
+                        chunk.setLocal(x + dx, canopyBase + cy, z + dz, BlockType.CHERRY_LEAVES);
+                    }
+                }
+            }
+        }
+        chunk.setLocal(x, y + trunkHeight, z, BlockType.CHERRY_LEAVES);
+    }
+
+    /** A small patch of a few bamboo stalks. */
+    private void placeBamboo(Chunk chunk, int x, int y, int z, Random rnd) {
+        int stalks = 1 + rnd.nextInt(3);
+        for (int s = 0; s < stalks; s++) {
+            int bx = x + (s == 0 ? 0 : rnd.nextInt(3) - 1);
+            int bz = z + (s == 0 ? 0 : rnd.nextInt(3) - 1);
+            int h = 3 + rnd.nextInt(5);
+            for (int i = 0; i < h; i++) {
+                if (chunk.getLocal(bx, y + i, bz) == BlockType.AIR) {
+                    chunk.setLocal(bx, y + i, bz, BlockType.BAMBOO);
+                }
+            }
+        }
+    }
+
+    /** A tall pillar of packed ice jutting up from snowy ground. */
+    private void placeIceSpike(Chunk chunk, int x, int y, int z, Random rnd) {
+        int h = 2 + rnd.nextInt(4);
+        for (int i = 0; i < h; i++) {
+            chunk.setLocal(x, y + i, z, BlockType.PACKED_ICE);
+        }
+    }
+
+    /** A dense carpet of flowers and tall grass for the flower meadow. */
+    private void placeFlowerCover(Chunk chunk, int x, int y, int z, Random rnd) {
+        if (rnd.nextInt(3) == 0) {
+            chunk.setLocal(x, y, z, rnd.nextBoolean() ? BlockType.FLOWER_RED : BlockType.FLOWER_YELLOW);
+        } else if (rnd.nextInt(4) == 0) {
+            chunk.setLocal(x, y, z, BlockType.TALL_GRASS);
+        } else if (rnd.nextInt(60) == 0) {
+            chunk.setLocal(x, y, z, BlockType.BERRY_BUSH);
+        }
     }
 
     private void placeTree(Chunk chunk, int x, int y, int z, Random rnd) {

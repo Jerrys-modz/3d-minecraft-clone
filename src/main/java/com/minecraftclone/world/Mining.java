@@ -62,6 +62,7 @@ public final class Mining {
 
         // Instant, no tool - decoration.
         put(BlockType.LEAVES, 0.2f, ToolKind.SWORD, TIER_HAND);
+        put(BlockType.CHERRY_LEAVES, 0.2f, ToolKind.SWORD, TIER_HAND);
         put(BlockType.TALL_GRASS, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_RED, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_YELLOW, 0f, ToolKind.NONE, TIER_HAND);
@@ -71,12 +72,15 @@ public final class Mining {
         put(BlockType.MUSHROOM_RED, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.MUSHROOM_BROWN, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.VINE, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.BAMBOO, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.LILY_PAD, 0f, ToolKind.NONE, TIER_HAND);
 
         // Biome surface blocks - soft, no tool required.
         put(BlockType.SWAMP_GRASS, 0.6f, ToolKind.NONE, TIER_HAND);
         put(BlockType.RED_CLAY, 0.6f, ToolKind.NONE, TIER_HAND);
         put(BlockType.MYCELIUM, 0.6f, ToolKind.NONE, TIER_HAND);
         put(BlockType.ICE, 0.5f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.PACKED_ICE, 0.5f, ToolKind.NONE, TIER_HAND);
 
         // Fluids - sources are quick to pick back up; flow is transient and instant.
         put(BlockType.WATER_SOURCE, 0.2f, ToolKind.NONE, TIER_HAND);

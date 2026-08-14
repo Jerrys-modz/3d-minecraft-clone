@@ -90,6 +90,10 @@ public class TextureAtlas {
         paintMushroom(image, 35, rnd, 0xD0392B, 0xB3251C);                   // red mushroom
         paintMushroom(image, 36, rnd, 0x8B5A2B, 0x6E4623);                   // brown mushroom
         paintVine(image, 39, rnd);
+        paintTile(image, 40, rnd, 0xE8A0B4, 0xC97E97, true);   // cherry leaves (pink)
+        paintTile(image, 41, rnd, 0xA5DBEE, 0x8AC6DE, true);   // packed ice
+        paintBamboo(image, 42, rnd);
+        paintLilyPad(image, 43, rnd);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
@@ -347,6 +351,40 @@ public class TextureAtlas {
             int x = 5 + rnd.nextInt(6);
             int y = 2 + rnd.nextInt(TILE_PX - 4);
             img.setRGB(ox + x, oy + y, 0xFF000000 | 0x3E8E35);
+        }
+    }
+
+    /** A tall green bamboo stalk with segment rings and a few leaves, on a transparent background. */
+    private void paintBamboo(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x5FA84C);
+            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x5FA84C);
+        }
+        for (int y = 2; y < TILE_PX; y += 5) {
+            img.setRGB(ox + 6, oy + y, 0xFF000000 | 0x4A8A3A);
+            img.setRGB(ox + 9, oy + y, 0xFF000000 | 0x4A8A3A);
+        }
+        for (int i = 0; i < 4; i++) {
+            int x = 3 + rnd.nextInt(9);
+            int y = 1 + rnd.nextInt(TILE_PX - 4);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x3E8E35);
+        }
+    }
+
+    /** A flat elliptical pad floating on water, on a transparent background - swamp lily pads. */
+    private void paintLilyPad(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        double cx = 8, cy = 10, r = 6;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                double d = Math.hypot(x - cx, (y - cy) * 0.5);
+                if (d <= r) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.3f ? 0x3E8E35 : 0x2F701F));
+                }
+            }
         }
     }
 
