@@ -54,7 +54,7 @@ public class TextureAtlas {
         paintTile(image, 3, rnd, 0x8B5A2B, 0x6E4623, true);   // dirt
         paintTile(image, 4, rnd, 0x8A8A8A, 0x777777, true);   // stone
         paintTile(image, 5, rnd, 0xE0D2A0, 0xCBBB84, true);   // sand
-        paintFluidTile(image, 6, 0x3B6FD1, 0x2E58A8, 190);     // water (translucent)
+        paintFluidTile(image, 6, rnd, 0x6FB4E8, 0x1F4A96, 195, 0xEAFBFF); // water (translucent, sparkly)
         paintTile(image, 7, rnd, 0x6E4A2A, 0x543A20, false);  // log side (bark stripes)
         paintLogStripes(image, 7, rnd);
         paintTile(image, 8, rnd, 0xC9A063, 0xAE8850, true);   // log top rings
@@ -72,7 +72,7 @@ public class TextureAtlas {
         paintOreTile(image, 17, rnd, 0xC08B5C);                // iron ore (rusty tan speckles)
         paintOreTile(image, 18, rnd, 0xE8C93A);                // gold ore (gold speckles)
         paintOreTile(image, 19, rnd, 0x5FE0E0);                // diamond ore (cyan speckles)
-        paintFluidTile(image, 20, 0xE25822, 0xB33A12, 225);     // lava
+        paintFluidTile(image, 20, rnd, 0xF2A93B, 0x9E2A0C, 225, 0xFFE066); // lava (translucent, ember glints)
 
         paintCrossGrass(image, 21, rnd, 0x4C8C2C);                        // tall grass
         paintCrossFlower(image, 22, rnd, 0x3D6E2E, 0xD0392B, 0xE8C93A);   // red flower
@@ -143,16 +143,44 @@ public class TextureAtlas {
         }
     }
 
-    /** Paints a translucent, lightly banded fluid tile without noisy speckles. */
-    private void paintFluidTile(BufferedImage img, int index, int baseColor, int altColor, int alpha) {
+    /**
+     * Paints a translucent fluid tile as soft, gently wavy bands between a
+     * light and dark shade, plus a few bright sparkle pixels for glints off
+     * the surface - water/lava's flowing translucent surface. Each band's
+     * edge is smoothly interpolated rather than a hard stripe boundary, and
+     * a small per-column phase shift bends the bands into a wave instead of
+     * dead-straight horizontal lines. The band period evenly divides the
+     * tile size so the flowing-fluid scroll animation (see chunk.frag) wraps
+     * with no visible seam.
+     */
+    private void paintFluidTile(BufferedImage img, int index, Random rnd, int lightColor, int darkColor, int alpha, int sparkleColor) {
         int ox = tileX(index);
         int oy = tileY(index);
+        int period = 8; // divides TILE_PX (16) evenly - see the seam note above
         for (int y = 0; y < TILE_PX; y++) {
-            int color = (y / 3) % 2 == 0 ? baseColor : altColor;
             for (int x = 0; x < TILE_PX; x++) {
-                img.setRGB(ox + x, oy + y, (alpha << 24) | color);
+                int waveShift = Math.round(1.5f * (float) Math.sin(x * 0.5f));
+                int phase = Math.floorMod(y + waveShift, period);
+                // Triangle wave 0..1..0 across the period: a soft gradient
+                // band instead of a hard edge between shades.
+                float t = phase < period / 2f ? phase / (period / 2f) : (period - phase) / (period / 2f);
+                img.setRGB(ox + x, oy + y, (alpha << 24) | lerpColor(darkColor, lightColor, t));
             }
         }
+        int sparkles = 3 + rnd.nextInt(3);
+        for (int i = 0; i < sparkles; i++) {
+            int sx = rnd.nextInt(TILE_PX);
+            int sy = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + sx, oy + sy, (Math.min(255, alpha + 45) << 24) | sparkleColor);
+        }
+    }
+
+    /** Linearly interpolates between two 0xRRGGBB colors; t=0 -> c0, t=1 -> c1. */
+    private static int lerpColor(int c0, int c1, float t) {
+        int r = Math.round(((c0 >> 16) & 0xFF) + ((((c1 >> 16) & 0xFF) - ((c0 >> 16) & 0xFF)) * t));
+        int g = Math.round(((c0 >> 8) & 0xFF) + ((((c1 >> 8) & 0xFF) - ((c0 >> 8) & 0xFF)) * t));
+        int b = Math.round((c0 & 0xFF) + (((c1 & 0xFF) - (c0 & 0xFF)) * t));
+        return (r << 16) | (g << 8) | b;
     }
 
     private void paintLogStripes(BufferedImage img, int index, Random rnd) {
