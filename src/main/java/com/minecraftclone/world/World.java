@@ -38,6 +38,16 @@ public class World implements BlockAccessor {
     private boolean leavesTransparent = false;
     private static final int MAX_GENERATE_PER_TICK = 4;
     private static final int MAX_MESH_PER_TICK = 4;
+    // world.update() (and so updateFluids()) runs once per rendered frame, so
+    // recomputing the flood-fill every single call made "one ring per tick"
+    // (see FluidSim) mean one ring per *frame* - at 60fps a 7-block spread
+    // reached full extent in about a tenth of a second, reading as instant
+    // rather than gradual. Only actually recomputing the fluid field once
+    // every FLUID_TICK_INTERVAL calls throttles it to a real, watchable pace
+    // without needing a wall-clock timer - consistent with how chunk
+    // generation/meshing already ration themselves per call above.
+    private static final int FLUID_TICK_INTERVAL = 12;
+    private int fluidTickCounter = 0;
 
     // Dropped item entities (from breaking blocks / death). Transient - not saved.
     private final List<ItemEntity> items = new ArrayList<>();
@@ -335,8 +345,14 @@ public class World implements BlockAccessor {
             c.destroy();
         }
 
-        // Flow after streaming so newly loaded chunks participate in the field.
-        updateFluids();
+        // Flow after streaming so newly loaded chunks participate in the field -
+        // throttled to a real, watchable pace (see FLUID_TICK_INTERVAL) rather
+        // than every single frame. Newly-loaded chunks just sit as they are
+        // (already-generated fluid, if any) until the next fluid tick lands.
+        if (++fluidTickCounter >= FLUID_TICK_INTERVAL) {
+            fluidTickCounter = 0;
+            updateFluids();
+        }
 
         // Remesh a limited number of dirty chunks per tick, nearest first.
         List<Chunk> dirty = new ArrayList<>();

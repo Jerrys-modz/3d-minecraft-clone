@@ -28,6 +28,12 @@ import java.util.Set;
  *       column - brings a cell's distance back to 0, so water flowing down a
  *       hillside or staircase can keep descending indefinitely instead of
  *       drying up once the 7-block spread limit is used up.</li>
+ *   <li><b>Downhill preference</b>: a resting cell with at least one
+ *       immediate drop beside it only flows toward that drop, not evenly in
+ *       all 4 directions - otherwise every row of a slope would also spend
+ *       its (distance-reset) 7-block sideways allowance, fanning a narrow
+ *       stream out into a flooded wedge on the way down. Flat, enclosed
+ *       ground with no drop anywhere still spreads evenly, same as before.</li>
  * </ul>
  * <p>
  * This is pure logic (only {@link BlockAccessor} is used) so it can be tested
@@ -151,10 +157,35 @@ public final class FluidSim {
                 // - letting it spread sideways would make a waterfall balloon into a
                 // fat blob on its second tick.
                 if (!below.isFluid() && n.dist + 1 <= maxDistance(n.flowType)) {
-                    spread(world, n.x + 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
-                    spread(world, n.x - 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
-                    spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
-                    spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
+                    // If any neighbor is an immediate drop (open, with open air below
+                    // it too), flow only toward those - a real downhill run, like a
+                    // staircase or a sloped hillside, keeps a stream narrow because
+                    // every direction that isn't the way down is normal solid ground
+                    // right beside it, not another opening to also pour into.
+                    // Distance resets on every fall (see above), so without this a
+                    // wide-open slope would let every single row spend a fresh
+                    // 7-block sideways allowance before continuing down, fanning a
+                    // narrow stream out into a flooded wedge shape by the bottom.
+                    // Only kicks in when at least one direction actually leads
+                    // somewhere lower - on flat, enclosed ground (no drop anywhere)
+                    // it's still an ordinary even spread in all 4 directions.
+                    boolean dropEast = leadsToDrop(world, n.x + 1, n.y, n.z, n.flowType);
+                    boolean dropWest = leadsToDrop(world, n.x - 1, n.y, n.z, n.flowType);
+                    boolean dropSouth = leadsToDrop(world, n.x, n.y, n.z + 1, n.flowType);
+                    boolean dropNorth = leadsToDrop(world, n.x, n.y, n.z - 1, n.flowType);
+                    boolean anyDrop = dropEast || dropWest || dropSouth || dropNorth;
+                    if (!anyDrop || dropEast) {
+                        spread(world, n.x + 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
+                    }
+                    if (!anyDrop || dropWest) {
+                        spread(world, n.x - 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
+                    }
+                    if (!anyDrop || dropSouth) {
+                        spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
+                    }
+                    if (!anyDrop || dropNorth) {
+                        spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
+                    }
                 }
             }
         }
@@ -182,6 +213,30 @@ public final class FluidSim {
             }
         }
         return new Result(fillNow, levelsNow, flowLevels, remove);
+    }
+
+    /**
+     * True if a neighbor cell is itself passable <em>and</em> has open air
+     * (or more of the same fall) below it too - a genuine one-block drop
+     * right there, not just passable ground at the same height. Used to
+     * make sideways spread prefer any direction that keeps descending over
+     * ones that don't.
+     * <p>
+     * "Passable" here means the same thing {@link #spread} does: open air,
+     * a cross decoration, or already more of this same flow/its source -
+     * not just {@code AIR}. A direction that's a genuine drop doesn't stop
+     * being one the moment gradual spread (or an earlier step in this same
+     * flood) actually places flow there; checking only for {@code AIR}
+     * meant a downhill neighbor counted as "a drop" for exactly one tick,
+     * then looked identical to solid ground once it was wet - silently
+     * falling back to the unrestricted, spreads-everywhere case from then on.
+     */
+    private static boolean leadsToDrop(BlockAccessor world, int x, int y, int z, BlockType flowType) {
+        BlockType here = world.getBlock(x, y, z);
+        boolean passable = here == BlockType.AIR || here.cross || here == flowType || here == sourceOf(flowType);
+        if (!passable) return false;
+        BlockType beneath = world.getBlock(x, y - 1, z);
+        return beneath == BlockType.AIR || beneath.cross || beneath.isFluid();
     }
 
     /** True if any orthogonal neighbor holds tracked fluid within {@code dist} of its source. */

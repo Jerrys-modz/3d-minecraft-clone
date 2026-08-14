@@ -180,15 +180,24 @@ class FluidSimTest {
         // normal, always-positive world-height range.
         StubWorld w = new StubWorld();
         int baseY = 50;
-        // A one-block-wide staircase, 15 steps long - each tread one lower
-        // than the last, nothing else solid around it. A source sits on the
-        // first tread; water should ride the stairs all the way down, well
-        // past the 7-block horizontal spread limit, because every drop
-        // between treads resets its distance the same way falling under the
-        // source does.
+        // A one-block-wide staircase corridor, 15 steps long - each tread one
+        // lower than the last, walled in on both sides so the only ways out
+        // of each landing are onward (downhill) or back the way it came
+        // (blocked by the previous, higher tread). Without the side walls
+        // every landing would also see open space - and open air below it -
+        // off to the sides, "leading to a drop" there too (see
+        // leadsToDrop/downhill preference) and falling forever into it.
+        // A source sits on the first tread; water should ride the stairs all
+        // the way down, well past the 7-block horizontal spread limit,
+        // because every drop between treads resets its distance the same way
+        // falling under the source does.
         int steps = 15;
         for (int x = 0; x <= steps; x++) {
             w.set(x, baseY - x, 0, BlockType.STONE);
+            for (int y = baseY - steps; y <= baseY + 2; y++) {
+                w.set(x, y, 1, BlockType.STONE);
+                w.set(x, y, -1, BlockType.STONE);
+            }
         }
         w.set(0, baseY + 1, 0, BlockType.WATER_SOURCE);
         for (int i = 0; i < steps * 2; i++) {
@@ -199,6 +208,35 @@ class FluidSimTest {
             // Each landing is a fresh fall, not a graded, nearly-dry-out puddle.
             assertEquals(0, w.getFluidLevel(x, baseY - x + 1, 0), "tread " + x + " just fell, so its level resets to 0");
         }
+    }
+
+    @Test
+    void downhillFlowPrefersTheDropOverSpreadingSideways() {
+        StubWorld w = flatGround();
+        // A wide, uniform ramp: every row (increasing x) is one block lower
+        // than the last, but each row is flat and open across its full width
+        // (z), same as a real sloped hillside - nothing forces the flow
+        // sideways except its own spread rules.
+        int rows = 5;
+        for (int x = 0; x <= rows; x++) {
+            for (int z = -4; z <= 4; z++) {
+                w.set(x, 10 - x, z, BlockType.STONE);
+            }
+        }
+        w.set(0, 11, 0, BlockType.WATER_SOURCE);
+        for (int i = 0; i < 20; i++) {
+            tick(w);
+        }
+        // The source's own row may pool a little around it (nothing there is
+        // a drop yet), but once the flow reaches the ramp itself it should
+        // ride straight down it rather than also ballooning across the row's
+        // width - each row's far sides (z=+-3 or wider) should stay dry.
+        for (int x = 1; x <= rows; x++) {
+            assertEquals(BlockType.AIR, w.getBlock(x, 10 - x + 1, 3), "row " + x + " shouldn't flood sideways");
+            assertEquals(BlockType.AIR, w.getBlock(x, 10 - x + 1, -3), "row " + x + " shouldn't flood sideways");
+        }
+        // But it does still ride the slope the whole way down.
+        assertEquals(BlockType.WATER_FLOW, w.getBlock(rows, 10 - rows + 1, 0), "last row should still be wet");
     }
 
     @Test
