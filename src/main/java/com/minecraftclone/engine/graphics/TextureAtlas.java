@@ -85,7 +85,7 @@ public class TextureAtlas {
         paintTile(image, 29, rnd, 0xB5532B, 0x94411F, true);                 // red clay (badlands)
         paintTile(image, 30, rnd, 0x8A6FA0, 0x6E5584, true);                 // mycelium top
         paintTile(image, 31, rnd, 0x8B5A2B, 0x6E4623, true, 0x8A6FA0, 0.28f); // mycelium side
-        paintFluidTile(image, 32, 0x9ADBEA, 0x7FC4D6, 200);                  // ice
+        paintFluidTile(image, 32, rnd, 0x9ADBEA, 0x7FC4D6, 200, 0xF2FEFF);   // ice
         paintDeadBush(image, 33, rnd);
         paintMushroom(image, 35, rnd, 0xD0392B, 0xB3251C);                   // red mushroom
         paintMushroom(image, 36, rnd, 0x8B5A2B, 0x6E4623);                   // brown mushroom
