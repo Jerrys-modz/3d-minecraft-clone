@@ -156,4 +156,27 @@ public final class Mining {
         }
         return info.hardnessSeconds() / speedMultiplier;
     }
+
+    /** True if {@code item} is one of the swords (the combat tool). */
+    public static boolean isSword(BlockType item) {
+        ToolStats stats = TOOLS.get(item);
+        return stats != null && stats.kind() == ToolKind.SWORD;
+    }
+
+    /**
+     * Hit damage dealt when attacking a mob with {@code heldItem}: swords hit
+     * harder than bare hands (punch = 1, wood/stone/iron/diamond sword = 4/5/6/7).
+     */
+    public static float attackDamage(BlockType heldItem) {
+        ToolStats stats = TOOLS.get(heldItem);
+        if (stats != null && stats.kind() == ToolKind.SWORD) {
+            return switch (stats.tier()) {
+                case TIER_WOOD -> 4f;
+                case TIER_STONE -> 5f;
+                case TIER_IRON -> 6f;
+                default -> 7f; // diamond
+            };
+        }
+        return 1f;
+    }
 }

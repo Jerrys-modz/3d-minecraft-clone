@@ -58,7 +58,11 @@ public final class GenerateItemTextures {
         write(outDir, "gold_ingot", paintIngot(0xE8C93A));
         write(outDir, "diamond", paintGem(0x5FE0E0));
 
-        System.out.println("Wrote 18 item textures to " + outDir.getAbsolutePath());
+        write(outDir, "raw_porkchop", paintMeat(0xE8A0A0, 0xC87878));
+        write(outDir, "raw_beef", paintMeat(0xC04848, 0x8E2E2E));
+        write(outDir, "mutton", paintMeat(0xD87870, 0xB04848));
+
+        System.out.println("Wrote 21 item textures to " + outDir.getAbsolutePath());
     }
 
     private static void write(File outDir, String name, BufferedImage image) throws IOException {
@@ -183,6 +187,28 @@ public final class GenerateItemTextures {
         // A bright facet highlight.
         for (int i = 0; i < 3; i++) {
             img.setRGB(cx - 1 + i, cy - 2, 0xFF000000 | lighten(color));
+        }
+        return img;
+    }
+
+    /** A raw meat cut: a rounded chunk with a darker marbled band - the kill-drop food. */
+    private static BufferedImage paintMeat(int meatColor, int marbledColor) {
+        BufferedImage img = blank();
+        for (int y = 4; y <= 11; y++) {
+            for (int x = 2; x <= 13; x++) {
+                // Rounded corners.
+                boolean corner = (x == 2 || x == 13) && (y == 4 || y == 5 || y == 10 || y == 11)
+                        || (x == 3 || x == 12) && (y == 4 || y == 11);
+                if (!corner) {
+                    img.setRGB(x, y, 0xFF000000 | meatColor);
+                }
+            }
+        }
+        // A couple of darker marbled streaks across the middle, and a light top edge.
+        for (int x = 4; x <= 11; x++) {
+            img.setRGB(x, 7, 0xFF000000 | marbledColor);
+            img.setRGB(x + 1, 8, 0xFF000000 | marbledColor);
+            img.setRGB(x, 4, 0xFF000000 | lighten(meatColor));
         }
         return img;
     }

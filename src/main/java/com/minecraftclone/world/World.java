@@ -443,6 +443,45 @@ public class World implements BlockAccessor {
         }
     }
 
+    /**
+     * The mob nearest along the given view ray within {@code maxDist}, or null if
+     * the player isn't aiming at one - the target of their attacks. The ray stops
+     * at the first mob's box, so a mob in front of another is the one hit.
+     */
+    public Mob raycastMob(Vector3f origin, Vector3f dir, float maxDist) {
+        Mob best = null;
+        float bestT = maxDist;
+        for (Mob m : mobs) {
+            float t = Mob.rayIntersects(origin, dir, bestT, m.getAABB());
+            if (t >= 0f) {
+                best = m;
+                bestT = t;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Damages a mob (knocking it back and panicking it); when its health runs out
+     * it's removed and drops its raw meat. Returns true if the hit killed it.
+     */
+    public boolean damageMob(Mob mob, float amount, float sourceX, float sourceZ, Random rnd) {
+        if (!mobs.contains(mob)) return false;
+        boolean killed = mob.damage(amount, sourceX, sourceZ);
+        if (killed) {
+            mobs.remove(mob);
+            BlockType drop = switch (mob.type) {
+                case PIG -> BlockType.RAW_PORKCHOP;
+                case COW -> BlockType.RAW_BEEF;
+                case SHEEP -> BlockType.MUTTON;
+            };
+            int count = 1 + rnd.nextInt(mob.type == Mob.Type.SHEEP ? 2 : 3);
+            spawnItem((int) Math.floor(mob.position.x), (int) Math.floor(mob.position.y),
+                    (int) Math.floor(mob.position.z), drop, count, rnd);
+        }
+        return killed;
+    }
+
     public boolean isFullyGenerated(int worldX, int worldZ) {
         Chunk c = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
         return c != null && c.isGenerated();

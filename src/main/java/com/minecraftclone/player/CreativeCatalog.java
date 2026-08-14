@@ -44,6 +44,7 @@ public final class CreativeCatalog {
             }),
             new Tab("Food", new BlockType[]{
                     BlockType.APPLE, BlockType.BERRIES,
+                    BlockType.RAW_PORKCHOP, BlockType.RAW_BEEF, BlockType.MUTTON,
             }),
     };
 

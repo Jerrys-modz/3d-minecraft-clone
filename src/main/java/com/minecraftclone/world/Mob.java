@@ -20,20 +20,22 @@ import java.util.Random;
  */
 public class Mob {
 
-    /** Mob kinds, with their dimensions in blocks and walking speed. */
+    /** Mob kinds, with their dimensions in blocks, walking speed and hit points. */
     public enum Type {
-        PIG(0.9f, 0.9f, 1.6f),
-        COW(1.0f, 1.0f, 1.4f),
-        SHEEP(0.9f, 0.9f, 1.4f);
+        PIG(0.9f, 0.9f, 1.6f, 10f),
+        COW(1.0f, 1.0f, 1.4f, 10f),
+        SHEEP(0.9f, 0.9f, 1.4f, 10f);
 
         public final float width;     // x/z footprint
         public final float height;    // full body height
         public final float walkSpeed; // blocks/second
+        public final float maxHealth;
 
-        Type(float width, float height, float walkSpeed) {
+        Type(float width, float height, float walkSpeed, float maxHealth) {
             this.width = width;
             this.height = height;
             this.walkSpeed = walkSpeed;
+            this.maxHealth = maxHealth;
         }
     }
 
@@ -42,6 +44,8 @@ public class Mob {
     private static final float WAYPOINT_REACH = 0.4f;  // feet within this of a waypoint center: advance
     private static final float STUCK_THRESHOLD = 0.5f; // blocked this long: give up and re-route
     private static final int MAX_PATH_NODES = 800;     // A* budget per route search
+    private static final float PANIC_TIME = 4f;        // how long a hit mob runs away for
+    private static final float PANIC_SPEED_MULT = 1.6f; // flee faster than it walks
 
     public final Type type;
     /** Body center of the mob. */
@@ -51,21 +55,98 @@ public class Mob {
     /** Facing direction in radians, 0 = +z; smooths toward the movement direction. */
     public float yaw;
 
+    private float health;
     private boolean onGround;
     private boolean moving;
     private float wanderTimer;  // time until the mob picks a new destination
     private float stuckTimer;   // how long we've been wedged against something
     private List<int[]> path;   // waypoints {x, floorY, z}, from Pathfinder
     private int pathIndex;      // next waypoint to reach
+    private float panicTimer;   // > 0: hurt, running away (see fleeX/fleeZ)
+    private float fleeX, fleeZ; // unit direction away from the last damage source
 
     public Mob(Type type, float x, float y, float z) {
         this.type = type;
+        this.health = type.maxHealth;
         this.position.set(x, y, z);
         this.wanderTimer = 0f; // decide on the first grounded tick
     }
 
     public boolean isMoving() {
         return moving;
+    }
+
+    public float getHealth() {
+        return health;
+    }
+
+    public float getMaxHealth() {
+        return type.maxHealth;
+    }
+
+    public boolean isDead() {
+        return health <= 0f;
+    }
+
+    /** This mob's collision box, in world coordinates - used for hit-testing the player's attacks. */
+    public AABB getAABB() {
+        return box();
+    }
+
+    /**
+     * Applies {@code amount} damage from a source at (sourceX, sourceZ): knocks the
+     * mob back, panics it (it flees for a few seconds), and kills it at zero health.
+     * Returns true if the hit killed it.
+     */
+    public boolean damage(float amount, float sourceX, float sourceZ) {
+        health -= amount;
+        float dx = position.x - sourceX;
+        float dz = position.z - sourceZ;
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        if (len > 1e-4f) {
+            fleeX = dx / len;
+            fleeZ = dz / len;
+        } else {
+            fleeX = 0f;
+            fleeZ = 1f;
+        }
+        velocity.x += fleeX * 3f;   // small knockback
+        velocity.z += fleeZ * 3f;
+        panicTimer = PANIC_TIME;
+        return isDead();
+    }
+
+    /**
+     * The t at which the ray (origin, dir) first enters {@code box}, clamped to
+     * {@code maxDist}, or -1 if it misses. Slab method; the origin being inside
+     * the box counts as a hit at t=0. Used to aim attacks at mobs.
+     */
+    public static float rayIntersects(Vector3f origin, Vector3f dir, float maxDist, AABB box) {
+        float tmin = 0f, tmax = maxDist;
+        tmin = Math.max(tmin, slabEntry(origin.x, dir.x, box.minX, box.maxX));
+        tmax = Math.min(tmax, slabExit(origin.x, dir.x, box.minX, box.maxX));
+        if (tmin > tmax) return -1f;
+        tmin = Math.max(tmin, slabEntry(origin.y, dir.y, box.minY, box.maxY));
+        tmax = Math.min(tmax, slabExit(origin.y, dir.y, box.minY, box.maxY));
+        if (tmin > tmax) return -1f;
+        tmin = Math.max(tmin, slabEntry(origin.z, dir.z, box.minZ, box.maxZ));
+        tmax = Math.min(tmax, slabExit(origin.z, dir.z, box.minZ, box.maxZ));
+        if (tmin > tmax) return -1f;
+        return tmin;
+    }
+
+    private static float slabEntry(float origin, float dir, float min, float max) {
+        if (Math.abs(dir) < 1e-6f) {
+            return origin >= min && origin <= max ? Float.NEGATIVE_INFINITY : Float.POSITIVE_INFINITY;
+        }
+        return Math.min((min - origin) / dir, (max - origin) / dir);
+    }
+
+    private static float slabExit(float origin, float dir, float min, float max) {
+        if (Math.abs(dir) < 1e-6f) {
+            return origin >= min && origin <= max ? Float.POSITIVE_INFINITY : Float.NEGATIVE_INFINITY;
+        }
+        return Math.max((min - origin) / dir, (max - origin) / dir);
     }
 
     /** Vertical bob for the renderer - scales with movement so walking looks alive. */
@@ -83,14 +164,23 @@ public class Mob {
     public void update(float dt, BlockAccessor world, Random rnd) {
         age += dt;
         wanderTimer -= dt;
-
-        // When the mob has nothing to walk toward (arrived, or no goal yet), decide
-        // where to go next - but only once it's settled on the ground.
-        if (onGround && (path == null || pathIndex >= path.size()) && wanderTimer <= 0f) {
-            pickNewGoal(world, rnd);
+        if (panicTimer > 0f) {
+            panicTimer -= dt;
+            // Hurt: bolt away from the last damage source, ignoring the pathfinder -
+            // a panicking animal runs (and may stumble off a ledge) rather than
+            // route neatly around things.
+            path = null;
+            moving = true;
+            velocity.x = fleeX * type.walkSpeed * PANIC_SPEED_MULT;
+            velocity.z = fleeZ * type.walkSpeed * PANIC_SPEED_MULT;
+        } else {
+            // When the mob has nothing to walk toward (arrived, or no goal yet), decide
+            // where to go next - but only once it's settled on the ground.
+            if (onGround && (path == null || pathIndex >= path.size()) && wanderTimer <= 0f) {
+                pickNewGoal(world, rnd);
+            }
+            followPath();
         }
-
-        followPath();
 
         velocity.y -= GRAVITY * dt;
         if (velocity.y < TERMINAL_VELOCITY) {

@@ -1,5 +1,7 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.util.AABB;
+import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -148,5 +150,54 @@ class MobTest {
         assertTrue(Math.abs(m.position.z) <= 2.4f, "left the corridor: z=" + m.position.z);
         assertTrue(Math.abs(m.position.x - startX) > 0.5f,
                 "should wander along the corridor: dx=" + (m.position.x - startX));
+    }
+
+    @Test
+    void mobStartsAtFullHealthAndDamageReducesIt() {
+        Mob m = new Mob(Mob.Type.PIG, 0f, 0f, 0f);
+        assertEquals(m.getMaxHealth(), m.getHealth(), 0.001f);
+        m.damage(3f, 0f, 0f);
+        assertEquals(m.getMaxHealth() - 3f, m.getHealth(), 0.001f);
+        assertFalse(m.isDead());
+    }
+
+    @Test
+    void mobDiesWhenItsHealthRunsOut() {
+        Mob m = new Mob(Mob.Type.COW, 0f, 0f, 0f);
+        assertTrue(m.damage(m.getMaxHealth(), 0f, 0f), "a full-health hit kills it");
+        assertTrue(m.isDead());
+        assertEquals(0f, m.getHealth(), 0.001f);
+    }
+
+    @Test
+    void hurtMobFleesAwayFromTheDamageSource() {
+        StubWorld w = flatGround(20);
+        Mob m = new Mob(Mob.Type.SHEEP, 0f, 1f + Mob.Type.SHEEP.height / 2f, 0f);
+        float startX = m.position.x;
+        // Hit from -x, so the mob should bolt toward +x.
+        m.damage(1f, -4f, 0f);
+        Random rnd = new Random(9);
+        for (int i = 0; i < 45; i++) {
+            m.update(DT, w, rnd);
+        }
+        assertTrue(m.position.x > startX + 0.5f,
+                "panic should run away from the attacker: dx=" + (m.position.x - startX));
+    }
+
+    @Test
+    void rayIntersectsAabbHitsOnlyWhenAimed() {
+        AABB box = new AABB(0, 0, 0, 1, 1, 1);
+        // Straight on from +x: enters the box at t = 4 (x=1).
+        float t = Mob.rayIntersects(new Vector3f(5f, 0.5f, 0.5f), new Vector3f(-1f, 0f, 0f), 10f, box);
+        assertEquals(4f, t, 1e-3f);
+        // Out of reach.
+        assertEquals(-1f, Mob.rayIntersects(new Vector3f(5f, 0.5f, 0.5f), new Vector3f(-1f, 0f, 0f), 3f, box), 0f);
+        // Misses vertically.
+        assertEquals(-1f, Mob.rayIntersects(new Vector3f(5f, 5f, 0.5f), new Vector3f(-1f, 0f, 0f), 10f, box), 0f);
+        // Diagonal hit.
+        assertTrue(Mob.rayIntersects(new Vector3f(3f, 3f, 3f), new Vector3f(-1f, -1f, -1f), 10f, box) > 0f,
+                "diagonal ray should enter the box");
+        // Ray starting inside the box counts as a hit at t=0.
+        assertEquals(0f, Mob.rayIntersects(new Vector3f(0.5f, 0.5f, 0.5f), new Vector3f(0f, 1f, 0f), 10f, box), 1e-3f);
     }
 }
