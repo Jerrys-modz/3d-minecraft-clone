@@ -13,18 +13,20 @@ public class WorldGenSettings {
 
     public enum WorldType { DEFAULT, SUPERFLAT }
 
-    public static final int ROW_SEED = 0;
-    public static final int ROW_WORLD_TYPE = 1;
-    public static final int ROW_STRUCTURES = 2;
-    public static final int ROW_SEA_LEVEL = 3;
-    public static final int ROW_TERRAIN_SIZE = 4;
-    public static final int ROW_COUNT = 5;
+    public static final int ROW_NAME = 0;
+    public static final int ROW_SEED = 1;
+    public static final int ROW_WORLD_TYPE = 2;
+    public static final int ROW_STRUCTURES = 3;
+    public static final int ROW_SEA_LEVEL = 4;
+    public static final int ROW_TERRAIN_SIZE = 5;
+    public static final int ROW_COUNT = 6;
 
     private static final int[] SEA_LEVELS = {34, 42, 50};
     private static final float[] TERRAIN_SIZES = {1f, 1.7f};
     private static final String[] SEA_LEVEL_NAMES = {"Low", "Normal", "High"};
     private static final String[] TERRAIN_SIZE_NAMES = {"Normal", "Large"};
 
+    private String name = "New World";
     private String seed = ""; // empty means a fresh random seed
     private int worldType = 0; // WorldType ordinal
     private boolean structures = true;
@@ -32,6 +34,14 @@ public class WorldGenSettings {
     private int terrainSizeIndex = 0; // Normal
 
     public WorldGenSettings() {
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name == null || name.isBlank() ? "New World" : name.trim();
     }
 
     public String getSeedText() {
@@ -85,6 +95,7 @@ public class WorldGenSettings {
 
     public static String label(int row) {
         return switch (row) {
+            case ROW_NAME -> "World name";
             case ROW_SEED -> "Seed";
             case ROW_WORLD_TYPE -> "World type";
             case ROW_STRUCTURES -> "Structures";
@@ -96,6 +107,7 @@ public class WorldGenSettings {
 
     public String valueText(int row) {
         return switch (row) {
+            case ROW_NAME -> name;
             case ROW_SEED -> seed.isBlank() ? "(random)" : seed;
             case ROW_WORLD_TYPE -> {
                 String n = WorldType.values()[worldType].name();
@@ -121,6 +133,7 @@ public class WorldGenSettings {
 
     /** Appends the {@code worldgen_*} lines for persistence (see Settings.save). */
     public void saveLines(java.util.List<String> lines) {
+        lines.add("worldgen_name=" + name);
         lines.add("worldgen_seed=" + seed);
         lines.add("worldgen_world_type=" + worldType);
         lines.add("worldgen_structures=" + (structures ? 1 : 0));
@@ -131,6 +144,7 @@ public class WorldGenSettings {
     /** Applies a persisted {@code worldgen_*} entry; unknown keys are ignored. */
     public void loadEntry(String fileKey, String value) {
         switch (fileKey) {
+            case "worldgen_name" -> name = value.trim();
             case "worldgen_seed" -> seed = value.trim();
             case "worldgen_world_type" -> worldType = parseClamped(value, WorldType.values().length - 1);
             case "worldgen_structures" -> structures = value.equals("1") || value.equalsIgnoreCase("true");

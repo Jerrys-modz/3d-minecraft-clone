@@ -629,7 +629,7 @@ public class Hud {
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
         drawCenteredText("3D Minecraft Clone", 0f, 0.5f, 0.085f, WHITE);
-        String[] items = {"Play", "World Generation", "Quit"};
+        String[] items = {"Play", "Quit"};
         for (int i = 0; i < items.length; i++) {
             boolean selected = i == selectedIndex;
             float y = 0.05f - i * 0.1f;
@@ -642,8 +642,39 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+
+    /** The world-selection screen (Minecraft singleplayer): saved worlds + a Create New World button. */
+    public void renderWorldSelectMenu(java.util.List<String> worldNames, int selectedIndex, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+        Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
+        Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
+        Vector4f dim = new Vector4f(0.62f, 0.62f, 0.62f, 1f);
+        drawCenteredText("Select World", 0f, 0.5f, 0.07f, WHITE);
+
+        float y = 0.3f;
+        int shown = 0;
+        int total = worldNames.size() + 1; // worlds + Create New World
+        for (String name : worldNames) {
+            boolean selected = shown == selectedIndex;
+            drawCenteredText(name, 0f, y, 0.04f, selected ? highlight : idle);
+            if (selected) {
+                float w = text.measure(name, 0.04f);
+                drawCenteredText(">", -w / 2f - 0.06f, y, 0.04f, highlight);
+            }
+            y -= 0.07f;
+            shown++;
+        }
+        boolean selected = shown == selectedIndex;
+        drawCenteredText("Create New World", 0f, y, 0.04f, selected ? highlight : idle);
+        if (selected) {
+            float w = text.measure("Create New World", 0.04f);
+            drawCenteredText(">", -w / 2f - 0.06f, y, 0.04f, highlight);
+        }
+        glEnable(GL_DEPTH_TEST);
+    }
     /** The world-generation settings page (Minecraft-style "More World Options"). */
-    public void renderWorldGenMenu(WorldGenSettings wgs, int selectedIndex, boolean editingSeed, float aspectRatio) {
+    public void renderWorldGenMenu(WorldGenSettings wgs, int selectedIndex, int editingRow, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
@@ -679,11 +710,11 @@ public class Hud {
             boolean selected = i == selectedIndex;
             if (i < WorldGenSettings.ROW_COUNT) {
                 boolean seedRow = i == WorldGenSettings.ROW_SEED;
-                boolean activeSeed = seedRow && editingSeed;
+                boolean activeSeed = i == editingRow;
                 Vector4f color = selected ? highlight : (activeSeed ? highlight : idle);
                 drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
                 drawTextAt(WorldGenSettings.label(i), left + SETTINGS_LEFT_PAD, baseline, size, color);
-                String value = activeSeed ? wgs.getSeedText() + "_" : wgs.valueText(i);
+                String value = activeSeed ? wgs.valueText(i) + "_" : wgs.valueText(i);
                 float valueWidth = text.measure(value, size);
                 drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
                         activeSeed ? highlight : idleValue);
@@ -694,7 +725,7 @@ public class Hud {
             }
         }
 
-        drawCenteredText(editingSeed ? "Type a seed (backspace deletes, Enter to keep)"
+        drawCenteredText(editingRow >= 0 ? "Type (backspace deletes, Enter to keep)"
                 : "Select a row, Enter to edit; Esc to close",
                 0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
 

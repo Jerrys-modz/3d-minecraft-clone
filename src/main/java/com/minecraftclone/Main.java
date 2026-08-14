@@ -129,17 +129,18 @@ public class Main {
         FontAtlas font = new FontAtlas();
         font.generate();
 
-        Path saveDir = Paths.get(System.getenv().getOrDefault("MCCLONE_SAVE_DIR", "saves/world"));
-        Path settingsFile = saveDir.resolve("settings.txt");
+        String saveDirEnv = System.getenv("MCCLONE_SAVE_DIR");
+        Path saveRoot = saveDirEnv != null ? Paths.get(saveDirEnv).getParent() : Paths.get("saves");
+        Path settingsFile = saveRoot.resolve("settings.txt");
         Settings settings = Settings.load(settingsFile);
-        WorldGenSettings genSettings = settings.getWorldGen();
-        System.out.println("Save directory: " + saveDir.toAbsolutePath());
+        WorldGenSettings genSettings = new WorldGenSettings();
+        System.out.println("Save directory: " + saveRoot.toAbsolutePath());
         Player player = new Player();
         player.setKeyBinds(settings.getKeyBinds());
-        // The world is created lazily when the player presses Play, using the
-        // world-generation settings chosen on the main menu.
+        // The world is created lazily when the player picks a world or creates one.
         World world = null;
         boolean[] started = {false};
+        List<String> worldNames = new ArrayList<>();
 
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
@@ -156,10 +157,12 @@ public class Main {
         int[] creativeTab = {0};
         int[] hoveredSlot = {-1};
         boolean[] mainMenuOpen = {true};
+        boolean[] worldSelectOpen = {false};
         boolean[] worldGenOpen = {false};
         int[] mainMenuSelection = {Hud.MENU_PLAY};
+        int[] worldSelectSelection = {0};
         int[] worldGenSelection = {0};
-        boolean[] editingSeed = {false};
+        int[] editingRow = {-1};
 
         window.setCursorCaptured(false); // free cursor in the main menu
 
@@ -205,10 +208,21 @@ public class Main {
         if (System.getenv("MCCLONE_AUTOTEST_MENU") != null) {
             menuOpen[0] = true;
         }
+        if (System.getenv("MCCLONE_AUTOTEST_WORLDSELECT") != null) {
+            worldNames = listWorlds(saveRoot);
+            worldSelectOpen[0] = true;
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_WORLDGEN") != null) {
+            worldGenOpen[0] = true;
+        }
         if (autoTest && System.getenv("MCCLONE_AUTOTEST_SHOW_MENU") == null) {
             // Auto-play for the headless smoke test (unless the menu is being screenshotted).
+            Path autoDir = saveDirEnv != null ? Paths.get(saveDirEnv) : saveRoot.resolve("world");
+            genSettings = loadWorldGenSettings(autoDir);
+            genSettings.setName(autoDir.getFileName().toString());
+            saveWorldGenSettings(autoDir, genSettings);
             long seed = genSettings.resolveSeed();
-            world = new World(seed, genSettings, atlas, saveDir);
+            world = new World(seed, genSettings, atlas, autoDir);
             world.setRenderDistance(settings.getRenderDistance());
             world.setLeavesTransparent(settings.isLeavesTransparent());
             for (int i = 0; i < 200; i++) world.update(0, 0);
@@ -240,24 +254,24 @@ public class Main {
             float breakFraction = 0f;
             boolean screenshotRequested = false;
 
-            // Main menu / world-gen page input (before the world exists).
+            // Main menu / world select / world-gen page input (before a world starts).
             if (!started[0]) {
                 if (worldGenOpen[0]) {
-                    if (editingSeed[0]) {
+                    if (editingRow[0] >= 0) {
                         String typed = input.consumeTypedChars();
-                        StringBuilder sb = new StringBuilder(genSettings.getSeedText());
+                        boolean nameRow = editingRow[0] == WorldGenSettings.ROW_NAME;
+                        StringBuilder sb = new StringBuilder(nameRow ? genSettings.getName() : genSettings.getSeedText());
                         for (int i = 0; i < typed.length(); i++) {
                             char ch = typed.charAt(i);
-                            if (Character.isLetterOrDigit(ch) || ch == '-') sb.append(ch);
+                            if (Character.isLetterOrDigit(ch) || ch == '-' || (nameRow && ch == ' ')) sb.append(ch);
                         }
-                        genSettings.setSeedText(sb.toString());
                         if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE)) {
-                            String s = genSettings.getSeedText();
-                            if (!s.isEmpty()) genSettings.setSeedText(s.substring(0, s.length() - 1));
+                            if (sb.length() > 0) sb.deleteCharAt(sb.length() - 1);
                         }
-                        settings.save(settingsFile);
+                        if (nameRow) genSettings.setName(sb.toString());
+                        else genSettings.setSeedText(sb.toString());
                         if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
-                            editingSeed[0] = false;
+                            editingRow[0] = -1;
                         }
                     } else {
                         if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
@@ -268,28 +282,86 @@ public class Main {
                         }
                         if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
                             genSettings.adjust(worldGenSelection[0], -1);
-                            settings.save(settingsFile);
                         }
                         if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
                             genSettings.adjust(worldGenSelection[0], +1);
-                            settings.save(settingsFile);
                         }
                         if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
-                            if (worldGenSelection[0] == WorldGenSettings.ROW_SEED) {
-                                editingSeed[0] = true;
+                            if (worldGenSelection[0] == WorldGenSettings.ROW_NAME || worldGenSelection[0] == WorldGenSettings.ROW_SEED) {
+                                editingRow[0] = worldGenSelection[0];
                                 input.consumeTypedChars();
                             } else if (worldGenSelection[0] == WorldGenSettings.ROW_COUNT) {
+                                Path worldDir = saveRoot.resolve(genSettings.getName());
+                                saveWorldGenSettings(worldDir, genSettings);
+                                long seed = genSettings.resolveSeed();
+                                if (genSettings.isSeedBlank()) {
+                                    genSettings.setSeedText(Long.toString(seed));
+                                    saveWorldGenSettings(worldDir, genSettings);
+                                }
+                                world = new World(seed, genSettings, atlas, worldDir);
+                                world.setRenderDistance(settings.getRenderDistance());
+                                world.setLeavesTransparent(settings.isLeavesTransparent());
+                                for (int i = 0; i < 200; i++) world.update(0, 0);
+                                float[] spawn = findSpawn(world);
+                                player.spawn(world, spawn[0], spawn[1]);
+                                for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+                                System.out.println("World: " + genSettings.getName() + " seed: " + seed);
+                                started[0] = true;
+                                mainMenuOpen[0] = false;
+                                worldSelectOpen[0] = false;
                                 worldGenOpen[0] = false;
-                                mainMenuSelection[0] = Hud.MENU_WORLD_GEN;
+                                window.setCursorCaptured(true);
+                                input.resetMouseDelta();
                             } else {
                                 genSettings.adjust(worldGenSelection[0], +1);
-                                settings.save(settingsFile);
                             }
                         }
                         if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                             worldGenOpen[0] = false;
-                            mainMenuSelection[0] = Hud.MENU_WORLD_GEN;
+                            worldSelectOpen[0] = true;
+                            worldSelectSelection[0] = worldNames.size();
                         }
+                    }
+                } else if (worldSelectOpen[0]) {
+                    int totalWorlds = worldNames.size() + 1;
+                    if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                        worldSelectSelection[0] = Math.floorMod(worldSelectSelection[0] - 1, totalWorlds);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                        worldSelectSelection[0] = Math.floorMod(worldSelectSelection[0] + 1, totalWorlds);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                        if (worldSelectSelection[0] < worldNames.size()) {
+                            genSettings = loadWorldGenSettings(saveRoot.resolve(worldNames.get(worldSelectSelection[0])));
+                            Path worldDir = saveRoot.resolve(genSettings.getName());
+                            long seed = genSettings.resolveSeed();
+                            if (genSettings.isSeedBlank()) {
+                                genSettings.setSeedText(Long.toString(seed));
+                                saveWorldGenSettings(worldDir, genSettings);
+                            }
+                            world = new World(seed, genSettings, atlas, worldDir);
+                            world.setRenderDistance(settings.getRenderDistance());
+                            world.setLeavesTransparent(settings.isLeavesTransparent());
+                            for (int i = 0; i < 200; i++) world.update(0, 0);
+                            float[] spawn = findSpawn(world);
+                            player.spawn(world, spawn[0], spawn[1]);
+                            for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+                            System.out.println("World: " + genSettings.getName() + " seed: " + seed);
+                            started[0] = true;
+                            mainMenuOpen[0] = false;
+                            worldSelectOpen[0] = false;
+                            window.setCursorCaptured(true);
+                            input.resetMouseDelta();
+                        } else {
+                            genSettings = new WorldGenSettings();
+                            genSettings.setName(uniqueWorldName(worldNames));
+                            worldGenOpen[0] = true;
+                            worldGenSelection[0] = 0;
+                        }
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                        worldSelectOpen[0] = false;
+                        mainMenuOpen[0] = true;
                     }
                 } else {
                     if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
@@ -300,26 +372,9 @@ public class Main {
                     }
                     if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
                         if (mainMenuSelection[0] == Hud.MENU_PLAY) {
-                            long seed = genSettings.resolveSeed();
-                            if (genSettings.isSeedBlank()) {
-                                genSettings.setSeedText(Long.toString(seed));
-                                settings.save(settingsFile);
-                            }
-                            world = new World(seed, genSettings, atlas, saveDir);
-                            world.setRenderDistance(settings.getRenderDistance());
-                            world.setLeavesTransparent(settings.isLeavesTransparent());
-                            for (int i = 0; i < 200; i++) world.update(0, 0);
-                            float[] spawn = findSpawn(world);
-                            player.spawn(world, spawn[0], spawn[1]);
-                            for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
-                            System.out.println("World seed: " + seed);
-                            started[0] = true;
-                            mainMenuOpen[0] = false;
-                            window.setCursorCaptured(true);
-                            input.resetMouseDelta();
-                        } else if (mainMenuSelection[0] == Hud.MENU_WORLD_GEN) {
-                            worldGenOpen[0] = true;
-                            worldGenSelection[0] = 0;
+                            worldNames = listWorlds(saveRoot);
+                            worldSelectOpen[0] = true;
+                            worldSelectSelection[0] = 0;
                         } else if (mainMenuSelection[0] == Hud.MENU_QUIT) {
                             glfwSetWindowShouldClose(window.getHandle(), true);
                         }
@@ -750,7 +805,9 @@ public class Main {
             }
             if (!started[0]) {
                 if (worldGenOpen[0]) {
-                    hud.renderWorldGenMenu(genSettings, worldGenSelection[0], editingSeed[0], window.getAspectRatio());
+                    hud.renderWorldGenMenu(genSettings, worldGenSelection[0], editingRow[0], window.getAspectRatio());
+                } else if (worldSelectOpen[0]) {
+                    hud.renderWorldSelectMenu(worldNames, worldSelectSelection[0], window.getAspectRatio());
                 } else {
                     hud.renderMainMenu(mainMenuSelection[0], window.getAspectRatio());
                 }
@@ -802,6 +859,64 @@ public class Main {
         window.close();
     }
 
+
+    /** Names of the saved worlds (folders directly under {@code saveRoot}), sorted. */
+    private static List<String> listWorlds(Path saveRoot) {
+        List<String> names = new ArrayList<>();
+        if (Files.isDirectory(saveRoot)) {
+            try (var stream = Files.list(saveRoot)) {
+                stream.filter(Files::isDirectory)
+                        .filter(p -> !p.getFileName().toString().startsWith("."))
+                        .map(p -> p.getFileName().toString())
+                        .sorted()
+                        .forEach(names::add);
+            } catch (IOException ignored) {
+            }
+        }
+        return names;
+    }
+
+    /** Loads a world's worldgen settings from its {@code world.txt}; the folder name is the default name. */
+    private static WorldGenSettings loadWorldGenSettings(Path worldDir) {
+        WorldGenSettings g = new WorldGenSettings();
+        if (worldDir.getFileName() != null) {
+            g.setName(worldDir.getFileName().toString());
+        }
+        Path file = worldDir.resolve("world.txt");
+        if (Files.isRegularFile(file)) {
+            try {
+                for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                    int eq = line.indexOf('=');
+                    if (eq > 0) {
+                        g.loadEntry(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+                    }
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return g;
+    }
+
+    /** Writes a world's worldgen settings to its {@code world.txt}, creating the folder if needed. */
+    private static void saveWorldGenSettings(Path worldDir, WorldGenSettings g) {
+        List<String> lines = new ArrayList<>();
+        g.saveLines(lines);
+        try {
+            Files.createDirectories(worldDir);
+            Files.write(worldDir.resolve("world.txt"), lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            System.err.println("Could not save world settings to " + worldDir + ": " + e.getMessage());
+        }
+    }
+
+    /** A world name that doesn't collide with an existing save: "New World", "New World 2", ... */
+    private static String uniqueWorldName(List<String> existing) {
+        String base = "New World";
+        if (!existing.contains(base)) return base;
+        int n = 2;
+        while (existing.contains(base + " " + n)) n++;
+        return base + " " + n;
+    }
     /** Finds a dry, non-mountain spawn near the origin by scanning outward in square rings. */
     private static float[] findSpawn(World world) {
         for (int r = 0; r <= 50; r++) {
