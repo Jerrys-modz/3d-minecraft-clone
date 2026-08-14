@@ -78,8 +78,7 @@ public class TextureAtlas {
         paintCrossFlower(image, 22, rnd, 0x3D6E2E, 0xD0392B, 0xE8C93A);   // red flower
         paintCrossFlower(image, 23, rnd, 0x3D6E2E, 0xF2D33A, 0xB5651D);   // yellow flower
 
-        paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
-        paintGlassPanes(image, 34);
+        paintGlass(image, 34);
         paintTile(image, 27, rnd, 0x2F6B2F, 0x245424, true);                 // swamp grass top
         paintTile(image, 28, rnd, 0x8B5A2B, 0x6E4623, true, 0x2F6B2F, 0.28f); // swamp grass side
         paintTile(image, 29, rnd, 0xB5532B, 0x94411F, true);                 // red clay (badlands)
@@ -96,6 +95,7 @@ public class TextureAtlas {
         paintLilyPad(image, 43, rnd);
         paintTile(image, 44, rnd, 0xE08A2E, 0xC7731F, true);   // pumpkin
         paintSeaweed(image, 45, rnd);
+        paintDoor(image, 46, rnd);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
@@ -259,21 +259,27 @@ public class TextureAtlas {
         img.setRGB(ox + stemX, oy + headY, 0xFF000000 | centerColor);
     }
 
-    /** Thin pane-divider lines (border + cross) over the base fill, for the glass block. */
-    private void paintGlassPanes(BufferedImage img, int index) {
+    /** Semi-transparent glass with thin pane-divider lines, so you can see through it. */
+    private void paintGlass(BufferedImage img, int index) {
         int ox = tileX(index);
         int oy = tileY(index);
+        int fill = 0xBEE7EA;
         int line = 0x8FB9BC;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, (150 << 24) | fill);
+            }
+        }
         for (int i = 0; i < TILE_PX; i++) {
-            img.setRGB(ox + i, oy, 0xFF000000 | line);
-            img.setRGB(ox + i, oy + TILE_PX - 1, 0xFF000000 | line);
-            img.setRGB(ox, oy + i, 0xFF000000 | line);
-            img.setRGB(ox + TILE_PX - 1, oy + i, 0xFF000000 | line);
+            img.setRGB(ox + i, oy, (190 << 24) | line);
+            img.setRGB(ox + i, oy + TILE_PX - 1, (190 << 24) | line);
+            img.setRGB(ox, oy + i, (190 << 24) | line);
+            img.setRGB(ox + TILE_PX - 1, oy + i, (190 << 24) | line);
         }
         int mid = TILE_PX / 2;
         for (int i = 0; i < TILE_PX; i++) {
-            img.setRGB(ox + mid, oy + i, 0xFF000000 | line);
-            img.setRGB(ox + i, oy + mid, 0xFF000000 | line);
+            img.setRGB(ox + mid, oy + i, (190 << 24) | line);
+            img.setRGB(ox + i, oy + mid, (190 << 24) | line);
         }
     }
 
@@ -406,6 +412,27 @@ public class TextureAtlas {
                 img.setRGB(ox + x, oy + y, 0xFF000000 | 0x2F8F3A);
             }
         }
+    }
+
+    /** A wooden door panel: plank fill with grooves, a crossbar and a handle. */
+    private void paintDoor(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int plank = 0xC69A56, dark = 0x8E6A34;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.15f ? dark : plank));
+            }
+        }
+        for (int x = 3; x < TILE_PX; x += 4) {
+            for (int y = 0; y < TILE_PX; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
+            }
+        }
+        for (int x = 0; x < TILE_PX; x++) {
+            img.setRGB(ox + x, oy + 9, 0xFF000000 | dark);
+        }
+        img.setRGB(ox + 13, oy + 11, 0xFF000000 | 0x4A3018);
     }
 
     private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {

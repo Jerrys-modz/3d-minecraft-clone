@@ -71,6 +71,7 @@ public enum BlockType {
     LILY_PAD(61, false, true, 43),
     PUMPKIN(62, true, false, 44, 44, 44),
     SEAWEED(63, false, true, 45),
+    DOOR(64, false, true, 46),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -265,6 +266,11 @@ public enum BlockType {
     /** True if a ray should pass straight through this block (air, static water, or transient flow). */
     public boolean isPassThrough() {
         return this == AIR || this == WATER || this == WATER_FLOW || this == LAVA_FLOW;
+    }
+
+    /** True if this block is drawn in the see-through translucent render pass (glass, ice). */
+    public boolean isTranslucent() {
+        return this == GLASS || this == ICE;
     }
 
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */

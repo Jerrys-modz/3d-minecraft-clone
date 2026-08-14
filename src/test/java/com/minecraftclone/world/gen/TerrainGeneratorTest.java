@@ -3,6 +3,7 @@ package com.minecraftclone.world.gen;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TerrainGeneratorTest {
@@ -56,5 +57,44 @@ class TerrainGeneratorTest {
         WorldGenSettings high = new WorldGenSettings();
         high.adjust(WorldGenSettings.ROW_SEA_LEVEL, 1); // Normal -> High
         assertEquals(50, new TerrainGenerator(2L, high).getSeaLevel());
+    }
+
+    @Test
+    void structuresMapToTheirBiomes() {
+        assertEquals(TerrainGenerator.StructureType.DESERT_TEMPLE, TerrainGenerator.structureFor(TerrainGenerator.Biome.DESERT));
+        assertEquals(TerrainGenerator.StructureType.IGLOO, TerrainGenerator.structureFor(TerrainGenerator.Biome.SNOWY));
+        assertEquals(TerrainGenerator.StructureType.CABIN, TerrainGenerator.structureFor(TerrainGenerator.Biome.PLAINS));
+        assertEquals(TerrainGenerator.StructureType.WITCH_HUT, TerrainGenerator.structureFor(TerrainGenerator.Biome.SWAMP));
+        assertEquals(TerrainGenerator.StructureType.STONE_RUIN, TerrainGenerator.structureFor(TerrainGenerator.Biome.MOUNTAIN));
+        assertEquals(TerrainGenerator.StructureType.NONE, TerrainGenerator.structureFor(TerrainGenerator.Biome.OCEAN));
+    }
+
+    @Test
+    void villagesAreSparseAndDeterministic() {
+        int count = 0;
+        for (int cx = 0; cx < 1000; cx++) {
+            if (TerrainGenerator.isVillageChunk(12345L, cx, 7)) count++;
+        }
+        assertTrue(count > 0, "some chunks should be village origins");
+        assertTrue(count < 100, "villages should be rare");
+        assertEquals(TerrainGenerator.isVillageChunk(12345L, 12, 7),
+                TerrainGenerator.isVillageChunk(12345L, 12, 7));
+    }
+
+    @Test
+    void villagesOnlySpawnInBuildableBiomes() {
+        assertTrue(TerrainGenerator.villageBiome(TerrainGenerator.Biome.PLAINS));
+        assertTrue(TerrainGenerator.villageBiome(TerrainGenerator.Biome.DESERT));
+        assertFalse(TerrainGenerator.villageBiome(TerrainGenerator.Biome.OCEAN));
+        assertFalse(TerrainGenerator.villageBiome(TerrainGenerator.Biome.MOUNTAIN));
+    }
+
+    @Test
+    void villagesMixBuildingTypes() {
+        java.util.EnumSet<TerrainGenerator.BuildingType> seen = java.util.EnumSet.noneOf(TerrainGenerator.BuildingType.class);
+        for (int i = 0; i < 60; i++) {
+            seen.add(TerrainGenerator.buildingTypeFor(100, 200, i));
+        }
+        assertEquals(4, seen.size(), "over many plots all building types should appear");
     }
 }
