@@ -24,6 +24,10 @@ import java.util.Set;
  *       spreads sideways. A cell in a vertical column (fluid directly below
  *       it) just keeps falling, so a waterfall stays a narrow ribbon instead
  *       of ballooning into a fat blob on its second tick.</li>
+ *   <li><b>Falling resets distance</b>: any drop - not just a source's own
+ *       column - brings a cell's distance back to 0, so water flowing down a
+ *       hillside or staircase can keep descending indefinitely instead of
+ *       drying up once the 7-block spread limit is used up.</li>
  * </ul>
  * <p>
  * This is pure logic (only {@link BlockAccessor} is used) so it can be tested
@@ -45,8 +49,9 @@ public final class FluidSim {
      * <ul>
      *   <li>{@code fill} - cells to fill this tick (pos -> flow type).</li>
      *   <li>{@code levels} - each fill's distance from the source it was
-     *       reached from, same keys as {@code fill} (0 = a falling column
-     *       directly under a source).</li>
+     *       reached from, same keys as {@code fill} (0 = falling - a
+     *       source's own column, or any water resuming a fall after a
+     *       drop).</li>
      *   <li>{@code flowLevels} - every existing flow that was reached this
      *       tick, mapped to its fresh distance (0..maxDistance). Cells can
      *       move closer to a source when the topology changes, so the stored
@@ -127,12 +132,19 @@ public final class FluidSim {
 
             if (below == BlockType.AIR || below.cross) {
                 // Air (or a cross decoration): fall straight down - a cell in free-fall
-                // doesn't spread sideways, which keeps waterfalls narrow.
-                spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
+                // doesn't spread sideways, which keeps waterfalls narrow. Falling always
+                // resets distance to 0, not just for a source's own column: water that
+                // spread out to its 7-block limit and then reaches a drop is falling
+                // again, and a fall is unrestricted the same way a source's is. Without
+                // this a hillside staircase would carry the accumulated distance down
+                // through every step and dry up a few drops later, even though it's
+                // still headed downhill the whole way - flowing water should be able to
+                // keep descending a slope indefinitely, the same as Minecraft's own.
+                spread(world, n.x, n.y - 1, n.z, 0, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
             } else {
                 // Keep traversing down through existing fluid so a column stays "reached".
                 if (below == n.flowType || below == sourceOf(n.flowType)) {
-                    spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
+                    spread(world, n.x, n.y - 1, n.z, 0, n.flowType, queue, visited, fill, levels, flowLevels, reachedFlow);
                 }
                 // Spread sideways only from cells resting on a solid surface. A cell
                 // whose below is more of the same fluid is part of a vertical column

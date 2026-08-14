@@ -174,6 +174,34 @@ class FluidSimTest {
     }
 
     @Test
+    void waterFlowingDownhillIsNotCappedByTheFlowDistance() {
+        // key() packs y directly with no offset (unlike x/z), so it only
+        // round-trips non-negative y - keep the whole staircase within the
+        // normal, always-positive world-height range.
+        StubWorld w = new StubWorld();
+        int baseY = 50;
+        // A one-block-wide staircase, 15 steps long - each tread one lower
+        // than the last, nothing else solid around it. A source sits on the
+        // first tread; water should ride the stairs all the way down, well
+        // past the 7-block horizontal spread limit, because every drop
+        // between treads resets its distance the same way falling under the
+        // source does.
+        int steps = 15;
+        for (int x = 0; x <= steps; x++) {
+            w.set(x, baseY - x, 0, BlockType.STONE);
+        }
+        w.set(0, baseY + 1, 0, BlockType.WATER_SOURCE);
+        for (int i = 0; i < steps * 2; i++) {
+            tick(w);
+        }
+        for (int x = 1; x <= steps; x++) {
+            assertEquals(BlockType.WATER_FLOW, w.getBlock(x, baseY - x + 1, 0), "tread " + x + " should be wet");
+            // Each landing is a fresh fall, not a graded, nearly-dry-out puddle.
+            assertEquals(0, w.getFluidLevel(x, baseY - x + 1, 0), "tread " + x + " just fell, so its level resets to 0");
+        }
+    }
+
+    @Test
     void unreachableFlowDriesUpButReachableFlowSurvives() {
         StubWorld w = flatGround();
         w.set(1, 1, 0, BlockType.WATER_FLOW);   // reachable from the source
