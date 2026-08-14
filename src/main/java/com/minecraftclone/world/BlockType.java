@@ -268,4 +268,18 @@ public enum BlockType {
         }
         return sb.toString();
     }
+
+    /**
+     * The tracked, flowing source variant a static (world-gen) fluid block should be
+     * promoted to once it ends up bordering open space - null if this block isn't a
+     * static fluid (including if it's already a source/flow). See World#setBlock: an
+     * entire ocean/lake is deliberately left untracked for performance, but the one
+     * boundary block that actually needs to flow into a freshly-broken opening is
+     * promoted right there, so it starts participating in FluidSim.
+     */
+    public BlockType promotedFluidSource() {
+        if (this == WATER) return WATER_SOURCE;
+        if (this == LAVA) return LAVA_SOURCE;
+        return null;
+    }
 }

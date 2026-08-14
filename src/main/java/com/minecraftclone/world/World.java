@@ -130,6 +130,30 @@ public class World implements BlockAccessor {
                 }
             }
         }
+
+        // Opening a cell next to static (world-gen) water/lava doesn't make it flow
+        // on its own: FluidSim only tracks *_SOURCE/*_FLOW blocks, and treating an
+        // entire static lake/ocean as "live" would mean rescanning its whole interior
+        // every tick just for nothing to happen. Instead, promote only the specific
+        // boundary block(s) that actually end up touching the new opening into a real,
+        // tracked source, right where the flow is needed - the natural fix for
+        // "breaking a block next to [natural] water doesn't make it flow".
+        if (type == BlockType.AIR) {
+            promoteIfStaticFluid(worldX + 1, worldY, worldZ);
+            promoteIfStaticFluid(worldX - 1, worldY, worldZ);
+            promoteIfStaticFluid(worldX, worldY + 1, worldZ);
+            promoteIfStaticFluid(worldX, worldY - 1, worldZ);
+            promoteIfStaticFluid(worldX, worldY, worldZ + 1);
+            promoteIfStaticFluid(worldX, worldY, worldZ - 1);
+        }
+    }
+
+    /** If the block at this position is static WATER/LAVA, promotes it to the matching tracked source. See setBlock. */
+    private void promoteIfStaticFluid(int x, int y, int z) {
+        BlockType promoted = getBlock(x, y, z).promotedFluidSource();
+        if (promoted != null) {
+            setBlock(x, y, z, promoted);
+        }
     }
 
     private void markNeighborDirty(int cx, int cz) {
