@@ -63,4 +63,13 @@ class TerrainGeneratorTest {
         assertFalse(TerrainGenerator.villageBiome(TerrainGenerator.Biome.OCEAN));
         assertFalse(TerrainGenerator.villageBiome(TerrainGenerator.Biome.MOUNTAIN));
     }
+
+    @Test
+    void villagesMixBuildingTypes() {
+        java.util.EnumSet<TerrainGenerator.BuildingType> seen = java.util.EnumSet.noneOf(TerrainGenerator.BuildingType.class);
+        for (int i = 0; i < 60; i++) {
+            seen.add(TerrainGenerator.buildingTypeFor(100, 200, i));
+        }
+        assertEquals(4, seen.size(), "over many plots all building types should appear");
+    }
 }
