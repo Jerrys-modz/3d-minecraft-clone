@@ -40,7 +40,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
   - **Stars** (ON/OFF): whether the procedural night sky draws its star field (the moon still appears).
   - **Keybinds**: a separate section below the settings lists every rebindable action (move/jump/sprint, fly, inventory, smelt, debug, screenshot) with its current key. Select a keybind row and press `Enter`/`Space` (or click it), then press a key to rebind it - `Esc` cancels. Bindings are saved to `settings.txt`.
   - All of these apply immediately, while the menu is open.
-- **Main menu & world generation**: on launch a main menu (Play / World Generation / Quit) appears. The world-generation page lets you set a seed, world type (Default/Superflat), whether structures (trees, cacti, ...) generate, the sea level, and terrain size before pressing Play - Minecraft-style. Choices persist to settings.txt.
+- **Main menu & world generation**: on launch a main menu (Play / Settings / Quit) appears, Minecraft-style. **Play** opens the world-selection screen listing your saved worlds plus a **Create New World** entry; picking one plays it, and creating one opens the world-generation page where you name the world and set a seed, world type (Default/Superflat), whether structures (trees, cacti, ...) generate, the sea level, and terrain size before pressing Done. Each world is saved in its own folder under `saves/` with its settings, so it reloads on the next launch. **Settings** opens the same settings page as the in-game `Esc` menu (graphics, game mode, keybinds) before you even start a world - `Esc` returns to the main menu.
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, torches, lamps, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 
 ## Requirements
@@ -90,7 +90,7 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 | `1`-`9` / mouse wheel | Select hotbar slot |
 | `F2` | Save a screenshot to `screenshot.png` |
 | `F3` | Toggle the debug overlay (FPS / position / selected item) |
-| `Esc` | Open/close the settings menu (pauses the game) |
+| `Esc` | Open/close the settings menu (pauses the game); on the main menu, closes the Settings page |
 
 You start with an empty inventory - break blocks to collect them (they show up with a count on the hotbar) before you can place them elsewhere. Bedrock can't be broken.
 
@@ -205,5 +205,7 @@ MCCLONE_AUTOTEST=1 MCCLONE_AUTOTEST_FRAMES=90 MCCLONE_AUTOTEST_PATH=out.png \
 ```
 
 Add `MCCLONE_AUTOTEST_TIME=0.5` (0=midnight, 0.5=noon, etc.) to pin the day/night cycle to a specific moment for a reproducible screenshot instead of whatever the default start time renders.
+
+To screenshot one of the menu screens instead of a live world, add `MCCLONE_AUTOTEST_SHOW_MENU=1` together with one of `MCCLONE_AUTOTEST_MENU` (in-game settings), `MCCLONE_AUTOTEST_MAINMENU_SETTINGS` (main-menu Settings page), `MCCLONE_AUTOTEST_WORLDSELECT` or `MCCLONE_AUTOTEST_WORLDGEN`.
 
 This runs the given number of frames, saves a screenshot, and exits.

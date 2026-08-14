@@ -618,7 +618,7 @@ public class Hud {
 
     /** Main menu button indices. */
     public static final int MENU_PLAY = 0;
-    public static final int MENU_WORLD_GEN = 1;
+    public static final int MENU_SETTINGS = 1;
     public static final int MENU_QUIT = 2;
     public static final int MENU_COUNT = 3;
 
@@ -629,7 +629,7 @@ public class Hud {
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
         drawCenteredText("3D Minecraft Clone", 0f, 0.5f, 0.085f, WHITE);
-        String[] items = {"Play", "Quit"};
+        String[] items = {"Play", "Settings", "Quit"};
         for (int i = 0; i < items.length; i++) {
             boolean selected = i == selectedIndex;
             float y = 0.05f - i * 0.1f;
