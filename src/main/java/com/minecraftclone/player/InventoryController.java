@@ -248,4 +248,28 @@ public class InventoryController {
             }
         }
     }
+
+    /**
+     * Creative mode: clicking a catalog item puts a full stack on the cursor
+     * (returning any incompatible cursor item to the inventory first); shift-
+     * clicking instead moves it straight into the first available slot (the
+     * hotbar, since its slots come first).
+     */
+    public void pickCreativeItem(BlockType type, boolean shift) {
+        if (type == null) return;
+        if (shift) {
+            inventory.add(type, Inventory.maxStack(type));
+            return;
+        }
+        if (hasCursorItem() && cursorType != type) {
+            inventory.add(cursorType, cursorCount);
+        }
+        cursorType = type;
+        cursorCount = Inventory.maxStack(type);
+    }
+
+    /** Creative mode: drops whatever the cursor is holding (the "destroy item" slot). */
+    public void destroyCursor() {
+        clearCursor();
+    }
 }

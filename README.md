@@ -18,12 +18,12 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Procedural terrain generation**: layered Perlin/fBm noise for rolling hills and mountains, a second noise channel for rough biomes (desert / plains / forest / snowy peaks), winding rivers carved from a dedicated noise channel, 3D-noise cave systems with lava pooling in the deepest pockets, and four depth-gated ore veins (coal, iron, gold, diamond - rarer ones deeper and sparser, mirroring vanilla Minecraft's progression).
 - **Biome-varied vegetation**: dense oak forests where it's wet, sparser oak on plains, conical pine trees at higher/colder elevations, cacti in deserts, and tall grass/flowers/berry bushes scattered across grassy ground.
 - **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom), distance fog, and cross-shaped "billboard" geometry for non-cube decoration (grass/flowers/bushes) with alpha-cutout transparency.
-- **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a no-clip flight mode.
+- **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a creative-only flight mode (`F` to toggle).
 - **Block interaction**: raycast-based block breaking/placing (reach limited to 6 blocks) with a wireframe outline on the targeted block, gated by a real inventory - breaking a block drops it as an item to pick up, placing spends one, and bedrock is unbreakable. Starts empty, so you gather before you build.
 - **Flowing fluids**: place a **water source** or **lava source** and it flows like Minecraft - it pours straight down until it lands, then spreads out (water 7 blocks, lava 3) and dries up when the source is removed. Flowing lava burns, flowing water drowns. Oceans/cave lava are static fills that don't move.
 - **Item drops**: broken blocks drop their item into the world as a small bobbing sprite that falls with gravity and rests on the ground; walk over it to pick it up (items despawn after 5 minutes). Dying scatters your whole inventory around you the same way.
-- **Inventory & hotbar (Minecraft-style)**: a 36-slot inventory - 9 hotbar slots plus a 3×9 grid - where items stack up to 64 (tools are unstackable). Press `E` to open it and move items with the mouse: left-click picks up/places a whole stack, right-click does one item, shift-click quick-moves a stack between the hotbar and inventory, and drag spreads a stack across slots. The in-game hotbar shows the first 9 slots (`1`-`9` / scroll to select), and creative mode starts with the full catalog.
-- **Game modes** (settings menu): **Survival** (the default), **Creative** (instant break, place blocks for free, flight, no damage or hunger), **Adventure** (no breaking or placing, still vulnerable), and **Spectator** (no-clip flight through the world, no interaction or damage).
+- **Inventory & hotbar (Minecraft-style)**: a 36-slot inventory - 9 hotbar slots plus a 3×9 grid - where items stack up to 64 (tools are unstackable). Press `E` to open it and move items with the mouse: left-click picks up/places a whole stack, right-click does one item, shift-click quick-moves a stack between the hotbar and inventory, and drag spreads a stack across slots. The in-game hotbar shows the first 9 slots (`1`-`9` / scroll to select). **Creative mode** gets its own inventory screen instead: a tabbed item catalog (Building / Decoration / Materials / Tools / Combat / Food) over the hotbar, where clicking an item puts a full stack on your cursor (shift-click moves it straight into a hotbar slot) and an "X" slot deletes whatever the cursor holds.
+- **Game modes** (settings menu): **Survival** (the default), **Creative** (instant break, place blocks for free, flight, no damage or hunger, plus a tabbed creative inventory), **Adventure** (no breaking or placing, still vulnerable), and **Spectator** (no-clip flight through the world, no interaction or damage).
 - **Slabs (partial-cube blocks)**: stone and planks slabs, the first half-height blocks. A slab occupies only the lower half of its cell - meshed with a top face at half height and a half-height collision box (you can step onto one without jumping), and its block-selection outline shrinks to match. The mesher treats slabs as non-occluding, so full blocks beside/above them render correctly; this is the first piece of the partial-cube support that stairs/doors/fences will build on.
 - **On-screen HUD**: a 9-slot hotbar with block icons batched from the game's shared texture atlas and item icons (food/tools) drawn from their own individual PNGs, live stack counts drawn with a tiny procedural pixel font (its own small atlas, no external font/text-rendering library), a highlight border on the selected slot, health/hunger/stamina bars above it, transient on-screen messages (death, crafting, tool breakage), an `F3`-toggled debug overlay (FPS, position, selected item), and a full mouse-driven inventory screen (see Inventory & hotbar).
 - **Settings menu**: `Esc` pauses the game and opens an in-game settings menu (arrows/WASD to move the highlight, `Enter`/`Space`/`Left`/`Right` to change a setting, `Esc` to close). Graphics options:
@@ -73,12 +73,11 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 | `W A S D` | Move |
 | Mouse | Look around |
 | `Space` | Jump (or fly up, in flight mode) |
-| `Left Shift` | Fly down (flight mode only) |
-| `Left Ctrl` | Sprint (costs stamina) |
-| `F` | Toggle flight mode |
+| `Left Shift` | Fly down (flight mode only) || `Left Ctrl` | Sprint (costs stamina) |
+| `F` | Toggle flight (creative only) |
 | Hold Left click | Mine the targeted block (speed/possibility depends on your tool) |
 | Right click | Place the selected block - or eat it, if it's food |
-| `E` | Open/close the inventory (click/drag items, craft on the 3×3 grid) |
+| `E` | Open/close the inventory (or the tabbed creative catalog in creative mode) |
 | `C` | Smelt the selected ore, if you're aiming at a furnace |
 | `1`-`9` / mouse wheel | Select hotbar slot |
 | `F2` | Save a screenshot to `screenshot.png` |
@@ -176,6 +175,14 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 - A real **recipe book / on-screen UI** now that a text renderer exists - the crafting grid, message logs, death/damage messaging, and debug info are in-game (see Features), but there's no scrollable/laid-out recipe book or map/inventory screen beyond the hotbar and crafting grid.
 
 If you've got a specific one of these in mind, just say which and it jumps the queue.
+
+## Testing a PR
+
+Every push to a pull request automatically builds a runnable fat jar and uploads it as a build **artifact** — open the PR's **Actions** tab and download `minecraft-clone-pr-N.jar` from the latest run. You can also comment `/build` on a PR to trigger a fresh build of that PR's head on demand (see `.github/workflows/pr-build.yml`). Download it and run:
+
+```bash
+java -jar minecraft-clone-pr-N.jar
+```
 
 ## Automated smoke testing
 

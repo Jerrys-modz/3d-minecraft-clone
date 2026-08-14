@@ -9,6 +9,7 @@ import com.minecraftclone.engine.graphics.TextRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
+import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.ToolDurability;
@@ -60,6 +61,16 @@ public class Hud {
     private static final float CRAFT_TOP_ROW_Y = INV_TOP_ROW_Y;
     private static final float OUTPUT_X = -0.50f;           // crafting result slot
     private static final float OUTPUT_Y = INV_TOP_ROW_Y - INV_STEP;
+
+    // Creative inventory screen layout (logical square units).
+    private static final float CAT_SLOT = 0.09f;
+    private static final float CAT_GAP = 0.014f;
+    private static final float CAT_STEP = CAT_SLOT + CAT_GAP;
+    private static final float CAT_GRID_TOP_Y = 0.44f;      // center y of the catalog's first row
+    private static final float TAB_W = 0.31f;
+    private static final float TAB_GAP = 0.012f;
+    private static final float TAB_CENTER_Y = 0.80f;        // center y of the tab strip
+    private static final float TAB_H = 0.07f;
 
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
 
@@ -615,6 +626,64 @@ public class Hud {
         return -1;
     }
 
+    /** Center (logical x) of creative tab {@code i} out of {@code count}. */
+    private float tabCenterX(int i, int count) {
+        float total = count * TAB_W + (count - 1) * TAB_GAP;
+        float left = -total / 2f + TAB_W / 2f;
+        return left + i * (TAB_W + TAB_GAP);
+    }
+
+    /** Center (logical x, y) of catalog item {@code index} (row-major, 9 per row). */
+    private float[] catalogItemCenter(int index) {
+        int r = index / 9, c = index % 9;
+        float gridW = 9 * CAT_SLOT + 8 * CAT_GAP;
+        float left = -gridW / 2f + CAT_SLOT / 2f;
+        return new float[]{left + c * CAT_STEP, CAT_GRID_TOP_Y - r * CAT_STEP};
+    }
+
+    /** Center (logical x) of the creative "destroy item" slot, just right of the hotbar. */
+    private float destroySlotX() {
+        return slotCenterX(Inventory.HOTBAR_SIZE - 1, Inventory.HOTBAR_SIZE) + HOTBAR_SLOT_SIZE + HOTBAR_SLOT_GAP;
+    }
+
+    /** The creative tab under the mouse, or -1. */
+    public int creativeTabAt(float logicalX, float logicalY) {
+        int count = CreativeCatalog.TABS.length;
+        for (int i = 0; i < count; i++) {
+            float cx = tabCenterX(i, count);
+            if (Math.abs(logicalX - cx) <= TAB_W / 2f && Math.abs(logicalY - TAB_CENTER_Y) <= TAB_H / 2f) return i;
+        }
+        return -1;
+    }
+
+    /** The index (into the given tab's items) of the catalog item under the mouse, or -1. */
+    public int creativeItemAt(float logicalX, float logicalY, int tab) {
+        BlockType[] items = CreativeCatalog.TABS[tab].items();
+        float half = CAT_SLOT / 2f;
+        for (int i = 0; i < items.length; i++) {
+            float[] c = catalogItemCenter(i);
+            if (Math.abs(logicalX - c[0]) <= half && Math.abs(logicalY - c[1]) <= half) return i;
+        }
+        return -1;
+    }
+
+    /** The hotbar slot (0-8) under the mouse using in-game hotbar geometry, or -1. */
+    public int hotbarSlotAt(float logicalX, float logicalY) {
+        for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
+            float cx = slotCenterX(i, Inventory.HOTBAR_SIZE);
+            float cy = slotCenterY();
+            if (Math.abs(logicalX - cx) <= HOTBAR_SLOT_SIZE / 2f && Math.abs(logicalY - cy) <= HOTBAR_SLOT_SIZE / 2f) return i;
+        }
+        return -1;
+    }
+
+    /** True if the mouse is over the creative "destroy item" slot. */
+    public boolean destroySlotAt(float logicalX, float logicalY) {
+        float cx = destroySlotX();
+        float cy = slotCenterY();
+        return Math.abs(logicalX - cx) <= HOTBAR_SLOT_SIZE / 2f && Math.abs(logicalY - cy) <= HOTBAR_SLOT_SIZE / 2f;
+    }
+
     /**
      * Draws the full Minecraft-style inventory screen: the 36-slot inventory
      * grid (with the hotbar as its bottom row), the 3x3 crafting grid, its
@@ -740,6 +809,169 @@ public class Hud {
         float digitSize = 0.028f;
         text.add(countText, cx + half - text.measure(countText, digitSize), cy - half, digitSize);
         text.render(hudTransform, WHITE);
+    }
+
+    /**
+     * Draws the creative-mode inventory screen: a tabbed item catalog on top of
+     * the normal 9-slot hotbar plus a "destroy item" slot, with the cursor stack
+     * following the mouse. {@code selectedTab} is the active category and
+     * {@code selectedSlot} the highlighted hotbar slot.
+     */
+    public void renderCreative(Inventory inventory, InventoryController controller, int selectedTab, int selectedSlot,
+                               TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
+                               float aspectRatio, float cursorLx, float cursorLy) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        // Full-screen dim behind everything (logical x spans the whole viewport).
+        float full = aspectRatio;
+        float[] dim = {
+                -full, -1, 0, full, -1, 0, full, 1, 0,
+                -full, -1, 0, full, 1, 0, -full, 1, 0,
+        };
+        inventoryPanel.upload(dim);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.62f));
+        inventoryPanel.render();
+
+        // Tabs: a highlight behind the selected tab, labels for all.
+        int tabCount = CreativeCatalog.TABS.length;
+        for (int i = 0; i < tabCount; i++) {
+            float cx = tabCenterX(i, tabCount);
+            boolean selected = i == selectedTab;
+            if (selected) {
+                float[] bg = {
+                        cx - TAB_W / 2f, TAB_CENTER_Y - TAB_H / 2f, 0, cx + TAB_W / 2f, TAB_CENTER_Y - TAB_H / 2f, 0,
+                        cx + TAB_W / 2f, TAB_CENTER_Y + TAB_H / 2f, 0,
+                        cx - TAB_W / 2f, TAB_CENTER_Y - TAB_H / 2f, 0, cx + TAB_W / 2f, TAB_CENTER_Y + TAB_H / 2f, 0,
+                        cx - TAB_W / 2f, TAB_CENTER_Y + TAB_H / 2f, 0,
+                };
+                inventorySlotBg.upload(bg);
+                lineShader.setUniform("color", new Vector4f(0.35f, 0.35f, 0.35f, 0.95f));
+                inventorySlotBg.render();
+            }
+            drawCenteredText(CreativeCatalog.TABS[i].label(), cx, TAB_CENTER_Y - 0.022f, 0.026f,
+                    selected ? WHITE : new Vector4f(0.72f, 0.72f, 0.72f, 1f));
+        }
+        lineShader.unbind();
+
+        // Catalog slot backgrounds + icons for the selected tab.
+        BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
+        float half = CAT_SLOT / 2f - 0.005f;
+        slotBgVerts.clear();
+        for (int i = 0; i < items.length; i++) {
+            float[] c = catalogItemCenter(i);
+            addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
+        }
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.35f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+
+        beginSlotBatch();
+        for (int i = 0; i < items.length; i++) {
+            float[] c = catalogItemCenter(i);
+            addSlotIcon(c[0], c[1], half, items[i], 1, itemTextures, atlas, durability);
+        }
+        flushBlockBatch(atlas);
+        text.render(hudTransform, WHITE);
+
+        // Catalog item hover highlight.
+        int hoverItem = creativeItemAt(cursorLx, cursorLy, selectedTab);
+        if (hoverItem >= 0) {
+            float[] c = catalogItemCenter(hoverItem);
+            inventoryHover.upload(outlineLines(c[0], c[1], CAT_SLOT / 2f + 0.004f));
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.9f));
+            glLineWidth(2f);
+            inventoryHover.render();
+            lineShader.unbind();
+        }
+
+        // Hotbar slot backgrounds + the destroy slot, then their icons.
+        float centerY = slotCenterY();
+        slotBgVerts.clear();
+        for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
+            float cx = slotCenterX(i, Inventory.HOTBAR_SIZE);
+            addQuad3(slotBgVerts, cx - half, centerY - half, cx + half, centerY + half);
+        }
+        float dx = destroySlotX();
+        addQuad3(slotBgVerts, dx - half, centerY - half, dx + half, centerY + half);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.45f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+
+        beginSlotBatch();
+        float hotbarHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
+        for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
+            addSlotIcon(slotCenterX(i, Inventory.HOTBAR_SIZE), centerY, hotbarHalf,
+                    inventory.typeOf(i), inventory.countOf(i), itemTextures, atlas, durability);
+        }
+        flushBlockBatch(atlas);
+        text.render(hudTransform, WHITE);
+
+        // Hotbar slot numbers.
+        text.begin();
+        for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
+            text.add(String.valueOf(i + 1), slotCenterX(i, Inventory.HOTBAR_SIZE) - hotbarHalf + 0.006f,
+                    centerY - hotbarHalf + 0.002f, 0.022f);
+        }
+        text.render(hudTransform, new Vector4f(0.55f, 0.55f, 0.55f, 1f));
+
+        // Selected-slot + hover highlight on the hotbar, and the destroy "X".
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        float selCx = slotCenterX(Math.max(0, Math.min(Inventory.HOTBAR_SIZE - 1, selectedSlot)), Inventory.HOTBAR_SIZE);
+        inventoryHover.upload(outlineLines(selCx, centerY, HOTBAR_SLOT_SIZE / 2f + 0.006f));
+        lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.95f));
+        glLineWidth(2f);
+        inventoryHover.render();
+        int hoverHotbar = hotbarSlotAt(cursorLx, cursorLy);
+        if (hoverHotbar >= 0 && hoverHotbar != selectedSlot) {
+            float hx = slotCenterX(hoverHotbar, Inventory.HOTBAR_SIZE);
+            inventoryHover.upload(outlineLines(hx, centerY, HOTBAR_SLOT_SIZE / 2f + 0.006f));
+            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.5f));
+            inventoryHover.render();
+        }
+        if (destroySlotAt(cursorLx, cursorLy)) {
+            inventoryHover.upload(outlineLines(dx, centerY, HOTBAR_SLOT_SIZE / 2f + 0.006f));
+            lineShader.setUniform("color", new Vector4f(1f, 0.3f, 0.3f, 0.9f));
+            inventoryHover.render();
+        }
+        lineShader.unbind();
+
+        renderDurabilityBars(hotbarHalf);
+
+        // "X" in the destroy slot.
+        drawCenteredText("X", dx, centerY - 0.022f, 0.04f, new Vector4f(0.85f, 0.85f, 0.85f, 1f));
+
+        // Cursor stack following the mouse.
+        if (controller.hasCursorItem()) {
+            drawCursorStack(atlas, itemTextures, controller.cursorType(), controller.cursorCount(),
+                    cursorLx + 0.02f, cursorLy - 0.02f);
+        }
+
+        drawCenteredText("Creative    Click: add to cursor    Shift-click: to hotbar    X: delete",
+                0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+
+        glEnable(GL_DEPTH_TEST);
     }
 
     public void destroy() {

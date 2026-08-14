@@ -99,6 +99,9 @@ public class Player {
         this.gameMode = mode;
         if (mode.isSpectator()) {
             flying = true;
+        } else if (!mode.isCreative()) {
+            // Only creative (and spectator) can fly - leaving creative drops you out of flight.
+            flying = false;
         }
     }
 
@@ -118,8 +121,8 @@ public class Player {
         updateLook(input);
         if (gameMode.isSpectator()) {
             flying = true; // always in no-clip flight
-        } else {
-            updateFlyToggle(input);
+        } else if (gameMode.isCreative()) {
+            updateFlyToggle(input); // F toggles flight in creative only
         }
         boolean sprintingAndMoving = updateMovement(dt, input, world);
         camera.setPosition(position.x, position.y + EYE_HEIGHT, position.z);
