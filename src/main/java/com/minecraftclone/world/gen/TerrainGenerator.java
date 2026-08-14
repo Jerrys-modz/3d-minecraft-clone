@@ -452,7 +452,7 @@ public class TerrainGenerator {
                             } else if (featureRandom.nextInt(120) == 0) {
                                 placeMushroom(chunk, x, height + 1, z, featureRandom);
                             } else {
-                                placeGroundCover(chunk, x, height + 1, z, featureRandom, false);
+                                placeGrassCover(chunk, x, height + 1, z, featureRandom);
                             }
                         }
                     }
@@ -548,6 +548,18 @@ public class TerrainGenerator {
             chunk.setLocal(x, y, z, rnd.nextBoolean() ? BlockType.FLOWER_RED : BlockType.FLOWER_YELLOW);
         } else if (rnd.nextInt(grassChance) == 0) {
             chunk.setLocal(x, y, z, BlockType.TALL_GRASS);
+        }
+    }
+
+    /** A thick carpet of tall grass for the plains - a proper grassland, with the odd flower or berry bush. */
+    private void placeGrassCover(Chunk chunk, int x, int y, int z, Random rnd) {
+        int roll = rnd.nextInt(5);
+        if (roll < 3) {
+            chunk.setLocal(x, y, z, BlockType.TALL_GRASS);
+        } else if (roll == 3) {
+            chunk.setLocal(x, y, z, rnd.nextBoolean() ? BlockType.FLOWER_RED : BlockType.FLOWER_YELLOW);
+        } else if (rnd.nextInt(40) == 0) {
+            chunk.setLocal(x, y, z, BlockType.BERRY_BUSH);
         }
     }
 
