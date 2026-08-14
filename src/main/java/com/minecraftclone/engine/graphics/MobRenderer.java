@@ -1,71 +1,159 @@
 package com.minecraftclone.engine.graphics;
 
-import com.minecraftclone.engine.Camera;
-import com.minecraftclone.engine.Shader;
 import com.minecraftclone.util.FloatArray;
 import com.minecraftclone.util.IntArray;
 import com.minecraftclone.world.Mob;
-import org.joml.Vector3f;
 
 import java.util.List;
 
-import static org.lwjgl.opengl.GL11.*;
-
 /**
- * Draws {@link Mob}s as camera-facing billboards (one quad per animal, using
- * its own procedural sprite - see {@link MobTextures}), batching all mobs of
- * the same kind into a single mesh so the whole herd costs a few draw calls.
- * Mobs bob gently while walking so they look alive. The caller must already
- * have the chunk shader bound with projection/view/fog/ambient uniforms set,
- * so mobs get the same fog and day/night lighting as everything else.
+ * Draws {@link Mob}s as small 3D voxel animals - each one a handful of textured
+ * boxes (body, head, four legs) using the same interleaved vertex format and
+ * baked directional shading as the world's chunk mesh, so they render as solid
+ * creatures that sit in the blocky scene rather than flat camera-facing
+ * sprites. The boxes are rotated to face the mob's heading, and all mobs of the
+ * same kind are batched into a single mesh (one draw call per kind). Faces map
+ * onto per-kind skin regions (see {@link MobTextures}); the head's front face
+ * uses the "face" region with eyes/snout, and the body top uses the lighter
+ * top region.
  */
 public class MobRenderer {
 
-    private final Mesh mesh = new Mesh();
-    private final Vector3f right = new Vector3f();
+    private static final float LIGHT_TOP = 1.0f;
+    private static final float LIGHT_BOTTOM = 0.4f;
+    private static final float LIGHT_EW = 0.6f;
+    private static final float LIGHT_NS = 0.75f;
 
-    public void render(MobTextures textures, List<Mob> mobs, Camera camera) {
-        if (mobs.isEmpty()) return;
+    /** A box body part, in local coords with the mob's feet at y=0 and facing +z. */
+    private static final class Part {
+        final float hw, hh, hd;      // half extents
+        final float cx, cy, cz;      // center offset from the feet
+        final float[][] faces;       // skin region per face: TOP, BOTTOM, +X, -X, +Z, -Z
 
-        Vector3f r = camera.getRight();
-        right.set(r);
-
-        // Billboards need to be visible from both sides (like dropped items).
-        glDisable(GL_CULL_FACE);
-        for (Mob.Type type : Mob.Type.values()) {
-            FloatArray v = new FloatArray(mobs.size() * 40);
-            IntArray i = new IntArray(mobs.size() * 6);
-            int[] c = {0};
-            for (Mob mob : mobs) {
-                if (mob.type == type) {
-                    addBillboard(v, i, c, mob);
-                }
-            }
-            if (c[0] > 0) {
-                mesh.upload(v.toArray(), i.toArray());
-                textures.bind(type);
-                mesh.render();
-            }
+        Part(float hw, float hh, float hd, float cx, float cy, float cz, float[][] faces) {
+            this.hw = hw;
+            this.hh = hh;
+            this.hd = hd;
+            this.cx = cx;
+            this.cy = cy;
+            this.cz = cz;
+            this.faces = faces;
         }
-        glEnable(GL_CULL_FACE);
     }
 
-    private void addBillboard(FloatArray verts, IntArray inds, int[] counter, Mob mob) {
-        float cy = mob.position.y + mob.bobOffset();
-        float hw = mob.type.width / 2f, hh = mob.type.height / 2f;
-        float rx = right.x * hw, rz = right.z * hw;
-        int base = counter[0];
+    private static final float[][] BODY_FACES = {
+            MobTextures.BODY_TOP, MobTextures.BODY, MobTextures.BODY, MobTextures.BODY, MobTextures.BODY, MobTextures.BODY};
+    private static final float[][] HEAD_FACES = {
+            MobTextures.HEAD_SIDE, MobTextures.HEAD_SIDE, MobTextures.HEAD_SIDE,
+            MobTextures.HEAD_SIDE, MobTextures.HEAD_FRONT, MobTextures.HEAD_SIDE};
+    private static final float[][] LEG_FACES = {
+            MobTextures.LEG, MobTextures.LEG, MobTextures.LEG, MobTextures.LEG, MobTextures.LEG, MobTextures.LEG};
 
-        // Four corners: bottom-left, bottom-right, top-right, top-left. 10 floats
-        // per vertex (pos, uv, light, blockLight, fluidFlow, flowDir) - see Mesh.
-        verts.add(mob.position.x - rx); verts.add(cy - hh); verts.add(mob.position.z - rz); verts.add(0f); verts.add(1f); verts.add(1f); verts.add(0f); verts.add(0f); verts.add(0f); verts.add(0f);
-        verts.add(mob.position.x + rx); verts.add(cy - hh); verts.add(mob.position.z + rz); verts.add(1f); verts.add(1f); verts.add(1f); verts.add(0f); verts.add(0f); verts.add(0f); verts.add(0f);
-        verts.add(mob.position.x + rx); verts.add(cy + hh); verts.add(mob.position.z + rz); verts.add(1f); verts.add(0f); verts.add(1f); verts.add(0f); verts.add(0f); verts.add(0f); verts.add(0f);
-        verts.add(mob.position.x - rx); verts.add(cy + hh); verts.add(mob.position.z - rz); verts.add(0f); verts.add(0f); verts.add(1f); verts.add(0f); verts.add(0f); verts.add(0f); verts.add(0f);
+    private static Part[] parts(Mob.Type type) {
+        return switch (type) {
+            case PIG -> new Part[]{
+                    new Part(0.42f, 0.23f, 0.27f, 0f, 0.42f, 0f, BODY_FACES),   // body
+                    new Part(0.22f, 0.17f, 0.19f, 0f, 0.70f, 0.30f, HEAD_FACES), // head
+                    new Part(0.07f, 0.20f, 0.07f, -0.27f, 0.20f, -0.16f, LEG_FACES),
+                    new Part(0.07f, 0.20f, 0.07f, 0.27f, 0.20f, -0.16f, LEG_FACES),
+                    new Part(0.07f, 0.20f, 0.07f, -0.27f, 0.20f, 0.16f, LEG_FACES),
+                    new Part(0.07f, 0.20f, 0.07f, 0.27f, 0.20f, 0.16f, LEG_FACES),
+            };
+            case COW -> new Part[]{
+                    new Part(0.47f, 0.25f, 0.32f, 0f, 0.50f, 0f, BODY_FACES),
+                    new Part(0.24f, 0.19f, 0.21f, 0f, 0.80f, 0.35f, HEAD_FACES),
+                    new Part(0.08f, 0.225f, 0.08f, -0.32f, 0.225f, -0.20f, LEG_FACES),
+                    new Part(0.08f, 0.225f, 0.08f, 0.32f, 0.225f, -0.20f, LEG_FACES),
+                    new Part(0.08f, 0.225f, 0.08f, -0.32f, 0.225f, 0.20f, LEG_FACES),
+                    new Part(0.08f, 0.225f, 0.08f, 0.32f, 0.225f, 0.20f, LEG_FACES),
+            };
+            case SHEEP -> new Part[]{
+                    new Part(0.42f, 0.27f, 0.29f, 0f, 0.50f, 0f, BODY_FACES),
+                    new Part(0.19f, 0.17f, 0.17f, 0f, 0.72f, 0.32f, HEAD_FACES),
+                    new Part(0.065f, 0.20f, 0.065f, -0.28f, 0.20f, -0.18f, LEG_FACES),
+                    new Part(0.065f, 0.20f, 0.065f, 0.28f, 0.20f, -0.18f, LEG_FACES),
+                    new Part(0.065f, 0.20f, 0.065f, -0.28f, 0.20f, 0.18f, LEG_FACES),
+                    new Part(0.065f, 0.20f, 0.065f, 0.28f, 0.20f, 0.18f, LEG_FACES),
+            };
+        };
+    }
 
-        inds.add(base); inds.add(base + 1); inds.add(base + 2);
-        inds.add(base); inds.add(base + 2); inds.add(base + 3);
-        counter[0] += 4;
+    private final Mesh mesh = new Mesh();
+
+    /** Draws every mob as a batched set of 3D boxes. Caller must have the chunk shader bound. */
+    public void render(MobTextures textures, List<Mob> mobs) {
+        if (mobs.isEmpty()) return;
+
+        for (Mob.Type type : Mob.Type.values()) {
+            int count = 0;
+            for (Mob m : mobs) {
+                if (m.type == type) count++;
+            }
+            if (count == 0) continue;
+
+            Part[] parts = parts(type);
+            FloatArray v = new FloatArray(count * parts.length * 240); // 6 faces * 4 verts * 10 floats
+            IntArray i = new IntArray(count * parts.length * 36);      // 6 faces * 6 indices
+            int[] c = {0};
+            for (Mob m : mobs) {
+                if (m.type == type) {
+                    for (Part part : parts) {
+                        emitBox(v, i, c, m, part);
+                    }
+                }
+            }
+            mesh.upload(v.toArray(), i.toArray());
+            textures.bind(type);
+            mesh.render();
+        }
+    }
+
+    private void emitBox(FloatArray v, IntArray i, int[] counter, Mob mob, Part part) {
+        float yaw = mob.yaw;
+        float cos = (float) Math.cos(yaw), sin = (float) Math.sin(yaw);
+        float feetY = mob.position.y - mob.type.height / 2f;
+        float x0 = part.cx - part.hw, x1 = part.cx + part.hw;
+        float y0 = part.cy - part.hh, y1 = part.cy + part.hh;
+        float z0 = part.cz - part.hd, z1 = part.cz + part.hd;
+
+        // Local corners (x, y, z), wound to match the chunk mesh so back-face
+        // culling leaves the outside visible.
+        float[][] corners = {
+                {x0, y0, z0}, {x1, y0, z0}, {x0, y0, z1}, {x1, y0, z1},
+                {x0, y1, z0}, {x1, y1, z0}, {x0, y1, z1}, {x1, y1, z1},
+        };
+        int[][] faces = {{6, 7, 5, 4}, {0, 1, 3, 2}, {3, 1, 5, 7}, {0, 2, 6, 4}, {2, 3, 7, 6}, {1, 0, 4, 5}};
+        float[] lights = {LIGHT_TOP, LIGHT_BOTTOM, LIGHT_EW, LIGHT_EW, LIGHT_NS, LIGHT_NS};
+
+        for (int f = 0; f < 6; f++) {
+            float[] region = part.faces[f];
+            float u0 = region[0], v0 = region[1], u1 = region[2], v1 = region[3];
+            int base = counter[0];
+            for (int k = 0; k < 4; k++) {
+                float[] corner = corners[faces[f][k]];
+                // Rotate the corner's (x, z) offset by the mob's yaw around the feet axis.
+                float wx = mob.position.x + corner[0] * cos + corner[2] * sin;
+                float wz = mob.position.z - corner[0] * sin + corner[2] * cos;
+                float wy = feetY + corner[1];
+                v.add(wx);
+                v.add(wy);
+                v.add(wz);
+                v.add(k == 1 || k == 2 ? u1 : u0);
+                v.add(k == 0 || k == 1 ? v1 : v0);
+                v.add(lights[f]);
+                v.add(0f);  // blockLight
+                v.add(0f);  // fluidFlow
+                v.add(0f);
+                v.add(0f);  // flowDir
+            }
+            i.add(base);
+            i.add(base + 1);
+            i.add(base + 2);
+            i.add(base);
+            i.add(base + 2);
+            i.add(base + 3);
+            counter[0] += 4;
+        }
     }
 
     public void destroy() {

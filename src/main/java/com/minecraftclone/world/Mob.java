@@ -22,9 +22,9 @@ public class Mob {
 
     /** Mob kinds, with their dimensions in blocks and walking speed. */
     public enum Type {
-        PIG(0.9f, 0.7f, 1.6f),
-        COW(1.0f, 0.9f, 1.4f),
-        SHEEP(0.9f, 0.8f, 1.4f);
+        PIG(0.9f, 0.9f, 1.6f),
+        COW(1.0f, 1.0f, 1.4f),
+        SHEEP(0.9f, 0.9f, 1.4f);
 
         public final float width;     // x/z footprint
         public final float height;    // full body height
@@ -48,6 +48,8 @@ public class Mob {
     public final Vector3f position = new Vector3f();
     public final Vector3f velocity = new Vector3f();
     public float age;
+    /** Facing direction in radians, 0 = +z; smooths toward the movement direction. */
+    public float yaw;
 
     private boolean onGround;
     private boolean moving;
@@ -110,6 +112,22 @@ public class Mob {
         } else {
             stuckTimer = 0f;
         }
+
+        // Face the way we're going (smooth turn, so it doesn't snap around).
+        float hSpeed = (float) Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+        if (hSpeed > 0.1f) {
+            float target = (float) Math.atan2(velocity.x, velocity.z);
+            yaw = turnToward(yaw, target, 12f * dt);
+        }
+    }
+
+    /** Rotates {@code current} toward {@code target} by at most {@code maxDelta}, wrapping around -pi..pi. */
+    private static float turnToward(float current, float target, float maxDelta) {
+        float diff = target - current;
+        while (diff > Math.PI) diff -= 2f * (float) Math.PI;
+        while (diff < -Math.PI) diff += 2f * (float) Math.PI;
+        float step = Math.max(-maxDelta, Math.min(maxDelta, diff));
+        return current + step;
     }
 
     /** Picks a random walkable destination and paths to it; sometimes just idles. */

@@ -618,7 +618,7 @@ public class Main {
             atlas.bind();
             world.render(chunkShader);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
-            mobRenderer.render(mobTextures, world.getMobs(), player.getCamera());
+            mobRenderer.render(mobTextures, world.getMobs());
             chunkShader.unbind();
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
