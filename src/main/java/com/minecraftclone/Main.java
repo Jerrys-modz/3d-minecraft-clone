@@ -198,6 +198,9 @@ public class Main {
         if (System.getenv("MCCLONE_AUTOTEST_YAW") != null) {
             player.getCamera().setYaw(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_YAW")));
         }
+        if (System.getenv("MCCLONE_AUTOTEST_MENU") != null) {
+            menuOpen[0] = true;
+        }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
 

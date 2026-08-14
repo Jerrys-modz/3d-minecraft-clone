@@ -532,17 +532,12 @@ public class Hud {
             boolean selected = i == selectedIndex;
             drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
             drawTextAt(Settings.label(i), left + SETTINGS_LEFT_PAD, baseline, size, selected ? highlight : idle);
-            // The current value, always visible beside the control.
+            // The current value, always visible beside the control, in the same
+            // font size as the labels so every row reads consistently.
             String value = settings.valueText(i);
-            if (Settings.isToggle(i)) {
-                float valueWidth = text.measure(value, size);
-                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
-                        selected ? highlight : idleValue);
-            } else {
-                float valueWidth = text.measure(value, 0.024f);
-                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, 0.024f,
-                        selected ? highlight : idleValue);
-            }
+            float valueWidth = text.measure(value, size);
+            drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                    selected ? highlight : idleValue);
         }
 
         // Sliders for the range rows, drawn together with one line-shader pass.
