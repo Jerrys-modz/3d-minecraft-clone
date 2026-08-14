@@ -4,6 +4,8 @@ import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
+import com.minecraftclone.engine.graphics.MobRenderer;
+import com.minecraftclone.engine.graphics.MobTextures;
 import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.CraftingGrid;
@@ -123,6 +125,8 @@ public class Main {
         atlas.generate();
         ItemTextures itemTextures = new ItemTextures();
         itemTextures.generate();
+        MobTextures mobTextures = new MobTextures();
+        mobTextures.generate();
         FontAtlas font = new FontAtlas();
         font.generate();
 
@@ -147,8 +151,17 @@ public class Main {
         float[] spawn = findSpawn(world);
         player.spawn(world, spawn[0], spawn[1]);
 
+        // Stream the chunks around the actual spawn point (it may be far from the
+        // origin the warm-up generated), then scatter a herd so the world feels
+        // alive from the very first frame.
+        for (int i = 0; i < 80; i++) {
+            world.update(player.getPosition().x, player.getPosition().z);
+        }
+        world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12);
+
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
+        MobRenderer mobRenderer = new MobRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
@@ -453,6 +466,9 @@ public class Main {
             // Item-entity physics + pickup.
             world.updateItems(dt, player.getPosition(), player.getInventory());
 
+            // Passive animals: wander, spawn on nearby grass, despawn when far away.
+            world.updateMobs(dt, player.getPosition().x, player.getPosition().z, loot);
+
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
             for (int i = messages.size() - 1; i >= 0; i--) {
                 messages.get(i).age += dt;
@@ -602,6 +618,7 @@ public class Main {
             atlas.bind();
             world.render(chunkShader);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
+            mobRenderer.render(mobTextures, world.getMobs(), player.getCamera());
             chunkShader.unbind();
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
@@ -674,6 +691,7 @@ public class Main {
 
         hud.destroy();
         itemRenderer.destroy();
+        mobRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
         hudShader.destroy();
@@ -681,6 +699,7 @@ public class Main {
         skyRenderer.destroy();
         atlas.destroy();
         itemTextures.destroy();
+        mobTextures.destroy();
         font.destroy();
         world.destroy();
         window.close();

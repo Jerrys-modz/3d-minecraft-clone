@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * Owns all loaded chunks: streaming (load/unload around the player), meshing,
@@ -45,6 +46,13 @@ public class World implements BlockAccessor {
     private static final float ITEM_TERMINAL_VELOCITY = -40f;
     private static final float ITEM_HALF_HEIGHT = 0.15f;
     private static final float PICKUP_RADIUS = 1.5f;
+
+    // Passive animals wandering the surface. Transient - not saved.
+    private final List<Mob> mobs = new ArrayList<>();
+    private static final int MAX_MOBS = 32;                    // loaded at once
+    private static final float MOB_SPAWN_RADIUS = 40f;         // spawn within this many blocks
+    private static final float MOB_DESPAWN_RADIUS = 72f;       // despawn beyond this
+    private static final int MOB_SPAWN_ODDS = 30;              // 1 in N ticks try to spawn
 
     public World(long seed, TextureAtlas atlas, Path saveDir) {
         this.generator = new TerrainGenerator(seed);
@@ -380,6 +388,59 @@ public class World implements BlockAccessor {
 
     public int getLoadedChunkCount() {
         return chunks.size();
+    }
+
+    /** All currently-alive mobs (read-only; rendered by the caller). */
+    public List<Mob> getMobs() {
+        return mobs;
+    }
+
+    /**
+     * Advances every mob (wandering, gravity, collision), spawns new ones on
+     * grass surfaces near the player up to {@link #MAX_MOBS}, and despawns any
+     * that wander beyond {@link #MOB_DESPAWN_RADIUS} so a herd never trails the
+     * player across the whole map. Call once per frame from the main thread.
+     */
+    public void updateMobs(float dt, float playerWorldX, float playerWorldZ, Random rnd) {
+        float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
+        for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
+            Mob mob = it.next();
+            float dx = mob.position.x - playerWorldX;
+            float dz = mob.position.z - playerWorldZ;
+            if (dx * dx + dz * dz > despawnSq || mob.position.y < -64f) {
+                it.remove();
+                continue;
+            }
+            mob.update(dt, this, rnd);
+        }
+
+        if (mobs.size() < MAX_MOBS && rnd.nextInt(MOB_SPAWN_ODDS) == 0) {
+            trySpawnMob(rnd, playerWorldX, playerWorldZ);
+        }
+    }
+
+    /** Seeds the world with an initial scattering of mobs so it feels alive from the start. */
+    public void spawnInitialMobs(Random rnd, float playerWorldX, float playerWorldZ, int count) {
+        for (int i = 0; i < count && mobs.size() < MAX_MOBS; i++) {
+            trySpawnMob(rnd, playerWorldX, playerWorldZ);
+        }
+    }
+
+    /** Spawns one mob on a random grass surface within range; does nothing if no spot qualifies. */
+    private void trySpawnMob(Random rnd, float playerWorldX, float playerWorldZ) {
+        int radius = (int) MOB_SPAWN_RADIUS;
+        for (int attempt = 0; attempt < 6; attempt++) {
+            int x = (int) Math.floor(playerWorldX) + rnd.nextInt(radius * 2) - radius;
+            int z = (int) Math.floor(playerWorldZ) + rnd.nextInt(radius * 2) - radius;
+            if (!isFullyGenerated(x, z)) continue;
+            int y = getSurfaceHeight(x, z);
+            if (y < 1 || y >= Chunk.HEIGHT - 1) continue;
+            if (getBlock(x, y, z) != BlockType.GRASS) continue;
+            if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
+            Mob.Type type = Mob.Type.values()[rnd.nextInt(Mob.Type.values().length)];
+            mobs.add(new Mob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
+            return;
+        }
     }
 
     public boolean isFullyGenerated(int worldX, int worldZ) {
