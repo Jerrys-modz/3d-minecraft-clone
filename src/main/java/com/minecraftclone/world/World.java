@@ -101,6 +101,16 @@ public class World implements BlockAccessor {
         return chunk.getLocal(lx, worldY, lz);
     }
 
+    @Override
+    public int getFluidLevel(int worldX, int worldY, int worldZ) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return 0;
+        Chunk chunk = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
+        if (chunk == null) return 0;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        return chunk.getFluidLevel(lx, worldY, lz);
+    }
+
     public void setBlock(int worldX, int worldY, int worldZ, BlockType type) {
         if (worldY < 0 || worldY >= Chunk.HEIGHT) return;
         int cx = worldToChunk(worldX);
@@ -166,6 +176,16 @@ public class World implements BlockAccessor {
      * fluid simulation for transient flow cells, which are recomputed (not saved).
      */
     public void setFluidBlock(int worldX, int worldY, int worldZ, BlockType type) {
+        setFluidBlock(worldX, worldY, worldZ, type, 0);
+    }
+
+    /**
+     * Like {@link #setFluidBlock(int, int, int, BlockType)}, but also records
+     * this fill's distance from its source (see {@link FluidSim.Result#levels}
+     * and {@link BlockAccessor#getFluidLevel}) so the renderer can grade the
+     * surface height down as flowing fluid spreads farther from its source.
+     */
+    public void setFluidBlock(int worldX, int worldY, int worldZ, BlockType type, int level) {
         if (worldY < 0 || worldY >= Chunk.HEIGHT) return;
         int cx = worldToChunk(worldX);
         int cz = worldToChunk(worldZ);
@@ -173,7 +193,7 @@ public class World implements BlockAccessor {
         if (chunk == null) return;
         int lx = Math.floorMod(worldX, Chunk.SIZE);
         int lz = Math.floorMod(worldZ, Chunk.SIZE);
-        chunk.setLocal(lx, worldY, lz, type);
+        chunk.setLocal(lx, worldY, lz, type, level);
         if (lx == 0) markNeighborDirty(cx - 1, cz);
         if (lx == Chunk.SIZE - 1) markNeighborDirty(cx + 1, cz);
         if (lz == 0) markNeighborDirty(cx, cz - 1);
@@ -205,7 +225,8 @@ public class World implements BlockAccessor {
 
         FluidSim.Result result = FluidSim.compute(this, sources, flows);
         for (Map.Entry<Long, BlockType> e : result.fill().entrySet()) {
-            setFluidBlock(FluidSim.keyX(e.getKey()), FluidSim.keyY(e.getKey()), FluidSim.keyZ(e.getKey()), e.getValue());
+            int level = result.levels().getOrDefault(e.getKey(), 0);
+            setFluidBlock(FluidSim.keyX(e.getKey()), FluidSim.keyY(e.getKey()), FluidSim.keyZ(e.getKey()), e.getValue(), level);
         }
         for (long k : result.remove()) {
             setFluidBlock(FluidSim.keyX(k), FluidSim.keyY(k), FluidSim.keyZ(k), BlockType.AIR);

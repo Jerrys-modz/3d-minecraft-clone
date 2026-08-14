@@ -35,6 +35,12 @@ public class Chunk {
     // Local positions of every flowing-fluid block (source or flow) currently in
     // this chunk, kept incrementally up to date - consulted by World's fluid sim.
     private final List<int[]> fluidBlocks = new ArrayList<>();
+    // Per-block fluid flow "level" (0 = right next to a source, up to FluidSim's
+    // max distance) - only meaningful where blocks[] holds a *_FLOW type; grades
+    // the rendered surface height (see fluidTop) so flow visibly thins out with
+    // distance. Not persisted (flow cells themselves aren't saved either), and
+    // default-zero everywhere else is exactly what a non-flow cell should read.
+    private final byte[] fluidLevels = new byte[SIZE * HEIGHT * SIZE];
 
     private volatile boolean dirty = true;
     private boolean generated = false;
@@ -88,14 +94,30 @@ public class Chunk {
     }
 
     public void setLocal(int x, int y, int z, BlockType type) {
+        setLocal(x, y, z, type, 0);
+    }
+
+    /**
+     * Like {@link #setLocal(int, int, int, BlockType)}, but also records a
+     * fluid flow level (0 = right next to a source; ignored for non-flow
+     * types) - see {@link #fluidLevels} and World's fluid simulation.
+     */
+    public void setLocal(int x, int y, int z, BlockType type, int level) {
         if (!inBounds(x, y, z)) return;
         BlockType old = getLocal(x, y, z);
         if (old.isLightSource()) removeLightSource(x, y, z);
         if (old.isFlowingFluid()) removeFluid(x, y, z);
         blocks[index(x, y, z)] = type.id;
+        fluidLevels[index(x, y, z)] = (byte) level;
         if (type.isLightSource()) lightSources.add(new int[]{x, y, z, type.lightLevel});
         if (type.isFlowingFluid()) fluidBlocks.add(new int[]{x, y, z});
         dirty = true;
+    }
+
+    /** This block's fluid flow level (see {@link #fluidLevels}); 0 for anything that isn't a tracked flow block. */
+    public int getFluidLevel(int x, int y, int z) {
+        if (!inBounds(x, y, z)) return 0;
+        return fluidLevels[index(x, y, z)];
     }
 
     private void removeLightSource(int x, int y, int z) {
@@ -141,6 +163,10 @@ public class Chunk {
             throw new IllegalArgumentException("Expected " + blocks.length + " bytes, got " + data.length);
         }
         System.arraycopy(data, 0, blocks, 0, blocks.length);
+        // Fluid levels aren't persisted (flow cells themselves usually aren't
+        // either - see setFluidBlock) - reset to 0 and let the next fluid tick
+        // recompute proper levels for any flow cells that happened to be saved.
+        java.util.Arrays.fill(fluidLevels, (byte) 0);
         dirty = true;
         rebuildLightSourceIndex();
         rebuildFluidIndex();
@@ -304,14 +330,25 @@ public class Chunk {
 
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
 
+    // Resting-flow surface height range: just under a source at level 0,
+    // thinning down to a shallow sheet at the farthest level it can reach -
+    // see fluidTop.
+    private static final float FLOW_TOP_NEAR = 0.86f;
+    private static final float FLOW_TOP_FAR = 0.25f;
+
     /**
      * Fluid surface height (above its cell's floor, 0..1): 0.9 for a static/source
-     * block, full height for an unsupported (falling) flow, otherwise a shorter
-     * resting "puddle" height.
+     * block, full height for an unsupported (falling) flow, otherwise a resting
+     * "puddle" height that grades down from {@link #FLOW_TOP_NEAR} right next to
+     * its source to {@link #FLOW_TOP_FAR} at the farthest it's spread - real
+     * flowing fluid visibly thins out with distance, not one fixed puddle depth.
      */
     private float fluidTop(BlockAccessor world, int wx, int wy, int wz, BlockType type) {
         if (type == BlockType.WATER || type == BlockType.LAVA || type.isFluidSource()) return 0.9f;
-        return world.getBlock(wx, wy - 1, wz) == BlockType.AIR ? 1f : 0.78f;
+        if (world.getBlock(wx, wy - 1, wz) == BlockType.AIR) return 1f;
+        int maxLevel = type.isWater() ? FluidSim.WATER_FLOW_DISTANCE : FluidSim.LAVA_FLOW_DISTANCE;
+        float t = Math.min(world.getFluidLevel(wx, wy, wz), maxLevel) / (float) maxLevel;
+        return FLOW_TOP_NEAR - t * (FLOW_TOP_NEAR - FLOW_TOP_FAR);
     }
 
     /** Emits a lowered translucent surface for fluid instead of a solid full cube. */

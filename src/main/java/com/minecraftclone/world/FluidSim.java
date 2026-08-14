@@ -27,8 +27,13 @@ public final class FluidSim {
     public record FluidBlock(int x, int y, int z, BlockType type) {
     }
 
-    /** The result of one pass: cells to fill (pos -> flow type) and cells to dry up. */
-    public record Result(Map<Long, BlockType> fill, Set<Long> remove) {
+    /**
+     * The result of one pass: cells to fill (pos -> flow type), each fill's
+     * distance from the source it was reached from (pos -> 0..maxDistance,
+     * same keys as {@code fill} - see {@link BlockAccessor#getFluidLevel}),
+     * and cells to dry up.
+     */
+    public record Result(Map<Long, BlockType> fill, Map<Long, Integer> levels, Set<Long> remove) {
     }
 
     // Coordinates are bounded by the loaded-chunk radius (fluids only flow within
@@ -77,6 +82,7 @@ public final class FluidSim {
      */
     public static Result compute(BlockAccessor world, List<FluidBlock> sources, List<FluidBlock> flows) {
         Map<Long, BlockType> fill = new HashMap<>();
+        Map<Long, Integer> levels = new HashMap<>();
         Set<Long> reachedFlow = new HashSet<>();
         Set<Long> visited = new HashSet<>();
         ArrayDeque<Node> queue = new ArrayDeque<>();
@@ -94,20 +100,20 @@ public final class FluidSim {
             if (below == BlockType.AIR || below.cross) {
                 // Air (or a cross decoration): fall straight down - a cell in free-fall
                 // doesn't spread sideways, which keeps waterfalls narrow.
-                spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
+                spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, levels, reachedFlow);
             } else {
                 // Supported - below is solid OR more of the same fluid: spread
                 // horizontally (so a pool's surface fills a freshly-broken block, and
                 // a source resting on water still spreads), and keep traversing down
                 // through existing fluid so a column stays "reached".
                 if (below == n.flowType || below == sourceOf(n.flowType)) {
-                    spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
+                    spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, levels, reachedFlow);
                 }
                 if (n.dist + 1 <= maxDistance(n.flowType)) {
-                    spread(world, n.x + 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
-                    spread(world, n.x - 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
-                    spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
-                    spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
+                    spread(world, n.x + 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, levels, reachedFlow);
+                    spread(world, n.x - 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, levels, reachedFlow);
+                    spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, levels, reachedFlow);
+                    spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, levels, reachedFlow);
                 }
             }
         }
@@ -119,17 +125,19 @@ public final class FluidSim {
                 remove.add(k);
             }
         }
-        return new Result(fill, remove);
+        return new Result(fill, levels, remove);
     }
 
     /** Expands the flood into one neighbor cell, filling air/cross or passing through the same fluid. */
     private static void spread(BlockAccessor world, int x, int y, int z, int dist, BlockType flowType,
-                               ArrayDeque<Node> queue, Set<Long> visited, Map<Long, BlockType> fill, Set<Long> reachedFlow) {
+                               ArrayDeque<Node> queue, Set<Long> visited, Map<Long, BlockType> fill,
+                               Map<Long, Integer> levels, Set<Long> reachedFlow) {
         long k = key(x, y, z);
         if (!visited.add(k)) return;
         BlockType b = world.getBlock(x, y, z);
         if (b == BlockType.AIR || b.cross) {
             fill.put(k, flowType);
+            levels.put(k, dist);
             queue.add(new Node(x, y, z, dist, flowType));
         } else if (b == flowType || b == sourceOf(flowType)) {
             if (b == flowType) {

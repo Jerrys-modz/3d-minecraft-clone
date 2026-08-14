@@ -51,6 +51,16 @@ class FluidSimTest {
     }
 
     @Test
+    void levelGrowsByOneWithEachStepFromTheSource() {
+        StubWorld w = flatGround();
+        List<FluidSim.FluidBlock> sources = List.of(new FluidSim.FluidBlock(0, 1, 0, BlockType.WATER_SOURCE));
+        FluidSim.Result r = FluidSim.compute(w, sources, List.of());
+        for (int d = 1; d <= FluidSim.WATER_FLOW_DISTANCE; d++) {
+            assertEquals(d, r.levels().get(FluidSim.key(d, 1, 0)), "level at distance " + d);
+        }
+    }
+
+    @Test
     void lavaSpreadsOnlyThreeBlocks() {
         StubWorld w = flatGround();
         List<FluidSim.FluidBlock> sources = List.of(new FluidSim.FluidBlock(0, 1, 0, BlockType.LAVA_SOURCE));
@@ -68,6 +78,9 @@ class FluidSimTest {
         assertEquals(2 + diamondCells(FluidSim.WATER_FLOW_DISTANCE), r.fill().size());
         assertTrue(r.fill().containsKey(FluidSim.key(0, 2, 0)));
         assertTrue(r.fill().containsKey(FluidSim.key(0, 1, 0)));
+        // Falling doesn't cost distance - the whole column stays at level 0, same as the source.
+        assertEquals(0, r.levels().get(FluidSim.key(0, 2, 0)));
+        assertEquals(0, r.levels().get(FluidSim.key(0, 1, 0)));
     }
 
     @Test
