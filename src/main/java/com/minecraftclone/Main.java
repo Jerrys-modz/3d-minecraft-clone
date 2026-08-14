@@ -81,17 +81,33 @@ public class Main {
         window.setVsync(settings.isVsync());
         player.setMouseSensitivity(settings.getMouseSensitivity());
         player.setGameMode(settings.getGameMode());
+        player.setInvertMouseY(settings.isInvertMouseY());
+        player.setViewBobbing(settings.isViewBobbing());
     }
 
     /**
      * Shared keyboard + mouse interaction for the settings page, used both by the
      * in-game Esc menu and the main-menu Settings button. {@code world} may be
-     * null (main menu) - {@link #applySettings} tolerates that.
+     * null (main menu) - {@link #applySettings} tolerates that. {@code tab}
+     * selects the active section (Graphics / Gameplay / Controls); navigation
+     * wraps within the active tab's rows, and Tab (or clicking a tab) switches.
      */
     private void handleSettingsMenuInput(Input input, Settings settings, Path settingsFile, World world,
                                          Player player, Window window, Hud hud,
-                                         int[] menuSelection, int[] sliderDragRow, int[] bindingAction) {
-        int totalMenuRows = Settings.ROW_COUNT + 1 + KeyBindings.COUNT;
+                                         int[] menuSelection, int[] sliderDragRow, int[] bindingAction,
+                                         int[] settingsTab) {
+        int tab = settingsTab[0];
+        int rows = tab == Settings.TAB_CONTROLS ? KeyBindings.COUNT : Settings.tabRowCount(tab);
+
+        // Tab key switches to the next section; the selection resets to the top.
+        if (input.isKeyJustPressed(GLFW_KEY_TAB)) {
+            settingsTab[0] = (tab + 1) % Settings.TAB_COUNT;
+            menuSelection[0] = 0;
+            sliderDragRow[0] = -1;
+            bindingAction[0] = -1;
+            return;
+        }
+
         if (bindingAction[0] >= 0) {
             // Capturing a key for a keybind row: bind the next non-modifier
             // key press (Esc cancels).
@@ -107,77 +123,91 @@ public class Main {
             // Navigate with arrows/WASD; toggle/step settings or start a
             // keybind capture with Enter/Space/Left/Right.
             if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
-                menuSelection[0] = Math.floorMod(menuSelection[0] - 1, totalMenuRows);
+                menuSelection[0] = Math.floorMod(menuSelection[0] - 1, rows);
             }
             if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
-                menuSelection[0] = Math.floorMod(menuSelection[0] + 1, totalMenuRows);
+                menuSelection[0] = Math.floorMod(menuSelection[0] + 1, rows);
             }
             if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
-                if (menuSelection[0] < Settings.ROW_COUNT) {
-                    settings.adjust(menuSelection[0], -1);
-                    applySettings(settings, world, player, window);
-                    settings.save(settingsFile);
+                if (tab != Settings.TAB_CONTROLS) {
+                    adjustSettingsRow(settings, settingsFile, world, player, window,
+                            Settings.rowInTab(tab, menuSelection[0]), -1);
                 }
             }
             if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
-                if (menuSelection[0] < Settings.ROW_COUNT) {
-                    settings.adjust(menuSelection[0], +1);
-                    applySettings(settings, world, player, window);
-                    settings.save(settingsFile);
+                if (tab != Settings.TAB_CONTROLS) {
+                    adjustSettingsRow(settings, settingsFile, world, player, window,
+                            Settings.rowInTab(tab, menuSelection[0]), +1);
                 }
             }
             if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
-                if (menuSelection[0] < Settings.ROW_COUNT) {
-                    settings.adjust(menuSelection[0], +1);
-                    applySettings(settings, world, player, window);
-                    settings.save(settingsFile);
-                } else if (menuSelection[0] > Settings.ROW_COUNT) {
-                    bindingAction[0] = menuSelection[0] - Settings.ROW_COUNT - 1;
+                if (tab == Settings.TAB_CONTROLS) {
+                    bindingAction[0] = menuSelection[0];
                     input.consumeLastKeyPressed(); // discard the Enter/Space that started capture
+                } else {
+                    adjustSettingsRow(settings, settingsFile, world, player, window,
+                            Settings.rowInTab(tab, menuSelection[0]), +1);
                 }
             }
         }
 
-        // Mouse: hover to select, click a toggle, click or drag a slider,
-        // or click a keybind row to start capturing it.
+        // Mouse: hover to select, click a tab to switch, click a toggle, click
+        // or drag a slider, or click a keybind row to start capturing it.
         float sLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
         float sLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
-        int hoverRow = hud.settingsRowAt(sLx, sLy);
+        int hoverTab = hud.settingsTabAt(sLx, sLy);
+        if (hoverTab >= 0) {
+            if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT) && hoverTab != tab) {
+                settingsTab[0] = hoverTab;
+                menuSelection[0] = 0;
+                sliderDragRow[0] = -1;
+                bindingAction[0] = -1;
+            }
+            return;
+        }
+        int hoverRow = hud.settingsRowAt(sLx, sLy, tab);
         if (hoverRow >= 0) {
             menuSelection[0] = hoverRow;
         }
         if (bindingAction[0] < 0 && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-            int clicked = hud.settingsRowAt(sLx, sLy);
+            int clicked = hud.settingsRowAt(sLx, sLy, tab);
             if (clicked >= 0) {
-                if (clicked < Settings.ROW_COUNT) {
-                    if (Settings.isToggle(clicked)) {
-                        settings.adjust(clicked, +1);
-                        applySettings(settings, world, player, window);
-                        settings.save(settingsFile);
+                if (tab == Settings.TAB_CONTROLS) {
+                    bindingAction[0] = clicked;
+                    input.consumeLastKeyPressed();
+                } else {
+                    int row = Settings.rowInTab(tab, clicked);
+                    if (Settings.isToggle(row)) {
+                        adjustSettingsRow(settings, settingsFile, world, player, window, row, +1);
                     } else {
-                        float frac = hud.settingsTrackAt(sLx, sLy);
+                        float frac = hud.settingsTrackAt(sLx, sLy, tab);
                         if (frac >= 0f) {
-                            settings.setFromFraction(clicked, frac);
+                            settings.setFromFraction(row, frac);
                             applySettings(settings, world, player, window);
                             settings.save(settingsFile);
                             sliderDragRow[0] = clicked;
                         }
                     }
-                } else if (clicked > Settings.ROW_COUNT) {
-                    bindingAction[0] = clicked - Settings.ROW_COUNT - 1;
-                    input.consumeLastKeyPressed();
                 }
             }
         }
         if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && sliderDragRow[0] >= 0) {
-            float frac = hud.settingsSliderAt(sLx, sliderDragRow[0]);
-            settings.setFromFraction(sliderDragRow[0], frac);
+            float frac = hud.settingsSliderAt(sLx, sliderDragRow[0], tab);
+            settings.setFromFraction(Settings.rowInTab(tab, sliderDragRow[0]), frac);
             applySettings(settings, world, player, window);
             settings.save(settingsFile);
         }
         if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
             sliderDragRow[0] = -1;
         }
+    }
+
+    /** Steps/toggles a single settings row and pushes the change everywhere it applies. */
+    private void adjustSettingsRow(Settings settings, Path settingsFile, World world, Player player,
+                                   Window window, int row, int direction) {
+        settings.adjust(row, direction);
+        applySettings(settings, world, player, window);
+        settings.save(settingsFile);
     }
 
     /** Closes the inventory screen, returning any cursor/grid items to the inventory. */
@@ -245,6 +275,7 @@ public class Main {
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
         int[] menuSelection = {0};
+        int[] settingsTab = {Settings.TAB_GRAPHICS}; // active settings tab
         int[] sliderDragRow = {-1};
         int[] bindingAction = {-1}; // >= 0: capturing a key for this action (settings menu)
         CraftingGrid craftingGrid = new CraftingGrid();
@@ -306,6 +337,10 @@ public class Main {
         if (System.getenv("MCCLONE_AUTOTEST_MENU") != null) {
             menuOpen[0] = true;
         }
+        if (System.getenv("MCCLONE_AUTOTEST_SETTINGS_TAB") != null) {
+            settingsTab[0] = Math.max(0, Math.min(Settings.TAB_COUNT - 1,
+                    Integer.parseInt(System.getenv("MCCLONE_AUTOTEST_SETTINGS_TAB"))));
+        }
         if (System.getenv("MCCLONE_AUTOTEST_MAINMENU_SETTINGS") != null) {
             mainSettingsOpen[0] = true;
         }
@@ -361,7 +396,7 @@ public class Main {
                     // Settings page opened from the main menu: same controls as the
                     // in-game Esc menu, but Esc returns to the main menu.
                     handleSettingsMenuInput(input, settings, settingsFile, world, player, window, hud,
-                            menuSelection, sliderDragRow, bindingAction);
+                            menuSelection, sliderDragRow, bindingAction, settingsTab);
                     if (input.isKeyJustPressed(GLFW_KEY_ESCAPE) && bindingAction[0] < 0) {
                         mainSettingsOpen[0] = false;
                         sliderDragRow[0] = -1;
@@ -488,6 +523,7 @@ public class Main {
                             worldSelectSelection[0] = 0;
                         } else if (mainMenuSelection[0] == Hud.MENU_SETTINGS) {
                             mainSettingsOpen[0] = true;
+                            settingsTab[0] = Settings.TAB_GRAPHICS;
                             menuSelection[0] = 0;
                             sliderDragRow[0] = -1;
                             bindingAction[0] = -1;
@@ -608,7 +644,7 @@ public class Main {
                 }
             } else if (menuOpen[0]) {
                 handleSettingsMenuInput(input, settings, settingsFile, world, player, window, hud,
-                        menuSelection, sliderDragRow, bindingAction);
+                        menuSelection, sliderDragRow, bindingAction, settingsTab);
             }
 
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.DEBUG))) {
@@ -790,7 +826,7 @@ public class Main {
             chunkShader.setUniform("fogColor", horizonColor);
             chunkShader.setUniform("fogStart", (world.getRenderDistance() - 2) * 16f);
             chunkShader.setUniform("fogEnd", world.getRenderDistance() * 16f);
-            chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness());
+            chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness() * settings.getBrightness());
             chunkShader.setUniform("time", animTime[0]);
             chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
@@ -832,11 +868,11 @@ public class Main {
                         -0.95f, y - 3f * step, textSize, WHITE, aspect);
             }
             if (menuOpen[0]) {
-                hud.renderSettingsMenu(settings, menuSelection[0], bindingAction[0], window.getAspectRatio());
+                hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio());
             }
             if (!started[0]) {
                 if (mainSettingsOpen[0]) {
-                    hud.renderSettingsMenu(settings, menuSelection[0], bindingAction[0], window.getAspectRatio());
+                    hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio());
                 } else if (worldGenOpen[0]) {
                     hud.renderWorldGenMenu(genSettings, worldGenSelection[0], editingRow[0], window.getAspectRatio());
                 } else if (worldSelectOpen[0]) {

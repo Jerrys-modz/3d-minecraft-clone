@@ -28,18 +28,23 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Game modes** (settings menu): **Survival** (the default), **Creative** (instant break, place blocks for free, flight, no damage or hunger, plus a tabbed creative inventory), **Adventure** (no breaking or placing, still vulnerable), and **Spectator** (no-clip flight through the world, no interaction or damage).
 - **Slabs (partial-cube blocks)**: stone and planks slabs, the first half-height blocks. A slab occupies only the lower half of its cell - meshed with a top face at half height and a half-height collision box (you can step onto one without jumping), and its block-selection outline shrinks to match. The mesher treats slabs as non-occluding, so full blocks beside/above them render correctly; this is the first piece of the partial-cube support that stairs/doors/fences will build on.
 - **On-screen HUD**: a 9-slot hotbar with block icons batched from the game's shared texture atlas and item icons (food/tools) drawn from their own individual PNGs, live stack counts drawn with a tiny procedural pixel font (its own small atlas, no external font/text-rendering library), a highlight border on the selected slot, health/hunger/stamina bars above it, transient on-screen messages (death, crafting, tool breakage), an `F3`-toggled debug overlay (FPS, position, selected item), and a full mouse-driven inventory screen (see Inventory & hotbar).
-- **Settings menu**: `Esc` pauses the game and opens an in-game settings menu - click a row to select it, click a toggle to flip it, and click or drag a slider to change it (arrows/WASD + `Enter`/`Space`/`Left`/`Right` still work, `Esc` closes). The current value of each setting is always shown next to its control. Options:
-  - **See-through leaves**: with it on, leaves use an alpha-cutout texture with holes punched through them and stop occluding faces behind them, so you can actually see through a tree canopy (the classic "fast leaves" look); off, they're the default opaque cubes. Toggling it live-rebuilds loaded chunk meshes, so the change streams in while you're looking at it.
-  - **Render distance** (3-12): chunk streaming radius, so fewer blocks to draw for speed or more view for looks.
-  - **VSync**: cap the framerate to the monitor's refresh or uncap it.
-  - **Field of view** (60-110): camera zoom.
-  - **Mouse sensitivity** (0.03-0.40): mouse-look speed.
-  - **Game mode** (Survival / Creative / Adventure / Spectator): the four Minecraft modes - see Game modes below.
-  - **Clouds** (Off / Light / Normal / Heavy): how much cloud cover the procedural skybox has (Off skips clouds entirely).
-  - **Cloud speed** (Slow / Normal / Fast): how quickly the skybox's drifting clouds slide across the sky.
-  - **Stars** (ON/OFF): whether the procedural night sky draws its star field (the moon still appears).
-  - **Keybinds**: a separate section below the settings lists every rebindable action (move/jump/sprint, fly, inventory, smelt, debug, screenshot) with its current key. Select a keybind row and press `Enter`/`Space` (or click it), then press a key to rebind it - `Esc` cancels. Bindings are saved to `settings.txt`.
-  - All of these apply immediately, while the menu is open.
+- **Settings menu**: `Esc` pauses the game and opens an in-game settings menu split into three tabs - **Graphics**, **Gameplay** and **Controls** (switch with the `Tab` key or by clicking a tab). Click a row to select it, click a toggle to flip it, and click or drag a slider to change it (arrows/WASD + `Enter`/`Space`/`Left`/`Right` still work, `Esc` closes). The current value of each setting is always shown next to its control. Options:
+  - **Graphics**:
+    - **See-through leaves**: with it on, leaves use an alpha-cutout texture with holes punched through them and stop occluding faces behind them, so you can actually see through a tree canopy (the classic "fast leaves" look); off, they're the default opaque cubes. Toggling it live-rebuilds loaded chunk meshes, so the change streams in while you're looking at it.
+    - **Render distance** (3-12): chunk streaming radius, so fewer blocks to draw for speed or more view for looks.
+    - **VSync**: cap the framerate to the monitor's refresh or uncap it.
+    - **Field of view** (60-110): camera zoom.
+    - **Brightness** (50-150%): a world-light multiplier - dim the night or brighten caves.
+    - **Clouds** (Off / Light / Normal / Heavy): how much cloud cover the procedural skybox has (Off skips clouds entirely).
+    - **Cloud speed** (Slow / Normal / Fast): how quickly the skybox's drifting clouds slide across the sky.
+    - **Stars** (ON/OFF): whether the procedural night sky draws its star field (the moon still appears).
+  - **Gameplay**:
+    - **Game mode** (Survival / Creative / Adventure / Spectator): the four Minecraft modes - see Game modes below.
+    - **Mouse sensitivity** (0.03-0.40): mouse-look speed.
+    - **Invert mouse Y** (ON/OFF): flip vertical mouse look.
+    - **View bobbing** (ON/OFF): the subtle head-bob while walking.
+  - **Controls**: the keybind list - every rebindable action (move/jump/sprint, fly, inventory, smelt, debug, screenshot) with its current key. Select a keybind row and press `Enter`/`Space` (or click it), then press a key to rebind it - `Esc` cancels. Bindings are saved to `settings.txt`.
+  - All of these apply immediately, while the menu is open. The same page is reachable from the main menu's **Settings** button before a world starts.
 - **Main menu & world generation**: on launch a main menu (Play / Settings / Quit) appears, Minecraft-style. **Play** opens the world-selection screen listing your saved worlds plus a **Create New World** entry; picking one plays it, and creating one opens the world-generation page where you name the world and set a seed, world type (Default/Superflat), whether structures (trees, cacti, ...) generate, the sea level, and terrain size before pressing Done. Each world is saved in its own folder under `saves/` with its settings, so it reloads on the next launch. **Settings** opens the same settings page as the in-game `Esc` menu (graphics, game mode, keybinds) before you even start a world - `Esc` returns to the main menu.
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, torches, lamps, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 
@@ -206,6 +211,6 @@ MCCLONE_AUTOTEST=1 MCCLONE_AUTOTEST_FRAMES=90 MCCLONE_AUTOTEST_PATH=out.png \
 
 Add `MCCLONE_AUTOTEST_TIME=0.5` (0=midnight, 0.5=noon, etc.) to pin the day/night cycle to a specific moment for a reproducible screenshot instead of whatever the default start time renders.
 
-To screenshot one of the menu screens instead of a live world, add `MCCLONE_AUTOTEST_SHOW_MENU=1` together with one of `MCCLONE_AUTOTEST_MENU` (in-game settings), `MCCLONE_AUTOTEST_MAINMENU_SETTINGS` (main-menu Settings page), `MCCLONE_AUTOTEST_WORLDSELECT` or `MCCLONE_AUTOTEST_WORLDGEN`.
+To screenshot one of the menu screens instead of a live world, add `MCCLONE_AUTOTEST_SHOW_MENU=1` together with one of `MCCLONE_AUTOTEST_MENU` (in-game settings), `MCCLONE_AUTOTEST_MAINMENU_SETTINGS` (main-menu Settings page), `MCCLONE_AUTOTEST_WORLDSELECT` or `MCCLONE_AUTOTEST_WORLDGEN`. For the settings page, `MCCLONE_AUTOTEST_SETTINGS_TAB=0|1|2` picks the Graphics / Gameplay / Controls tab.
 
 This runs the given number of frames, saves a screenshot, and exits.

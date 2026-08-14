@@ -21,16 +21,49 @@ import java.util.List;
  */
 public class Settings {
 
-    public static final int LEAVES_TRANSPARENT = 0;
-    public static final int RENDER_DISTANCE = 1;
-    public static final int VSYNC = 2;
-    public static final int FOV = 3;
-    public static final int SENSITIVITY = 4;
-    public static final int GAME_MODE = 5;
-    public static final int CLOUDS = 6;        // 0-3: off/light/normal/heavy
-    public static final int CLOUD_SPEED = 7;   // 0-2: slow/normal/fast
-    public static final int STARS = 8;         // toggle
-    public static final int ROW_COUNT = 9;
+    // Row indices, grouped by settings tab (see TAB_ROW_START / TAB_ROW_END below).
+    public static final int LEAVES_TRANSPARENT = 0; // Graphics
+    public static final int RENDER_DISTANCE = 1;    // Graphics
+    public static final int VSYNC = 2;              // Graphics
+    public static final int FOV = 3;                // Graphics
+    public static final int BRIGHTNESS = 4;         // Graphics
+    public static final int CLOUDS = 5;             // 0-3: off/light/normal/heavy (Graphics)
+    public static final int CLOUD_SPEED = 6;        // 0-2: slow/normal/fast (Graphics)
+    public static final int STARS = 7;              // toggle (Graphics)
+    public static final int GAME_MODE = 8;          // Gameplay
+    public static final int SENSITIVITY = 9;        // Gameplay
+    public static final int INVERT_MOUSE_Y = 10;    // toggle (Gameplay)
+    public static final int VIEW_BOBBING = 11;      // toggle (Gameplay)
+    public static final int ROW_COUNT = 12;
+
+    // Settings tabs: each owns a contiguous slice of the rows above. The
+    // Controls tab has no Settings rows - it shows the keybind list instead.
+    public static final int TAB_GRAPHICS = 0;
+    public static final int TAB_GAMEPLAY = 1;
+    public static final int TAB_CONTROLS = 2;
+    public static final int TAB_COUNT = 3;
+    private static final int[] TAB_ROW_START = {LEAVES_TRANSPARENT, GAME_MODE, ROW_COUNT};
+    private static final int[] TAB_ROW_END = {GAME_MODE, ROW_COUNT, ROW_COUNT};
+
+    /** Display name of a settings tab, for the tab bar. */
+    public static String tabLabel(int tab) {
+        return switch (tab) {
+            case TAB_GRAPHICS -> "Graphics";
+            case TAB_GAMEPLAY -> "Gameplay";
+            case TAB_CONTROLS -> "Controls";
+            default -> "?";
+        };
+    }
+
+    /** Number of setting rows on {@code tab} (0 for the keybinds-only Controls tab). */
+    public static int tabRowCount(int tab) {
+        return TAB_ROW_END[tab] - TAB_ROW_START[tab];
+    }
+
+    /** The Settings row index shown as local row {@code local} on tab {@code tab}. */
+    public static int rowInTab(int tab, int local) {
+        return TAB_ROW_START[tab] + local;
+    }
 
     private final boolean[] toggles = new boolean[ROW_COUNT];
     private final float[] ranges = new float[ROW_COUNT];
@@ -41,15 +74,18 @@ public class Settings {
         toggles[VSYNC] = true; // matches the window's default state
         ranges[RENDER_DISTANCE] = 6f;
         ranges[FOV] = 75f;
+        ranges[BRIGHTNESS] = 1f;
         ranges[SENSITIVITY] = 0.12f;
         ranges[CLOUDS] = 2f;     // normal
         ranges[CLOUD_SPEED] = 1f; // normal
         toggles[STARS] = true;
+        toggles[VIEW_BOBBING] = true;
     }
 
     /** True if the given row is a boolean toggle; false for a numeric range. */
     public static boolean isToggle(int row) {
-        return row == LEAVES_TRANSPARENT || row == VSYNC || row == STARS;
+        return row == LEAVES_TRANSPARENT || row == VSYNC || row == STARS
+                || row == INVERT_MOUSE_Y || row == VIEW_BOBBING;
     }
 
     public static String label(int row) {
@@ -58,11 +94,14 @@ public class Settings {
             case RENDER_DISTANCE -> "Render distance";
             case VSYNC -> "VSync";
             case FOV -> "Field of view";
+            case BRIGHTNESS -> "Brightness";
             case SENSITIVITY -> "Mouse sensitivity";
             case GAME_MODE -> "Game mode";
             case CLOUDS -> "Clouds";
             case CLOUD_SPEED -> "Cloud speed";
             case STARS -> "Stars";
+            case INVERT_MOUSE_Y -> "Invert mouse Y";
+            case VIEW_BOBBING -> "View bobbing";
             default -> "?";
         };
     }
@@ -72,6 +111,7 @@ public class Settings {
         return switch (row) {
             case RENDER_DISTANCE -> 1f;
             case FOV -> 5f;
+            case BRIGHTNESS -> 0.05f;
             case SENSITIVITY -> 0.01f;
             case GAME_MODE -> 1f;
             case CLOUDS -> 1f;
@@ -84,6 +124,7 @@ public class Settings {
         return switch (row) {
             case RENDER_DISTANCE -> 3f;
             case FOV -> 60f;
+            case BRIGHTNESS -> 0.5f;
             case SENSITIVITY -> 0.03f;
             case GAME_MODE -> 0f;
             case CLOUDS -> 0f;
@@ -96,6 +137,7 @@ public class Settings {
         return switch (row) {
             case RENDER_DISTANCE -> 12f;
             case FOV -> 110f;
+            case BRIGHTNESS -> 1.5f;
             case SENSITIVITY -> 0.4f;
             case GAME_MODE -> GameMode.values().length - 1f;
             case CLOUDS -> 3f;
@@ -111,6 +153,9 @@ public class Settings {
         }
         if (row == SENSITIVITY) {
             return String.format("%.2f", ranges[row]);
+        }
+        if (row == BRIGHTNESS) {
+            return Math.round(ranges[row] * 100f) + "%";
         }
         if (row == GAME_MODE) {
             return getGameMode().toString();
@@ -178,11 +223,14 @@ public class Settings {
         lines.add("render_distance=" + getRenderDistance());
         lines.add("vsync=" + (toggles[VSYNC] ? 1 : 0));
         lines.add("fov=" + Math.round(ranges[FOV]));
+        lines.add("brightness=" + ranges[BRIGHTNESS]);
         lines.add("mouse_sensitivity=" + ranges[SENSITIVITY]);
         lines.add("game_mode=" + getGameMode().ordinal());
         lines.add("clouds=" + getCloudAmount());
         lines.add("cloud_speed=" + getCloudSpeed());
         lines.add("stars=" + (toggles[STARS] ? 1 : 0));
+        lines.add("invert_mouse_y=" + (toggles[INVERT_MOUSE_Y] ? 1 : 0));
+        lines.add("view_bobbing=" + (toggles[VIEW_BOBBING] ? 1 : 0));
         keyBinds.saveLines(lines);
         worldGen.saveLines(lines);
         try {
@@ -215,11 +263,14 @@ public class Settings {
                         case "render_distance" -> s.ranges[RENDER_DISTANCE] = clamp(RENDER_DISTANCE, Float.parseFloat(value));
                         case "vsync" -> s.toggles[VSYNC] = parseBool(value);
                         case "fov" -> s.ranges[FOV] = clamp(FOV, Float.parseFloat(value));
+                        case "brightness" -> s.ranges[BRIGHTNESS] = clamp(BRIGHTNESS, Float.parseFloat(value));
                         case "mouse_sensitivity" -> s.ranges[SENSITIVITY] = clamp(SENSITIVITY, Float.parseFloat(value));
                         case "game_mode" -> s.ranges[GAME_MODE] = clamp(GAME_MODE, Float.parseFloat(value));
                         case "clouds" -> s.ranges[CLOUDS] = clamp(CLOUDS, Float.parseFloat(value));
                         case "cloud_speed" -> s.ranges[CLOUD_SPEED] = clamp(CLOUD_SPEED, Float.parseFloat(value));
                         case "stars" -> s.toggles[STARS] = parseBool(value);
+                        case "invert_mouse_y" -> s.toggles[INVERT_MOUSE_Y] = parseBool(value);
+                        case "view_bobbing" -> s.toggles[VIEW_BOBBING] = parseBool(value);
                         default -> {
                             s.keyBinds.loadEntry(key, value);
                             s.worldGen.loadEntry(key, value);
@@ -277,6 +328,19 @@ public class Settings {
 
     public boolean isStars() {
         return toggles[STARS];
+    }
+
+    /** Brightness multiplier (0.5-1.5) applied to the world's ambient light. */
+    public float getBrightness() {
+        return ranges[BRIGHTNESS];
+    }
+
+    public boolean isInvertMouseY() {
+        return toggles[INVERT_MOUSE_Y];
+    }
+
+    public boolean isViewBobbing() {
+        return toggles[VIEW_BOBBING];
     }
 
     /** World-generation settings for new worlds (see {@link WorldGenSettings}). */

@@ -84,8 +84,15 @@ public class Hud {
     private static final float SETTINGS_VALUE_GAP = 0.02f;  // track -> value text gap
     private static final float SETTINGS_ROW_H = 0.05f;
     private static final float SETTINGS_TITLE_H = 0.07f;
+    private static final float SETTINGS_TAB_H = 0.055f;     // the tab strip under the title
+    private static final float SETTINGS_TAB_GAP = 0.015f;
     private static final float SETTINGS_PAD = 0.035f;
     private static final float SETTINGS_CENTER_Y = 0.12f;
+    // The panel is sized for the tallest tab (Controls: the keybind list) so the
+    // tab strip stays in the same place when switching between tabs.
+    private static final int SETTINGS_MAX_ROWS = Math.max(
+            Settings.tabRowCount(Settings.TAB_GRAPHICS),
+            Math.max(Settings.tabRowCount(Settings.TAB_GAMEPLAY), KeyBindings.COUNT));
 
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
 
@@ -489,19 +496,21 @@ public class Hud {
     }
 
     /**
-     * Draws the pause/settings menu: a semi-transparent panel with a title, one
-     * row per setting in {@link Settings}, and a highlighted selection marker.
-     * The panel sizes itself to the widest row so labels never overflow it.
-     * {@code selectedIndex} points at the currently-highlighted row.
+     * Draws the pause/settings menu: a semi-transparent panel with a title, a
+     * tab strip (Graphics / Gameplay / Controls) under it, and the rows of the
+     * active tab - setting rows for the first two tabs, the keybind list for
+     * Controls. The panel is always sized for the tallest tab so the tabs stay
+     * put when switching. {@code selectedIndex} is a row index within the
+     * active tab; {@code capturingAction} >= 0 means that keybind row is
+     * waiting for a key press.
      */
-    public void renderSettingsMenu(Settings settings, int selectedIndex, int capturingAction, float aspectRatio) {
+    public void renderSettingsMenu(Settings settings, int selectedTab, int selectedIndex, int capturingAction, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
-        int rows = settingsTotalRows();
         float size = SETTINGS_SIZE;
         float panelW = settingsPanelWidth();
-        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
         float left = -panelW / 2f;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
 
@@ -524,92 +533,117 @@ public class Hud {
         // Title, centered near the top of the panel.
         drawCenteredText("Settings", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
 
-        // One row per setting: ">" marker + label on the left, a toggle text or a
-        // slider track on the right.
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
-        for (int i = 0; i < Settings.ROW_COUNT; i++) {
-            float baseline = settingsRowTop(i) - SETTINGS_ROW_H + 0.013f;
-            boolean selected = i == selectedIndex;
-            drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
-            drawTextAt(Settings.label(i), left + SETTINGS_LEFT_PAD, baseline, size, selected ? highlight : idle);
-            // The current value, always visible beside the control, in the same
-            // font size as the labels so every row reads consistently.
-            String value = settings.valueText(i);
-            float valueWidth = text.measure(value, size);
-            drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
-                    selected ? highlight : idleValue);
+
+        // Tab strip: one button per tab, the active one highlighted.
+        float tabCenterY = settingsTabCenterY();
+        for (int t = 0; t < Settings.TAB_COUNT; t++) {
+            float tabCx = settingsTabCenterX(t);
+            float tabW = settingsTabWidth(t);
+            if (t == selectedTab) {
+                float[] bg = {
+                        tabCx - tabW / 2f, tabCenterY - SETTINGS_TAB_H / 2f, 0, tabCx + tabW / 2f, tabCenterY - SETTINGS_TAB_H / 2f, 0,
+                        tabCx + tabW / 2f, tabCenterY + SETTINGS_TAB_H / 2f, 0,
+                        tabCx - tabW / 2f, tabCenterY - SETTINGS_TAB_H / 2f, 0, tabCx + tabW / 2f, tabCenterY + SETTINGS_TAB_H / 2f, 0,
+                        tabCx - tabW / 2f, tabCenterY + SETTINGS_TAB_H / 2f, 0,
+                };
+                settingsFill.upload(bg);
+                lineShader.bind();
+                lineShader.setUniform("projection", identity);
+                lineShader.setUniform("view", identity);
+                lineShader.setUniform("model", hudTransform);
+                lineShader.setUniform("color", new Vector4f(0.3f, 0.3f, 0.3f, 0.9f));
+                settingsFill.render();
+                lineShader.unbind();
+            }
+            drawCenteredText(Settings.tabLabel(t), tabCx, tabCenterY - 0.024f, 0.03f,
+                    t == selectedTab ? WHITE : idleValue);
         }
 
-        // "Keybinds" section header.
-        drawTextAt("Keybinds", left + SETTINGS_LEFT_PAD,
-                settingsRowTop(Settings.ROW_COUNT) - SETTINGS_ROW_H + 0.013f, size, idleValue);
-
-        // Keybind rows: action name on the left, bound key on the right. While a
-        // row is being captured ("?" shown), it's highlighted and the next key
-        // press (in Main) re-binds it.
-        for (int action = 0; action < KeyBindings.COUNT; action++) {
-            int i = settingsKeybindRow(action);
-            float baseline = settingsRowTop(i) - SETTINGS_ROW_H + 0.013f;
-            boolean selected = i == selectedIndex;
-            boolean capturing = action == capturingAction;
-            Vector4f rowColor = selected || capturing ? highlight : idle;
-            drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
-            drawTextAt(KeyBindings.name(action), left + SETTINGS_LEFT_PAD, baseline, size, rowColor);
-            String keyText = capturing ? "?" : KeyBindings.keyName(settings.getKeyBinds().get(action));
-            float valueWidth = text.measure(keyText, size);
-            drawTextAt(keyText, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
-                    capturing ? highlight : idleValue);
+        // One row per entry in the active tab. The Controls tab shows the
+        // keybind list; the other two show their Settings rows.
+        int rows = settingsRowsForTab(selectedTab);
+        if (selectedTab == Settings.TAB_CONTROLS) {
+            for (int action = 0; action < rows; action++) {
+                float baseline = settingsRowTop(selectedTab, action) - SETTINGS_ROW_H + 0.013f;
+                boolean selected = action == selectedIndex;
+                boolean capturing = action == capturingAction;
+                Vector4f rowColor = selected || capturing ? highlight : idle;
+                drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+                drawTextAt(KeyBindings.name(action), left + SETTINGS_LEFT_PAD, baseline, size, rowColor);
+                String keyText = capturing ? "?" : KeyBindings.keyName(settings.getKeyBinds().get(action));
+                float valueWidth = text.measure(keyText, size);
+                drawTextAt(keyText, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                        capturing ? highlight : idleValue);
+            }
+        } else {
+            for (int local = 0; local < rows; local++) {
+                int row = settingsRowForTab(selectedTab, local);
+                float baseline = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H + 0.013f;
+                boolean selected = local == selectedIndex;
+                drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+                drawTextAt(Settings.label(row), left + SETTINGS_LEFT_PAD, baseline, size, selected ? highlight : idle);
+                String value = settings.valueText(row);
+                float valueWidth = text.measure(value, size);
+                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                        selected ? highlight : idleValue);
+            }
         }
 
-        // Sliders for the range rows, drawn together with one line-shader pass.
-        float[] cx = settingsControlX();
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        for (int i = 0; i < Settings.ROW_COUNT; i++) {
-            if (Settings.isToggle(i)) continue;
-            float trackY = settingsRowTop(i) - SETTINGS_ROW_H / 2f;
-            float trackH = 0.012f;
-            float frac = settings.fraction(i);
-            float fillEnd = cx[0] + (cx[1] - cx[0]) * frac;
+        // Sliders for the range rows of the active (non-Controls) tab.
+        if (selectedTab != Settings.TAB_CONTROLS) {
+            float[] cx = settingsControlX();
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            for (int local = 0; local < rows; local++) {
+                int row = settingsRowForTab(selectedTab, local);
+                if (Settings.isToggle(row)) continue;
+                float trackY = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H / 2f;
+                float trackH = 0.012f;
+                float frac = settings.fraction(row);
+                float fillEnd = cx[0] + (cx[1] - cx[0]) * frac;
 
-            // Track background.
-            settingsTrack.upload(new float[]{
-                    cx[0], trackY - trackH / 2f, 0, cx[1], trackY - trackH / 2f, 0, cx[1], trackY + trackH / 2f, 0,
-                    cx[0], trackY - trackH / 2f, 0, cx[1], trackY + trackH / 2f, 0, cx[0], trackY + trackH / 2f, 0,
-            });
-            lineShader.setUniform("color", new Vector4f(0.15f, 0.15f, 0.15f, 0.8f));
-            settingsTrack.render();
-
-            // Fill up to the current value.
-            if (frac > 0f) {
-                settingsFill.upload(new float[]{
-                        cx[0], trackY - trackH / 2f, 0, fillEnd, trackY - trackH / 2f, 0, fillEnd, trackY + trackH / 2f, 0,
-                        cx[0], trackY - trackH / 2f, 0, fillEnd, trackY + trackH / 2f, 0, cx[0], trackY + trackH / 2f, 0,
+                // Track background.
+                settingsTrack.upload(new float[]{
+                        cx[0], trackY - trackH / 2f, 0, cx[1], trackY - trackH / 2f, 0, cx[1], trackY + trackH / 2f, 0,
+                        cx[0], trackY - trackH / 2f, 0, cx[1], trackY + trackH / 2f, 0, cx[0], trackY + trackH / 2f, 0,
                 });
-                lineShader.setUniform("color", i == selectedIndex
-                        ? new Vector4f(0.4f, 0.85f, 1f, 0.95f)
-                        : new Vector4f(0.6f, 0.6f, 0.6f, 0.9f));
+                lineShader.setUniform("color", new Vector4f(0.15f, 0.15f, 0.15f, 0.8f));
+                settingsTrack.render();
+
+                // Fill up to the current value.
+                if (frac > 0f) {
+                    settingsFill.upload(new float[]{
+                            cx[0], trackY - trackH / 2f, 0, fillEnd, trackY - trackH / 2f, 0, fillEnd, trackY + trackH / 2f, 0,
+                            cx[0], trackY - trackH / 2f, 0, fillEnd, trackY + trackH / 2f, 0, cx[0], trackY + trackH / 2f, 0,
+                    });
+                    lineShader.setUniform("color", local == selectedIndex
+                            ? new Vector4f(0.4f, 0.85f, 1f, 0.95f)
+                            : new Vector4f(0.6f, 0.6f, 0.6f, 0.9f));
+                    settingsFill.render();
+                }
+
+                // Knob.
+                float knobHalf = 0.02f;
+                settingsFill.upload(new float[]{
+                        fillEnd - knobHalf, trackY - knobHalf, 0, fillEnd + knobHalf, trackY - knobHalf, 0,
+                        fillEnd + knobHalf, trackY + knobHalf, 0,
+                        fillEnd - knobHalf, trackY - knobHalf, 0, fillEnd + knobHalf, trackY + knobHalf, 0,
+                        fillEnd - knobHalf, trackY + knobHalf, 0,
+                });
+                lineShader.setUniform("color", new Vector4f(0.95f, 0.95f, 0.95f, 1f));
                 settingsFill.render();
             }
-
-            // Knob.
-            float knobHalf = 0.02f;
-            settingsFill.upload(new float[]{
-                    fillEnd - knobHalf, trackY - knobHalf, 0, fillEnd + knobHalf, trackY - knobHalf, 0,
-                    fillEnd + knobHalf, trackY + knobHalf, 0,
-                    fillEnd - knobHalf, trackY - knobHalf, 0, fillEnd + knobHalf, trackY + knobHalf, 0,
-                    fillEnd - knobHalf, trackY + knobHalf, 0,
-            });
-            lineShader.setUniform("color", new Vector4f(0.95f, 0.95f, 0.95f, 1f));
-            settingsFill.render();
+            lineShader.unbind();
         }
-        lineShader.unbind();
 
-        drawCenteredText("Click/Enter: toggle or rebind    Esc: close",
+        drawCenteredText(selectedTab == Settings.TAB_CONTROLS
+                        ? "Click/Enter: rebind    Tab: next section    Esc: close"
+                        : "Click/Enter: toggle or adjust    Tab: next section    Esc: close",
                 0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
 
         glEnable(GL_DEPTH_TEST);
@@ -706,7 +740,7 @@ public class Hud {
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
         for (int i = 0; i < rows; i++) {
-            float baseline = settingsRowTop(i) - SETTINGS_ROW_H + 0.013f;
+            float baseline = worldGenRowTop(i) - SETTINGS_ROW_H + 0.013f;
             boolean selected = i == selectedIndex;
             if (i < WorldGenSettings.ROW_COUNT) {
                 boolean seedRow = i == WorldGenSettings.ROW_SEED;
@@ -731,14 +765,13 @@ public class Hud {
 
         glEnable(GL_DEPTH_TEST);
     }
-    /** Interactive rows in the settings menu: settings rows + keybinds header + one row per keybind. */
-    private static int settingsTotalRows() {
-        return Settings.ROW_COUNT + 1 + KeyBindings.COUNT;
+    /** Number of interactive rows for a settings tab (keybind actions on Controls, Settings rows elsewhere). */
+    private static int settingsRowsForTab(int tab) {        return tab == Settings.TAB_CONTROLS ? KeyBindings.COUNT : Settings.tabRowCount(tab);
     }
 
-    /** The settings-menu row index for a keybind {@code action}. */
-    private static int settingsKeybindRow(int action) {
-        return Settings.ROW_COUNT + 1 + action;
+    /** The Settings row index shown as local row {@code local} on {@code tab} (only valid for non-Controls tabs). */
+    private static int settingsRowForTab(int tab, int local) {
+        return Settings.rowInTab(tab, local);
     }
 
     /** Width of the settings panel: widest label + room for a slider track and its value text. */
@@ -754,9 +787,43 @@ public class Hud {
                 + SETTINGS_LEFT_PAD + SETTINGS_RIGHT_PAD;
     }
 
-    /** Top edge (logical y) of settings row {@code i}. */
-    private float settingsRowTop(int i) {
-        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + settingsTotalRows() * SETTINGS_ROW_H;
+    /** Logical center-y of the tab strip. */
+    private float settingsTabCenterY() {
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+        float top = SETTINGS_CENTER_Y + panelH / 2f;
+        return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H / 2f;
+    }
+
+    /** Width of tab {@code t}'s button. */
+    private float settingsTabWidth(int t) {
+        return text.measure(Settings.tabLabel(t), 0.03f) + 0.06f;
+    }
+
+    /** Logical center-x of tab {@code t}: the strip is centered, spaced by {@link #SETTINGS_TAB_GAP}. */
+    private float settingsTabCenterX(int t) {
+        float total = 0f;
+        for (int i = 0; i < Settings.TAB_COUNT; i++) {
+            total += settingsTabWidth(i) + SETTINGS_TAB_GAP;
+        }
+        total -= SETTINGS_TAB_GAP;
+        float x = -total / 2f;
+        for (int i = 0; i < t; i++) {
+            x += settingsTabWidth(i) + SETTINGS_TAB_GAP;
+        }
+        return x + settingsTabWidth(t) / 2f;
+    }
+
+    /** Top edge (logical y) of row {@code i} on the given tab. */
+    private float settingsRowTop(int tab, int i) {
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+        float top = SETTINGS_CENTER_Y + panelH / 2f;
+        return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H - i * SETTINGS_ROW_H;
+    }
+
+    /** Top edge (logical y) of row {@code i} in the world-generation page's own panel. */
+    private float worldGenRowTop(int i) {
+        int rows = WorldGenSettings.ROW_COUNT + 1;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - i * SETTINGS_ROW_H;
     }
@@ -769,12 +836,25 @@ public class Hud {
         return new float[]{right - SETTINGS_TRACK_W, right};
     }
 
-    /** The settings-menu row under the mouse, or -1. */
-    public int settingsRowAt(float logicalX, float logicalY) {
+    /** The settings-tab button under the mouse, or -1. */
+    public int settingsTabAt(float logicalX, float logicalY) {
+        float cy = settingsTabCenterY();
+        for (int t = 0; t < Settings.TAB_COUNT; t++) {
+            float cx = settingsTabCenterX(t);
+            if (Math.abs(logicalX - cx) <= settingsTabWidth(t) / 2f
+                    && Math.abs(logicalY - cy) <= SETTINGS_TAB_H / 2f) {
+                return t;
+            }
+        }
+        return -1;
+    }
+
+    /** The settings-menu row (within tab {@code tab}) under the mouse, or -1. */
+    public int settingsRowAt(float logicalX, float logicalY, int tab) {
         float panelW = settingsPanelWidth();
         float left = -panelW / 2f;
-        for (int i = 0; i < settingsTotalRows(); i++) {
-            float rowTop = settingsRowTop(i);
+        for (int i = 0; i < settingsRowsForTab(tab); i++) {
+            float rowTop = settingsRowTop(tab, i);
             if (logicalX >= left && logicalX <= left + panelW
                     && logicalY <= rowTop && logicalY >= rowTop - SETTINGS_ROW_H) {
                 return i;
@@ -784,16 +864,16 @@ public class Hud {
     }
 
     /** If the mouse is over a range row's slider track, the click fraction (0..1); otherwise -1. */
-    public float settingsTrackAt(float logicalX, float logicalY) {
-        int row = settingsRowAt(logicalX, logicalY);
-        if (row < 0 || row >= Settings.ROW_COUNT || Settings.isToggle(row)) return -1f;
+    public float settingsTrackAt(float logicalX, float logicalY, int tab) {
+        int row = settingsRowAt(logicalX, logicalY, tab);
+        if (row < 0 || tab == Settings.TAB_CONTROLS || Settings.isToggle(settingsRowForTab(tab, row))) return -1f;
         float[] cx = settingsControlX();
         if (logicalX < cx[0] - 0.012f || logicalX > cx[1] + 0.012f) return -1f;
-        return settingsSliderAt(logicalX, row);
+        return settingsSliderAt(logicalX, row, tab);
     }
 
     /** Clamped slider fraction (0..1) from an x position - for dragging a known row. */
-    public float settingsSliderAt(float logicalX, int row) {
+    public float settingsSliderAt(float logicalX, int row, int tab) {
         float[] cx = settingsControlX();
         return Math.max(0f, Math.min(1f, (logicalX - cx[0]) / (cx[1] - cx[0])));
     }
