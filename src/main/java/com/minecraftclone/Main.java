@@ -842,7 +842,27 @@ public class Main {
         for (int i = 0; i < 100; i++) {
             targetWorld.update(x, z);
         }
-        int surfaceY = landingSurfaceY(targetWorld, (int) Math.floor(x), (int) Math.floor(z));
+        int fx = (int) Math.floor(x);
+        int fz = (int) Math.floor(z);
+        int surfaceY = landingSurfaceY(targetWorld, fx, fz);
+
+        // When arriving in a new dimension, spawn a matching portal block right at
+        // the landing spot so there's always a way back home (Minecraft spawns the
+        // return portal on the far side too). A NETHER_PORTAL returns you from the
+        // Nether, an END_PORTAL from the End. The player lands a couple of blocks
+        // away so they don't instantly step back through it.
+        if (to != DimensionType.OVERWORLD) {
+            BlockType returnPortal = to == DimensionType.NETHER ? BlockType.NETHER_PORTAL : BlockType.END_PORTAL;
+            targetWorld.setBlock(fx, surfaceY + 1, fz, returnPortal);
+            // Nudge the landing spot clear of the portal.
+            x += 2.5f;
+            fx = (int) Math.floor(x);
+            int offsetY = landingSurfaceY(targetWorld, fx, fz);
+            if (offsetY > 1) {
+                surfaceY = offsetY;
+            }
+        }
+
         player.teleportTo(x, surfaceY + 2f, z);
 
         currentDim[0] = to;

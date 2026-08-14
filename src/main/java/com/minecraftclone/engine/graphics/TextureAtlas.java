@@ -97,7 +97,7 @@ public class TextureAtlas {
         paintTile(image, 44, rnd, 0xE08A2E, 0xC7731F, true);   // pumpkin
         paintSeaweed(image, 45, rnd);
         paintNetherrack(image, 46, rnd);
-        paintTile(image, 47, rnd, 0xC9B08A, 0xB39A72, true);   // soul sand
+        paintSoulSand(image, 47, rnd);
         paintTile(image, 48, rnd, 0xF5E6A0, 0xE8CE6A, true, 0xFFF7C0, 0.5f); // glowstone (bright, yellowish)
         paintNetherPortal(image, 49, rnd);
         paintTile(image, 50, rnd, 0xE4E0C8, 0xCFC8A8, true);   // end stone (pale, sandy)
@@ -496,6 +496,37 @@ public class TextureAtlas {
             if (rnd.nextBoolean()) {
                 img.setRGB(ox + (cx + 1) % TILE_PX, oy + cy, 0xFF000000 | 0x8A4634);
             }
+        }
+    }
+
+    /** Soul sand: a dark, pitted brown - clearly NOT the overworld's pale beach sand. */
+    private void paintSoulSand(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | 0x5A4632);
+            }
+        }
+        // Mottled darker/redder patches so it reads as dim, grainy nether ground.
+        for (int i = 0; i < 40; i++) {
+            int cx = rnd.nextInt(TILE_PX);
+            int cy = rnd.nextInt(TILE_PX);
+            int color = rnd.nextFloat() < 0.5f ? 0x44351F : 0x6A4A34;
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    int px = cx + dx, py = cy + dy;
+                    if (px >= 0 && px < TILE_PX && py >= 0 && py < TILE_PX && rnd.nextFloat() < 0.6f) {
+                        img.setRGB(ox + px, oy + py, 0xFF000000 | color);
+                    }
+                }
+            }
+        }
+        // A few deep pits for the classic crumbly soul-sand look.
+        for (int i = 0; i < 6; i++) {
+            int cx = rnd.nextInt(TILE_PX);
+            int cy = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + cx, oy + cy, 0xFF000000 | 0x2B2012);
         }
     }
 
