@@ -4,6 +4,7 @@ import com.minecraftclone.util.Noise;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Chunk;
 
+import java.util.ArrayDeque;
 import java.util.Random;
 
 /**
@@ -28,6 +29,7 @@ public class TerrainGenerator {
     private static final int SNOW_LINE = 60;
     private static final int MOUNTAIN_LINE = SEA_LEVEL + 16; // above this: mountain biome
     private static final int LAVA_LEVEL = 10;                // cave pockets at/below this fill with lava instead of air
+    private static final int RIVER_ZONE = 6;                 // rivers only form in lowland within this of sea level, so they never become ravines
 
     /** The biomes a column can be assigned, from its temperature, moisture and height. */
     public enum Biome {
@@ -81,14 +83,6 @@ public class TerrainGenerator {
                 || (z < heights.length - 1 && heights[x][z + 1] < SEA_LEVEL);
     }
 
-    /** True if any of a column's in-chunk orthogonal neighbors is a river column. */
-    private static boolean riverNeighbor(boolean[][] rivers, int x, int z) {
-        return (x > 0 && rivers[x - 1][z])
-                || (x < rivers.length - 1 && rivers[x + 1][z])
-                || (z > 0 && rivers[x][z - 1])
-                || (z < rivers.length - 1 && rivers[x][z + 1]);
-    }
-
     /**
      * The biome used for filling a column: oceans by height, beaches only where the
      * land actually touches water, and inland lowlands near the sea fall through to
@@ -111,9 +105,11 @@ public class TerrainGenerator {
         double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
         double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
         int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
-        boolean river = isRiver(wx, wz);
+        // Rivers only cut through lowland near sea level, so their water sits level
+        // with the land instead of carving deep ravines through high terrain.
+        boolean river = isRiver(wx, wz) && height <= SEA_LEVEL + RIVER_ZONE;
         if (river) {
-            height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed, water sits near land level
+            height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed
         }
         height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
         if (height < SEA_LEVEL && !river) {
@@ -175,7 +171,8 @@ public class TerrainGenerator {
                 moisture[x][z] = moistureAt(wx, wz);
 
                 int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
-                boolean river = isRiver(wx, wz);
+                // Rivers only cut through lowland near sea level (see RIVER_ZONE).
+                boolean river = isRiver(wx, wz) && height <= SEA_LEVEL + RIVER_ZONE;
                 rivers[x][z] = river;
                 if (river) {
                     height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed
@@ -192,14 +189,37 @@ public class TerrainGenerator {
             }
         }
 
-        // Riverbanks: pull the land beside a river down toward water level, so a
-        // river reads as a shallow valley with its water near the land, not a deep
-        // 1-block trench cut through the terrain.
+        // River valleys: pull land within a few blocks of a river down in gentle
+        // rings toward water level, so a river sits in a shallow valley rather than
+        // between steep ravine walls.
+        int[][] riverDist = new int[Chunk.SIZE][Chunk.SIZE];
+        ArrayDeque<int[]> queue = new ArrayDeque<>();
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
-                if (rivers[x][z]) continue;
-                if (heights[x][z] > SEA_LEVEL + 2 && riverNeighbor(rivers, x, z)) {
-                    heights[x][z] = SEA_LEVEL + 2;
+                riverDist[x][z] = rivers[x][z] ? 0 : Integer.MAX_VALUE;
+                if (rivers[x][z]) queue.add(new int[]{x, z});
+            }
+        }
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        while (!queue.isEmpty()) {
+            int[] p = queue.poll();
+            for (int[] d : dirs) {
+                int nx = p[0] + d[0], nz = p[1] + d[1];
+                if (nx >= 0 && nx < Chunk.SIZE && nz >= 0 && nz < Chunk.SIZE
+                        && riverDist[nx][nz] > riverDist[p[0]][p[1]] + 1) {
+                    riverDist[nx][nz] = riverDist[p[0]][p[1]] + 1;
+                    queue.add(new int[]{nx, nz});
+                }
+            }
+        }
+        for (int x = 0; x < Chunk.SIZE; x++) {
+            for (int z = 0; z < Chunk.SIZE; z++) {
+                int d = riverDist[x][z];
+                if (d >= 1 && d <= 4) {
+                    int target = SEA_LEVEL + d + 1; // 1 away: +2 above water, up to 5 away: +5
+                    if (heights[x][z] > target) {
+                        heights[x][z] = target;
+                    }
                 }
             }
         }
