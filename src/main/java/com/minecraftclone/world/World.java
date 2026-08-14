@@ -41,8 +41,21 @@ public class World implements BlockAccessor {
 
     private int renderDistance = 6;
     private boolean leavesTransparent = false;
-    private static final int MAX_GENERATE_PER_TICK = 4;
-    private static final int MAX_MESH_PER_TICK = 4;
+    // Generation and meshing used to be budgeted by a fixed chunk *count* per
+    // frame (generate/mesh up to N, however long that takes). That has the
+    // same flaw the fluid-tick throttle below already learned the hard way:
+    // per-chunk cost isn't constant (profiling found some chunks taking many
+    // times longer than others - cave/ore-heavy terrain is far pricier than a
+    // flat plain), so a handful of expensive chunks landing in one frame's
+    // fixed-size batch could still blow the frame budget wide open, which is
+    // exactly the "lags kinda bad at max render distance during world gen"
+    // symptom. Budgeted by wall-clock time instead: keep generating/meshing
+    // until the time budget is spent, not until a chunk count is reached.
+    // Each loop still always does at least one unit of work when something is
+    // pending, so streaming can't stall completely even if a single chunk
+    // alone exceeds the budget.
+    private static final double GENERATE_BUDGET_SECONDS = 0.006;
+    private static final double MESH_BUDGET_SECONDS = 0.004;
     // world.update() (and so updateFluids()) runs once per rendered frame, so
     // recomputing the flood-fill every single call made "one ring per tick"
     // (see FluidSim) mean one ring per *frame*. A fixed *frame-count*
@@ -367,13 +380,17 @@ public class World implements BlockAccessor {
         int pcx = worldToChunk((int) Math.floor(playerWorldX));
         int pcz = worldToChunk((int) Math.floor(playerWorldZ));
 
-        // Load / generate.
+        // Load / generate, budgeted by wall-clock time (see GENERATE_BUDGET_SECONDS
+        // above for why this isn't a fixed chunk count anymore).
+        long generateDeadline = System.nanoTime() + (long) (GENERATE_BUDGET_SECONDS * 1e9);
         int generated = 0;
-        for (int dx = -renderDistance; dx <= renderDistance && generated < MAX_GENERATE_PER_TICK; dx++) {
-            for (int dz = -renderDistance; dz <= renderDistance && generated < MAX_GENERATE_PER_TICK; dz++) {
+        outer:
+        for (int dx = -renderDistance; dx <= renderDistance; dx++) {
+            for (int dz = -renderDistance; dz <= renderDistance; dz++) {
                 if (dx * dx + dz * dz > renderDistance * renderDistance) continue;
                 int cx = pcx + dx, cz = pcz + dz;
                 if (!chunks.containsKey(key(cx, cz))) {
+                    if (generated > 0 && System.nanoTime() >= generateDeadline) break outer;
                     Chunk chunk = new Chunk(new ChunkPos(cx, cz));
                     chunks.put(key(cx, cz), chunk);
                     if (storage.hasSavedChunk(chunk.getPos())) {
@@ -392,20 +409,24 @@ public class World implements BlockAccessor {
             }
         }
 
-        // Unload far chunks.
+        // Unload far chunks. Most frames unload nothing, so the removal list
+        // is only allocated once something actually needs to go.
         int unloadRadius = renderDistance + 2;
-        List<Chunk> toRemove = new ArrayList<>();
+        List<Chunk> toRemove = null;
         for (Chunk c : chunks.values()) {
             if (c.getPos().distanceSq(pcx, pcz) > (double) unloadRadius * unloadRadius) {
+                if (toRemove == null) toRemove = new ArrayList<>();
                 toRemove.add(c);
             }
         }
-        for (Chunk c : toRemove) {
-            chunks.remove(key(c.getPos().x(), c.getPos().z()));
-            if (c.isModifiedByPlayer()) {
-                storage.save(c);
+        if (toRemove != null) {
+            for (Chunk c : toRemove) {
+                chunks.remove(key(c.getPos().x(), c.getPos().z()));
+                if (c.isModifiedByPlayer()) {
+                    storage.save(c);
+                }
+                c.destroy();
             }
-            c.destroy();
         }
 
         // Flow after streaming so newly loaded chunks participate in the field -
@@ -418,13 +439,16 @@ public class World implements BlockAccessor {
             updateFluids();
         }
 
-        // Remesh a limited number of dirty chunks per tick, nearest first.
+        // Remesh dirty chunks nearest-first, budgeted by wall-clock time (see
+        // MESH_BUDGET_SECONDS above) rather than a fixed count per tick.
         List<Chunk> dirty = new ArrayList<>();
         for (Chunk c : chunks.values()) {
             if (c.isDirty()) dirty.add(c);
         }
         dirty.sort((a, b) -> Double.compare(a.getPos().distanceSq(pcx, pcz), b.getPos().distanceSq(pcx, pcz)));
-        for (int i = 0; i < Math.min(MAX_MESH_PER_TICK, dirty.size()); i++) {
+        long meshDeadline = System.nanoTime() + (long) (MESH_BUDGET_SECONDS * 1e9);
+        for (int i = 0; i < dirty.size(); i++) {
+            if (i > 0 && System.nanoTime() >= meshDeadline) break;
             Chunk c = dirty.get(i);
             c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
         }
