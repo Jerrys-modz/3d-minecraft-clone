@@ -543,6 +543,9 @@ public class Main {
             glDisable(GL_DEPTH_TEST);
             skyRenderer.render(skyShader, projection, view,
                     dayNightCycle.getSunDirection(), dayNightCycle.getDaylightFactor(), dayNightCycle.getCloudPhase(),
+                    settings.getCloudAmount() / 3f,
+                    0.5f + settings.getCloudSpeed() * 0.5f,
+                    settings.isStars() ? 1f : 0f,
                     dayNightCycle.getZenithColor(), dayNightCycle.getHorizonColor(),
                     dayNightCycle.getNightZenithColor(), dayNightCycle.getSunColor(), dayNightCycle.getMoonColor());
             glEnable(GL_DEPTH_TEST);

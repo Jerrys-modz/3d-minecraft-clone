@@ -24,7 +24,10 @@ public class Settings {
     public static final int FOV = 3;
     public static final int SENSITIVITY = 4;
     public static final int GAME_MODE = 5;
-    public static final int ROW_COUNT = 6;
+    public static final int CLOUDS = 6;        // 0-3: off/light/normal/heavy
+    public static final int CLOUD_SPEED = 7;   // 0-2: slow/normal/fast
+    public static final int STARS = 8;         // toggle
+    public static final int ROW_COUNT = 9;
 
     private final boolean[] toggles = new boolean[ROW_COUNT];
     private final float[] ranges = new float[ROW_COUNT];
@@ -34,11 +37,14 @@ public class Settings {
         ranges[RENDER_DISTANCE] = 6f;
         ranges[FOV] = 75f;
         ranges[SENSITIVITY] = 0.12f;
+        ranges[CLOUDS] = 2f;     // normal
+        ranges[CLOUD_SPEED] = 1f; // normal
+        toggles[STARS] = true;
     }
 
     /** True if the given row is a boolean toggle; false for a numeric range. */
     public static boolean isToggle(int row) {
-        return row == LEAVES_TRANSPARENT || row == VSYNC;
+        return row == LEAVES_TRANSPARENT || row == VSYNC || row == STARS;
     }
 
     public static String label(int row) {
@@ -49,6 +55,9 @@ public class Settings {
             case FOV -> "Field of view";
             case SENSITIVITY -> "Mouse sensitivity";
             case GAME_MODE -> "Game mode";
+            case CLOUDS -> "Clouds";
+            case CLOUD_SPEED -> "Cloud speed";
+            case STARS -> "Stars";
             default -> "?";
         };
     }
@@ -60,6 +69,8 @@ public class Settings {
             case FOV -> 5f;
             case SENSITIVITY -> 0.01f;
             case GAME_MODE -> 1f;
+            case CLOUDS -> 1f;
+            case CLOUD_SPEED -> 1f;
             default -> 0f;
         };
     }
@@ -70,6 +81,8 @@ public class Settings {
             case FOV -> 60f;
             case SENSITIVITY -> 0.03f;
             case GAME_MODE -> 0f;
+            case CLOUDS -> 0f;
+            case CLOUD_SPEED -> 0f;
             default -> 0f;
         };
     }
@@ -80,6 +93,8 @@ public class Settings {
             case FOV -> 110f;
             case SENSITIVITY -> 0.4f;
             case GAME_MODE -> GameMode.values().length - 1f;
+            case CLOUDS -> 3f;
+            case CLOUD_SPEED -> 2f;
             default -> 0f;
         };
     }
@@ -94,6 +109,21 @@ public class Settings {
         }
         if (row == GAME_MODE) {
             return getGameMode().toString();
+        }
+        if (row == CLOUDS) {
+            return switch (getCloudAmount()) {
+                case 0 -> "Off";
+                case 1 -> "Light";
+                case 3 -> "Heavy";
+                default -> "Normal";
+            };
+        }
+        if (row == CLOUD_SPEED) {
+            return switch (getCloudSpeed()) {
+                case 0 -> "Slow";
+                case 2 -> "Fast";
+                default -> "Normal";
+            };
         }
         return String.valueOf(Math.round(ranges[row]));
     }
@@ -145,6 +175,9 @@ public class Settings {
         lines.add("fov=" + Math.round(ranges[FOV]));
         lines.add("mouse_sensitivity=" + ranges[SENSITIVITY]);
         lines.add("game_mode=" + getGameMode().ordinal());
+        lines.add("clouds=" + getCloudAmount());
+        lines.add("cloud_speed=" + getCloudSpeed());
+        lines.add("stars=" + (toggles[STARS] ? 1 : 0));
         try {
             if (file.getParent() != null) {
                 Files.createDirectories(file.getParent());
@@ -177,6 +210,9 @@ public class Settings {
                         case "fov" -> s.ranges[FOV] = clamp(FOV, Float.parseFloat(value));
                         case "mouse_sensitivity" -> s.ranges[SENSITIVITY] = clamp(SENSITIVITY, Float.parseFloat(value));
                         case "game_mode" -> s.ranges[GAME_MODE] = clamp(GAME_MODE, Float.parseFloat(value));
+                        case "clouds" -> s.ranges[CLOUDS] = clamp(CLOUDS, Float.parseFloat(value));
+                        case "cloud_speed" -> s.ranges[CLOUD_SPEED] = clamp(CLOUD_SPEED, Float.parseFloat(value));
+                        case "stars" -> s.toggles[STARS] = parseBool(value);
                         default -> { /* ignore unknown keys for forward compatibility */ }
                     }
                 } catch (NumberFormatException ignored) {
@@ -217,5 +253,19 @@ public class Settings {
         int idx = Math.round(ranges[GAME_MODE]);
         GameMode[] modes = GameMode.values();
         return modes[Math.max(0, Math.min(modes.length - 1, idx))];
+    }
+
+    /** 0 = off, 1 = light, 2 = normal, 3 = heavy. */
+    public int getCloudAmount() {
+        return Math.round(ranges[CLOUDS]);
+    }
+
+    /** 0 = slow, 1 = normal, 2 = fast. */
+    public int getCloudSpeed() {
+        return Math.round(ranges[CLOUD_SPEED]);
+    }
+
+    public boolean isStars() {
+        return toggles[STARS];
     }
 }
