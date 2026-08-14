@@ -1014,6 +1014,35 @@ public class Main {
                 long maxMb = rt.maxMemory() / (1024 * 1024);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Memory: %d / %d MB", usedMb, maxMb),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+
+                // Whatever the crosshair is currently aimed at, recomputed independently
+                // of the break/place handling above (which only runs with no menu open) -
+                // the debug overlay should keep showing the last-aimed block even while a
+                // menu's open, same as the crosshair target itself doesn't move.
+                if (hit != null) {
+                    Vector3i bp = hit.blockPos;
+                    BlockType primary = world.getBlock(bp.x, bp.y, bp.z);
+                    BlockType overlay = world.getOverlay(bp.x, bp.y, bp.z);
+                    BlockType looking = overlay != BlockType.AIR ? overlay : primary;
+                    hud.drawTextLeft(String.format(Locale.ROOT, "Looking at: %s @ %d, %d, %d", looking, bp.x, bp.y, bp.z),
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                    if (overlay != BlockType.AIR) {
+                        hud.drawTextLeft("  (growing in " + primary + ")",
+                                -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                    }
+                    if (primary.isFluid()) {
+                        hud.drawTextLeft("  Fluid level: " + world.getFluidLevel(bp.x, bp.y, bp.z),
+                                -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                    }
+                    BlockType heldItem = player.getInventory().typeOf(selectedSlot[0]);
+                    String breakInfo = Mining.canBreak(looking, heldItem)
+                            ? String.format(Locale.ROOT, "  Break time: %.2fs", Mining.breakTimeSeconds(looking, heldItem))
+                            : "  Cannot break with current tool";
+                    hud.drawTextLeft(breakInfo, -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                } else {
+                    hud.drawTextLeft("Looking at: nothing in range",
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
             }
             if (menuOpen[0]) {
                 hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio());
