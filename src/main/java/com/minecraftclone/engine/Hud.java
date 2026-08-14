@@ -7,8 +7,10 @@ import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.LineMesh;
 import com.minecraftclone.engine.graphics.TextRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Inventory;
+import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.ToolDurability;
 import com.minecraftclone.util.FloatArray;
 import com.minecraftclone.util.IntArray;
@@ -24,9 +26,10 @@ import static org.lwjgl.opengl.GL11.*;
 
 /**
  * Draws all 2D overlay elements: the crosshair, the wireframe outline around
- * the targeted block, the hotbar (block icons + inventory counts, with the
- * selected slot highlighted), the health/hunger/stamina bars, transient
- * on-screen messages, and the F3 debug overlay.
+ * the targeted block, the hotbar (a 9-slot strip of the player's inventory,
+ * with the selected slot highlighted), the health/hunger/stamina bars,
+ * transient on-screen messages, the F3 debug overlay, and the Minecraft-style
+ * inventory screen (36 slots + a 3x3 crafting grid with an output slot).
  * <p>
  * All 2D geometry is built in a "logical square" coordinate space (-1..1 on
  * both axes, as if the viewport were square) and corrected for the real
@@ -47,6 +50,17 @@ public class Hud {
     private static final float STAT_BAR_GAP = 0.007f;          // gap between stacked bars
     private static final float STAT_BAR_STACK_MARGIN = 0.014f; // gap between the bar stack and the hotbar panel below it
 
+    // Inventory screen layout (logical square units).
+    private static final float INV_SLOT = 0.082f;
+    private static final float INV_GAP = 0.012f;
+    private static final float INV_STEP = INV_SLOT + INV_GAP;
+    private static final float INV_GRID_CENTER_X = 0.12f;   // horizontal center of the 9-wide inventory grid
+    private static final float INV_TOP_ROW_Y = 0.16f;       // center y of the inventory's top row
+    private static final float CRAFT_LEFT_X = -0.86f + INV_SLOT / 2f; // center x of the crafting grid's left column
+    private static final float CRAFT_TOP_ROW_Y = INV_TOP_ROW_Y;
+    private static final float OUTPUT_X = -0.50f;           // crafting result slot
+    private static final float OUTPUT_Y = INV_TOP_ROW_Y - INV_STEP;
+
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
 
     private final Shader lineShader;
@@ -64,17 +78,18 @@ public class Hud {
     private final LineMesh durabilityBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarFill = new LineMesh(GL_TRIANGLES);
     private final LineMesh settingsPanel = new LineMesh(GL_TRIANGLES);
-    private final LineMesh craftPanel = new LineMesh(GL_TRIANGLES);
-    private final LineMesh craftCursor = new LineMesh(GL_LINES);
-    private final IconMesh craftBlockIcons = new IconMesh();  // batched: grid cells sampling the shared block atlas
-    private final IconMesh craftItemIcon = new IconMesh();    // reused per grid cell: item icons have their own textures
+    private final LineMesh inventoryPanel = new LineMesh(GL_TRIANGLES);
+    private final LineMesh inventorySlotBg = new LineMesh(GL_TRIANGLES);
+    private final LineMesh inventoryHover = new LineMesh(GL_LINES);
 
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
     private final FloatArray blockVertices = new FloatArray(1024);
     private final IntArray blockIndices = new IntArray(1024);
-    private final FloatArray barCx = new FloatArray(16);
-    private final FloatArray barFrac = new FloatArray(16);
+    private final FloatArray slotBgVerts = new FloatArray(1024);
+    private final FloatArray barCx = new FloatArray(64);
+    private final FloatArray barCy = new FloatArray(64);
+    private final FloatArray barFrac = new FloatArray(64);
     private int blockVertexCounter;
 
     private final Matrix4f identity = new Matrix4f();
@@ -169,11 +184,12 @@ public class Hud {
         return slotCenterY() + HOTBAR_SLOT_SIZE / 2f + HOTBAR_PADDING;
     }
 
+    /** Renders the in-game 9-slot hotbar: the player's first 9 inventory slots. */
     public void renderHotbar(TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
-                              BlockType[] hotbar, Inventory inventory, int selectedSlot, float aspectRatio) {
+                              Inventory inventory, int selectedSlot, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
 
-        int count = hotbar.length;
+        int count = Inventory.HOTBAR_SIZE;
         float centerY = slotCenterY();
 
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
@@ -200,104 +216,113 @@ public class Hud {
         // Selected-slot highlight border.
         float selCenterX = slotCenterX(Math.max(0, Math.min(count - 1, selectedSlot)), count);
         float hs = HOTBAR_SLOT_SIZE / 2f + 0.006f;
-        float[] hl = {
-                selCenterX - hs, centerY - hs, 0, selCenterX + hs, centerY - hs, 0,
-                selCenterX + hs, centerY - hs, 0, selCenterX + hs, centerY + hs, 0,
-                selCenterX + hs, centerY + hs, 0, selCenterX - hs, centerY + hs, 0,
-                selCenterX - hs, centerY + hs, 0, selCenterX - hs, centerY - hs, 0,
-        };
-        hotbarHighlight.upload(hl);
+        hotbarHighlight.upload(outlineLines(selCenterX, centerY, hs));
         lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.95f));
         glLineWidth(2f);
         hotbarHighlight.render();
         lineShader.unbind();
 
-        // Icons come from three separate texture sources, so they can't all
-        // batch into one draw call the way they used to: block icons still
-        // batch together (one shared atlas), each item icon needs its own
-        // individual bind+draw (its own PNG), and the count text batches
-        // together again through the shared font atlas + TextRenderer.
+        // Icons + counts + wear bars, using the same batched path as the inventory screen.
+        beginSlotBatch();
+        float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
+        for (int i = 0; i < count; i++) {
+            addSlotIcon(slotCenterX(i, count), centerY, iconHalf,
+                    inventory.typeOf(i), inventory.countOf(i), itemTextures, atlas, durability);
+        }
+        flushBlockBatch(atlas);
+        text.render(hudTransform, WHITE);
+
+        // Small slot-number labels (1-9) in the corner of each slot.
+        text.begin();
+        for (int i = 0; i < count; i++) {
+            text.add(String.valueOf(i + 1), slotCenterX(i, count) - iconHalf + 0.006f, centerY - iconHalf + 0.002f, 0.022f);
+        }
+        text.render(hudTransform, new Vector4f(0.55f, 0.55f, 0.55f, 1f));
+
+        renderDurabilityBars(iconHalf);
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Resets the per-frame scratch buffers for a fresh slot batch. */
+    private void beginSlotBatch() {
         blockVertices.clear();
         blockIndices.clear();
         blockVertexCounter = 0;
         barCx.clear();
+        barCy.clear();
         barFrac.clear();
-
-        float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
-
         text.begin();
+    }
 
-        for (int i = 0; i < count; i++) {
-            float cx = slotCenterX(i, count);
-            BlockType type = hotbar[i];
-
-            if (type.isItem) {
-                // Own texture, own draw call - can't be batched with the shared atlas.
-                float[] quadVerts = {
-                        cx - iconHalf, centerY - iconHalf, 0f, 1f,
-                        cx + iconHalf, centerY - iconHalf, 1f, 1f,
-                        cx + iconHalf, centerY + iconHalf, 1f, 0f,
-                        cx - iconHalf, centerY + iconHalf, 0f, 0f,
-                };
-                hotbarItemIcon.upload(quadVerts, QUAD_INDICES);
-
-                hudShader.bind();
-                hudShader.setUniform("transform", hudTransform);
-                hudShader.setUniform("atlas", 0);
-                hudShader.setUniform("color", WHITE);
-                itemTextures.bind(type);
-                hotbarItemIcon.render();
-                hudShader.unbind();
-            } else {
-                addQuad(cx - iconHalf, centerY - iconHalf, cx + iconHalf, centerY + iconHalf,
-                        atlas.getUV(type.topTile));
-            }
-
-            if (Mining.isTool(type)) {
-                float fraction = durability.fraction(type);
-                if (fraction < 1f) {
-                    barCx.add(cx);
-                    barFrac.add(fraction);
-                }
-            }
-
-            int amount = inventory.getCount(type);
-            if (amount > 0) {
-                String countText = Integer.toString(Math.min(amount, 999));
-                float digitSize = 0.032f;
-                float textWidth = text.measure(countText, digitSize);
-                // Right-aligned to the icon's top corner; y is the text block's bottom edge.
-                text.add(countText, cx + iconHalf - textWidth, centerY + iconHalf - digitSize, digitSize);
-            }
+    /**
+     * Adds one slot's icon to the batch: block icons accumulate into the shared
+     * atlas batch, item icons draw immediately (their own texture), counts go
+     * to the text batch, and worn tools record a wear-bar entry.
+     */
+    private void addSlotIcon(float cx, float cy, float half, BlockType type, int count,
+                             ItemTextures itemTextures, TextureAtlas atlas, ToolDurability durability) {
+        if (type == null) return;
+        if (type.isItem) {
+            float[] qv = {
+                    cx - half, cy - half, 0f, 1f,
+                    cx + half, cy - half, 1f, 1f,
+                    cx + half, cy + half, 1f, 0f,
+                    cx - half, cy + half, 0f, 0f,
+            };
+            hotbarItemIcon.upload(qv, QUAD_INDICES);
+            hudShader.bind();
+            hudShader.setUniform("transform", hudTransform);
+            hudShader.setUniform("atlas", 0);
+            hudShader.setUniform("color", WHITE);
+            itemTextures.bind(type);
+            hotbarItemIcon.render();
+            hudShader.unbind();
+        } else {
+            addQuad(cx - half, cy - half, cx + half, cy + half, atlas.getUV(type.topTile));
         }
 
+        if (count > 1) {
+            String countText = Integer.toString(Math.min(count, 999));
+            float digitSize = 0.028f;
+            text.add(countText, cx + half - text.measure(countText, digitSize), cy - half, digitSize);
+        }
+        if (Mining.isTool(type)) {
+            float fraction = durability.fraction(type);
+            if (fraction < 1f) {
+                barCx.add(cx);
+                barCy.add(cy);
+                barFrac.add(fraction);
+            }
+        }
+    }
+
+    /** Uploads and draws the accumulated block-icon batch. */
+    private void flushBlockBatch(TextureAtlas atlas) {
         hudShader.bind();
         hudShader.setUniform("transform", hudTransform);
         hudShader.setUniform("atlas", 0);
         hudShader.setUniform("color", WHITE);
-
         hotbarBlockIcons.upload(blockVertices.toArray(), blockIndices.toArray());
         atlas.bind();
         hotbarBlockIcons.render();
-
         hudShader.unbind();
+    }
 
-        text.render(hudTransform, WHITE);
-
-        if (!barCx.isEmpty()) {
-            lineShader.bind();
-            lineShader.setUniform("projection", identity);
-            lineShader.setUniform("view", identity);
-            lineShader.setUniform("model", hudTransform);
-            float barY1 = centerY - iconHalf;                 // icon's bottom edge
-            float barY0 = barY1 - DURABILITY_BAR_HEIGHT;
-            for (int i = 0; i < barCx.size(); i++) {
-                renderDurabilityBar(barCx.get(i) - iconHalf, barCx.get(i) + iconHalf, barY0, barY1, barFrac.get(i));
-            }
-            lineShader.unbind();
+    /** Draws the wear bars recorded by {@link #addSlotIcon}, spanning each tool icon's width. */
+    private void renderDurabilityBars(float iconHalf) {
+        if (barCx.isEmpty()) return;
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        for (int i = 0; i < barCx.size(); i++) {
+            float cx = barCx.get(i);
+            float cy = barCy.get(i);
+            float y0 = cy - iconHalf;
+            renderDurabilityBar(cx - iconHalf, cx + iconHalf, y0, y0 + DURABILITY_BAR_HEIGHT, barFrac.get(i));
         }
-
-        glEnable(GL_DEPTH_TEST);
+        lineShader.unbind();
     }
 
     /** Draws one tool's wear strip: dark background + a fill that shrinks and shifts green->yellow->red as it wears. */
@@ -530,165 +555,191 @@ public class Hud {
         blockVertexCounter += 4;
     }
 
+    private void addQuad3(FloatArray out, float minX, float minY, float maxX, float maxY) {
+        out.add(minX); out.add(minY); out.add(0);
+        out.add(maxX); out.add(minY); out.add(0);
+        out.add(maxX); out.add(maxY); out.add(0);
+        out.add(minX); out.add(minY); out.add(0);
+        out.add(maxX); out.add(maxY); out.add(0);
+        out.add(minX); out.add(maxY); out.add(0);
+    }
+
+    private static float[] outlineLines(float cx, float cy, float half) {
+        return new float[]{
+                cx - half, cy - half, 0, cx + half, cy - half, 0,
+                cx + half, cy - half, 0, cx + half, cy + half, 0,
+                cx + half, cy + half, 0, cx - half, cy + half, 0,
+                cx - half, cy + half, 0, cx - half, cy - half, 0,
+        };
+    }
+
+    private float invGridWidth() {
+        return 9 * INV_SLOT + 8 * INV_GAP;
+    }
+
+    private float invGridLeft() {
+        return INV_GRID_CENTER_X - invGridWidth() / 2f + INV_SLOT / 2f;
+    }
+
+    /** Center (logical x, y) of the given slot id; see {@link InventoryController} for numbering. */
+    private float[] slotCenter(int slotId) {
+        if (slotId == InventoryController.OUTPUT_SLOT) {
+            return new float[]{OUTPUT_X, OUTPUT_Y};
+        }
+        if (slotId >= Inventory.SIZE) {
+            int g = slotId - Inventory.SIZE;
+            int r = g / CraftingGrid.WIDTH, c = g % CraftingGrid.WIDTH;
+            return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
+        }
+        int r, c;
+        if (slotId < Inventory.HOTBAR_SIZE) {
+            r = 3;
+            c = slotId;
+        } else {
+            int s = slotId - Inventory.HOTBAR_SIZE;
+            r = s / 9;
+            c = s % 9;
+        }
+        return new float[]{invGridLeft() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP};
+    }
+
+    /** Resolves a mouse position (in logical-square coords) to a slot id, or -1 if it's over nothing. */
+    public int inventorySlotAt(float logicalX, float logicalY) {
+        for (int id = 0; id <= InventoryController.OUTPUT_SLOT; id++) {
+            float[] c = slotCenter(id);
+            float half = INV_SLOT / 2f;
+            if (Math.abs(logicalX - c[0]) <= half && Math.abs(logicalY - c[1]) <= half) {
+                return id;
+            }
+        }
+        return -1;
+    }
+
     /**
-     * Draws the shaped-crafting screen: a 3x3 grid of placed items with a cursor
-     * highlight, plus an output slot showing the recipe result. {@code output} is
-     * the current match (may be null), {@code cursor} is the hovered grid cell
-     * (0-8), and {@code selectedType} is the hotbar item available to place.
+     * Draws the full Minecraft-style inventory screen: the 36-slot inventory
+     * grid (with the hotbar as its bottom row), the 3x3 crafting grid, its
+     * output slot, the cursor stack following the mouse, and hover highlight.
+     * {@code cursorLx}/{@code cursorLy} are the mouse position in logical-square
+     * coordinates, so the cursor stack can track it.
      */
-    public void renderCraftingGrid(CraftingGrid grid, BlockType output, int cursor, BlockType selectedType,
-                                   Inventory inventory, TextureAtlas atlas, ItemTextures itemTextures, float aspectRatio) {
+    public void renderInventory(Inventory inventory, CraftingGrid grid, InventoryController controller,
+                                int hoveredSlot, TextureAtlas atlas, ItemTextures itemTextures,
+                                ToolDurability durability, float aspectRatio, float cursorLx, float cursorLy) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
-        float slot = 0.1f;
-        float gap = 0.03f;
-        float gridW = 3 * slot + 2 * gap;
-        float gridLeft = -gridW / 2f - 0.1f;
-        float gridTop = 0.22f; // y of the top row's center
-
-        float panelW = gridW + slot + 0.24f;
-        float panelH = 0.42f;
-        float panelCenterY = 0.02f;
-        float left = -panelW / 2f;
-        float top = panelCenterY + panelH / 2f;
-        float bottom = panelCenterY - panelH / 2f;
-
-        // Panel background.
+        // Panel background spanning the inventory grid and crafting area.
+        float gridW = invGridWidth();
+        float panelLeft = CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
+        float panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+        float panelTop = INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
+        float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f;
         float[] panel = {
-                left, bottom, 0, left + panelW, bottom, 0, left + panelW, top, 0,
-                left, bottom, 0, left + panelW, top, 0, left, top, 0,
+                panelLeft, panelBottom, 0, panelRight, panelBottom, 0, panelRight, panelTop, 0,
+                panelLeft, panelBottom, 0, panelRight, panelTop, 0, panelLeft, panelTop, 0,
         };
-        craftPanel.upload(panel);
+        inventoryPanel.upload(panel);
         lineShader.bind();
         lineShader.setUniform("projection", identity);
         lineShader.setUniform("view", identity);
         lineShader.setUniform("model", hudTransform);
-        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.55f));
-        craftPanel.render();
+        lineShader.setUniform("color", new Vector4f(0.78f, 0.78f, 0.78f, 0.35f));
+        inventoryPanel.render();
+
+        // Slot backgrounds (dark squares) for every inventory slot, grid cell and the output slot.
+        slotBgVerts.clear();
+        float half = INV_SLOT / 2f - 0.004f;
+        for (int id = 0; id <= InventoryController.OUTPUT_SLOT; id++) {
+            float[] c = slotCenter(id);
+            addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
+        }
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.35f));
+        inventorySlotBg.render();
+
+        // Hover highlight.
+        if (hoveredSlot >= 0) {
+            float[] c = slotCenter(hoveredSlot);
+            inventoryHover.upload(outlineLines(c[0], c[1], INV_SLOT / 2f + 0.004f));
+            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.9f));
+            glLineWidth(2f);
+            inventoryHover.render();
+        }
         lineShader.unbind();
 
-        // Title + hint.
-        drawCenteredText("Crafting", 0f, top - 0.055f, 0.045f, WHITE);
-        drawCenteredText("Arrows: move    Space: place/remove    C: craft    E: close",
-                0f, bottom + 0.012f, 0.024f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
-
-        // Grid cell icons: block items batch through the atlas, item icons bind individually.
-        FloatArray blockV = new FloatArray(256);
-        IntArray blockI = new IntArray(256);
-        int[] counter = {0};
+        // Icons + counts + wear bars for every occupied slot.
+        beginSlotBatch();
+        float iconHalf = INV_SLOT / 2f - 0.006f;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            float[] c = slotCenter(i);
+            addSlotIcon(c[0], c[1], iconHalf, inventory.typeOf(i), inventory.countOf(i), itemTextures, atlas, durability);
+        }
         for (int i = 0; i < CraftingGrid.SIZE; i++) {
-            BlockType type = grid.get(i);
-            if (type == null) continue;
-            int r = i / 3, c = i % 3;
-            float cx = gridLeft + c * (slot + gap) + slot / 2f;
-            float cy = gridTop - r * (slot + gap);
-            float half = slot / 2f - 0.008f;
-            if (type.isItem) {
-                float[] qv = {cx - half, cy - half, 0f, 1f, cx + half, cy - half, 1f, 1f,
-                        cx + half, cy + half, 1f, 0f, cx - half, cy + half, 0f, 0f};
-                craftItemIcon.upload(qv, QUAD_INDICES);
-                hudShader.bind();
-                hudShader.setUniform("transform", hudTransform);
-                hudShader.setUniform("atlas", 0);
-                hudShader.setUniform("color", WHITE);
-                itemTextures.bind(type);
-                craftItemIcon.render();
-                hudShader.unbind();
-            } else {
-                addGridQuad(blockV, blockI, counter, cx - half, cy - half, cx + half, cy + half, atlas.getUV(type.topTile));
-            }
+            float[] c = slotCenter(Inventory.SIZE + i);
+            BlockType t = grid.get(i);
+            if (t != null) addSlotIcon(c[0], c[1], iconHalf, t, 1, itemTextures, atlas, durability);
+        }
+        Crafting.Recipe recipe = Crafting.match(grid.snapshot());
+        if (recipe != null) {
+            float[] c = slotCenter(InventoryController.OUTPUT_SLOT);
+            addSlotIcon(c[0], c[1], iconHalf, recipe.output(), recipe.outputAmount(), itemTextures, atlas, durability);
+        }
+        flushBlockBatch(atlas);
+        text.render(hudTransform, WHITE);
+        renderDurabilityBars(iconHalf);
+
+        // Cursor stack following the mouse, drawn on top.
+        if (controller.hasCursorItem()) {
+            drawCursorStack(atlas, itemTextures, controller.cursorType(), controller.cursorCount(),
+                    cursorLx + 0.02f, cursorLy - 0.02f);
         }
 
-        hudShader.bind();
-        hudShader.setUniform("transform", hudTransform);
-        hudShader.setUniform("atlas", 0);
-        hudShader.setUniform("color", WHITE);
-        craftBlockIcons.upload(toFloats(blockV), toInts(blockI));
-        atlas.bind();
-        craftBlockIcons.render();
-        hudShader.unbind();
-
-        // Output slot (right of the grid): show the current match.
-        float ox = gridLeft + gridW + 0.16f;
-        float oy = gridTop - (slot + gap);
-        if (output != null) {
-            float half = slot / 2f - 0.008f;
-            if (output.isItem) {
-                float[] qv = {ox - half, oy - half, 0f, 1f, ox + half, oy - half, 1f, 1f,
-                        ox + half, oy + half, 1f, 0f, ox - half, oy + half, 0f, 0f};
-                craftItemIcon.upload(qv, QUAD_INDICES);
-                hudShader.bind();
-                hudShader.setUniform("transform", hudTransform);
-                hudShader.setUniform("atlas", 0);
-                hudShader.setUniform("color", WHITE);
-                itemTextures.bind(output);
-                craftItemIcon.render();
-                hudShader.unbind();
-            } else {
-                FloatArray ov = new FloatArray(32);
-                IntArray oi = new IntArray(16);
-                int[] oc = {0};
-                addGridQuad(ov, oi, oc, ox - half, oy - half, ox + half, oy + half, atlas.getUV(output.topTile));
-                hudShader.bind();
-                hudShader.setUniform("transform", hudTransform);
-                hudShader.setUniform("atlas", 0);
-                hudShader.setUniform("color", WHITE);
-                craftBlockIcons.upload(toFloats(ov), toInts(oi));
-                atlas.bind();
-                craftBlockIcons.render();
-                hudShader.unbind();
-            }
-        }
-
-        // Cursor highlight on the hovered cell.
-        int cr = cursor / 3, cc = cursor % 3;
-        float ccx = gridLeft + cc * (slot + gap) + slot / 2f;
-        float ccy = gridTop - cr * (slot + gap);
-        float hs = slot / 2f + 0.005f;
-        float[] hl = {
-                ccx - hs, ccy - hs, 0, ccx + hs, ccy - hs, 0,
-                ccx + hs, ccy - hs, 0, ccx + hs, ccy + hs, 0,
-                ccx + hs, ccy + hs, 0, ccx - hs, ccy + hs, 0,
-                ccx - hs, ccy + hs, 0, ccx - hs, ccy - hs, 0,
-        };
-        craftCursor.upload(hl);
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        lineShader.setUniform("color", new Vector4f(1f, 0.85f, 0.4f, 0.95f));
-        glLineWidth(2f);
-        craftCursor.render();
-        lineShader.unbind();
-
-        // Selected ingredient hint (what Space will place).
-        String selName = selectedType == null ? "-" : selectedType.toString();
-        drawCenteredText("Placing: " + selName + " (" + inventory.getCount(selectedType) + ")",
-                0f, bottom - 0.045f, 0.024f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+        // Title + hint line.
+        drawCenteredText("Inventory", 0f, panelTop - 0.05f, 0.045f, WHITE);
+        drawCenteredText("Left: pick up    Right: one    Shift-click: move    Drag: split    Esc: close",
+                0f, panelBottom - 0.04f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
         glEnable(GL_DEPTH_TEST);
     }
 
-    private void addGridQuad(FloatArray vertices, IntArray indices, int[] counter,
-                             float minX, float minY, float maxX, float maxY, float[] uv) {
-        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
-        int base = counter[0];
-        vertices.add(minX); vertices.add(minY); vertices.add(u0); vertices.add(v1);
-        vertices.add(maxX); vertices.add(minY); vertices.add(u1); vertices.add(v1);
-        vertices.add(maxX); vertices.add(maxY); vertices.add(u1); vertices.add(v0);
-        vertices.add(minX); vertices.add(maxY); vertices.add(u0); vertices.add(v0);
-        indices.add(base); indices.add(base + 1); indices.add(base + 2);
-        indices.add(base); indices.add(base + 2); indices.add(base + 3);
-        counter[0] += 4;
-    }
+    /** Draws the cursor stack (icon + count) at the given logical position, above everything else. */
+    private void drawCursorStack(TextureAtlas atlas, ItemTextures itemTextures, BlockType type, int count, float cx, float cy) {
+        float half = INV_SLOT / 2f;
+        if (type.isItem) {
+            float[] qv = {
+                    cx - half, cy - half, 0f, 1f,
+                    cx + half, cy - half, 1f, 1f,
+                    cx + half, cy + half, 1f, 0f,
+                    cx - half, cy + half, 0f, 0f,
+            };
+            hotbarItemIcon.upload(qv, QUAD_INDICES);
+            hudShader.bind();
+            hudShader.setUniform("transform", hudTransform);
+            hudShader.setUniform("atlas", 0);
+            hudShader.setUniform("color", WHITE);
+            itemTextures.bind(type);
+            hotbarItemIcon.render();
+            hudShader.unbind();
+        } else {
+            blockVertices.clear();
+            blockIndices.clear();
+            blockVertexCounter = 0;
+            addQuad(cx - half, cy - half, cx + half, cy + half, atlas.getUV(type.topTile));
+            hotbarBlockIcons.upload(blockVertices.toArray(), blockIndices.toArray());
+            hudShader.bind();
+            hudShader.setUniform("transform", hudTransform);
+            hudShader.setUniform("atlas", 0);
+            hudShader.setUniform("color", WHITE);
+            atlas.bind();
+            hotbarBlockIcons.render();
+            hudShader.unbind();
+        }
 
-    private static float[] toFloats(FloatArray values) {
-        return values.toArray();
-    }
-
-    private static int[] toInts(IntArray values) {
-        return values.toArray();
+        text.begin();
+        String countText = Integer.toString(Math.min(count, 999));
+        float digitSize = 0.028f;
+        text.add(countText, cx + half - text.measure(countText, digitSize), cy - half, digitSize);
+        text.render(hudTransform, WHITE);
     }
 
     public void destroy() {
@@ -704,9 +755,8 @@ public class Hud {
         durabilityBarBackground.destroy();
         durabilityBarFill.destroy();
         settingsPanel.destroy();
-        craftPanel.destroy();
-        craftCursor.destroy();
-        craftBlockIcons.destroy();
-        craftItemIcon.destroy();
+        inventoryPanel.destroy();
+        inventorySlotBg.destroy();
+        inventoryHover.destroy();
     }
 }

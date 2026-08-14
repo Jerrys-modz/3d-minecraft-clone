@@ -3,9 +3,12 @@ package com.minecraftclone.player;
 import com.minecraftclone.world.BlockType;
 
 /**
- * The 3x3 crafting grid shown by the crafting screen. Items placed here are
- * pulled out of the player's inventory as they're placed; closing the grid
- * returns them, and crafting consumes them (converting them to the output).
+ * The 3x3 crafting grid on the inventory screen. Each cell holds at most one
+ * item (single items only, never stacked, like Minecraft's crafting grid), so
+ * a cell is simply a {@link BlockType} or null. Items are moved in/out of the
+ * cells by the cursor stack in {@link InventoryController}; crafting consumes
+ * the ingredients (see {@link #reset}) and hands the result back to the
+ * cursor.
  */
 public class CraftingGrid {
 
@@ -19,6 +22,15 @@ public class CraftingGrid {
         return cells[index];
     }
 
+    /** Puts one item in the cell (null clears it). Cells hold single items, so a count is implicit. */
+    public void set(int index, BlockType type) {
+        cells[index] = type;
+    }
+
+    public boolean isOccupied(int index) {
+        return cells[index] != null;
+    }
+
     public boolean isEmpty() {
         for (BlockType c : cells) {
             if (c != null) return false;
@@ -26,46 +38,14 @@ public class CraftingGrid {
         return true;
     }
 
-    /** True if the cell at {@code index} already holds an item. */
-    public boolean isOccupied(int index) {
-        return cells[index] != null;
-    }
-
-    /**
-     * Places one of {@code type} into an empty cell, consuming it from the
-     * inventory. Returns false (no change) if the cell is occupied, the type is
-     * null, or the player has none.
-     */
-    public boolean place(int index, Inventory inventory, BlockType type) {
-        if (type == null || cells[index] != null) return false;
-        if (!inventory.remove(type, 1)) return false;
-        cells[index] = type;
-        return true;
-    }
-
-    /** Returns the item in {@code index} to the inventory and empties the cell. */
-    public void clear(int index, Inventory inventory) {
-        if (cells[index] != null) {
-            inventory.add(cells[index], 1);
-            cells[index] = null;
-        }
-    }
-
-    /** Returns every placed item to the inventory - used when closing the grid. */
-    public void clearAll(Inventory inventory) {
-        for (int i = 0; i < SIZE; i++) {
-            clear(i, inventory);
-        }
-    }
-
-    /** Empties the grid without returning items - used when a craft consumes them. */
+    /** Empties every cell without returning items - used when a craft consumes the ingredients. */
     public void reset() {
         for (int i = 0; i < SIZE; i++) {
             cells[i] = null;
         }
     }
 
-    /** A copy of the 3x3 cells (row-major) for recipe matching. */
+    /** A copy of the 3x3 cells (row-major, null = empty) for recipe matching. */
     public BlockType[] snapshot() {
         return cells.clone();
     }

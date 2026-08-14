@@ -27,7 +27,6 @@ public class Chunk {
     private final ChunkPos pos;
     private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
     private final Mesh mesh = new Mesh();
-    private final Mesh waterMesh = new Mesh(); // translucent water faces, drawn in a separate pass
     // Local positions (+ light level) of every light-emitting block (torches) currently
     // in this chunk, kept incrementally up to date - see setLocal/setRawBlocks. Small and
     // rare enough that a flat list beats a spatial index; consulted by rebuildMesh to bake
@@ -40,7 +39,6 @@ public class Chunk {
     private volatile boolean dirty = true;
     private boolean generated = false;
     private boolean hasMeshData = false;
-    private boolean hasWaterMeshData = false;
     private boolean modifiedByPlayer = false;
     private boolean leavesTransparent = false;
 
@@ -188,9 +186,6 @@ public class Chunk {
         FloatArray vertices = new FloatArray(4096);
         IntArray indices = new IntArray(4096);
         int[] vertexCounter = {0};
-        FloatArray waterVertices = new FloatArray(1024);
-        IntArray waterIndices = new IntArray(1024);
-        int[] waterCounter = {0};
 
         int originX = getOriginX();
         int originZ = getOriginZ();
@@ -206,55 +201,51 @@ public class Chunk {
                     int wz = originZ + z;
                     float blockLight = computeBlockLight(nearbyLights, wx + 0.5f, wy + 0.5f, wz + 0.5f);
 
-                    // Water renders translucent in a separate pass; everything else is opaque.
-                    boolean water = block.isWater();
-                    FloatArray v = water ? waterVertices : vertices;
-                    IntArray idx = water ? waterIndices : indices;
-                    int[] counter = water ? waterCounter : vertexCounter;
-
                     if (block.cross) {
                         // Decoration (grass/flowers): two crossed planes, always fully
                         // visible - no face culling, since it never covers a whole cell.
-                        emitCross(v, idx, counter, wx, wy, wz, block, atlas, blockLight);
+                        emitCross(vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
                     if (block.slab) {
-                        emitSlab(world, v, idx, counter, wx, wy, wz, block, atlas, blockLight);
+                        emitSlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        continue;
+                    }
+                    if (block.isFluid()) {
+                        emitFluid(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
 
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz, block)) {
-                        emitFace(v, idx, counter, wx, wy, wz, Face.TOP, block, atlas, blockLight);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.TOP, block, atlas, blockLight);
                     }
                     // -Y bottom
                     if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz, block)) {
-                        emitFace(v, idx, counter, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
                     }
                     // +X east
                     if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz, block)) {
-                        emitFace(v, idx, counter, wx, wy, wz, Face.EAST, block, atlas, blockLight);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.EAST, block, atlas, blockLight);
                     }
                     // -X west
                     if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz, block)) {
-                        emitFace(v, idx, counter, wx, wy, wz, Face.WEST, block, atlas, blockLight);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.WEST, block, atlas, blockLight);
                     }
                     // +Z south
                     if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1, block)) {
-                        emitFace(v, idx, counter, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
                     }
                     // -Z north
                     if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1, block)) {
-                        emitFace(v, idx, counter, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
+                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
                     }
                 }
             }
         }
 
         mesh.upload(vertices.toArray(), indices.toArray());
-        waterMesh.upload(waterVertices.toArray(), waterIndices.toArray());
         hasMeshData = indices.size() > 0;
-        hasWaterMeshData = waterIndices.size() > 0;
         dirty = false;
     }
 
@@ -312,6 +303,49 @@ public class Chunk {
     }
 
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
+
+    /** Emits a lowered translucent surface for fluid instead of a solid full cube. */
+    private void emitFluid(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                            int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
+        float top = (block == BlockType.WATER || block == BlockType.LAVA || block.isFluidSource()) ? 0.9f
+                : (world.getBlock(wx, wy - 1, wz) == BlockType.AIR ? 1f : 0.78f);
+        float[] uv = atlas.getUV(block.topTile);
+        float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + top, z1 = wz + 1;
+
+        if (isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
+                    uvs, LIGHT_TOP, blockLight);
+        }
+        if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz, block)) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
+                    uvs, LIGHT_BOTTOM, blockLight);
+        }
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.EAST, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.WEST, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.SOUTH, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.NORTH, uvs);
+    }
+
+    private void emitFluidSide(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                                int wx, int wy, int wz, BlockType block, float blockLight, float top,
+                                Face face, float[][] uvs) {
+        int nx = wx + (face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0);
+        int nz = wz + (face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0);
+        if (!isFaceVisible(world, nx - getOriginX(), wy, nz - getOriginZ(), nx, wy, nz, block)) return;
+        float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + top, z0 = wz, z1 = wz + 1;
+        float[][] positions = switch (face) {
+            case EAST -> new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}};
+            case WEST -> new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}};
+            case SOUTH -> new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}};
+            case NORTH -> new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}};
+            default -> throw new IllegalArgumentException("Fluid side must be horizontal");
+        };
+        float light = face == Face.NORTH || face == Face.SOUTH ? LIGHT_NORTH_SOUTH : LIGHT_EAST_WEST;
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
+    }
 
     private void emitFace(FloatArray vertices, IntArray indices, int[] vertexCounter,
                            int wx, int wy, int wz, Face face, BlockType block, TextureAtlas atlas, float blockLight) {
@@ -463,15 +497,7 @@ public class Chunk {
         }
     }
 
-    /** Renders the translucent water faces (call after the opaque pass, with depth writes off). */
-    public void renderTransparent() {
-        if (hasWaterMeshData) {
-            waterMesh.render();
-        }
-    }
-
     public void destroy() {
         mesh.destroy();
-        waterMesh.destroy();
     }
 }

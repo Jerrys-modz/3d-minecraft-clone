@@ -229,9 +229,6 @@ public class World implements BlockAccessor {
         int pcx = worldToChunk((int) Math.floor(playerWorldX));
         int pcz = worldToChunk((int) Math.floor(playerWorldZ));
 
-        // Flow the fluids (water/lava sources spread, and stale flow dries up).
-        updateFluids();
-
         // Load / generate.
         int generated = 0;
         for (int dx = -renderDistance; dx <= renderDistance && generated < MAX_GENERATE_PER_TICK; dx++) {
@@ -273,6 +270,9 @@ public class World implements BlockAccessor {
             c.destroy();
         }
 
+        // Flow after streaming so newly loaded chunks participate in the field.
+        updateFluids();
+
         // Remesh a limited number of dirty chunks per tick, nearest first.
         List<Chunk> dirty = new ArrayList<>();
         for (Chunk c : chunks.values()) {
@@ -288,13 +288,6 @@ public class World implements BlockAccessor {
     public void render(Shader shader) {
         for (Chunk chunk : chunks.values()) {
             chunk.render();
-        }
-    }
-
-    /** Renders translucent water faces - call after {@link #render}, with depth writes disabled. */
-    public void renderTransparent(Shader shader) {
-        for (Chunk chunk : chunks.values()) {
-            chunk.renderTransparent();
         }
     }
 
