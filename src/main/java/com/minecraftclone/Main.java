@@ -893,9 +893,18 @@ public class Main {
                                     } else {
                                         world.setBlock(p.x, p.y, p.z, heldItem);
                                     }
-                                    // A door is 2 blocks tall: also place the top half.
-                                    if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
-                                        world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
+                                    // A door is 2 blocks tall: also place the top half,
+                                    // facing the direction the player was looking.
+                                    if (heldItem == BlockType.DOOR) {
+                                        Vector3f front = player.getCamera().getFront();
+                                        byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
+                                                ? (front.x >= 0 ? 2 : 3)
+                                                : (front.z >= 0 ? 0 : 1));
+                                        world.setBlockOrientation(p.x, p.y, p.z, facing);
+                                        if (world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
+                                            world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
+                                            world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
+                                        }
                                     }
                                 }
                             }
