@@ -504,7 +504,14 @@ public class Main {
                     }
                 }
 
-                BlockType targetType = hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
+                // A cell can hold an overlay decoration inside its primary block (e.g.
+                // seaweed inside water - see BlockType#isSubmersible); aiming at one
+                // targets the decoration itself, the same way Minecraft lets you break
+                // waterlogged seagrass without touching the water it's growing in.
+                BlockType targetOverlay = hit != null ? world.getOverlay(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
+                boolean targetingOverlay = targetOverlay != BlockType.AIR;
+                BlockType targetType = targetingOverlay ? targetOverlay
+                        : hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
                 BlockType heldItem = player.getInventory().typeOf(selectedSlot[0]);
                 GameMode mode = settings.getGameMode();
 
@@ -524,7 +531,13 @@ public class Main {
                     if (breakFraction >= 1f) {
                         mining.reset();
                         breakFraction = 0f;
-                        world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                        if (targetingOverlay) {
+                            // Clear just the decoration - the water (or whatever else)
+                            // it was sitting inside is untouched.
+                            world.setOverlay(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                        } else {
+                            world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                        }
                         if (!mode.isCreative()) {
                             // Drop the item into the world (to be picked up) rather than
                             // adding it straight to the inventory. Transient fluid flow drops
@@ -559,10 +572,24 @@ public class Main {
                         // Pure inventory items (tools, and any future non-edible item)
                         // have no world tile and can never be placed as a block.
                         Vector3i p = hit.placePos;
-                        if (!intersectsPlayer(player, p)) {
+                        // A submersible decoration (seaweed) placed where a fluid
+                        // already is grows inside it instead of replacing it - the
+                        // same rule world-gen follows (see TerrainGenerator). If that
+                        // cell's overlay slot is already taken, there's simply nowhere
+                        // to put it - skip placing rather than fall through and
+                        // overwrite the fluid it would have grown inside.
+                        boolean targetIsFluid = world.getBlock(p.x, p.y, p.z).isFluid();
+                        boolean overlayFull = world.getOverlay(p.x, p.y, p.z) != BlockType.AIR;
+                        boolean blocked = heldItem.isSubmersible() ? (targetIsFluid && overlayFull) : false;
+                        boolean intoFluid = heldItem.isSubmersible() && targetIsFluid && !overlayFull;
+                        if (!blocked && !intersectsPlayer(player, p)) {
                             boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
                             if (placed) {
-                                world.setBlock(p.x, p.y, p.z, heldItem);
+                                if (intoFluid) {
+                                    world.setOverlay(p.x, p.y, p.z, heldItem);
+                                } else {
+                                    world.setBlock(p.x, p.y, p.z, heldItem);
+                                }
                             }
                         }
                     }
