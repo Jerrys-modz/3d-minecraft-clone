@@ -89,6 +89,7 @@ public class TextureAtlas {
         paintDeadBush(image, 33, rnd);
         paintMushroom(image, 35, rnd, 0xD0392B, 0xB3251C);                   // red mushroom
         paintMushroom(image, 36, rnd, 0x8B5A2B, 0x6E4623);                   // brown mushroom
+        paintVine(image, 39, rnd);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
@@ -331,6 +332,21 @@ public class TextureAtlas {
                     img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.3f ? capDark : capColor));
                 }
             }
+        }
+    }
+
+    /** A thin green vine strand with a few leaves, on a transparent background - hangs from jungle canopies. */
+    private void paintVine(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x2F6B2F);
+            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x2F6B2F);
+        }
+        for (int i = 0; i < 7; i++) {
+            int x = 5 + rnd.nextInt(6);
+            int y = 2 + rnd.nextInt(TILE_PX - 4);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x3E8E35);
         }
     }
 

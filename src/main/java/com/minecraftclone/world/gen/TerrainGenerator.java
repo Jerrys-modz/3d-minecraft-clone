@@ -513,6 +513,25 @@ public class TerrainGenerator {
             }
         }
         chunk.setLocal(x, y + trunkHeight, z, BlockType.LEAVES);
+
+        // Vines hanging from the canopy fringe down into the air below.
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                if (dx == 0 && dz == 0) continue;
+                if (Math.abs(dx) != 3 && Math.abs(dz) != 3) continue; // fringe only
+                if (rnd.nextInt(3) != 0) continue;
+                int vx = x + dx, vz = z + dz;
+                int len = 1 + rnd.nextInt(3);
+                for (int i = 1; i <= len; i++) {
+                    int vy = canopyBase - i;
+                    if (chunk.getLocal(vx, vy, vz) == BlockType.AIR) {
+                        chunk.setLocal(vx, vy, vz, BlockType.VINE);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /** A dried bush on the badlands surface. */

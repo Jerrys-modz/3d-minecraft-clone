@@ -64,6 +64,7 @@ public enum BlockType {
     DEAD_BUSH(54, false, true, 33),
     MUSHROOM_RED(55, false, true, 35),
     MUSHROOM_BROWN(56, false, true, 36),
+    VINE(57, false, true, 39),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
