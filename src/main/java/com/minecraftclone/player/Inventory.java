@@ -41,4 +41,9 @@ public class Inventory {
     public void clear() {
         counts.clear();
     }
+
+    /** A copy of the current contents (type -> count), safe to iterate while the inventory changes. */
+    public Map<BlockType, Integer> snapshot() {
+        return new EnumMap<>(counts);
+    }
 }

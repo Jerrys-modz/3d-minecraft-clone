@@ -59,6 +59,16 @@ public class PlayerStats {
         dead = false;
     }
 
+    /** Keeps every stat topped up and the player alive - used in creative/spectator modes. */
+    public void forceFull() {
+        health = MAX_HEALTH;
+        hunger = MAX_HUNGER;
+        stamina = MAX_STAMINA;
+        submergedTime = 0f;
+        staminaExhausted = false;
+        dead = false;
+    }
+
     public boolean canSprint() {
         return !staminaExhausted && stamina > 0.5f;
     }

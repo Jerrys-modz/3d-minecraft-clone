@@ -2,11 +2,14 @@ package com.minecraftclone.world;
 
 import com.minecraftclone.engine.Shader;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.player.Inventory;
 import com.minecraftclone.world.gen.TerrainGenerator;
+import org.joml.Vector3f;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +38,13 @@ public class World implements BlockAccessor {
     private boolean leavesTransparent = false;
     private static final int MAX_GENERATE_PER_TICK = 4;
     private static final int MAX_MESH_PER_TICK = 4;
+
+    // Dropped item entities (from breaking blocks / death). Transient - not saved.
+    private final List<ItemEntity> items = new ArrayList<>();
+    private static final float ITEM_GRAVITY = 24f;
+    private static final float ITEM_TERMINAL_VELOCITY = -40f;
+    private static final float ITEM_HALF_HEIGHT = 0.15f;
+    private static final float PICKUP_RADIUS = 1.5f;
 
     public World(long seed, TextureAtlas atlas, Path saveDir) {
         this.generator = new TerrainGenerator(seed);
@@ -224,6 +234,64 @@ public class World implements BlockAccessor {
     public void render(Shader shader) {
         for (Chunk chunk : chunks.values()) {
             chunk.render();
+        }
+    }
+
+    /** Spawns a dropped item of {@code type} at the given block position (centered, with a small random kick). */
+    public void spawnItem(int blockX, int blockY, int blockZ, BlockType type, int count, java.util.Random rnd) {
+        ItemEntity e = new ItemEntity(type, count, blockX + 0.5f, blockY + 0.5f, blockZ + 0.5f);
+        e.velocity.set((rnd.nextFloat() - 0.5f) * 1.5f, 2.5f + rnd.nextFloat() * 1.5f, (rnd.nextFloat() - 0.5f) * 1.5f);
+        items.add(e);
+    }
+
+    /** All currently-dropped item entities (read-only; rendered by the caller). */
+    public List<ItemEntity> getItems() {
+        return items;
+    }
+
+    /**
+     * Advances item physics (gravity, resting on blocks) and collects any item
+     * the player is close enough to pick up into {@code inventory}. Call once
+     * per frame from the main thread.
+     */
+    public void updateItems(float dt, Vector3f playerPos, Inventory inventory) {
+        for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
+            ItemEntity e = it.next();
+            e.age += dt;
+            if (e.isExpired() || e.position.y < -64f) {
+                it.remove();
+                continue;
+            }
+
+            e.velocity.y -= ITEM_GRAVITY * dt;
+            e.velocity.y = Math.max(e.velocity.y, ITEM_TERMINAL_VELOCITY);
+            e.position.x += e.velocity.x * dt;
+            e.position.y += e.velocity.y * dt;
+            e.position.z += e.velocity.z * dt;
+            // Air friction on the horizontal kick.
+            float friction = Math.max(0f, 1f - 6f * dt);
+            e.velocity.x *= friction;
+            e.velocity.z *= friction;
+
+            // Rest on top of a solid block below the item.
+            int bx = (int) Math.floor(e.position.x);
+            int by = (int) Math.floor(e.position.y - ITEM_HALF_HEIGHT);
+            int bz = (int) Math.floor(e.position.z);
+            BlockType below = getBlock(bx, by, bz);
+            if (below.isCollidable()) {
+                e.position.y = by + below.collisionHeight + ITEM_HALF_HEIGHT;
+                e.velocity.y = 0f;
+            }
+
+            if (e.canPickup()) {
+                float dx = e.position.x - playerPos.x;
+                float dy = e.position.y - (playerPos.y + 0.9f);
+                float dz = e.position.z - playerPos.z;
+                if (dx * dx + dy * dy + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
+                    inventory.add(e.type, e.count);
+                    it.remove();
+                }
+            }
         }
     }
 

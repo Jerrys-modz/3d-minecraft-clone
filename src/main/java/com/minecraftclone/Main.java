@@ -2,6 +2,7 @@ package com.minecraftclone;
 
 import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Crafting;
@@ -29,6 +30,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -85,6 +87,7 @@ public class Main {
         world.setRenderDistance(settings.getRenderDistance());
         window.setVsync(settings.isVsync());
         player.setMouseSensitivity(settings.getMouseSensitivity());
+        player.setGameMode(settings.getGameMode());
     }
 
     /** Closes the crafting grid, returning any items still placed in it to the inventory. */
@@ -141,6 +144,7 @@ public class Main {
         player.spawn(world, 0.5f, 0.5f);
 
         Hud hud = new Hud(lineShader, hudShader, font);
+        ItemRenderer itemRenderer = new ItemRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
@@ -287,10 +291,19 @@ public class Main {
             if (player.getStats().isDead()) {
                 System.out.println("You died. Respawning...");
                 showMessage(messages, "You died!", new Vector4f(0.9f, 0.25f, 0.25f, 1f), 3.0f);
+                // Drop the whole inventory onto the ground, Minecraft-style.
+                Vector3f deathPos = player.getPosition();
+                for (Map.Entry<BlockType, Integer> entry : player.getInventory().snapshot().entrySet()) {
+                    world.spawnItem((int) Math.floor(deathPos.x), (int) Math.floor(deathPos.y),
+                            (int) Math.floor(deathPos.z), entry.getKey(), entry.getValue(), loot);
+                }
                 player.getInventory().clear();
                 player.getDurability().reset();
                 player.respawn(world, 0.5f, 0.5f);
             }
+
+            // Item-entity physics + pickup.
+            world.updateItems(dt, player.getPosition(), player.getInventory());
 
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
             for (int i = messages.size() - 1; i >= 0; i--) {
@@ -346,41 +359,57 @@ public class Main {
 
                 BlockType targetType = hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
                 BlockType heldItem = HOTBAR[selectedSlot[0]];
-                boolean holding = hit != null && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
-                breakFraction = mining.update(hit != null ? hit.blockPos : null, targetType, heldItem, holding, dt);
+                GameMode mode = settings.getGameMode();
 
-                if (breakFraction >= 1f) {
-                    mining.reset();
-                    breakFraction = 0f;
-                    world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
-                    if (targetType == BlockType.BERRY_BUSH) {
-                        // Harvesting a bush yields berries, not the bush itself - it doesn't regrow.
-                        player.getInventory().add(BlockType.BERRIES, BERRIES_PER_BUSH);
+                // Breaking: creative breaks instantly; adventure/spectator can't break.
+                if (mode.canBreak()) {
+                    boolean holding = hit != null && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
+                    if (mode.isCreative() && holding) {
+                        breakFraction = 1f;
                     } else {
-                        player.getInventory().add(targetType, 1);
-                        if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
-                            player.getInventory().add(BlockType.APPLE, 1);
-                        }
+                        breakFraction = mining.update(hit != null ? hit.blockPos : null, targetType, heldItem, holding, dt);
                     }
 
-                    // Wear down the tool that did the breaking; once its uses run out, it's gone.
-                    if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
-                        player.getInventory().remove(heldItem, 1);
-                        System.out.println("Your " + heldItem + " broke!");
-                        showMessage(messages, "Your " + heldItem + " broke!",
-                                new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+                    if (breakFraction >= 1f) {
+                        mining.reset();
+                        breakFraction = 0f;
+                        world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                        if (!mode.isCreative()) {
+                            // Drop the item into the world (to be picked up) rather than
+                            // adding it straight to the inventory.
+                            if (targetType == BlockType.BERRY_BUSH) {
+                                world.spawnItem(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
+                            } else {
+                                world.spawnItem(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, targetType, 1, loot);
+                                if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
+                                    world.spawnItem(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.APPLE, 1, loot);
+                                }
+                            }
+
+                            // Wear down the tool that did the breaking; once its uses run out, it's gone.
+                            if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
+                                player.getInventory().remove(heldItem, 1);
+                                System.out.println("Your " + heldItem + " broke!");
+                                showMessage(messages, "Your " + heldItem + " broke!",
+                                        new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+                            }
+                        }
                     }
                 }
 
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
-                    if (heldItem.isEdible()) {
+                // Placing: creative places for free; adventure/spectator can't place.
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null && mode.canPlace()) {
+                    if (heldItem.isEdible() && !mode.isCreative()) {
                         player.eat(heldItem);
                     } else if (!heldItem.isItem) {
                         // Pure inventory items (tools, and any future non-edible item)
                         // have no world tile and can never be placed as a block.
                         Vector3i p = hit.placePos;
-                        if (!intersectsPlayer(player, p) && player.getInventory().remove(heldItem, 1)) {
-                            world.setBlock(p.x, p.y, p.z, heldItem);
+                        if (!intersectsPlayer(player, p)) {
+                            boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
+                            if (placed) {
+                                world.setBlock(p.x, p.y, p.z, heldItem);
+                            }
                         }
                     }
                 }
@@ -404,6 +433,7 @@ public class Main {
             chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness());
             atlas.bind();
             world.render(chunkShader);
+            itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             chunkShader.unbind();
 
             if (!menuOpen[0]) {
@@ -462,6 +492,7 @@ public class Main {
         settings.save(settingsFile);
 
         hud.destroy();
+        itemRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
         hudShader.destroy();
