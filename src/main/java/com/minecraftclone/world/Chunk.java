@@ -27,6 +27,7 @@ public class Chunk {
     private final ChunkPos pos;
     private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
     private final Mesh mesh = new Mesh();
+    private final Mesh translucentMesh = new Mesh();
     // Local positions (+ light level) of every light-emitting block (torches) currently
     // in this chunk, kept incrementally up to date - see setLocal/setRawBlocks. Small and
     // rare enough that a flat list beats a spatial index; consulted by rebuildMesh to bake
@@ -45,6 +46,7 @@ public class Chunk {
     private volatile boolean dirty = true;
     private boolean generated = false;
     private boolean hasMeshData = false;
+    private boolean hasTranslucentData = false;
     private boolean modifiedByPlayer = false;
     private boolean leavesTransparent = false;
 
@@ -212,6 +214,9 @@ public class Chunk {
         FloatArray vertices = new FloatArray(4096);
         IntArray indices = new IntArray(4096);
         int[] vertexCounter = {0};
+        FloatArray transVertices = new FloatArray(1024);
+        IntArray transIndices = new IntArray(1024);
+        int[] transCounter = {0};
 
         int originX = getOriginX();
         int originZ = getOriginZ();
@@ -242,29 +247,35 @@ public class Chunk {
                         continue;
                     }
 
+                    // Translucent blocks (glass, ice) go into their own batch, drawn
+                    // after everything opaque so they blend over what's behind them.
+                    FloatArray bv = block.isTranslucent() ? transVertices : vertices;
+                    IntArray bi = block.isTranslucent() ? transIndices : indices;
+                    int[] bc = block.isTranslucent() ? transCounter : vertexCounter;
+
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz, block)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.TOP, block, atlas, blockLight);
+                        emitFace(bv, bi, bc, wx, wy, wz, Face.TOP, block, atlas, blockLight);
                     }
                     // -Y bottom
                     if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz, block)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
+                        emitFace(bv, bi, bc, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
                     }
                     // +X east
                     if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz, block)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.EAST, block, atlas, blockLight);
+                        emitFace(bv, bi, bc, wx, wy, wz, Face.EAST, block, atlas, blockLight);
                     }
                     // -X west
                     if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz, block)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.WEST, block, atlas, blockLight);
+                        emitFace(bv, bi, bc, wx, wy, wz, Face.WEST, block, atlas, blockLight);
                     }
                     // +Z south
                     if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1, block)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
+                        emitFace(bv, bi, bc, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
                     }
                     // -Z north
                     if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1, block)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
+                        emitFace(bv, bi, bc, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
                     }
                 }
             }
@@ -272,6 +283,8 @@ public class Chunk {
 
         mesh.upload(vertices.toArray(), indices.toArray());
         hasMeshData = indices.size() > 0;
+        translucentMesh.upload(transVertices.toArray(), transIndices.toArray());
+        hasTranslucentData = transIndices.size() > 0;
         dirty = false;
     }
 
@@ -298,10 +311,20 @@ public class Chunk {
             return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab;
         }
 
+        if (block.isTranslucent()) {
+            // Glass/ice: draw faces toward empty space, decoration and water, but
+            // cull toward solid blocks and toward other translucent blocks (no
+            // internal glass-to-glass faces).
+            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isWater();
+        }
+
         // Cross-shaped decoration (grass/flowers) and slabs don't cover a full cell,
         // and translucent water doesn't occlude, so a solid neighbor's face toward
         // them must still be drawn - treat them like air for culling purposes.
         if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isWater()) return true;
+        // Glass/ice are see-through, so a block behind them still gets its face
+        // drawn (it shows through the glass instead of a hole).
+        if (neighbor.isTranslucent()) return true;
         // With see-through leaves on, leaf blocks stop occluding faces too - both
         // the leaf block's own faces and the blocks behind it get drawn, so the
         // cutout holes in the leaves texture actually show what's behind.
@@ -760,7 +783,15 @@ public class Chunk {
         }
     }
 
+    /** Renders the see-through (glass/ice) faces - the caller draws this after all opaque geometry. */
+    public void renderTranslucent() {
+        if (hasTranslucentData) {
+            translucentMesh.render();
+        }
+    }
+
     public void destroy() {
         mesh.destroy();
+        translucentMesh.destroy();
     }
 }
