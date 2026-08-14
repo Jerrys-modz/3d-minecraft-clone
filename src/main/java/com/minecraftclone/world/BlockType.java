@@ -32,6 +32,8 @@ public enum BlockType {
     GLASS(21, true, false, 34, 34, 34),
     BERRY_BUSH(22, false, true, 37),
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
+    LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
+    FURNACE(40, true, false, 4, 26, 4), // smelting station: stone top/bottom, furnace-face sides (tile 26)
     STONE_SLAB(44, true, false, true, 4),   // bottom-half slab, stone texture
     PLANKS_SLAB(45, true, false, true, 11), // bottom-half slab, planks texture
 
@@ -54,7 +56,10 @@ public enum BlockType {
     WOOD_SWORD(34, 0),
     STONE_SWORD(35, 0),
     IRON_SWORD(36, 0),
-    DIAMOND_SWORD(37, 0);
+    DIAMOND_SWORD(37, 0),
+    IRON_INGOT(41, 0), // smelted from iron ore (see Smelting)
+    GOLD_INGOT(42, 0), // smelted from gold ore
+    DIAMOND(43, 0);    // smelted from diamond ore
 
     public final byte id;
     public final boolean solid;
@@ -80,6 +85,11 @@ public enum BlockType {
 
     /** Full-cube block with a food value (not currently used - cubes aren't eaten - but kept symmetric). */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue) {
+        this(id, solid, transparent, topTile, sideTile, bottomTile, foodValue, 0);
+    }
+
+    /** Full-cube block that also emits light (e.g. a lamp), plus an (unused) food value. */
+    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue, int lightLevel) {
         this.id = (byte) id;
         this.solid = solid;
         this.transparent = transparent;
@@ -90,7 +100,7 @@ public enum BlockType {
         this.bottomTile = bottomTile;
         this.foodValue = foodValue;
         this.isItem = false;
-        this.lightLevel = 0;
+        this.lightLevel = lightLevel;
         this.collisionHeight = 1.0f;
     }
 

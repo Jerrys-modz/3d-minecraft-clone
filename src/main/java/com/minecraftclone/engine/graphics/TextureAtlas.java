@@ -33,6 +33,10 @@ public class TextureAtlas {
 
     /** Tile index of the alpha-cutout leaves texture used when the "see-through leaves" setting is on. */
     public static final int LEAVES_CUTOUT_TILE = 24;
+    /** Tile index of the full-cube lamp texture. */
+    public static final int LAMP_TILE = 25;
+    /** Tile index of the furnace's front/side face. */
+    public static final int FURNACE_TILE = 26;
 
     private int textureId;
 
@@ -77,6 +81,8 @@ public class TextureAtlas {
         paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
         paintGlassPanes(image, 34);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
+        paintLamp(image, LAMP_TILE);
+        paintFurnace(image, FURNACE_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
 
@@ -280,6 +286,58 @@ public class TextureAtlas {
                         img.setRGB(px, py, hole ? 0x00000000 : (0xFF000000 | base));
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * A glowing full-cube lamp: a warm light panel with a bright center and a
+     * darker frame, on an opaque background. The lamp itself emits light (see
+     * {@link com.minecraftclone.world.BlockType#LAMP}), so this tile just gives
+     * it a distinct "lit fixture" look; nearby blocks are brightened by the
+     * light baking in {@link com.minecraftclone.world.Chunk}.
+     */
+    private void paintLamp(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int frame = 0x6E4A2A;  // dark wood/graphite border
+        int warm = 0xFFE08A;   // warm glow body
+        int core = 0xFFFFF0;   // bright center
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                boolean edge = x < 2 || x >= TILE_PX - 2 || y < 2 || y >= TILE_PX - 2;
+                boolean center = x >= 5 && x < 11 && y >= 5 && y < 11;
+                int color = edge ? frame : (center ? core : warm);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * A furnace's front face: a stone body with a dark rectangular mouth and a
+     * lighter lintel above it, on an opaque background. The block reuses the
+     * plain stone tile for its top/bottom, so only the (orientation-less) sides
+     * get this "furnace" look - see {@link com.minecraftclone.world.BlockType#FURNACE}.
+     */
+    private void paintFurnace(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int stone = 0x8A8A8A;
+        int dark = 0x2E2E2E;
+        int lintel = 0x6E6E6E;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | stone);
+            }
+        }
+        // Lintel across the top of the opening.
+        for (int x = 3; x < 13; x++) {
+            img.setRGB(ox + x, oy + 5, 0xFF000000 | lintel);
+        }
+        // Dark mouth.
+        for (int y = 6; y < 12; y++) {
+            for (int x = 4; x < 12; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
             }
         }
     }

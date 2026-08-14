@@ -12,6 +12,9 @@ public class Camera {
 
     private final Matrix4f viewMatrix = new Matrix4f();
     private final Matrix4f projectionMatrix = new Matrix4f();
+    // Reused output vectors, so per-frame look/move math doesn't allocate.
+    private final Vector3f front = new Vector3f();
+    private final Vector3f frontFlat = new Vector3f();
 
     public void setPosition(float x, float y, float z) {
         position.set(x, y, z);
@@ -44,23 +47,21 @@ public class Camera {
         yaw = yaw % 360f;
     }
 
-    /** Forward direction (normalized), ignoring roll. */
+    /** Forward direction (normalized), ignoring roll. Returns a reused vector - copy before retaining. */
     public Vector3f getFront() {
         float yawRad = (float) Math.toRadians(yaw);
         float pitchRad = (float) Math.toRadians(pitch);
-        Vector3f front = new Vector3f(
+        return front.set(
                 (float) (Math.cos(yawRad) * Math.cos(pitchRad)),
                 (float) Math.sin(pitchRad),
                 (float) (Math.sin(yawRad) * Math.cos(pitchRad))
-        );
-        return front.normalize();
+        ).normalize();
     }
 
-    /** Forward direction projected onto the horizontal plane (for walking). */
+    /** Forward direction projected onto the horizontal plane (for walking). Returns a reused vector - copy before retaining. */
     public Vector3f getFrontFlat() {
         float yawRad = (float) Math.toRadians(yaw);
-        Vector3f front = new Vector3f((float) Math.cos(yawRad), 0, (float) Math.sin(yawRad));
-        return front.normalize();
+        return frontFlat.set((float) Math.cos(yawRad), 0, (float) Math.sin(yawRad)).normalize();
     }
 
     public Vector3f getRight() {
