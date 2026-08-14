@@ -3,6 +3,7 @@ package com.minecraftclone.world;
 import com.minecraftclone.engine.Shader;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
+import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import com.minecraftclone.world.gen.WorldGenSettings;
 import org.joml.Vector3f;
@@ -13,6 +14,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import static org.lwjgl.opengl.GL11.glDepthMask;
 
@@ -63,6 +65,23 @@ public class World implements BlockAccessor {
     private static final float ITEM_TERMINAL_VELOCITY = -40f;
     private static final float ITEM_HALF_HEIGHT = 0.15f;
     private static final float PICKUP_RADIUS = 1.5f;
+
+    // Passive animals wandering the surface. Transient - not saved.
+    private final List<Mob> mobs = new ArrayList<>();
+    private static final int MAX_MOBS = 32;                    // loaded at once
+    private static final float MOB_SPAWN_RADIUS = 40f;         // spawn within this many blocks
+    private static final float MOB_DESPAWN_RADIUS = 72f;       // despawn beyond this
+    private static final int MOB_SPAWN_ODDS = 30;              // 1 in N ticks try to spawn
+
+    // Hostile monsters: spawn only at night, out of sight, in their own cap.
+    private static final int MAX_HOSTILES = 12;
+    private static final int HOSTILE_SPAWN_ODDS = 20;          // 1 in N night ticks try to spawn
+    private static final float HOSTILE_MIN_DIST = 18f;         // never spawn right on top of the player
+    private static final float HOSTILE_MAX_DIST = 32f;
+    private static final float ARROW_DAMAGE = 3f;              // a skeleton hit, like its attackDamage
+
+    // Skeleton arrows. Transient - not saved.
+    private final List<ArrowEntity> arrows = new ArrayList<>();
 
     public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir) {
         this.generator = new TerrainGenerator(seed, genSettings);
@@ -477,6 +496,200 @@ public class World implements BlockAccessor {
 
     public int getLoadedChunkCount() {
         return chunks.size();
+    }
+
+    /** All currently-alive mobs (read-only; rendered by the caller). */
+    public List<Mob> getMobs() {
+        return mobs;
+    }
+
+    /** All currently-flying skeleton arrows (read-only; rendered by the caller). */
+    public List<ArrowEntity> getArrows() {
+        return arrows;
+    }
+
+    /**
+     * Advances every mob (wandering/pathing, gravity, collision), spawns new ones
+     * near the player up to the cap, and despawns any that wander beyond
+     * {@link #MOB_DESPAWN_RADIUS} so nothing trails the player across the whole
+     * map. Hostile mobs spawn only at night, out of sight, and melt away at dawn;
+     * their melee hits and arrows damage the player, whose total damage taken
+     * this frame is returned. Call once per frame from the main thread.
+     */
+    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd) {
+        float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
+        float damage = 0f;
+        for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
+            Mob mob = it.next();
+            float dx = mob.position.x - playerPos.x;
+            float dz = mob.position.z - playerPos.z;
+            // Hostiles are gone by daylight (they burn/melt at dawn); everything
+            // far away or fallen out of the world despawns.
+            boolean gone = mob.isHostile() && !night;
+            if (gone || dx * dx + dz * dz > despawnSq || mob.position.y < -64f) {
+                it.remove();
+                continue;
+            }
+            mob.update(dt, this, rnd, playerPos);
+            damage += mob.getMeleeRequest();
+            if (mob.wantsToShoot()) {
+                spawnArrow(mob, playerPos, rnd);
+            }
+        }
+
+        if (night && hostileCount() < MAX_HOSTILES && rnd.nextInt(HOSTILE_SPAWN_ODDS) == 0) {
+            trySpawnHostile(rnd, playerPos.x, playerPos.z);
+        }
+        if (mobs.size() < MAX_MOBS && rnd.nextInt(MOB_SPAWN_ODDS) == 0) {
+            trySpawnMob(rnd, playerPos.x, playerPos.z);
+        }
+
+        damage += updateArrows(dt, playerBox);
+        return damage;
+    }
+
+    /** Advances skeleton arrows (gravity, block/player collisions) and returns player damage taken. */
+    private float updateArrows(float dt, AABB playerBox) {
+        float damage = 0f;
+        for (Iterator<ArrowEntity> it = arrows.iterator(); it.hasNext(); ) {
+            ArrowEntity a = it.next();
+            a.age += dt;
+            if (a.age > ArrowEntity.LIFETIME || a.position.y < -32f || a.stuck) {
+                it.remove();
+                continue;
+            }
+            a.velocity.y -= 20f * dt;
+
+            // Move in small sub-steps so a fast arrow can't tunnel through a block or the player.
+            float speed = (float) Math.sqrt(a.velocity.x * a.velocity.x + a.velocity.y * a.velocity.y + a.velocity.z * a.velocity.z);
+            float move = speed * dt;
+            if (move <= 0f) continue;
+            int steps = Math.max(1, (int) Math.ceil(move / 0.2f));
+            float sub = dt / steps;
+            boolean consumed = false;
+            for (int s = 0; s < steps; s++) {
+                a.position.x += a.velocity.x * sub;
+                a.position.y += a.velocity.y * sub;
+                a.position.z += a.velocity.z * sub;
+
+                AABB arrowBox = new AABB(a.position.x - 0.1f, a.position.y - 0.1f, a.position.z - 0.1f,
+                        a.position.x + 0.1f, a.position.y + 0.1f, a.position.z + 0.1f);
+                if (playerBox.intersects(arrowBox)) {
+                    damage += ARROW_DAMAGE;
+                    consumed = true;
+                    break;
+                }
+                if (getBlock((int) Math.floor(a.position.x), (int) Math.floor(a.position.y),
+                        (int) Math.floor(a.position.z)).isCollidable()) {
+                    a.stuck = true;
+                    break;
+                }
+            }
+            if (consumed) {
+                it.remove();
+            }
+        }
+        return damage;
+    }
+
+    private int hostileCount() {
+        int n = 0;
+        for (Mob m : mobs) {
+            if (m.isHostile()) n++;
+        }
+        return n;
+    }
+
+    /** Seeds the world with an initial scattering of mobs so it feels alive from the start. */
+    public void spawnInitialMobs(Random rnd, float playerWorldX, float playerWorldZ, int count) {
+        for (int i = 0; i < count && mobs.size() < MAX_MOBS; i++) {
+            trySpawnMob(rnd, playerWorldX, playerWorldZ);
+        }
+    }
+
+    /** Spawns one hostile on solid ground just out of sight; does nothing if no spot qualifies. */
+    private void trySpawnHostile(Random rnd, float playerWorldX, float playerWorldZ) {
+        for (int attempt = 0; attempt < 8; attempt++) {
+            float angle = rnd.nextFloat() * (float) Math.PI * 2f;
+            float dist = HOSTILE_MIN_DIST + rnd.nextFloat() * (HOSTILE_MAX_DIST - HOSTILE_MIN_DIST);
+            int x = (int) Math.floor(playerWorldX + (float) Math.cos(angle) * dist);
+            int z = (int) Math.floor(playerWorldZ + (float) Math.sin(angle) * dist);
+            if (!isFullyGenerated(x, z)) continue;
+            int y = getSurfaceHeight(x, z);
+            if (y < 1 || y >= Chunk.HEIGHT - 1) continue;
+            if (!getBlock(x, y, z).isCollidable()) continue;
+            if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
+            Mob.Type type = rnd.nextBoolean() ? Mob.Type.ZOMBIE : Mob.Type.SKELETON;
+            mobs.add(new Mob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
+            return;
+        }
+    }
+
+    /** Fires an arrow from a skeleton toward the player (with a little inaccuracy). */
+    private void spawnArrow(Mob mob, Vector3f playerPos, Random rnd) {
+        float sx = mob.position.x;
+        float sy = mob.position.y + mob.type.height * 0.4f;
+        float sz = mob.position.z;
+        float tx = playerPos.x + (rnd.nextFloat() - 0.5f) * 1.5f;
+        float ty = playerPos.y + 0.9f + (rnd.nextFloat() - 0.5f) * 0.8f;
+        float tz = playerPos.z + (rnd.nextFloat() - 0.5f) * 1.5f;
+        float dx = tx - sx, dy = ty - sy, dz = tz - sz;
+        float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (len <= 0f) return;
+        float speed = 15f;
+        arrows.add(new ArrowEntity(sx, sy, sz, dx / len * speed, dy / len * speed, dz / len * speed));
+    }
+
+    /** Spawns one mob on a random grass surface within range; does nothing if no spot qualifies. */
+    private void trySpawnMob(Random rnd, float playerWorldX, float playerWorldZ) {
+        int radius = (int) MOB_SPAWN_RADIUS;
+        for (int attempt = 0; attempt < 6; attempt++) {
+            int x = (int) Math.floor(playerWorldX) + rnd.nextInt(radius * 2) - radius;
+            int z = (int) Math.floor(playerWorldZ) + rnd.nextInt(radius * 2) - radius;
+            if (!isFullyGenerated(x, z)) continue;
+            int y = getSurfaceHeight(x, z);
+            if (y < 1 || y >= Chunk.HEIGHT - 1) continue;
+            if (getBlock(x, y, z) != BlockType.GRASS) continue;
+            if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
+            Mob.Type type = Mob.Type.values()[rnd.nextInt(Mob.Type.values().length)];
+            mobs.add(new Mob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
+            return;
+        }
+    }
+
+    /**
+     * The mob nearest along the given view ray within {@code maxDist}, or null if
+     * the player isn't aiming at one - the target of their attacks. The ray stops
+     * at the first mob's box, so a mob in front of another is the one hit.
+     */
+    public Mob raycastMob(Vector3f origin, Vector3f dir, float maxDist) {
+        Mob best = null;
+        float bestT = maxDist;
+        for (Mob m : mobs) {
+            float t = Mob.rayIntersects(origin, dir, bestT, m.getAABB());
+            if (t >= 0f) {
+                best = m;
+                bestT = t;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Damages a mob (knocking it back and panicking it); when its health runs out
+     * it's removed and drops its raw meat. Returns true if the hit killed it.
+     */
+    public boolean damageMob(Mob mob, float amount, float sourceX, float sourceZ, Random rnd) {
+        if (!mobs.contains(mob)) return false;
+        boolean killed = mob.damage(amount, sourceX, sourceZ);
+        if (killed) {
+            mobs.remove(mob);
+            BlockType drop = mob.dropType();
+            int count = 1 + rnd.nextInt(mob.type == Mob.Type.SHEEP ? 2 : 3);
+            spawnItem((int) Math.floor(mob.position.x), (int) Math.floor(mob.position.y),
+                    (int) Math.floor(mob.position.z), drop, count, rnd);
+        }
+        return killed;
     }
 
     public boolean isFullyGenerated(int worldX, int worldZ) {

@@ -95,7 +95,14 @@ public enum BlockType {
     DIAMOND_SWORD(37, 0),
     IRON_INGOT(41, 0), // smelted from iron ore (see Smelting)
     GOLD_INGOT(42, 0), // smelted from gold ore
-    DIAMOND(43, 0);    // smelted from diamond ore
+    DIAMOND(43, 0),    // smelted from diamond ore
+    // Raw meat - dropped by passive mobs when killed (see World.damageMob), edible.
+    RAW_PORKCHOP(65, 16),
+    RAW_BEEF(66, 16),
+    MUTTON(67, 12),
+    // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
+    ROTTEN_FLESH(68, 4),
+    BONES(69, 0);
 
     public final byte id;
     public final boolean solid;

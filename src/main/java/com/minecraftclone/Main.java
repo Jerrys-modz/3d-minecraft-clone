@@ -4,6 +4,8 @@ import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
+import com.minecraftclone.engine.graphics.MobRenderer;
+import com.minecraftclone.engine.graphics.MobTextures;
 import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.CraftingGrid;
@@ -14,10 +16,12 @@ import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.player.Smelting;
+import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Mining;
+import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import com.minecraftclone.world.gen.WorldGenSettings;
@@ -253,6 +257,8 @@ public class Main {
         atlas.generate();
         ItemTextures itemTextures = new ItemTextures();
         itemTextures.generate();
+        MobTextures mobTextures = new MobTextures();
+        mobTextures.generate();
         FontAtlas font = new FontAtlas();
         font.generate();
 
@@ -271,6 +277,7 @@ public class Main {
 
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
+        MobRenderer mobRenderer = new MobRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
@@ -303,6 +310,8 @@ public class Main {
         DayNightCycle dayNightCycle = new DayNightCycle();
         MiningController mining = new MiningController();
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
+        float[] attackCooldown = {0f}; // time until the next mob hit can land
+        Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
         System.out.println("          F to fly (double-tap W also takes off in creative and boosts speed");
@@ -365,6 +374,7 @@ public class Main {
             float[] spawn = findSpawn(world);
             player.spawn(world, spawn[0], spawn[1]);
             for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+            world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12);
             System.out.println("World seed: " + seed);
             started[0] = true;
             mainMenuOpen[0] = false;
@@ -386,6 +396,7 @@ public class Main {
             timer.updateFps(dt);
             dayNightCycle.update(dt);
             animTime[0] += dt;
+            attackCooldown[0] -= dt;
             Raycaster.Hit hit = null;
             float breakFraction = 0f;
             boolean screenshotRequested = false;
@@ -451,6 +462,7 @@ public class Main {
                                 float[] spawn = findSpawn(world);
                                 player.spawn(world, spawn[0], spawn[1]);
                                 for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+                                world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12);
                                 System.out.println("World: " + genSettings.getName() + " seed: " + seed);
                                 started[0] = true;
                                 mainMenuOpen[0] = false;
@@ -492,6 +504,7 @@ public class Main {
                             float[] spawn = findSpawn(world);
                             player.spawn(world, spawn[0], spawn[1]);
                             for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+                            world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12);
                             System.out.println("World: " + genSettings.getName() + " seed: " + seed);
                             started[0] = true;
                             mainMenuOpen[0] = false;
@@ -689,6 +702,18 @@ public class Main {
             // Item-entity physics + pickup.
             world.updateItems(dt, player.getPosition(), player.getInventory());
 
+            // Mobs: passives wander, hostiles hunt the player (spawning at night and
+            // melting away at dawn); the damage their hits and arrows deal is applied
+            // to the player's health, where the existing death/respawn handling picks
+            // it up.
+            Vector3f playerPos = player.getPosition();
+            AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
+                    playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
+            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
+            if (mobDamage > 0f) {
+                player.getStats().damage(mobDamage);
+            }
+
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
             for (int i = messages.size() - 1; i >= 0; i--) {
                 messages.get(i).age += dt;
@@ -751,8 +776,32 @@ public class Main {
                 BlockType heldItem = player.getInventory().typeOf(selectedSlot[0]);
                 GameMode mode = settings.getGameMode();
 
+                // What the crosshair is aimed at: a mob takes priority over the block
+                // behind it, so swinging at a pig doesn't dig up the ground behind it.
+                Mob targetedMob = world.raycastMob(player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
+                targetedMobRef[0] = targetedMob;
+
+                // Attacking: holding left-click hits the targeted mob on a short cooldown
+                // (mobs can't be hurt in spectator - no interaction).
+                if (targetedMob != null && !mode.isSpectator()
+                        && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && attackCooldown[0] <= 0f) {
+                    // Creative kills in one hit; survival/adventure deal tool damage
+                    // (a sword hits harder than a bare-handed punch).
+                    float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldItem);
+                    world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
+                    attackCooldown[0] = 0.45f;
+                    // Swords wear out with use (creative tools never break).
+                    if (!mode.isCreative() && Mining.isSword(heldItem) && player.getDurability().use(heldItem)) {
+                        player.getInventory().remove(heldItem, 1);
+                        System.out.println("Your " + heldItem + " broke!");
+                        showMessage(messages, "Your " + heldItem + " broke!",
+                                new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+                    }
+                }
+
                 // Breaking: creative breaks instantly; adventure/spectator can't break.
-                if (mode.canBreak()) {
+                // Aiming at a mob means the swing is an attack, not a dig.
+                if (mode.canBreak() && targetedMobRef[0] == null) {
                     boolean holding = hit != null && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
                     if (mode.isCreative()) {
                         // One block per click (a fresh press), not "instant-break
@@ -801,7 +850,9 @@ public class Main {
                 }
 
                 // Placing: creative places for free; adventure/spectator can't place.
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null && mode.canPlace() && heldItem != null) {
+                // (Never place into the mob the crosshair is on.)
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null && mode.canPlace()
+                        && heldItem != null && targetedMobRef[0] == null) {
                     if (heldItem.isEdible() && !mode.isCreative()) {
                         player.eat(heldItem);
                     } else if (!heldItem.isItem) {
@@ -868,11 +919,12 @@ public class Main {
             atlas.bind();
             world.render(chunkShader);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
+            mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
             chunkShader.unbind();
             }
 
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                if (hit != null) {
+                if (hit != null && targetedMobRef[0] == null) {
                     float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
                     hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
                 }
@@ -952,6 +1004,7 @@ public class Main {
 
         hud.destroy();
         itemRenderer.destroy();
+        mobRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
         hudShader.destroy();
@@ -959,6 +1012,7 @@ public class Main {
         skyRenderer.destroy();
         atlas.destroy();
         itemTextures.destroy();
+        mobTextures.destroy();
         font.destroy();
         if (world != null) world.destroy();
         window.close();
