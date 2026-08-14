@@ -273,6 +273,17 @@ public enum BlockType {
         return this == GLASS || this == ICE;
     }
 
+    /**
+     * True for decoration that grows/sits <em>inside</em> a fluid cell rather
+     * than needing to replace it - Minecraft's "waterlogged" plants (seagrass,
+     * kelp) work the same way. World-gen and manual placement both route this
+     * into the target cell's overlay slot instead of overwriting the water
+     * there - see {@link Chunk#setOverlay} and {@link BlockAccessor#getOverlay}.
+     */
+    public boolean isSubmersible() {
+        return this == SEAWEED;
+    }
+
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */
     public String displayName() {
         StringBuilder sb = new StringBuilder(name().length());

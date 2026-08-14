@@ -41,6 +41,21 @@ public class World implements BlockAccessor {
     private boolean leavesTransparent = false;
     private static final int MAX_GENERATE_PER_TICK = 4;
     private static final int MAX_MESH_PER_TICK = 4;
+    // world.update() (and so updateFluids()) runs once per rendered frame, so
+    // recomputing the flood-fill every single call made "one ring per tick"
+    // (see FluidSim) mean one ring per *frame*. A fixed *frame-count*
+    // throttle (e.g. "every 12 calls") was tried first, on the assumption of
+    // a steady ~60fps - but frame rate isn't a constant: vsync caps to
+    // whatever the display's actual refresh rate is (which can be well over
+    // 60Hz), and it's frequently not enforced at all under a software/
+    // headless renderer, so "every 12 frames" could mean anywhere from
+    // "every fifth of a second" to "every couple of milliseconds" depending
+    // entirely on how fast frames happen to be rendering right now - not
+    // actually throttled at all in the worst case. Timed off the real clock
+    // instead (like the flow texture's own scroll animation already is),
+    // this is independent of frame rate altogether.
+    private static final double FLUID_TICK_SECONDS = 0.15;
+    private double lastFluidTickNanos = Double.NaN;
 
     // Dropped item entities (from breaking blocks / death). Transient - not saved.
     private final List<ItemEntity> items = new ArrayList<>();
@@ -102,6 +117,44 @@ public class World implements BlockAccessor {
         int lx = Math.floorMod(worldX, Chunk.SIZE);
         int lz = Math.floorMod(worldZ, Chunk.SIZE);
         return chunk.getLocal(lx, worldY, lz);
+    }
+
+    @Override
+    public int getFluidLevel(int worldX, int worldY, int worldZ) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return 0;
+        Chunk chunk = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
+        if (chunk == null) return 0;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        return chunk.getFluidLevel(lx, worldY, lz);
+    }
+
+    @Override
+    public BlockType getOverlay(int worldX, int worldY, int worldZ) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return BlockType.AIR;
+        Chunk chunk = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
+        if (chunk == null) return BlockType.AIR;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        return chunk.getOverlay(lx, worldY, lz);
+    }
+
+    /**
+     * Sets (or clears, with {@link BlockType#AIR}) the decoration layered
+     * inside a cell - e.g. seaweed inside a water cell - without touching
+     * whatever its primary block is. See {@link Chunk#setOverlay}. Doesn't
+     * need the neighbor-chunk-dirtying or light/fluid-promotion handling
+     * {@link #setBlock} does: an overlay is a cross-shaped decoration, which
+     * never occludes a face (so it can't change a neighbor chunk's culling)
+     * and is never a light source or a fluid source/flow itself.
+     */
+    public void setOverlay(int worldX, int worldY, int worldZ, BlockType type) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return;
+        Chunk chunk = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
+        if (chunk == null) return;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        chunk.setOverlayFromPlayer(lx, worldY, lz, type);
     }
 
     public void setBlock(int worldX, int worldY, int worldZ, BlockType type) {
@@ -169,6 +222,16 @@ public class World implements BlockAccessor {
      * fluid simulation for transient flow cells, which are recomputed (not saved).
      */
     public void setFluidBlock(int worldX, int worldY, int worldZ, BlockType type) {
+        setFluidBlock(worldX, worldY, worldZ, type, 0);
+    }
+
+    /**
+     * Like {@link #setFluidBlock(int, int, int, BlockType)}, but also records
+     * this fill's distance from its source (see {@link FluidSim.Result#levels}
+     * and {@link BlockAccessor#getFluidLevel}) so the renderer can grade the
+     * surface height down as flowing fluid spreads farther from its source.
+     */
+    public void setFluidBlock(int worldX, int worldY, int worldZ, BlockType type, int level) {
         if (worldY < 0 || worldY >= Chunk.HEIGHT) return;
         int cx = worldToChunk(worldX);
         int cz = worldToChunk(worldZ);
@@ -176,7 +239,7 @@ public class World implements BlockAccessor {
         if (chunk == null) return;
         int lx = Math.floorMod(worldX, Chunk.SIZE);
         int lz = Math.floorMod(worldZ, Chunk.SIZE);
-        chunk.setLocal(lx, worldY, lz, type);
+        chunk.setLocal(lx, worldY, lz, type, level);
         if (lx == 0) markNeighborDirty(cx - 1, cz);
         if (lx == Chunk.SIZE - 1) markNeighborDirty(cx + 1, cz);
         if (lz == 0) markNeighborDirty(cx, cz - 1);
@@ -208,7 +271,23 @@ public class World implements BlockAccessor {
 
         FluidSim.Result result = FluidSim.compute(this, sources, flows);
         for (Map.Entry<Long, BlockType> e : result.fill().entrySet()) {
-            setFluidBlock(FluidSim.keyX(e.getKey()), FluidSim.keyY(e.getKey()), FluidSim.keyZ(e.getKey()), e.getValue());
+            long k = e.getKey();
+            int level = result.levels().getOrDefault(k, 0);
+            setFluidBlock(FluidSim.keyX(k), FluidSim.keyY(k), FluidSim.keyZ(k), e.getValue(), level);
+        }
+        // Existing flows' distances can change when the topology changes (a new
+        // source placed next to old water), so refresh any that moved - skipping
+        // unchanged ones so a settled field doesn't re-dirty chunks every frame.
+        for (Map.Entry<Long, Integer> e : result.flowLevels().entrySet()) {
+            long k = e.getKey();
+            int x = FluidSim.keyX(k), y = FluidSim.keyY(k), z = FluidSim.keyZ(k);
+            int level = e.getValue();
+            if (level != getFluidLevel(x, y, z)) {
+                BlockType t = getBlock(x, y, z);
+                if (t.isFluidFlow()) {
+                    setFluidBlock(x, y, z, t, level);
+                }
+            }
         }
         for (long k : result.remove()) {
             setFluidBlock(FluidSim.keyX(k), FluidSim.keyY(k), FluidSim.keyZ(k), BlockType.AIR);
@@ -302,8 +381,15 @@ public class World implements BlockAccessor {
             c.destroy();
         }
 
-        // Flow after streaming so newly loaded chunks participate in the field.
-        updateFluids();
+        // Flow after streaming so newly loaded chunks participate in the field -
+        // throttled to a real, watchable pace (see FLUID_TICK_SECONDS) rather
+        // than every single frame. Newly-loaded chunks just sit as they are
+        // (already-generated fluid, if any) until the next fluid tick lands.
+        double nowNanos = System.nanoTime();
+        if (Double.isNaN(lastFluidTickNanos) || (nowNanos - lastFluidTickNanos) / 1e9 >= FLUID_TICK_SECONDS) {
+            lastFluidTickNanos = nowNanos;
+            updateFluids();
+        }
 
         // Remesh a limited number of dirty chunks per tick, nearest first.
         List<Chunk> dirty = new ArrayList<>();

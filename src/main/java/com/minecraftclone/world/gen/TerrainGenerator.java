@@ -388,11 +388,13 @@ public class TerrainGenerator {
                         }
                         chunk.setLocal(x, y, z, fill);
                     }
-                    // Seaweed on shallow, warm ocean floors.
+                    // Seaweed on shallow, warm ocean floors - grows *inside* the water
+                    // cell (an overlay, like Minecraft's waterlogged seagrass) rather
+                    // than replacing it, so the water is still there around it.
                     if (biome == Biome.OCEAN && height >= seaLevel - 8 && featureRandom.nextInt(4) == 0) {
                         for (int i = 1; i <= 2; i++) {
                             if (chunk.getLocal(x, height + i, z) == BlockType.WATER) {
-                                chunk.setLocal(x, height + i, z, BlockType.SEAWEED);
+                                chunk.setOverlay(x, height + i, z, BlockType.SEAWEED);
                             }
                         }
                     }
