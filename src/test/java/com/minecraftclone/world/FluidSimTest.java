@@ -203,4 +203,17 @@ class FluidSimTest {
         assertEquals(1, w.getFluidLevel(5, 1, 0), "cell next to the new source");
         assertEquals(1, w.getFluidLevel(7, 1, 0), "cell next to the new source");
     }
+
+    @Test
+    void removingTheSourceDriesTheWholePool() {
+        StubWorld w = flatGround();
+        w.set(0, 1, 0, BlockType.WATER_SOURCE);
+        for (int i = 0; i < FluidSim.WATER_FLOW_DISTANCE; i++) {
+            tick(w);
+        }
+        assertEquals(diamondCells(FluidSim.WATER_FLOW_DISTANCE), countFlows(w));
+        w.set(0, 1, 0, BlockType.AIR); // break the source
+        tick(w);
+        assertEquals(0, countFlows(w), "no source, no flow");
+    }
 }
