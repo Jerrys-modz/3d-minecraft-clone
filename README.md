@@ -18,7 +18,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Procedural terrain generation**: layered Perlin/fBm noise for rolling hills and mountains, a second noise channel for rough biomes (desert / plains / forest / snowy peaks), winding rivers carved from a dedicated noise channel, 3D-noise cave systems with lava pooling in the deepest pockets, and four depth-gated ore veins (coal, iron, gold, diamond - rarer ones deeper and sparser, mirroring vanilla Minecraft's progression).
 - **Biome-varied vegetation**: dense oak forests where it's wet, sparser oak on plains, conical pine trees at higher/colder elevations, cacti in deserts, and tall grass/flowers/berry bushes scattered across grassy ground.
 - **Fast chunk meshing**: per-block face culling (only exposed faces are emitted) with baked fixed-direction shading (top/side/bottom), distance fog, and cross-shaped "billboard" geometry for non-cube decoration (grass/flowers/bushes) with alpha-cutout transparency.
-- **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a no-clip flight mode.
+- **First-person player controller**: WASD walking with gravity and AABB-vs-voxel collision resolved per axis, jumping, stamina-gated sprinting, and a creative-only flight mode (`F` to toggle).
 - **Block interaction**: raycast-based block breaking/placing (reach limited to 6 blocks) with a wireframe outline on the targeted block, gated by a real inventory - breaking a block drops it as an item to pick up, placing spends one, and bedrock is unbreakable. Starts empty, so you gather before you build.
 - **Flowing fluids**: place a **water source** or **lava source** and it flows like Minecraft - it pours straight down until it lands, then spreads out (water 7 blocks, lava 3) and dries up when the source is removed. Flowing lava burns, flowing water drowns. Oceans/cave lava are static fills that don't move.
 - **Item drops**: broken blocks drop their item into the world as a small bobbing sprite that falls with gravity and rests on the ground; walk over it to pick it up (items despawn after 5 minutes). Dying scatters your whole inventory around you the same way.
@@ -73,9 +73,8 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 | `W A S D` | Move |
 | Mouse | Look around |
 | `Space` | Jump (or fly up, in flight mode) |
-| `Left Shift` | Fly down (flight mode only) |
-| `Left Ctrl` | Sprint (costs stamina) |
-| `F` | Toggle flight mode |
+| `Left Shift` | Fly down (flight mode only) || `Left Ctrl` | Sprint (costs stamina) |
+| `F` | Toggle flight (creative only) |
 | Hold Left click | Mine the targeted block (speed/possibility depends on your tool) |
 | Right click | Place the selected block - or eat it, if it's food |
 | `E` | Open/close the inventory (or the tabbed creative catalog in creative mode) |

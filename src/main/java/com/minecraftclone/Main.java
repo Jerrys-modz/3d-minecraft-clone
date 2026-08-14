@@ -41,7 +41,7 @@ import static org.lwjgl.opengl.GL11.*;
  * runs the main game loop.
  * <p>
  * Controls: WASD to move, mouse to look, Space to jump, Left-Ctrl to sprint,
- * F to toggle flight, hold Left-click to break the targeted block (speed and
+ * F to toggle flight (creative only), hold Left-click to break the targeted block (speed and
  * whether it's even possible depend on the selected tool - see {@link
  * com.minecraftclone.world.Mining}), Right-click to place the selected block
  * (or eat it, if it's food), C to smelt the selected ore (aim at a furnace),
@@ -159,7 +159,7 @@ public class Main {
         DayNightCycle dayNightCycle = new DayNightCycle();
         MiningController mining = new MiningController();
 
-        System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl sprint, F fly toggle,");
+        System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl sprint, F fly (creative only),");
         System.out.println("          hold Left-click to mine (speed/possibility depends on your tool),");
         System.out.println("          Right-click place (or eat, if selected item is food),");
         System.out.println("          E inventory (click/drag items), C smelt (aim at a furnace), 1-9/scroll select,");
@@ -493,11 +493,14 @@ public class Main {
                 }
                 hud.renderCrosshair(window.getAspectRatio());
                 hud.renderHotbar(atlas, itemTextures, player.getDurability(), player.getInventory(), selectedSlot[0], window.getAspectRatio());
-                hud.renderStatusBars(
-                        player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
-                        player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
-                        player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
-                        Inventory.HOTBAR_SIZE, window.getAspectRatio());
+                // Creative/spectator have no health to show - hide the bars like Minecraft.
+                if (!settings.getGameMode().isInvulnerable()) {
+                    hud.renderStatusBars(
+                            player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
+                            player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
+                            player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
+                            Inventory.HOTBAR_SIZE, window.getAspectRatio());
+                }
             }
             hud.renderMessages(messages, window.getAspectRatio());
             if (showDebug[0]) {
