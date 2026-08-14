@@ -58,7 +58,9 @@ public class Main {
             BlockType.GRAVEL, BlockType.SNOW,
             BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
             BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
-            BlockType.LAVA, BlockType.GLASS, BlockType.TORCH, BlockType.LAMP, BlockType.FURNACE, BlockType.APPLE, BlockType.BERRIES,
+            BlockType.LAVA, BlockType.GLASS, BlockType.TORCH, BlockType.LAMP, BlockType.FURNACE,
+            BlockType.STONE_SLAB, BlockType.PLANKS_SLAB,
+            BlockType.APPLE, BlockType.BERRIES,
             BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
             BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
             BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
@@ -347,7 +349,8 @@ public class Main {
 
             if (!menuOpen[0]) {
                 if (hit != null) {
-                    hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction);
+                    float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
+                    hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
                 }
                 hud.renderCrosshair(window.getAspectRatio());
             }

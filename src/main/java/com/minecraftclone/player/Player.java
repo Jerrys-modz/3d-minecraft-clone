@@ -188,7 +188,7 @@ public class Player {
                 for (int z = minZ; z <= maxZ; z++) {
                     BlockType type = world.getBlock(x, y, z);
                     if (type.isCollidable()) {
-                        AABB blockBox = new AABB(x, y, z, x + 1, y + 1, z + 1);
+                        AABB blockBox = new AABB(x, y, z, x + 1, y + type.collisionHeight, z + 1);
                         if (box.intersects(blockBox)) return true;
                     }
                 }

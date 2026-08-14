@@ -180,6 +180,10 @@ public class Chunk {
                         emitCross(vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
+                    if (block.slab) {
+                        emitSlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        continue;
+                    }
 
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz)) {
@@ -226,8 +230,9 @@ public class Chunk {
         }
         // Cross-shaped decoration (grass/flowers) doesn't cover a full cell, so a
         // solid neighbor's face toward it must still be drawn - treat it like air
-        // for culling purposes.
-        if (neighbor == BlockType.AIR || neighbor.cross) return true;
+        // for culling purposes. Slabs are the same: they only fill the bottom half,
+        // so a full block's face toward one is still drawn.
+        if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab) return true;
         // With see-through leaves on, leaf blocks stop occluding faces too - both
         // the leaf block's own faces and the blocks behind it get drawn, so the
         // cutout holes in the leaves texture actually show what's behind.
@@ -316,6 +321,59 @@ public class Chunk {
 
         emitQuadBothSides(vertices, indices, vertexCounter, planeA, uvs, light, blockLight);
         emitQuadBothSides(vertices, indices, vertexCounter, planeB, uvs, light, blockLight);
+    }
+
+    /**
+     * Emits a bottom-half slab: a top face at half height (always visible), a
+     * bottom face only when nothing full sits below, and side faces only toward
+     * air/cross neighbors (a full block covers the whole face, and an adjacent
+     * slab shares the half-height face).
+     */
+    private void emitSlab(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                          int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
+        float[] uv = atlas.getUV(block.topTile);
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + 0.5f, z1 = wz + 1;
+
+        // Top face is never covered from above (blocks start at whole-block heights).
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
+                uvs, LIGHT_TOP, blockLight);
+
+        // Bottom face: drawn unless a full-height block sits directly below.
+        BlockType below = world.getBlock(wx, wy - 1, wz);
+        if (below == BlockType.AIR || below.cross || below.slab) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
+                    uvs, LIGHT_BOTTOM, blockLight);
+        }
+
+        BlockType east = world.getBlock(wx + 1, wy, wz);
+        if (east == BlockType.AIR || east.cross) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}},
+                    uvs, LIGHT_EAST_WEST, blockLight);
+        }
+        BlockType west = world.getBlock(wx - 1, wy, wz);
+        if (west == BlockType.AIR || west.cross) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}},
+                    uvs, LIGHT_EAST_WEST, blockLight);
+        }
+        BlockType south = world.getBlock(wx, wy, wz + 1);
+        if (south == BlockType.AIR || south.cross) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}},
+                    uvs, LIGHT_NORTH_SOUTH, blockLight);
+        }
+        BlockType north = world.getBlock(wx, wy, wz - 1);
+        if (north == BlockType.AIR || north.cross) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
+                    uvs, LIGHT_NORTH_SOUTH, blockLight);
+        }
     }
 
     private void emitQuadBothSides(FloatArray vertices, IntArray indices, int[] vertexCounter,

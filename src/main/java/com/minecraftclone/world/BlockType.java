@@ -34,6 +34,8 @@ public enum BlockType {
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
     LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
     FURNACE(40, true, false, 4, 26, 4), // smelting station: stone top/bottom, furnace-face sides (tile 26)
+    STONE_SLAB(44, true, false, true, 4),   // bottom-half slab, stone texture
+    PLANKS_SLAB(45, true, false, true, 11), // bottom-half slab, planks texture
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -71,6 +73,10 @@ public enum BlockType {
     public final boolean isItem;
     /** 0-15, Minecraft-style: how brightly this block glows (0 = not a light source). See torch handling in {@link Chunk}. */
     public final int lightLevel;
+    /** True if this block is a bottom-half slab (partial cube), which meshes and collides at half height. */
+    public final boolean slab;
+    /** Vertical extent of this block's collision box in blocks (1.0 for full cubes, 0.5 for slabs). */
+    public final float collisionHeight;
 
     /** Full-cube block: distinct top/side/bottom textures, collides with the player. */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile) {
@@ -88,12 +94,30 @@ public enum BlockType {
         this.solid = solid;
         this.transparent = transparent;
         this.cross = false;
+        this.slab = false;
         this.topTile = topTile;
         this.sideTile = sideTile;
         this.bottomTile = bottomTile;
         this.foodValue = foodValue;
         this.isItem = false;
         this.lightLevel = lightLevel;
+        this.collisionHeight = 1.0f;
+    }
+
+    /** Bottom-half slab: a partial cube, one atlas tile for all faces, colliding only in its lower half. */
+    BlockType(int id, boolean solid, boolean transparent, boolean slab, int tile) {
+        this.id = (byte) id;
+        this.solid = solid;
+        this.transparent = transparent;
+        this.cross = false;
+        this.slab = slab;
+        this.topTile = tile;
+        this.sideTile = tile;
+        this.bottomTile = tile;
+        this.foodValue = 0;
+        this.isItem = false;
+        this.lightLevel = 0;
+        this.collisionHeight = slab ? 0.5f : 1.0f;
     }
 
     /** Cross-shaped (billboard-X) world decoration block, e.g. grass/flowers/berry bush: one atlas tile, never collides. */
@@ -107,12 +131,14 @@ public enum BlockType {
         this.solid = solid;
         this.transparent = transparent;
         this.cross = true;
+        this.slab = false;
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
         this.foodValue = 0;
         this.isItem = false;
         this.lightLevel = lightLevel;
+        this.collisionHeight = 1.0f;
     }
 
     /** Inventory-only item (tool, or foraged food like apple/berries): no atlas tile, has its own PNG texture, never placeable as a world block. */
@@ -121,17 +147,27 @@ public enum BlockType {
         this.solid = false;
         this.transparent = true;
         this.cross = false;
+        this.slab = false;
         this.topTile = -1;
         this.sideTile = -1;
         this.bottomTile = -1;
         this.foodValue = foodValue;
         this.isItem = true;
         this.lightLevel = 0;
+        this.collisionHeight = 1.0f;
     }
 
-    private static final BlockType[] BY_ID = new BlockType[values().length];
+    // Sparse id lookup: sized to the largest id rather than values().length, so
+    // ids don't have to be a dense 0..N-1 range (e.g. slabs use 44/45 while
+    // other features may take 39-43). byId guards against out-of-range anyway.
+    private static final BlockType[] BY_ID;
 
     static {
+        int maxId = 0;
+        for (BlockType t : values()) {
+            maxId = Math.max(maxId, t.id);
+        }
+        BY_ID = new BlockType[maxId + 1];
         for (BlockType t : values()) {
             BY_ID[t.id] = t;
         }

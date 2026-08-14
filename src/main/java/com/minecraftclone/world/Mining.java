@@ -71,9 +71,11 @@ public final class Mining {
         // Wood - axe helps but isn't required.
         put(BlockType.WOOD_LOG, 1.5f, ToolKind.AXE, TIER_HAND);
         put(BlockType.PLANKS, 1.0f, ToolKind.AXE, TIER_HAND);
+        put(BlockType.PLANKS_SLAB, 1.0f, ToolKind.AXE, TIER_HAND);
 
         // Stone family - pickaxe helps but bare hands still work (just slow).
         put(BlockType.STONE, 2.5f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.STONE_SLAB, 2.5f, ToolKind.PICKAXE, TIER_HAND);
         put(BlockType.GLASS, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.LAMP, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FURNACE, 3.5f, ToolKind.PICKAXE, TIER_HAND);
