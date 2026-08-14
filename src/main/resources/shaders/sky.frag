@@ -10,6 +10,7 @@ in vec3 fragRayView;
 uniform mat4 invView;       // view inverse -> world space (rotation part used)
 uniform vec3 sunDir;        // normalized world-space sun direction
 uniform float daylight;     // 0 = night, 1 = noon
+uniform float cloudTime;    // drifting cloud phase (noise units), advances with the clock
 uniform vec3 zenithColor;   // sky at the top of the sky
 uniform vec3 horizonColor;  // sky at the horizon
 uniform vec3 nightColor;    // night sky at the top
@@ -73,12 +74,16 @@ void main() {
         sky += star * vec3(0.9, 0.95, 1.0);
     }
 
-    // Clouds: a band of fbm noise near the horizon, fading with day and looking
-    // "flat" by only sampling in a thin band of up.
+    // Clouds: a layer of fbm noise across the lower sky. They drift across the
+    // sky as cloudTime advances, and each in-game day gets a different cloud
+    // cover (from a per-day hash), so the sky keeps changing day to day.
     if (daylight > 0.1) {
-        float band = smoothstep(0.0, 0.06, dir.y) * (1.0 - smoothstep(0.25, 0.5, dir.y));
-        float cloud = fbm(dir.xz * 4.0 + vec2(dir.y * 2.0, 0.0));
-        float cover = smoothstep(0.48, 0.62, cloud) * band * daylight;
+        float band = smoothstep(0.0, 0.1, dir.y) * (1.0 - smoothstep(0.55, 0.8, dir.y));
+        float dayIndex = floor(cloudTime / 30.0);
+        float dayCover = hash(vec3(dayIndex, 0.0, 0.0));
+        float cloud = fbm(dir.xz * 4.0 + vec2(cloudTime, cloudTime * 0.55));
+        float threshold = 0.44 + 0.16 * dayCover;
+        float cover = smoothstep(threshold, threshold + 0.14, cloud) * band * daylight;
         sky = mix(sky, vec3(0.85, 0.88, 0.93), cover * 0.75);
     }
 

@@ -199,6 +199,9 @@ public class Main {
         if (System.getenv("MCCLONE_AUTOTEST_TIME") != null) {
             dayNightCycle.setTime(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_TIME")));
         }
+        if (System.getenv("MCCLONE_AUTOTEST_CLOUD") != null) {
+            dayNightCycle.setCloudPhase(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_CLOUD")));
+        }
         if (System.getenv("MCCLONE_AUTOTEST_PITCH") != null) {
             player.getCamera().setPitch(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_PITCH")));
         }
@@ -451,7 +454,7 @@ public class Main {
             // plane so the world always draws in front of it.
             glDisable(GL_DEPTH_TEST);
             skyRenderer.render(skyShader, projection, view,
-                    dayNightCycle.getSunDirection(), dayNightCycle.getDaylightFactor(),
+                    dayNightCycle.getSunDirection(), dayNightCycle.getDaylightFactor(), dayNightCycle.getCloudPhase(),
                     dayNightCycle.getZenithColor(), dayNightCycle.getHorizonColor(),
                     dayNightCycle.getNightZenithColor(), dayNightCycle.getSunColor(), dayNightCycle.getMoonColor());
             glEnable(GL_DEPTH_TEST);

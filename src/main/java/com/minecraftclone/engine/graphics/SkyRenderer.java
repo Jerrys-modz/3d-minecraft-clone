@@ -49,7 +49,7 @@ public class SkyRenderer {
     }
 
     public void render(Shader skyShader, Matrix4f projection, Matrix4f view,
-                       Vector3f sunDir, float daylight,
+                       Vector3f sunDir, float daylight, float cloudTime,
                        Vector3f zenith, Vector3f horizon, Vector3f night, Vector3f sun, Vector3f moon) {
         projection.invert(invProj);
         view.invert(invView);
@@ -59,6 +59,7 @@ public class SkyRenderer {
         skyShader.setUniform("invView", invView);
         skyShader.setUniform("sunDir", sunDir);
         skyShader.setUniform("daylight", daylight);
+        skyShader.setUniform("cloudTime", cloudTime);
         skyShader.setUniform("zenithColor", zenith);
         skyShader.setUniform("horizonColor", horizon);
         skyShader.setUniform("nightColor", night);

@@ -15,6 +15,7 @@ public class DayNightCycle {
 
     private static final float DAY_LENGTH_SECONDS = 600f; // one full day/night cycle
     private static final float NIGHT_MIN_BRIGHTNESS = 0.28f;
+    private static final float CLOUD_DRIFT_RATE = 0.05f; // noise-units per second
 
     // Sky colors for the procedural skybox (see SkyRenderer / sky.frag).
     private static final Vector3f DAY_ZENITH = new Vector3f(0.30f, 0.56f, 0.93f);
@@ -35,8 +36,12 @@ public class DayNightCycle {
     /** 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset. Starts mid-morning. */
     private float time = 0.3f;
 
+    /** Continuous cloud-drift phase (noise units), always advancing so the sky keeps changing. */
+    private float cloudPhase = 0f;
+
     public void update(float dt) {
         time = (time + dt / DAY_LENGTH_SECONDS) % 1f;
+        cloudPhase += dt * CLOUD_DRIFT_RATE;
     }
 
     public void setTime(float t) {
@@ -45,6 +50,16 @@ public class DayNightCycle {
 
     public float getTime() {
         return time;
+    }
+
+    /** Monotonic cloud-drift phase for the sky shader; see {@link #update}. */
+    public float getCloudPhase() {
+        return cloudPhase;
+    }
+
+    /** Overrides the cloud-drift phase (used by the headless autotest). */
+    public void setCloudPhase(float phase) {
+        cloudPhase = phase;
     }
 
     /** 0 at midnight, 1 at noon, smoothly interpolated in between. */
