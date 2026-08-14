@@ -3,6 +3,7 @@
 in vec2 fragUv;
 in float fragLight;
 in float fragBlockLight;
+in float fragFluidFlow;
 in float fragViewDistance;
 
 uniform sampler2D atlas;
@@ -10,11 +11,25 @@ uniform vec3 fogColor;
 uniform float fogStart;
 uniform float fogEnd;
 uniform float ambientBrightness; // day/night dimming, see DayNightCycle
+uniform float time;              // seconds, free-running - drives flowing-water/lava animation
+uniform float atlasGrid;         // tiles per side of the atlas (see TextureAtlas.GRID)
 
 out vec4 outColor;
 
 void main() {
-    vec4 texColor = texture(atlas, fragUv);
+    vec2 uv = fragUv;
+    if (fragFluidFlow > 0.5) {
+        // Scroll the sampled texel downward within its own tile only (never past the
+        // tile's own edges into a neighbor) - wrapping relative to the tile's origin
+        // keeps this safe on a shared atlas where a naive GL_REPEAT scroll would bleed
+        // into whatever tile sits below it.
+        float tileSize = 1.0 / atlasGrid;
+        float tileV0 = floor(fragUv.y / tileSize) * tileSize;
+        float localV = mod((fragUv.y - tileV0) + time * 0.35 * tileSize, tileSize);
+        uv.y = tileV0 + localV;
+    }
+
+    vec4 texColor = texture(atlas, uv);
     if (texColor.a < 0.1) {
         discard;
     }
