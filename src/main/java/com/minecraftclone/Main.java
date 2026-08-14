@@ -41,10 +41,10 @@ import static org.lwjgl.opengl.GL11.*;
  * runs the main game loop.
  * <p>
  * Controls: WASD to move, mouse to look, Space to jump, Left-Ctrl (or double-tap
- * W) to sprint, F to toggle flight (double-tap W also takes off in creative,
- * but only F lands you again), hold Left-click
- * to break the targeted block (speed and whether it's even possible depend on the
- * selected tool - see {@link com.minecraftclone.world.Mining} - creative instead
+ * W) to sprint, F to toggle flight (double-tap W also takes off in creative and,
+ * once already flying, boosts flight speed instead - only F lands you again),
+ * hold Left-click to break the targeted block (speed and whether it's even
+ * possible depend on the selected tool - see {@link com.minecraftclone.world.Mining} - creative instead
  * breaks one block per click), Right-click to place the selected block
  * (or eat it, if it's food), C to smelt the selected ore (aim at a furnace),
  * E to open the inventory (click/drag items, craft on the 3x3 grid),
@@ -164,7 +164,8 @@ public class Main {
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
-        System.out.println("          F to fly (double-tap W also takes off in creative, only F lands you),");
+        System.out.println("          F to fly (double-tap W also takes off in creative and boosts speed");
+        System.out.println("          once flying - only F lands you),");
         System.out.println("          hold Left-click to mine (speed/possibility depends on your tool;");
         System.out.println("          creative breaks one block per click),");
         System.out.println("          Right-click place (or eat, if selected item is food),");

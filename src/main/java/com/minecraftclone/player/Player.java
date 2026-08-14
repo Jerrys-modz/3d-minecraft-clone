@@ -25,6 +25,7 @@ public class Player {
     private static final float WALK_SPEED = 4.3f;
     private static final float SPRINT_SPEED = 6.6f;
     private static final float FLY_SPEED = 12.0f;
+    private static final float FLY_SPRINT_SPEED = 20.0f;
     private static final float JUMP_VELOCITY = 8.2f;
     private static final float GRAVITY = 24.0f;
     private static final float TERMINAL_VELOCITY = -50f;
@@ -163,19 +164,21 @@ public class Player {
 
     /**
      * Pure decision for what a double-tap of W means: in creative, while not
-     * already flying, it takes off (same as {@code F}); otherwise (not
-     * flying, any mode) it latches sprint on, Minecraft-style, without
-     * needing to hold anything.
+     * already flying, it takes off (same as {@code F}); while already
+     * flying, it instead latches on a faster flying speed (the flight
+     * equivalent of ground sprint); on the ground (any mode) it latches
+     * ground sprint on - Minecraft-style, without needing to hold anything.
      * <p>
-     * Deliberately one-directional: it only ever starts flying, never stops
-     * it - {@code alreadyFlying} always yields {@code NONE}. A double-tap
-     * toggle in both directions meant any stray double-tap while just trying
-     * to move forward mid-flight - easy to do by accident - dropped you
-     * straight out of the sky. {@code F} still lands you when you actually
-     * mean to. No GLFW/Input dependency, so this is directly unit testable.
+     * Deliberately never turns flight itself off - {@code alreadyFlying}
+     * always yields {@code SPRINT}, never a fly-toggle. A double-tap that
+     * could switch flight off too meant any stray double-tap while just
+     * trying to move forward mid-flight - easy to do by accident - dropped
+     * you straight out of the sky. {@code F} is still the deliberate way to
+     * land. No GLFW/Input dependency, so this is directly unit testable.
      */
     static WTapAction decideDoubleTapWAction(boolean doubleTapped, boolean alreadyFlying, boolean creative) {
-        if (!doubleTapped || alreadyFlying) return WTapAction.NONE;
+        if (!doubleTapped) return WTapAction.NONE;
+        if (alreadyFlying) return WTapAction.SPRINT;
         return creative ? WTapAction.START_FLYING : WTapAction.SPRINT;
     }
 
@@ -213,7 +216,12 @@ public class Player {
         }
 
         boolean sprinting = (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || sprintLatched) && stats.canSprint();
-        float speed = flying ? FLY_SPEED : (sprinting ? SPRINT_SPEED : WALK_SPEED);
+        float speed;
+        if (flying) {
+            speed = sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
+        } else {
+            speed = sprinting ? SPRINT_SPEED : WALK_SPEED;
+        }
 
         velocity.x = moveX * speed;
         velocity.z = moveZ * speed;

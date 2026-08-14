@@ -25,16 +25,17 @@ class DoubleTapWActionTest {
     }
 
     @Test
-    void alreadyFlyingNeverGetsToggledOffByADoubleTap() {
-        // Regression: this used to toggle flight off, dropping the player
-        // straight out of the sky on any stray double-tap while airborne.
-        assertEquals(NONE, decideDoubleTapWAction(true, true, true));
+    void alreadyFlyingSpeedsUpInsteadOfTakingOffAgain() {
+        // Regression: this used to toggle flight off (flying = !flying),
+        // dropping the player straight out of the sky on any stray
+        // double-tap while airborne. It must never yield START_FLYING once
+        // already flying - SPRINT is reused as the flight-speed-boost latch.
+        assertEquals(SPRINT, decideDoubleTapWAction(true, true, true));
     }
 
     @Test
-    void alreadyFlyingDoesNotLatchSprintEither() {
-        // Non-creative "flying" only happens in spectator, where sprint is
-        // meaningless anyway - still shouldn't do anything.
-        assertEquals(NONE, decideDoubleTapWAction(true, true, false));
+    void spectatorDoubleTapAlsoSpeedsUpFlight() {
+        // Non-creative "flying" only happens in spectator - still a speed boost.
+        assertEquals(SPRINT, decideDoubleTapWAction(true, true, false));
     }
 }
