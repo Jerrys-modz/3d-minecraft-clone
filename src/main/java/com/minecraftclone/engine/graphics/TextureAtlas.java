@@ -54,7 +54,7 @@ public class TextureAtlas {
         paintTile(image, 3, rnd, 0x8B5A2B, 0x6E4623, true);   // dirt
         paintTile(image, 4, rnd, 0x8A8A8A, 0x777777, true);   // stone
         paintTile(image, 5, rnd, 0xE0D2A0, 0xCBBB84, true);   // sand
-        paintTile(image, 6, rnd, 0x3B6FD1, 0x2E58A8, false);  // water
+        paintFluidTile(image, 6, 0x3B6FD1, 0x2E58A8, 190);     // water
         paintTile(image, 7, rnd, 0x6E4A2A, 0x543A20, false);  // log side (bark stripes)
         paintLogStripes(image, 7, rnd);
         paintTile(image, 8, rnd, 0xC9A063, 0xAE8850, true);   // log top rings
@@ -72,7 +72,7 @@ public class TextureAtlas {
         paintOreTile(image, 17, rnd, 0xC08B5C);                // iron ore (rusty tan speckles)
         paintOreTile(image, 18, rnd, 0xE8C93A);                // gold ore (gold speckles)
         paintOreTile(image, 19, rnd, 0x5FE0E0);                // diamond ore (cyan speckles)
-        paintTile(image, 20, rnd, 0xE25822, 0xB33A12, true);   // lava
+        paintFluidTile(image, 20, 0xE25822, 0xB33A12, 225);     // lava
 
         paintCrossGrass(image, 21, rnd, 0x4C8C2C);                        // tall grass
         paintCrossFlower(image, 22, rnd, 0x3D6E2E, 0xD0392B, 0xE8C93A);   // red flower
@@ -123,6 +123,18 @@ public class TextureAtlas {
                     }
                 }
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** Paints a translucent, lightly banded fluid tile without noisy speckles. */
+    private void paintFluidTile(BufferedImage img, int index, int baseColor, int altColor, int alpha) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            int color = (y / 3) % 2 == 0 ? baseColor : altColor;
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, (alpha << 24) | color);
             }
         }
     }
