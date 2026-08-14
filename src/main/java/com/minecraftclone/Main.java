@@ -894,15 +894,17 @@ public class Main {
                                     } else {
                                         world.setBlock(p.x, p.y, p.z, heldItem);
                                     }
-                                    // A door is 2 blocks tall: also place the top half,
-                                    // facing the direction the player was looking.
-                                    if (heldItem == BlockType.DOOR) {
+                                    // Doors and trapdoors face the player: the panel sits
+                                    // on the side of the block nearest to them (opposite
+                                    // the look direction).
+                                    if (heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
                                         Vector3f front = player.getCamera().getFront();
                                         byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
-                                                ? (front.x >= 0 ? 2 : 3)
-                                                : (front.z >= 0 ? 0 : 1));
+                                                ? (front.x >= 0 ? 3 : 2)
+                                                : (front.z >= 0 ? 1 : 0));
                                         world.setBlockOrientation(p.x, p.y, p.z, facing);
-                                        if (world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
+                                        // A door is 2 blocks tall: also place the top half.
+                                        if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
                                             world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
                                             world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
                                         }

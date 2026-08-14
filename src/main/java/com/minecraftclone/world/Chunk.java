@@ -324,7 +324,7 @@ public class Chunk {
                     // Trapdoors: a flat horizontal hatch when closed, a vertical panel when open.
                     if (block.isTrapdoor()) {
                         emitTrapdoorPanel(vertices, indices, vertexCounter, wx, wy, wz,
-                                block == BlockType.TRAPDOOR_OPEN, atlas, blockLight);
+                                getOrientation(x, y, z), block == BlockType.TRAPDOOR_OPEN, atlas, blockLight);
                         continue;
                     }
                     if (block.cross) {
@@ -417,8 +417,9 @@ public class Chunk {
         // and translucent water doesn't occlude, so a solid neighbor's face toward
         // them must still be drawn - treat them like air for culling purposes.
         if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isWater()) return true;
-        // Doors are thin panels, so they don't occlude the faces around the doorway.
-        if (neighbor.isDoor()) return true;
+        // Doors and trapdoors are thin panels, so they don't occlude the faces
+        // around a doorway or hatch.
+        if (neighbor.isDoor() || neighbor.isTrapdoor()) return true;
         // Glass/ice are see-through, so a block behind them still gets its face
         // drawn (it shows through the glass instead of a hole).
         if (neighbor.isTranslucent()) return true;
@@ -796,16 +797,17 @@ public class Chunk {
         emitQuadBothSides(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
     }
 
-    /** A trapdoor: a thin flat hatch across the top of its cell (closed) or a vertical panel (open). */
+    /** A trapdoor: a thin flat hatch across the top of its cell (closed) or a vertical panel hung on its hinge (open). */
     private void emitTrapdoorPanel(FloatArray vertices, IntArray indices, int[] vertexCounter,
-                                   int wx, int wy, int wz, boolean open, TextureAtlas atlas, float blockLight) {
+                                   int wx, int wy, int wz, byte orientation, boolean open,
+                                   TextureAtlas atlas, float blockLight) {
         float thin = 0.12f;
         float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + 1, z0 = wz, z1 = wz + 1;
         float[][] positions;
         float light;
         if (open) {
-            positions = new float[][]{{x0, y0, z0 + thin}, {x1, y0, z0 + thin}, {x1, y1, z0 + thin}, {x0, y1, z0 + thin}};
-            light = LIGHT_NORTH_SOUTH;
+            positions = doorPlane(wx, wy, wz, orientation);
+            light = (orientation == 2 || orientation == 3) ? LIGHT_EAST_WEST : LIGHT_NORTH_SOUTH;
         } else {
             positions = new float[][]{{x0, y1 - thin, z0}, {x1, y1 - thin, z0}, {x1, y1 - thin, z1}, {x0, y1 - thin, z1}};
             light = LIGHT_TOP;
