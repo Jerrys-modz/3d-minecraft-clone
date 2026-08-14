@@ -37,6 +37,23 @@ public class TerrainGenerator {
         TAIGA, SNOWY, TUNDRA, SWAMP, MUSHROOM_FIELD, CHERRY_GROVE, FLOWER_MEADOW, MOUNTAIN
     }
 
+    /** A small generated structure that can appear in a biome, placed at a flat surface cell. */
+    public enum StructureType {
+        NONE, DESERT_TEMPLE, IGLOO, CABIN, WITCH_HUT, STONE_RUIN
+    }
+
+    /** The structure a biome tends to spawn, or {@link StructureType#NONE} if it spawns nothing. */
+    public static StructureType structureFor(Biome b) {
+        return switch (b) {
+            case DESERT -> StructureType.DESERT_TEMPLE;
+            case SNOWY, TUNDRA -> StructureType.IGLOO;
+            case FOREST, PLAINS, TAIGA, CHERRY_GROVE, FLOWER_MEADOW -> StructureType.CABIN;
+            case SWAMP -> StructureType.WITCH_HUT;
+            case MOUNTAIN, BADLANDS -> StructureType.STONE_RUIN;
+            default -> StructureType.NONE;
+        };
+    }
+
     private final Noise heightNoise;
     private final Noise moistureNoise;
     private final Noise tempNoise;
@@ -469,6 +486,12 @@ public class TerrainGenerator {
             }
         }
 
+        // Structures: rare, biome-gated, built at a flat surface cell (kept well
+        // inside the chunk so a structure never spills into a neighbor).
+        if (featureRandom.nextInt(12) == 0) {
+            placeStructure(chunk, featureRandom, heights, biomes);
+        }
+
         chunk.markGenerated();
         chunk.markDirty();
     }
@@ -603,6 +626,147 @@ public class TerrainGenerator {
     /** A pumpkin on the grass - rare plains/forest flavor. */
     private void placePumpkin(Chunk chunk, int x, int y, int z) {
         chunk.setLocal(x, y, z, BlockType.PUMPKIN);
+    }
+
+    /** Half-width (in blocks) of a structure's footprint, for flatness checks. */
+    private static int footprint(StructureType s) {
+        return switch (s) {
+            case DESERT_TEMPLE, IGLOO, CABIN -> 3;
+            case WITCH_HUT, STONE_RUIN -> 2;
+            default -> 0;
+        };
+    }
+
+    /** True if the ground around (x, z) is flat enough (within 2 blocks) to build on. */
+    private static boolean flatArea(int[][] heights, int x, int z, int fp) {
+        for (int dx = -fp; dx <= fp; dx++) {
+            for (int dz = -fp; dz <= fp; dz++) {
+                int nx = x + dx, nz = z + dz;
+                if (nx < 0 || nx >= Chunk.SIZE || nz < 0 || nz >= Chunk.SIZE) return false;
+                if (Math.abs(heights[nx][nz] - heights[x][z]) > 2) return false;
+            }
+        }
+        return true;
+    }
+
+    /** Picks a biome-appropriate structure on a flat spot and builds it. */
+    private void placeStructure(Chunk chunk, Random rnd, int[][] heights, Biome[][] biomes) {
+        for (int t = 0; t < 10; t++) {
+            int x = 4 + rnd.nextInt(Chunk.SIZE - 8);
+            int z = 4 + rnd.nextInt(Chunk.SIZE - 8);
+            StructureType s = structureFor(biomes[x][z]);
+            if (s == StructureType.NONE) continue;
+            int height = heights[x][z];
+            if (height < SEA_LEVEL || height >= Chunk.HEIGHT - 12) continue;
+            if (!flatArea(heights, x, z, footprint(s))) continue;
+            buildStructure(chunk, s, x, height + 1, z, rnd);
+            return;
+        }
+    }
+
+    private void buildStructure(Chunk chunk, StructureType s, int x, int y, int z, Random rnd) {
+        switch (s) {
+            case DESERT_TEMPLE -> buildDesertTemple(chunk, x, y, z);
+            case IGLOO -> buildIgloo(chunk, x, y, z);
+            case CABIN -> buildCabin(chunk, x, y, z, rnd);
+            case WITCH_HUT -> buildWitchHut(chunk, x, y, z);
+            case STONE_RUIN -> buildStoneRuin(chunk, x, y, z, rnd);
+            default -> { }
+        }
+    }
+
+    /** A hollow stepped sand pyramid with a front entrance and a stone treasure inside. */
+    private void buildDesertTemple(Chunk chunk, int x, int y, int z) {
+        int[][] layers = {{7, 3}, {5, 2}, {3, 1}, {1, 0}}; // {size, hollow interior half}
+        for (int layer = 0; layer < layers.length; layer++) {
+            int size = layers[layer][0];
+            int half = size / 2;
+            int hollow = layers[layer][1];
+            for (int dx = -half; dx <= half; dx++) {
+                for (int dz = -half; dz <= half; dz++) {
+                    if (layer == 0 && dx == half && dz == 0) continue;      // front entrance
+                    if (Math.abs(dx) < hollow && Math.abs(dz) < hollow) continue; // hollow core
+                    chunk.setLocal(x + dx, y + layer, z + dz, BlockType.SAND);
+                }
+            }
+        }
+        chunk.setLocal(x, y + 1, z, BlockType.STONE); // hidden treasure
+    }
+
+    /** A small hollow snow dome with a door, for snowy plains and tundra. */
+    private void buildIgloo(Chunk chunk, int x, int y, int z) {
+        int[][] rings = {{3, 0}, {2, 1}, {1, 2}}; // {radius, height above base}
+        for (int[] ring : rings) {
+            int rr = ring[0], ly = y + ring[1];
+            for (int dx = -rr; dx <= rr; dx++) {
+                for (int dz = -rr; dz <= rr; dz++) {
+                    if (dx * dx + dz * dz > (rr + 0.4f) * (rr + 0.4f)) continue; // round it
+                    if (ring[1] == 0 && dx == rr && dz == 0) continue; // entrance
+                    if (Math.abs(dx) < rr && Math.abs(dz) < rr) continue; // hollow inside
+                    chunk.setLocal(x + dx, ly, z + dz, BlockType.SNOW);
+                }
+            }
+        }
+        chunk.setLocal(x, y + 3, z, BlockType.SNOW); // cap
+    }
+
+    /** A small ruined log-and-plank cabin with a flat roof and a doorway. */
+    private void buildCabin(Chunk chunk, int x, int y, int z, Random rnd) {
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (Math.abs(dx) != 2 && Math.abs(dz) != 1) continue; // walls only
+                for (int h = 0; h < 2; h++) {
+                    if (rnd.nextInt(4) == 0) continue; // ruined gap
+                    chunk.setLocal(x + dx, y + h, z + dz, BlockType.PLANKS);
+                }
+            }
+        }
+        chunk.setLocal(x - 2, y, z, BlockType.AIR);     // doorway
+        chunk.setLocal(x - 2, y + 1, z, BlockType.AIR);
+        for (int dx = -1; dx <= 1; dx++) {
+            chunk.setLocal(x + dx, y + 2, z - 1, BlockType.PLANKS); // roof remnant
+        }
+        chunk.setLocal(x, y + 2, z, BlockType.PLANKS);
+    }
+
+    /** A plank hut on log stilts with a flat roof and a front door, for the swamp. */
+    private void buildWitchHut(Chunk chunk, int x, int y, int z) {
+        for (int dx = -1; dx <= 1; dx++) {
+            chunk.setLocal(x + dx, y - 2, z, BlockType.WOOD_LOG);
+            chunk.setLocal(x + dx, y - 1, z, BlockType.WOOD_LOG);
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                chunk.setLocal(x + dx, y, z + dz, BlockType.PLANKS); // floor
+            }
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                boolean wall = Math.abs(dx) == 1 || Math.abs(dz) == 1;
+                if (wall && !(dx == 0 && dz == 1)) {
+                    chunk.setLocal(x + dx, y + 1, z + dz, BlockType.PLANKS);
+                }
+            }
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                chunk.setLocal(x + dx, y + 2, z + dz, BlockType.PLANKS); // roof
+            }
+        }
+    }
+
+    /** A few cracked stone pillars with a lintel, for mountain and badlands slopes. */
+    private void buildStoneRuin(Chunk chunk, int x, int y, int z, Random rnd) {
+        int[][] pillars = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+        for (int[] p : pillars) {
+            int h = 1 + rnd.nextInt(3);
+            for (int i = 0; i < h; i++) {
+                chunk.setLocal(x + p[0], y + i, z + p[1], BlockType.STONE);
+            }
+        }
+        chunk.setLocal(x - 1, y + 2, z - 1, BlockType.STONE);
+        chunk.setLocal(x, y + 2, z - 1, BlockType.STONE);
+        chunk.setLocal(x + 1, y + 2, z - 1, BlockType.STONE);
     }
 
     /** A tall jungle tree: a longer trunk and a bigger, lusher canopy than the oak. */

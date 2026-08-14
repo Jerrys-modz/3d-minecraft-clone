@@ -31,4 +31,14 @@ class TerrainGeneratorTest {
         assertEquals(TerrainGenerator.Biome.PLAINS, TerrainGenerator.biomeAt(0, -0.1, 50));
         assertEquals(TerrainGenerator.Biome.SWAMP, TerrainGenerator.biomeAt(0, 0.5, TerrainGenerator.SEA_LEVEL + 3));
     }
+
+    @Test
+    void structuresMapToTheirBiomes() {
+        assertEquals(TerrainGenerator.StructureType.DESERT_TEMPLE, TerrainGenerator.structureFor(TerrainGenerator.Biome.DESERT));
+        assertEquals(TerrainGenerator.StructureType.IGLOO, TerrainGenerator.structureFor(TerrainGenerator.Biome.SNOWY));
+        assertEquals(TerrainGenerator.StructureType.CABIN, TerrainGenerator.structureFor(TerrainGenerator.Biome.PLAINS));
+        assertEquals(TerrainGenerator.StructureType.WITCH_HUT, TerrainGenerator.structureFor(TerrainGenerator.Biome.SWAMP));
+        assertEquals(TerrainGenerator.StructureType.STONE_RUIN, TerrainGenerator.structureFor(TerrainGenerator.Biome.MOUNTAIN));
+        assertEquals(TerrainGenerator.StructureType.NONE, TerrainGenerator.structureFor(TerrainGenerator.Biome.OCEAN));
+    }
 }
