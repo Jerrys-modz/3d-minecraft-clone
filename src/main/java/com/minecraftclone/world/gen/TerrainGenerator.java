@@ -102,9 +102,12 @@ public class TerrainGenerator {
      */
     public int terrainHeight(int wx, int wz) {
         double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
-        double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
+        // Real mountains: a low-frequency range, sharpened into tall peaks by the
+        // power so only the core of a range reaches high altitude.
+        double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 2, 0.5, 2.0);
         double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
-        int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
+        int height = BASE_HEIGHT + (int) Math.round(
+                continent * 16 + h * 18 + Math.pow(Math.max(0, mountains), 1.4) * 340);
         // Rivers only cut through lowland near sea level, so their water sits level
         // with the land instead of carving deep ravines through high terrain.
         boolean river = isRiver(wx, wz) && height <= SEA_LEVEL + RIVER_ZONE;
@@ -164,13 +167,15 @@ public class TerrainGenerator {
                 int wz = originZ + z;
 
                 double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
-                double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
+                // Low-frequency mountain ranges, sharpened into tall peaks by a power.
+                double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 2, 0.5, 2.0);
                 // Low-frequency "continental" term: large ocean basins and landmasses.
                 double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
                 temperature[x][z] = temperatureAt(wx, wz);
                 moisture[x][z] = moistureAt(wx, wz);
 
-                int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
+                int height = BASE_HEIGHT + (int) Math.round(
+                        continent * 16 + h * 18 + Math.pow(Math.max(0, mountains), 1.4) * 340);
                 // Rivers only cut through lowland near sea level (see RIVER_ZONE).
                 boolean river = isRiver(wx, wz) && height <= SEA_LEVEL + RIVER_ZONE;
                 rivers[x][z] = river;
