@@ -92,23 +92,24 @@ public final class FluidSim {
             BlockType below = world.getBlock(n.x, n.y - 1, n.z);
 
             if (below == BlockType.AIR || below.cross) {
-                // Air (or a cross decoration): fall straight down, preserving distance.
+                // Air (or a cross decoration): fall straight down - a cell in free-fall
+                // doesn't spread sideways, which keeps waterfalls narrow.
                 spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
-            } else if (below.isCollidable()) {
-                // Resting on solid ground: spread horizontally.
+            } else {
+                // Supported - below is solid OR more of the same fluid: spread
+                // horizontally (so a pool's surface fills a freshly-broken block, and
+                // a source resting on water still spreads), and keep traversing down
+                // through existing fluid so a column stays "reached".
+                if (below == n.flowType || below == sourceOf(n.flowType)) {
+                    spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
+                }
                 if (n.dist + 1 <= maxDistance(n.flowType)) {
                     spread(world, n.x + 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                     spread(world, n.x - 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                     spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                     spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                 }
-            } else if (below == n.flowType || below == sourceOf(n.flowType)) {
-                // Resting on more of the same fluid (a column): don't spread, but
-                // traverse down through it so the existing flow stays "reached"
-                // instead of being dried up and re-filled every other tick.
-                spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
             }
-            // else: static water/lava or a different fluid -> barrier; no action.
         }
 
         Set<Long> remove = new HashSet<>();
