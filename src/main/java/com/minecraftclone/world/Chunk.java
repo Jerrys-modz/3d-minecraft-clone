@@ -351,6 +351,36 @@ public class Chunk {
         return FLOW_TOP_NEAR - t * (FLOW_TOP_NEAR - FLOW_TOP_FAR);
     }
 
+    /**
+     * The direction (in tile-UV space) the flow's surface animation should
+     * travel, so the water texture visibly creeps away from its source instead
+     * of always scrolling straight down. The cell flows away from its neighbor
+     * with the lowest stored level (nearest the source); a source or a cell with
+     * no lower neighbor is still, so it returns (0,0) and doesn't animate.
+     * Sides are deliberately left still (returned for the top face only) - a
+     * vertical wall scrolling the banded tile looked wrong when water started
+     * flowing.
+     */
+    private static float[] fluidFlowDir(BlockAccessor world, int wx, int wy, int wz, BlockType block) {
+        if (block.isFluidSource()) return new float[]{0f, 0f};
+        int level = world.getFluidLevel(wx, wy, wz);
+        int minLevel = level;
+        float dirX = 0f, dirZ = 0f;
+        int[][] offsets = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] o : offsets) {
+            BlockType t = world.getBlock(wx + o[0], wy, wz + o[1]);
+            if (t.isFluid()) {
+                int l = world.getFluidLevel(wx + o[0], wy, wz + o[1]);
+                if (l < minLevel) {
+                    minLevel = l;
+                    dirX = -o[0];
+                    dirZ = -o[1];
+                }
+            }
+        }
+        return minLevel < level ? new float[]{dirX, dirZ} : new float[]{0f, 0f};
+    }
+
     /** Emits a lowered translucent surface for fluid instead of a solid full cube. */
     private void emitFluid(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
@@ -360,11 +390,14 @@ public class Chunk {
         float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + top, z1 = wz + 1;
         // Only the transient flowing kind animates - a still source/static body doesn't.
         float flow = block.isFluidFlow() ? 1f : 0f;
+        // The top surface scrolls along the actual flow direction (away from the
+        // source) rather than always straight down.
+        float[] flowDir = fluidFlowDir(world, wx, wy, wz, block);
 
         if (isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
-                    uvs, LIGHT_TOP, blockLight, flow);
+                    uvs, LIGHT_TOP, blockLight, flow, flowDir[0], flowDir[1]);
         }
         if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
@@ -535,11 +568,17 @@ public class Chunk {
 
     private void emitQuad(FloatArray vertices, IntArray indices, int[] vertexCounter,
                            float[][] positions, float[][] uvs, float light, float blockLight) {
-        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, 0f);
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, 0f, 0f, 0f);
     }
 
     private void emitQuad(FloatArray vertices, IntArray indices, int[] vertexCounter,
                            float[][] positions, float[][] uvs, float light, float blockLight, float fluidFlow) {
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, fluidFlow, 0f, 0f);
+    }
+
+    private void emitQuad(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                           float[][] positions, float[][] uvs, float light, float blockLight,
+                           float fluidFlow, float flowDirX, float flowDirZ) {
         int base = vertexCounter[0];
         for (int i = 0; i < 4; i++) {
             vertices.add(positions[i][0]);
@@ -550,6 +589,8 @@ public class Chunk {
             vertices.add(light);
             vertices.add(blockLight);
             vertices.add(fluidFlow);
+            vertices.add(flowDirX);
+            vertices.add(flowDirZ);
         }
         indices.add(base);
         indices.add(base + 1);

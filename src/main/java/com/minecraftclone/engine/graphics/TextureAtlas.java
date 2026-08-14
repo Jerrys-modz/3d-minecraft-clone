@@ -149,9 +149,11 @@ public class TextureAtlas {
      * the surface - water/lava's flowing translucent surface. Each band's
      * edge is smoothly interpolated rather than a hard stripe boundary, and
      * a small per-column phase shift bends the bands into a wave instead of
-     * dead-straight horizontal lines. The band period evenly divides the
-     * tile size so the flowing-fluid scroll animation (see chunk.frag) wraps
-     * with no visible seam.
+     * dead-straight horizontal lines. The band period (8) divides the tile size
+     * (16) evenly, and the per-column wave shift repeats every tile width, so
+     * the flowing-fluid scroll animation (see chunk.frag) wraps with no visible
+     * seam in either direction - which is what lets it scroll along the actual
+     * flow direction instead of always straight down.
      */
     private void paintFluidTile(BufferedImage img, int index, Random rnd, int lightColor, int darkColor, int alpha, int sparkleColor) {
         int ox = tileX(index);
@@ -159,7 +161,11 @@ public class TextureAtlas {
         int period = 8; // divides TILE_PX (16) evenly - see the seam note above
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
-                int waveShift = Math.round(1.5f * (float) Math.sin(x * 0.5f));
+                // One full sine cycle across the tile width (period 16), so the
+                // wave shift repeats exactly at the tile's horizontal seam too -
+                // otherwise scrolling the texture along the flow direction would
+                // hit a seam at every tile boundary.
+                int waveShift = Math.round(1.5f * (float) Math.sin(x * (Math.PI / 8)));
                 int phase = Math.floorMod(y + waveShift, period);
                 // Triangle wave 0..1..0 across the period: a soft gradient
                 // band instead of a hard edge between shades.

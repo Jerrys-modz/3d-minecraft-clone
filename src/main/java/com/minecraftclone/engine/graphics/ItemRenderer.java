@@ -77,11 +77,12 @@ public class ItemRenderer {
         int base = counter[0];
 
         // Four corners of the billboard: bottom-left, bottom-right, top-right, top-left.
-        // Trailing 0f is the fluidFlow attribute (see Mesh) - items never animate like flowing water.
-        verts.add(p.x - rx); verts.add(cy - HALF_SIZE); verts.add(p.z - rz); verts.add(u0); verts.add(v1); verts.add(1f); verts.add(0f); verts.add(0f);
-        verts.add(p.x + rx); verts.add(cy - HALF_SIZE); verts.add(p.z + rz); verts.add(u1); verts.add(v1); verts.add(1f); verts.add(0f); verts.add(0f);
-        verts.add(p.x + rx); verts.add(cy + HALF_SIZE); verts.add(p.z + rz); verts.add(u1); verts.add(v0); verts.add(1f); verts.add(0f); verts.add(0f);
-        verts.add(p.x - rx); verts.add(cy + HALF_SIZE); verts.add(p.z - rz); verts.add(u0); verts.add(v0); verts.add(1f); verts.add(0f); verts.add(0f);
+        // Trailing 0f is the fluidFlow attribute and 0f,0f the flowDir pair (see
+        // Mesh) - items never animate like flowing water.
+        verts.add(p.x - rx); verts.add(cy - HALF_SIZE); verts.add(p.z - rz); verts.add(u0); verts.add(v1); verts.add(1f); verts.add(0f); verts.add(0f); verts.add(0f); verts.add(0f);
+        verts.add(p.x + rx); verts.add(cy - HALF_SIZE); verts.add(p.z + rz); verts.add(u1); verts.add(v1); verts.add(1f); verts.add(0f); verts.add(0f); verts.add(0f); verts.add(0f);
+        verts.add(p.x + rx); verts.add(cy + HALF_SIZE); verts.add(p.z + rz); verts.add(u1); verts.add(v0); verts.add(1f); verts.add(0f); verts.add(0f); verts.add(0f); verts.add(0f);
+        verts.add(p.x - rx); verts.add(cy + HALF_SIZE); verts.add(p.z - rz); verts.add(u0); verts.add(v0); verts.add(1f); verts.add(0f); verts.add(0f); verts.add(0f); verts.add(0f);
 
         inds.add(base); inds.add(base + 1); inds.add(base + 2);
         inds.add(base); inds.add(base + 2); inds.add(base + 3);

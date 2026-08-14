@@ -225,8 +225,23 @@ public class World implements BlockAccessor {
 
         FluidSim.Result result = FluidSim.compute(this, sources, flows);
         for (Map.Entry<Long, BlockType> e : result.fill().entrySet()) {
-            int level = result.levels().getOrDefault(e.getKey(), 0);
-            setFluidBlock(FluidSim.keyX(e.getKey()), FluidSim.keyY(e.getKey()), FluidSim.keyZ(e.getKey()), e.getValue(), level);
+            long k = e.getKey();
+            int level = result.levels().getOrDefault(k, 0);
+            setFluidBlock(FluidSim.keyX(k), FluidSim.keyY(k), FluidSim.keyZ(k), e.getValue(), level);
+        }
+        // Existing flows' distances can change when the topology changes (a new
+        // source placed next to old water), so refresh any that moved - skipping
+        // unchanged ones so a settled field doesn't re-dirty chunks every frame.
+        for (Map.Entry<Long, Integer> e : result.flowLevels().entrySet()) {
+            long k = e.getKey();
+            int x = FluidSim.keyX(k), y = FluidSim.keyY(k), z = FluidSim.keyZ(k);
+            int level = e.getValue();
+            if (level != getFluidLevel(x, y, z)) {
+                BlockType t = getBlock(x, y, z);
+                if (t.isFluidFlow()) {
+                    setFluidBlock(x, y, z, t, level);
+                }
+            }
         }
         for (long k : result.remove()) {
             setFluidBlock(FluidSim.keyX(k), FluidSim.keyY(k), FluidSim.keyZ(k), BlockType.AIR);

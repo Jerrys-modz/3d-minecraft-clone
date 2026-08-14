@@ -4,6 +4,7 @@ in vec2 fragUv;
 in float fragLight;
 in float fragBlockLight;
 in float fragFluidFlow;
+in vec2 fragFlowDir;
 in float fragViewDistance;
 
 uniform sampler2D atlas;
@@ -18,15 +19,19 @@ out vec4 outColor;
 
 void main() {
     vec2 uv = fragUv;
-    if (fragFluidFlow > 0.5) {
-        // Scroll the sampled texel downward within its own tile only (never past the
-        // tile's own edges into a neighbor) - wrapping relative to the tile's origin
-        // keeps this safe on a shared atlas where a naive GL_REPEAT scroll would bleed
-        // into whatever tile sits below it.
+    if (fragFluidFlow > 0.5 && length(fragFlowDir) > 0.001) {
+        // Scroll the sampled texel along the flow direction (per-cell, away from
+        // the nearest source) within its own tile only - never past the tile's
+        // own edges into a neighbor. Wrapping relative to the tile's origin keeps
+        // this safe on a shared atlas where a naive GL_REPEAT scroll would bleed
+        // into whatever tile sits beside it. Both the band pattern and the
+        // per-column wave are periodic in the tile (see TextureAtlas.paintFluidTile),
+        // so the scroll wraps with no seam in either direction.
         float tileSize = 1.0 / atlasGrid;
-        float tileV0 = floor(fragUv.y / tileSize) * tileSize;
-        float localV = mod((fragUv.y - tileV0) + time * 0.35 * tileSize, tileSize);
-        uv.y = tileV0 + localV;
+        vec2 tileUV0 = floor(fragUv / tileSize) * tileSize;
+        vec2 local = fragUv - tileUV0;
+        vec2 scrolled = mod(local - time * 0.35 * tileSize * fragFlowDir, tileSize);
+        uv = tileUV0 + scrolled;
     }
 
     vec4 texColor = texture(atlas, uv);
