@@ -345,7 +345,17 @@ public class Chunk {
      */
     private float fluidTop(BlockAccessor world, int wx, int wy, int wz, BlockType type) {
         if (type == BlockType.WATER || type == BlockType.LAVA || type.isFluidSource()) return 0.9f;
-        if (world.getBlock(wx, wy - 1, wz) == BlockType.AIR) return 1f;
+        BlockType below = world.getBlock(wx, wy - 1, wz);
+        // Falling, or stacked on more fluid - a vertical waterfall/lavafall
+        // column, per FluidSim's own "only spread sideways off solid ground"
+        // rule (below.isFluid() there too) - full height either way, never
+        // graded. Once a multi-block-tall fall has fully filled in, only its
+        // very bottom cell actually has air below it, so "below is air" alone
+        // can't tell a column cell apart from a resting puddle: every cell
+        // above the bottom one was rendering at its graded - often much
+        // shorter - puddle height instead of full, a visibly banded, gappy
+        // waterfall.
+        if (below == BlockType.AIR || below.cross || below.isFluid()) return 1f;
         int maxLevel = type.isWater() ? FluidSim.WATER_FLOW_DISTANCE : FluidSim.LAVA_FLOW_DISTANCE;
         float t = Math.min(world.getFluidLevel(wx, wy, wz), maxLevel) / (float) maxLevel;
         return FLOW_TOP_NEAR - t * (FLOW_TOP_NEAR - FLOW_TOP_FAR);
