@@ -7,35 +7,43 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * A passive animal wandering the surface - pigs, cows and sheep that idle and
- * stroll around on grass, making the world feel lived-in. Mobs are lightweight:
- * a position/velocity pair plus a tiny brain. Instead of blindly bumping into
- * the world, a mob picks a random walkable destination nearby, finds a path to
- * it with {@link Pathfinder} (2D A* over walkable columns, allowing single-block
- * steps and routing around walls and ledges), and follows the waypoints with
- * gravity and per-axis AABB-vs-voxel collision. If the terrain changes under it
- * or a path goes stale it re-routes. Mobs spawn on grass surfaces near the
- * player and despawn once they're far away. Transient - not saved, like dropped
- * items.
+ * A mob wandering the surface - passive animals (pigs, cows, sheep) that idle
+ * and stroll around, plus hostile monsters (zombies, skeletons) that spawn at
+ * night and hunt the player. Mobs are lightweight: a position/velocity pair
+ * plus a tiny brain. Instead of blindly bumping into the world, a mob picks
+ * walkable destinations and finds a path to them with {@link Pathfinder} (2D A*
+ * over walkable columns, allowing single-block steps and routing around walls
+ * and ledges), then follows the waypoints with gravity and per-axis
+ * AABB-vs-voxel collision. Passives wander the surface; hostiles chase the
+ * player when they notice them and attack on contact (zombies melee, skeletons
+ * shoot). Mobs spawn on grass surfaces near the player (hostiles only at
+ * night), despawn once they're far away (hostiles also melt away at dawn), and
+ * can be killed for drops. Transient - not saved, like dropped items.
  */
 public class Mob {
 
-    /** Mob kinds, with their dimensions in blocks, walking speed and hit points. */
+    /** Mob kinds, with their dimensions, walking speed, hit points, and combat role. */
     public enum Type {
-        PIG(0.9f, 0.9f, 1.6f, 10f),
-        COW(1.0f, 1.0f, 1.4f, 10f),
-        SHEEP(0.9f, 0.9f, 1.4f, 10f);
+        PIG(0.9f, 0.9f, 1.6f, 10f, false, 0f),
+        COW(1.0f, 1.0f, 1.4f, 10f, false, 0f),
+        SHEEP(0.9f, 0.9f, 1.4f, 10f, false, 0f),
+        ZOMBIE(0.7f, 1.8f, 2.0f, 20f, true, 4f),
+        SKELETON(0.6f, 1.8f, 2.2f, 20f, true, 3f);
 
         public final float width;     // x/z footprint
         public final float height;    // full body height
         public final float walkSpeed; // blocks/second
         public final float maxHealth;
+        public final boolean hostile;
+        public final float attackDamage;
 
-        Type(float width, float height, float walkSpeed, float maxHealth) {
+        Type(float width, float height, float walkSpeed, float maxHealth, boolean hostile, float attackDamage) {
             this.width = width;
             this.height = height;
             this.walkSpeed = walkSpeed;
             this.maxHealth = maxHealth;
+            this.hostile = hostile;
+            this.attackDamage = attackDamage;
         }
     }
 
@@ -44,8 +52,15 @@ public class Mob {
     private static final float WAYPOINT_REACH = 0.4f;  // feet within this of a waypoint center: advance
     private static final float STUCK_THRESHOLD = 0.5f; // blocked this long: give up and re-route
     private static final int MAX_PATH_NODES = 800;     // A* budget per route search
-    private static final float PANIC_TIME = 4f;        // how long a hit mob runs away for
+    private static final float PANIC_TIME = 4f;        // how long a hit passive runs away for
     private static final float PANIC_SPEED_MULT = 1.6f; // flee faster than it walks
+
+    private static final float HOSTILE_DETECT_RANGE = 20f; // notice the player within this many blocks
+    private static final float HOSTILE_MELEE_REACH = 1.4f; // adjacent enough to land a melee hit
+    private static final float SKELETON_MIN_SHOOT = 3f;    // skeletons back off rather than shoot at point-blank
+    private static final float SKELETON_MAX_SHOOT = 14f;
+    private static final float MELEE_COOLDOWN = 1f;        // seconds between hits
+    private static final float SHOOT_COOLDOWN = 1.5f;      // seconds between arrows
 
     public final Type type;
     /** Body center of the mob. */
@@ -64,6 +79,10 @@ public class Mob {
     private int pathIndex;      // next waypoint to reach
     private float panicTimer;   // > 0: hurt, running away (see fleeX/fleeZ)
     private float fleeX, fleeZ; // unit direction away from the last damage source
+    private float attackCooldown;
+    private float repathTimer;  // hostiles re-route to the moving player on this interval
+    private float meleeRequest; // damage this mob wants to deal the player this frame (0 = none)
+    private boolean shootRequest; // true: fire a projectile at the player this frame (skeletons)
 
     public Mob(Type type, float x, float y, float z) {
         this.type = type;
@@ -93,10 +112,39 @@ public class Mob {
         return box();
     }
 
+    public boolean isHostile() {
+        return type.hostile;
+    }
+
+    public float getAttackDamage() {
+        return type.attackDamage;
+    }
+
+    /** The item this mob drops when killed. */
+    public BlockType dropType() {
+        return switch (type) {
+            case PIG -> BlockType.RAW_PORKCHOP;
+            case COW -> BlockType.RAW_BEEF;
+            case SHEEP -> BlockType.MUTTON;
+            case ZOMBIE -> BlockType.ROTTEN_FLESH;
+            case SKELETON -> BlockType.BONES;
+        };
+    }
+
+    /** Damage the player should take from this mob this frame (0 = none), for hostiles' melee hits. */
+    public float getMeleeRequest() {
+        return meleeRequest;
+    }
+
+    /** True if this mob wants to fire a projectile at the player this frame (skeletons). */
+    public boolean wantsToShoot() {
+        return shootRequest;
+    }
+
     /**
      * Applies {@code amount} damage from a source at (sourceX, sourceZ): knocks the
-     * mob back, panics it (it flees for a few seconds), and kills it at zero health.
-     * Returns true if the hit killed it.
+     * mob back, panics a passive (it flees for a few seconds - hostiles keep
+     * coming), and kills it at zero health. Returns true if the hit killed it.
      */
     public boolean damage(float amount, float sourceX, float sourceZ) {
         health -= amount;
@@ -112,7 +160,9 @@ public class Mob {
         }
         velocity.x += fleeX * 3f;   // small knockback
         velocity.z += fleeZ * 3f;
-        panicTimer = PANIC_TIME;
+        if (!type.hostile) {
+            panicTimer = PANIC_TIME;
+        }
         return isDead();
     }
 
@@ -162,9 +212,22 @@ public class Mob {
      * {@link BlockAccessor} is used) so it can be tested without GL.
      */
     public void update(float dt, BlockAccessor world, Random rnd) {
+        update(dt, world, rnd, null);
+    }
+
+    /**
+     * Like {@link #update(float, BlockAccessor, Random)} but with the player's
+     * position, which hostile mobs chase (passives ignore it). Hostiles also
+     * request melee hits and shots here - the caller (World) applies them to the
+     * player.
+     */
+    public void update(float dt, BlockAccessor world, Random rnd, Vector3f playerPos) {
         age += dt;
         wanderTimer -= dt;
-        if (panicTimer > 0f) {
+
+        if (type.hostile) {
+            updateHostile(dt, world, rnd, playerPos);
+        } else if (panicTimer > 0f) {
             panicTimer -= dt;
             // Hurt: bolt away from the last damage source, ignoring the pathfinder -
             // a panicking animal runs (and may stumble off a ledge) rather than
@@ -208,6 +271,52 @@ public class Mob {
         if (hSpeed > 0.1f) {
             float target = (float) Math.atan2(velocity.x, velocity.z);
             yaw = turnToward(yaw, target, 12f * dt);
+        }
+    }
+
+    /** Hostile AI: notice and chase the player, attacking on contact (or at range for skeletons). */
+    private void updateHostile(float dt, BlockAccessor world, Random rnd, Vector3f playerPos) {
+        attackCooldown -= dt;
+        repathTimer -= dt;
+        meleeRequest = 0f;
+        shootRequest = false;
+
+        boolean hasTarget = playerPos != null
+                && Math.hypot(playerPos.x - position.x, playerPos.z - position.z) <= HOSTILE_DETECT_RANGE;
+        if (!hasTarget) {
+            // No player to hunt - idle around like the passives do.
+            if (onGround && (path == null || pathIndex >= path.size()) && wanderTimer <= 0f) {
+                pickNewGoal(world, rnd);
+            }
+            followPath();
+            return;
+        }
+
+        // Chase: re-route to the player's column periodically (they're moving).
+        int bx = (int) Math.floor(position.x);
+        int bz = (int) Math.floor(position.z);
+        int px = (int) Math.floor(playerPos.x);
+        int pz = (int) Math.floor(playerPos.z);
+        if (path == null || pathIndex >= path.size() || repathTimer <= 0f) {
+            repathTimer = 1f;
+            int floor = (int) Math.floor(position.y - type.height / 2f);
+            List<int[]> waypoints = Pathfinder.findPath(world, bx, bz, px, pz, floor, MAX_PATH_NODES);
+            if (waypoints != null && waypoints.size() > 1) {
+                path = waypoints;
+                pathIndex = 1;
+            }
+        }
+        followPath();
+
+        // Attack: melee once in reach; skeletons prefer shooting from mid range.
+        float dist = (float) Math.hypot(playerPos.x - position.x, playerPos.z - position.z);
+        if (dist <= HOSTILE_MELEE_REACH && attackCooldown <= 0f) {
+            meleeRequest = type.attackDamage;
+            attackCooldown = MELEE_COOLDOWN;
+        } else if (type == Type.SKELETON && dist >= SKELETON_MIN_SHOOT && dist <= SKELETON_MAX_SHOOT
+                && attackCooldown <= 0f) {
+            shootRequest = true;
+            attackCooldown = SHOOT_COOLDOWN;
         }
     }
 

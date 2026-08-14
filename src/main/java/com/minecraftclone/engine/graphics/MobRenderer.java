@@ -2,9 +2,12 @@ package com.minecraftclone.engine.graphics;
 
 import com.minecraftclone.util.FloatArray;
 import com.minecraftclone.util.IntArray;
+import com.minecraftclone.world.ArrowEntity;
 import com.minecraftclone.world.Mob;
 
 import java.util.List;
+
+import static org.lwjgl.opengl.GL11.*;
 
 /**
  * Draws {@link Mob}s as small 3D voxel animals - each one a handful of textured
@@ -75,14 +78,22 @@ public class MobRenderer {
                     new Part(0.065f, 0.20f, 0.065f, -0.28f, 0.20f, 0.18f, LEG_FACES),
                     new Part(0.065f, 0.20f, 0.065f, 0.28f, 0.20f, 0.18f, LEG_FACES),
             };
+            case ZOMBIE, SKELETON -> new Part[]{ // humanoid: body, head, two arms, two legs
+                    new Part(0.26f, 0.35f, 0.13f, 0f, 0.85f, 0f, BODY_FACES),
+                    new Part(0.23f, 0.23f, 0.23f, 0f, 1.40f, 0f, HEAD_FACES),
+                    new Part(0.07f, 0.30f, 0.07f, -0.32f, 0.90f, 0f, LEG_FACES),
+                    new Part(0.07f, 0.30f, 0.07f, 0.32f, 0.90f, 0f, LEG_FACES),
+                    new Part(0.09f, 0.30f, 0.09f, -0.13f, 0.30f, 0f, LEG_FACES),
+                    new Part(0.09f, 0.30f, 0.09f, 0.13f, 0.30f, 0f, LEG_FACES),
+            };
         };
     }
 
     private final Mesh mesh = new Mesh();
 
-    /** Draws every mob as a batched set of 3D boxes. Caller must have the chunk shader bound. */
-    public void render(MobTextures textures, List<Mob> mobs) {
-        if (mobs.isEmpty()) return;
+    /** Draws every mob as a batched set of 3D boxes, plus skeleton arrows. Caller must have the chunk shader bound. */
+    public void render(MobTextures textures, List<Mob> mobs, List<ArrowEntity> arrows) {
+        if (mobs.isEmpty() && arrows.isEmpty()) return;
 
         for (Mob.Type type : Mob.Type.values()) {
             int count = 0;
@@ -106,6 +117,52 @@ public class MobRenderer {
             textures.bind(type);
             mesh.render();
         }
+
+        if (!arrows.isEmpty()) {
+            // Arrows: small crossed billboards (visible from any angle), one pass.
+            FloatArray v = new FloatArray(arrows.size() * 64);
+            IntArray i = new IntArray(arrows.size() * 12);
+            int[] c = {0};
+            for (ArrowEntity a : arrows) {
+                emitArrow(v, i, c, a);
+            }
+            glDisable(GL_CULL_FACE);
+            mesh.upload(v.toArray(), i.toArray());
+            textures.bindArrow();
+            mesh.render();
+            glEnable(GL_CULL_FACE);
+        }
+    }
+
+    /** Emits an arrow as two crossed planes (an X), like the game's cross decorations. */
+    private void emitArrow(FloatArray v, IntArray i, int[] counter, ArrowEntity a) {
+        float s = 0.13f;
+        float cx = a.position.x, cy = a.position.y, cz = a.position.z;
+        float[][][] planes = {
+                {{cx - s, cy - s, cz - s}, {cx + s, cy - s, cz + s}, {cx + s, cy + s, cz + s}, {cx - s, cy + s, cz - s}},
+                {{cx - s, cy - s, cz + s}, {cx + s, cy - s, cz - s}, {cx + s, cy + s, cz - s}, {cx - s, cy + s, cz + s}},
+        };
+        int base = counter[0];
+        for (float[][] p : planes) {
+            for (int k = 0; k < 4; k++) {
+                v.add(p[k][0]);
+                v.add(p[k][1]);
+                v.add(p[k][2]);
+                v.add(k == 1 || k == 2 ? 1f : 0f);
+                v.add(k == 0 || k == 1 ? 1f : 0f);
+                v.add(1f);
+                v.add(0f);
+                v.add(0f);
+            }
+            i.add(base);
+            i.add(base + 1);
+            i.add(base + 2);
+            i.add(base);
+            i.add(base + 2);
+            i.add(base + 3);
+            base += 4;
+        }
+        counter[0] += 8;
     }
 
     private void emitBox(FloatArray v, IntArray i, int[] counter, Mob mob, Part part) {

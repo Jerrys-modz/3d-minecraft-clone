@@ -200,4 +200,51 @@ class MobTest {
         // Ray starting inside the box counts as a hit at t=0.
         assertEquals(0f, Mob.rayIntersects(new Vector3f(0.5f, 0.5f, 0.5f), new Vector3f(0f, 1f, 0f), 10f, box), 1e-3f);
     }
+
+    @Test
+    void hostileChasesThePlayer() {
+        StubWorld w = flatGround(20);
+        Mob zombie = new Mob(Mob.Type.ZOMBIE, 0f, 1f + Mob.Type.ZOMBIE.height / 2f, 0f);
+        float startX = zombie.position.x;
+        Random rnd = new Random(13);
+        Vector3f player = new Vector3f(5f, 0.9f, 0f);
+        for (int i = 0; i < 60; i++) {
+            zombie.update(DT, w, rnd, player);
+        }
+        assertTrue(zombie.position.x > startX + 1f,
+                "zombie should close in on the player: dx=" + (zombie.position.x - startX));
+    }
+
+    @Test
+    void hostileRequestsMeleeWhenAdjacent() {
+        StubWorld w = flatGround(10);
+        Mob zombie = new Mob(Mob.Type.ZOMBIE, 0f, 1f + Mob.Type.ZOMBIE.height / 2f, 0f);
+        Random rnd = new Random(4);
+        zombie.update(DT, w, rnd, new Vector3f(1f, 0.9f, 0f)); // adjacent
+        assertEquals(zombie.getAttackDamage(), zombie.getMeleeRequest(), 0.001f);
+    }
+
+    @Test
+    void skeletonRequestsShotsFromRange() {
+        StubWorld w = flatGround(10);
+        Mob skeleton = new Mob(Mob.Type.SKELETON, 0f, 1f + Mob.Type.SKELETON.height / 2f, 0f);
+        Random rnd = new Random(6);
+        skeleton.update(DT, w, rnd, new Vector3f(6f, 0.9f, 0f)); // in shoot range
+        assertTrue(skeleton.wantsToShoot(), "skeleton should shoot from mid range");
+    }
+
+    @Test
+    void hostileKeepsChasingAfterBeingHit() {
+        StubWorld w = flatGround(20);
+        Mob zombie = new Mob(Mob.Type.ZOMBIE, 0f, 1f + Mob.Type.ZOMBIE.height / 2f, 0f);
+        zombie.damage(2f, 3f, 0f); // hit from the player's side - must not flee away
+        float startX = zombie.position.x;
+        Random rnd = new Random(17);
+        Vector3f player = new Vector3f(5f, 0.9f, 0f);
+        for (int i = 0; i < 60; i++) {
+            zombie.update(DT, w, rnd, player);
+        }
+        assertTrue(zombie.position.x > startX + 0.5f,
+                "a hurt hostile keeps coming, not fleeing: dx=" + (zombie.position.x - startX));
+    }
 }

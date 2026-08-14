@@ -61,8 +61,10 @@ public final class GenerateItemTextures {
         write(outDir, "raw_porkchop", paintMeat(0xE8A0A0, 0xC87878));
         write(outDir, "raw_beef", paintMeat(0xC04848, 0x8E2E2E));
         write(outDir, "mutton", paintMeat(0xD87870, 0xB04848));
+        write(outDir, "rotten_flesh", paintMeat(0x9A8A6A, 0x7A6A50));
+        write(outDir, "bones", paintBones());
 
-        System.out.println("Wrote 21 item textures to " + outDir.getAbsolutePath());
+        System.out.println("Wrote 23 item textures to " + outDir.getAbsolutePath());
     }
 
     private static void write(File outDir, String name, BufferedImage image) throws IOException {
@@ -210,6 +212,19 @@ public final class GenerateItemTextures {
             img.setRGB(x + 1, 8, 0xFF000000 | marbledColor);
             img.setRGB(x, 4, 0xFF000000 | lighten(meatColor));
         }
+        return img;
+    }
+
+    /** A knobbly white bone - skeleton loot, a collectible for now. */
+    private static BufferedImage paintBones() {
+        BufferedImage img = blank();
+        drawThickLine(img, 3, 13, 8, 6, 0xE8E0D0); // shaft
+        img.setRGB(2, 12, 0xFF000000 | 0xE8E0D0);
+        img.setRGB(3, 13, 0xFF000000 | 0xE8E0D0);
+        img.setRGB(4, 14, 0xFF000000 | 0xE8E0D0);
+        img.setRGB(11, 2, 0xFF000000 | 0xE8E0D0);
+        img.setRGB(12, 3, 0xFF000000 | 0xE8E0D0);
+        img.setRGB(13, 4, 0xFF000000 | 0xE8E0D0);
         return img;
     }
 

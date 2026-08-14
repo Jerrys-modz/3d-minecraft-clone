@@ -16,6 +16,7 @@ import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.player.Smelting;
+import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
@@ -470,8 +471,17 @@ public class Main {
             // Item-entity physics + pickup.
             world.updateItems(dt, player.getPosition(), player.getInventory());
 
-            // Passive animals: wander, spawn on nearby grass, despawn when far away.
-            world.updateMobs(dt, player.getPosition().x, player.getPosition().z, loot);
+            // Mobs: passives wander, hostiles hunt the player (spawning at night and
+            // melting away at dawn); the damage their hits and arrows deal is applied
+            // to the player's health, where the existing death/respawn handling picks
+            // it up.
+            Vector3f playerPos = player.getPosition();
+            AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
+                    playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
+            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
+            if (mobDamage > 0f) {
+                player.getStats().damage(mobDamage);
+            }
 
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
             for (int i = messages.size() - 1; i >= 0; i--) {
@@ -648,7 +658,7 @@ public class Main {
             atlas.bind();
             world.render(chunkShader);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
-            mobRenderer.render(mobTextures, world.getMobs());
+            mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
             chunkShader.unbind();
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {

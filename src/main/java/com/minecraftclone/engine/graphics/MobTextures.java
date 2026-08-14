@@ -50,12 +50,14 @@ public class MobTextures {
     private static final int EYE = 0x26262B;
 
     private final Map<Mob.Type, Integer> textureIds = new EnumMap<>(Mob.Type.class);
+    private int arrowTextureId = -1;
 
-    /** Paints and uploads every mob type's skin to its own GL texture. */
+    /** Paints and uploads every mob type's skin, plus the skeleton-arrow sprite. */
     public void generate() {
         for (Mob.Type type : Mob.Type.values()) {
             textureIds.put(type, GLTexture.upload(build(type)));
         }
+        arrowTextureId = GLTexture.upload(buildArrow());
     }
 
     private BufferedImage build(Mob.Type type) {
@@ -65,6 +67,8 @@ public class MobTextures {
             case PIG -> paintPig(img, rnd);
             case COW -> paintCow(img, rnd);
             case SHEEP -> paintSheep(img, rnd);
+            case ZOMBIE -> paintZombie(img, rnd);
+            case SKELETON -> paintSkeleton(img, rnd);
         }
         return img;
     }
@@ -77,6 +81,28 @@ public class MobTextures {
         }
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, id);
+    }
+
+    /** Binds the skeleton-arrow sprite to texture unit 0. */
+    public void bindArrow() {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, arrowTextureId);
+    }
+
+    /** A diagonal arrow sprite for skeleton projectiles: brown shaft, grey head, white fletching. */
+    private static BufferedImage buildArrow() {
+        BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
+        for (int i = 0; i <= 10; i++) {
+            img.setRGB(2 + i, 14 - i, 0xFF000000 | 0x8B5A2B);
+        }
+        for (int x = 11; x <= 13; x++) {
+            img.setRGB(x, 14 - x, 0xFF000000 | 0xC9C9C9);
+            img.setRGB(x + 1, 14 - x, 0xFF000000 | 0xC9C9C9);
+        }
+        img.setRGB(2, 14, 0xFF000000 | 0xE8E0D0);
+        img.setRGB(3, 14, 0xFF000000 | 0xE8E0D0);
+        img.setRGB(3, 13, 0xFF000000 | 0xE8E0D0);
+        return img;
     }
 
     private void paintPig(BufferedImage img, Random rnd) {
@@ -116,6 +142,29 @@ public class MobTextures {
         fill(img, 0, 15, 14, 15, FACE_DARK);       // legs
     }
 
+    private void paintZombie(BufferedImage img, Random rnd) {
+        fill(img, 0, 15, 0, 7, 0x6FA34E);          // moldy green body
+        speckle(img, rnd, 0, 15, 0, 7, 0x54803C, 0.15f);
+        fill(img, 0, 15, 8, 9, 0x7FB85E);          // body top
+        fill(img, 0, 15, 10, 11, 0x6FA34E);        // head side
+        fill(img, 0, 15, 12, 13, 0x6FA34E);        // head front
+        set(img, 3, 12, EYE); set(img, 4, 12, EYE);          // eyes
+        set(img, 11, 12, EYE); set(img, 12, 12, EYE);
+        fill(img, 5, 10, 13, 13, 0x4A6636);        // gaping mouth
+        fill(img, 0, 15, 14, 15, 0x4E7337);        // legs
+    }
+
+    private void paintSkeleton(BufferedImage img, Random rnd) {
+        fill(img, 0, 15, 0, 7, 0xE8E0D0);          // bone-white body
+        speckle(img, rnd, 0, 15, 0, 7, 0xD8D0BE, 0.15f);
+        fill(img, 0, 15, 8, 9, 0xF2ECE0);          // body top
+        fill(img, 0, 15, 10, 11, 0xE8E0D0);        // head side
+        fill(img, 0, 15, 12, 13, 0xE8E0D0);        // head front
+        set(img, 3, 12, EYE); set(img, 4, 12, EYE);          // empty eye sockets
+        set(img, 11, 12, EYE); set(img, 12, 12, EYE);
+        fill(img, 0, 15, 14, 15, 0xD8D0BE);        // legs
+    }
+
     /** Sprinkles a few {@code color} pixels through a region for a speckled, textured look. */
     private static void speckle(BufferedImage img, Random rnd, int x0, int x1, int y0, int y1, int color, float density) {
         for (int y = y0; y <= y1; y++) {
@@ -144,6 +193,9 @@ public class MobTextures {
     public void destroy() {
         for (int id : textureIds.values()) {
             glDeleteTextures(id);
+        }
+        if (arrowTextureId != -1) {
+            glDeleteTextures(arrowTextureId);
         }
     }
 }

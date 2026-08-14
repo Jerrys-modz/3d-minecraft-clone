@@ -98,7 +98,10 @@ public enum BlockType {
     // Raw meat - dropped by passive mobs when killed (see World.damageMob), edible.
     RAW_PORKCHOP(64, 16),
     RAW_BEEF(65, 16),
-    MUTTON(66, 12);
+    MUTTON(66, 12),
+    // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
+    ROTTEN_FLESH(67, 4),
+    BONES(68, 0);
 
     public final byte id;
     public final boolean solid;
