@@ -7,24 +7,33 @@ import com.minecraftclone.world.Chunk;
 import java.util.Random;
 
 /**
- * Procedural terrain generator: a low-frequency "continental" noise carves large
- * ocean basins and landmasses, a heightmap built from layered noise decides ground
- * level per column, a river noise channel carves winding water channels into it,
- * a second noise channel picks a rough "biome" (desert / plains / forest /
- * mountains), 3D noise carves caves and veins ore into remaining stone (with lava
- * pooling in the deepest cave pockets), and a splash of trees/grass/flowers/cacti
- * dresses up the surface. Everything is deterministic from the world seed.
+ * Procedural terrain generator. A low-frequency "continental" noise carves large
+ * ocean basins and landmasses; layered height noise adds rolling hills and
+ * mountains; a river noise channel carves winding water channels. A temperature
+ * plus a moisture channel pick a per-column {@link Biome} (ocean / beach / plains /
+ * forest / desert / savanna / taiga / snowy / mountain) which drives the surface
+ * and subsurface blocks, tree type and density, ground cover, and ocean-floor
+ * material. Beaches are decided by adjacency to water rather than height alone, so
+ * only the coastline turns to sand. 3D noise carves caves and veins ore into
+ * remaining stone (with lava pooling in the deepest cave pockets). Everything is
+ * deterministic from the world seed.
  */
 public class TerrainGenerator {
 
-    public static final int SEA_LEVEL = 41;
-    private static final int BASE_HEIGHT = 42;
-    private static final int SNOW_LINE = 78;
-    private static final int MOUNTAIN_LINE = SEA_LEVEL + 25; // above this: pine forest instead of oak
+    public static final int SEA_LEVEL = 42;
+    private static final int BASE_HEIGHT = 44;
+    private static final int SNOW_LINE = 60;
+    private static final int MOUNTAIN_LINE = SEA_LEVEL + 16; // above this: mountain biome
     private static final int LAVA_LEVEL = 10;                // cave pockets at/below this fill with lava instead of air
 
+    /** The biomes a column can be assigned, from its temperature, moisture and height. */
+    public enum Biome {
+        OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, TAIGA, SNOWY, MOUNTAIN
+    }
+
     private final Noise heightNoise;
-    private final Noise biomeNoise;
+    private final Noise moistureNoise;
+    private final Noise tempNoise;
     private final Noise caveNoise;
     private final Noise riverNoise;
     private final Noise oreNoise;
@@ -33,10 +42,49 @@ public class TerrainGenerator {
     public TerrainGenerator(long seed) {
         this.seed = seed;
         this.heightNoise = new Noise(seed);
-        this.biomeNoise = new Noise(seed ^ 0x9E3779B97F4A7C15L);
-        this.caveNoise = new Noise(seed ^ 0xC2B2AE3D27D4EB4FL);
-        this.riverNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
-        this.oreNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
+        this.moistureNoise = new Noise(seed ^ 0x9E3779B97F4A7C15L);
+        this.tempNoise = new Noise(seed ^ 0xC2B2AE3D27D4EB4FL);
+        this.caveNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
+        this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
+        this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
+    }
+
+    /**
+     * Picks the biome for a column from its temperature / moisture noise values and
+     * its (pre-clamp) surface height. Height dominates first (ocean/beach/mountain),
+     * then the temperature/moisture plane splits the rest into the lowland biomes.
+     */
+    public static Biome biomeAt(double temperature, double moisture, int height) {
+        if (height < SEA_LEVEL) return Biome.OCEAN;
+        if (height <= SEA_LEVEL + 1) return Biome.BEACH;
+        if (height > MOUNTAIN_LINE) return Biome.MOUNTAIN;
+        if (temperature < -0.20) return moisture > 0.05 ? Biome.TAIGA : Biome.SNOWY;
+        if (temperature > 0.20) return moisture < -0.10 ? Biome.DESERT : Biome.SAVANNA;
+        return moisture > 0.10 ? Biome.FOREST : Biome.PLAINS;
+    }
+
+    private static boolean sandyBiome(Biome b) {
+        return b == Biome.BEACH || b == Biome.DESERT || b == Biome.OCEAN;
+    }
+
+    /** True if any of a column's in-chunk orthogonal neighbors sits below sea level. */
+    private static boolean neighborBelowSea(int[][] heights, int x, int z) {
+        return (x > 0 && heights[x - 1][z] < SEA_LEVEL)
+                || (x < heights.length - 1 && heights[x + 1][z] < SEA_LEVEL)
+                || (z > 0 && heights[x][z - 1] < SEA_LEVEL)
+                || (z < heights.length - 1 && heights[x][z + 1] < SEA_LEVEL);
+    }
+
+    /**
+     * The biome used for filling a column: oceans by height, beaches only where the
+     * land actually touches water, and inland lowlands near the sea fall through to
+     * the climate biomes instead of becoming sand.
+     */
+    private static Biome biomeForColumn(int[][] heights, int x, int z, double temperature, double moisture, int height) {
+        if (height < SEA_LEVEL) return Biome.OCEAN;
+        if (height <= SEA_LEVEL + 1 && neighborBelowSea(heights, x, z)) return Biome.BEACH;
+        Biome b = biomeAt(temperature, moisture, height);
+        return b == Biome.BEACH ? Biome.PLAINS : b;
     }
 
     public void generate(Chunk chunk) {
@@ -45,8 +93,12 @@ public class TerrainGenerator {
         Random featureRandom = new Random(seed ^ ((long) chunk.getPos().x() * 341873128712L) ^ ((long) chunk.getPos().z() * 132897987541L));
 
         int[][] heights = new int[Chunk.SIZE][Chunk.SIZE];
+        double[][] temperature = new double[Chunk.SIZE][Chunk.SIZE];
         double[][] moisture = new double[Chunk.SIZE][Chunk.SIZE];
+        Biome[][] biomes = new Biome[Chunk.SIZE][Chunk.SIZE];
 
+        // Pass 1: surface height + climate per column (needed up-front so beaches can
+        // look at their neighbors before any blocks are placed).
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 int wx = originX + x;
@@ -54,54 +106,62 @@ public class TerrainGenerator {
 
                 double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
                 double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
-                // A low-frequency "continental" term creates large ocean basins and
-                // landmasses, so the sea level sits naturally among the terrain
-                // instead of only appearing at the very bottom of the deepest valleys.
+                // Low-frequency "continental" term: large ocean basins and landmasses.
                 double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
-                double moist = moistureAt(wx, wz);
-                moisture[x][z] = moist;
+                temperature[x][z] = temperatureAt(wx, wz);
+                moisture[x][z] = moistureAt(wx, wz);
 
-                int height = BASE_HEIGHT + (int) Math.round(continent * 20 + h * 12 + Math.max(0, mountains) * 40);
-                height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
+                int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
                 if (isRiver(wx, wz)) {
                     height = Math.min(height, SEA_LEVEL - 2);
                 }
-                heights[x][z] = height;
+                height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
 
-                boolean desert = moist < -0.25 && height <= SEA_LEVEL + 6;
+                // Deepen oceans with a slow depth noise so open water is more than a puddle.
+                if (height < SEA_LEVEL) {
+                    double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
+                    height = Math.max(2, height - (int) (depth * 5));
+                }
+                heights[x][z] = height;
+            }
+        }
+
+        // Pass 2: place blocks, using the biome (with neighbor-aware beaches).
+        for (int x = 0; x < Chunk.SIZE; x++) {
+            for (int z = 0; z < Chunk.SIZE; z++) {
+                int height = heights[x][z];
+                Biome biome = biomeForColumn(heights, x, z, temperature[x][z], moisture[x][z], height);
+                biomes[x][z] = biome;
+
+                boolean sandy = sandyBiome(biome);
+                BlockType surface = surfaceFor(biome, height);
+                BlockType subsurface = subsurfaceFor(biome, height);
 
                 for (int y = 0; y <= height; y++) {
                     BlockType type;
                     if (y == 0) {
                         type = BlockType.BEDROCK;
                     } else if (y < height - 4) {
-                        if (caveAt(wx, y, wz)) {
+                        if (caveAt(originX + x, y, originZ + z)) {
                             type = (y <= LAVA_LEVEL) ? BlockType.LAVA : BlockType.AIR;
                         } else {
-                            type = oreAt(wx, y, wz);
+                            type = oreAt(originX + x, y, originZ + z);
                         }
                     } else if (y < height) {
-                        type = desert ? BlockType.SAND : (height > SNOW_LINE ? BlockType.STONE : BlockType.DIRT);
-                        if (!desert && y < height && caveAt(wx, y, wz) && y < height - 1) {
+                        type = subsurface;
+                        // Let caves poke through the topsoil (but not sand, which would float).
+                        if (!sandy && caveAt(originX + x, y, originZ + z) && y < height - 1) {
                             type = BlockType.AIR;
                         }
-                    } else { // y == height, the surface block
-                        if (desert) {
-                            type = BlockType.SAND;
-                        } else if (height <= SEA_LEVEL + 1) {
-                            type = BlockType.SAND;
-                        } else if (height > SNOW_LINE) {
-                            type = BlockType.SNOW;
-                        } else {
-                            type = BlockType.GRASS;
-                        }
+                    } else {
+                        type = surface;
                     }
                     if (type != BlockType.AIR) {
                         chunk.setLocal(x, y, z, type);
                     }
                 }
 
-                // Fill water up to sea level for low terrain (including river channels).
+                // Fill water up to sea level for low terrain (oceans, rivers, lakes).
                 if (height < SEA_LEVEL) {
                     for (int y = height + 1; y <= SEA_LEVEL; y++) {
                         chunk.setLocal(x, y, z, BlockType.WATER);
@@ -110,44 +170,59 @@ public class TerrainGenerator {
             }
         }
 
-        // Surface dressing: keep everything fully inside the chunk (margin 2) so
-        // tree canopies never spill into a not-yet-generated neighboring chunk.
+        // Surface dressing: trees / cacti / boulders / ground cover per biome. Kept
+        // fully inside the chunk (margin 2) so tree canopies never spill into a
+        // not-yet-generated neighboring chunk.
         for (int x = 2; x < Chunk.SIZE - 2; x++) {
             for (int z = 2; z < Chunk.SIZE - 2; z++) {
                 int height = heights[x][z];
-                if (height < SEA_LEVEL || height > SNOW_LINE) continue;
+                if (height < SEA_LEVEL) continue; // ocean floor gets no dressing
 
-                int wx = originX + x;
-                int wz = originZ + z;
-                double moist = moisture[x][z];
-                boolean desert = moist < -0.25 && height <= SEA_LEVEL + 6;
-                boolean forest = moist > 0.25;
-
+                Biome biome = biomes[x][z];
                 BlockType surface = chunk.getLocal(x, height, z);
-                if (desert && surface == BlockType.SAND) {
-                    if (featureRandom.nextInt(180) == 0) {
-                        placeCactus(chunk, x, height + 1, z, featureRandom);
-                    }
-                    continue;
-                }
-                if (surface != BlockType.GRASS) continue;
 
-                if (height > MOUNTAIN_LINE) {
-                    if (featureRandom.nextInt(60) == 0) {
-                        placePineTree(chunk, x, height + 1, z, featureRandom);
+                switch (biome) {
+                    case DESERT -> {
+                        if (surface == BlockType.SAND && featureRandom.nextInt(180) == 0) {
+                            placeCactus(chunk, x, height + 1, z, featureRandom);
+                        }
                     }
-                } else if (forest) {
-                    if (featureRandom.nextInt(20) == 0) {
-                        placeTree(chunk, x, height + 1, z, featureRandom);
-                    } else {
-                        placeGroundCover(chunk, x, height + 1, z, featureRandom, true);
+                    case TAIGA -> {
+                        if ((surface == BlockType.SNOW || surface == BlockType.GRASS) && featureRandom.nextInt(28) == 0) {
+                            placePineTree(chunk, x, height + 1, z, featureRandom);
+                        }
                     }
-                } else {
-                    if (featureRandom.nextInt(90) == 0) {
-                        placeTree(chunk, x, height + 1, z, featureRandom);
-                    } else {
-                        placeGroundCover(chunk, x, height + 1, z, featureRandom, false);
+                    case MOUNTAIN -> {
+                        if (surface == BlockType.STONE && featureRandom.nextInt(45) == 0) {
+                            placePineTree(chunk, x, height + 1, z, featureRandom);
+                        }
                     }
+                    case FOREST -> {
+                        if (surface == BlockType.GRASS) {
+                            if (featureRandom.nextInt(18) == 0) {
+                                placeTree(chunk, x, height + 1, z, featureRandom);
+                            } else {
+                                placeGroundCover(chunk, x, height + 1, z, featureRandom, true);
+                            }
+                        }
+                    }
+                    case SAVANNA -> {
+                        if (surface == BlockType.GRASS && featureRandom.nextInt(70) == 0) {
+                            placeTree(chunk, x, height + 1, z, featureRandom);
+                        }
+                    }
+                    case PLAINS -> {
+                        if (surface == BlockType.GRASS) {
+                            if (featureRandom.nextInt(85) == 0) {
+                                placeTree(chunk, x, height + 1, z, featureRandom);
+                            } else if (featureRandom.nextInt(140) == 0) {
+                                placeBoulder(chunk, x, height + 1, z, featureRandom);
+                            } else {
+                                placeGroundCover(chunk, x, height + 1, z, featureRandom, false);
+                            }
+                        }
+                    }
+                    default -> { /* beach / snowy: nothing grows */ }
                 }
             }
         }
@@ -157,7 +232,32 @@ public class TerrainGenerator {
     }
 
     private double moistureAt(int wx, int wz) {
-        return biomeNoise.fbm2(wx * 0.006 + 500, wz * 0.006 + 500, 3, 0.5, 2.0);
+        return moistureNoise.fbm2(wx * 0.008 + 500, wz * 0.008 + 500, 3, 0.5, 2.0) * 1.6;
+    }
+
+    private double temperatureAt(int wx, int wz) {
+        return tempNoise.fbm2(wx * 0.009 + 900, wz * 0.009 + 900, 3, 0.5, 2.0) * 1.6;
+    }
+
+    /** The top surface block for a biome (oceans get their sea-floor material). */
+    private static BlockType surfaceFor(Biome b, int height) {
+        return switch (b) {
+            case BEACH, DESERT -> BlockType.SAND;
+            case SNOWY, TAIGA -> BlockType.SNOW;
+            case MOUNTAIN -> height > SNOW_LINE ? BlockType.SNOW : BlockType.STONE;
+            case OCEAN -> height < SEA_LEVEL - 5 ? BlockType.GRAVEL : BlockType.SAND;
+            default -> BlockType.GRASS;
+        };
+    }
+
+    /** The block just under the surface. */
+    private static BlockType subsurfaceFor(Biome b, int height) {
+        return switch (b) {
+            case BEACH, DESERT, OCEAN -> BlockType.SAND;
+            case MOUNTAIN -> BlockType.STONE;
+            case SNOWY, TAIGA -> height > SNOW_LINE ? BlockType.STONE : BlockType.DIRT;
+            default -> BlockType.DIRT;
+        };
     }
 
     /** Winding rivers: the near-zero contour of a low-frequency noise field, thickened by a small threshold band. */
@@ -178,9 +278,6 @@ public class TerrainGenerator {
      * rarer/deeper ores are checked first so an unlikely overlap resolves in
      * favor of the rarer one. Falls back to plain stone.
      */
-    // fbm3(octaves=3, persistence=0.5) empirically lands in roughly [-0.71, 0.68], not [-1, 1],
-    // so these thresholds are picked from the actual observed distribution (percentiles), not
-    // guessed against the theoretical range - e.g. 0.30 is around the 97th percentile.
     private BlockType oreAt(int wx, int y, int wz) {
         if (y >= 5 && y <= 16 && oreNoise.fbm3(wx * 0.11 + 1000, y * 0.11, wz * 0.11 + 1000, 3, 0.5, 2.0) > 0.55) {
             return BlockType.DIAMOND_ORE;
@@ -211,6 +308,14 @@ public class TerrainGenerator {
         }
     }
 
+    /** A small grey boulder (a couple of stone blocks) on the surface - rare plains decoration. */
+    private void placeBoulder(Chunk chunk, int x, int y, int z, Random rnd) {
+        chunk.setLocal(x, y, z, BlockType.STONE);
+        if (rnd.nextBoolean()) {
+            chunk.setLocal(x + (rnd.nextBoolean() ? 1 : -1), y, z, BlockType.STONE);
+        }
+    }
+
     private void placeTree(Chunk chunk, int x, int y, int z, Random rnd) {
         int trunkHeight = 4 + rnd.nextInt(2);
         for (int i = 0; i < trunkHeight; i++) {
@@ -233,7 +338,7 @@ public class TerrainGenerator {
         chunk.setLocal(x, y + trunkHeight, z, BlockType.LEAVES);
     }
 
-    /** A narrower, conical evergreen: shrinking leaf rings stacked up a taller trunk. Used at higher, colder elevations. */
+    /** A narrower, conical evergreen: shrinking leaf rings stacked up a taller trunk. Used in taiga and mountains. */
     private void placePineTree(Chunk chunk, int x, int y, int z, Random rnd) {
         int trunkHeight = 6 + rnd.nextInt(3);
         for (int i = 0; i < trunkHeight; i++) {
