@@ -391,31 +391,83 @@ public class Chunk {
         return minLevel < level ? new float[]{dirX, dirZ} : new float[]{0f, 0f};
     }
 
+    /** True for two blocks of the same fluid family (both water-ish, or both lava-ish) - see {@link #fluidCornerTop}. */
+    private static boolean sameFluidFamily(BlockType a, BlockType b) {
+        return (a.isWater() && b.isWater()) || (a.isLava() && b.isLava());
+    }
+
+    /** The block type at a world position, preferring this chunk's own array (cheaper) over the world lookup when it's local. */
+    private BlockType fluidNeighborType(BlockAccessor world, int x, int y, int z) {
+        int lx = x - getOriginX(), lz = z - getOriginZ();
+        return inBounds(lx, y, lz) ? getLocal(lx, y, lz) : world.getBlock(x, y, z);
+    }
+
+    /**
+     * A fluid top surface isn't one flat height across the whole block - each
+     * of its 4 corners is averaged with the same-fluid-family cells sharing
+     * that corner (the same technique Minecraft's own water rendering uses),
+     * so two neighboring cells at different heights blend into one continuous
+     * sloped surface that meets exactly at their shared edge, rather than
+     * each having an independent flat top that doesn't quite line up with a
+     * differently-graded neighbor (the source of several "gap" reports: a
+     * flat single height per block just can't represent the surface dipping
+     * toward a shorter neighbor on one side while staying full-height on the
+     * others at the same time).
+     * <p>
+     * {@code cx, cz} is the corner's grid position - a corner of block
+     * (wx, wz) is at (wx or wx+1, wz or wz+1). The four cells that touch a
+     * given corner are the 2x2 block of cells around it.
+     */
+    private float fluidCornerTop(BlockAccessor world, int cx, int wy, int cz, BlockType block) {
+        float sum = 0f;
+        int count = 0;
+        for (int dx = -1; dx <= 0; dx++) {
+            for (int dz = -1; dz <= 0; dz++) {
+                int x = cx + dx, z = cz + dz;
+                BlockType t = fluidNeighborType(world, x, wy, z);
+                if (sameFluidFamily(t, block)) {
+                    sum += fluidTop(world, x, wy, z, t);
+                    count++;
+                }
+            }
+        }
+        // count is never 0 in practice - block (wx,wz) itself is always one of
+        // the 4 cells sharing each of its own corners, and always matches its
+        // own family - but stay defensive rather than divide by zero.
+        return count > 0 ? sum / count : 0f;
+    }
+
     /** Emits a lowered translucent surface for fluid instead of a solid full cube. */
     private void emitFluid(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
-        float top = fluidTop(world, wx, wy, wz, block);
         float[] uv = atlas.getUV(block.topTile);
         float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
-        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + top, z1 = wz + 1;
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, z1 = wz + 1;
         // Only the transient flowing kind animates - a still source/static body doesn't.
         float flow = block.isFluidFlow() ? 1f : 0f;
         // The top surface scrolls along the actual flow direction (away from the
         // source) rather than always straight down.
         float[] flowDir = fluidFlowDir(world, wx, wy, wz, block);
 
+        float yNW = wy + fluidCornerTop(world, wx, wy, wz, block);
+        float yNE = wy + fluidCornerTop(world, wx + 1, wy, wz, block);
+        float ySE = wy + fluidCornerTop(world, wx + 1, wy, wz + 1, block);
+        float ySW = wy + fluidCornerTop(world, wx, wy, wz + 1, block);
+
         // isFaceVisible's water branch treats "fluid above" as fully hiding this
-        // top face - true for a full-height cell, but a graded/shorter cell (top
-        // < 1) doesn't actually touch the cell above it even when that cell is
-        // also fluid (its own geometry only ever starts at this cell's ceiling,
-        // y+1, never lower). Skipping the face there left a real gap - looking
-        // down through it showed whatever was below (e.g. the floor a waterfall
-        // just landed on) instead of this cell's own water surface. Below a
-        // full-height (top == 1) cell is the one case the general culling still
-        // correctly applies - two full cells stacked really do hide the seam.
-        if (top < 1f || isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
+        // top face - true when every corner is already at full height, but a
+        // corner pulled down by a shorter neighbor doesn't actually touch the
+        // cell above it even when that cell is also fluid (its own geometry
+        // only ever starts at this cell's ceiling, y+1, never lower). Skipping
+        // the face there left a real gap - looking down through it showed
+        // whatever was below (e.g. the floor a waterfall just landed on)
+        // instead of this cell's own water surface. All 4 corners already at
+        // the ceiling is the one case the general culling still correctly
+        // applies - two full cells stacked really do hide the seam.
+        float minCorner = Math.min(Math.min(yNW, yNE), Math.min(ySE, ySW));
+        if (minCorner < wy + 1f || isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
-                    new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
+                    new float[][]{{x0, ySW, z1}, {x1, ySE, z1}, {x1, yNE, z0}, {x0, yNW, z0}},
                     uvs, LIGHT_TOP, blockLight, flow, flowDir[0], flowDir[1]);
         }
         if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz, block)) {
@@ -423,39 +475,43 @@ public class Chunk {
                     new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
                     uvs, LIGHT_BOTTOM, blockLight, flow);
         }
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, flow, Face.EAST, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, flow, Face.WEST, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, flow, Face.SOUTH, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, flow, Face.NORTH, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.EAST, uvs, yNE, ySE);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.WEST, uvs, yNW, ySW);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.SOUTH, uvs, ySW, ySE);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.NORTH, uvs, yNW, yNE);
     }
 
+    /**
+     * A fluid block's vertical side face. {@code yA, yB} are the two corner
+     * heights (absolute world Y) at this edge - the same values the top face
+     * uses at its matching corners (see {@link #fluidCornerTop}), so this
+     * face's top edge lines up with the top face exactly, whatever shape it
+     * has. {@code yA} is the edge's "first" corner and {@code yB} its
+     * "second", in the same order as each face's vertex winding below.
+     */
     private void emitFluidSide(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
-                                int wx, int wy, int wz, BlockType block, float blockLight, float top, float flow,
-                                Face face, float[][] uvs) {
+                                int wx, int wy, int wz, BlockType block, float blockLight, float flow,
+                                Face face, float[][] uvs, float yA, float yB) {
         int nx = wx + (face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0);
         int nz = wz + (face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0);
         int nlx = nx - getOriginX(), nlz = nz - getOriginZ();
 
-        float bottom = 0f;
         BlockType neighbor = inBounds(nlx, wy, nlz) ? getLocal(nlx, wy, nlz) : world.getBlock(nx, wy, nz);
-        if ((block.isWater() && neighbor.isWater()) || (block.isLava() && neighbor.isLava())) {
-            // Same fluid family, but possibly a different surface height (e.g. a
-            // low-lying resting flow next to a full source or a falling column) -
-            // only the exposed sliver above the shorter one's surface needs a face.
-            // Culling the whole side here (like plain water-vs-water always did)
-            // left that step as a see-through gap whenever the heights didn't match.
-            float neighborTop = fluidTop(world, nx, wy, nz, neighbor);
-            if (neighborTop >= top) return;
-            bottom = neighborTop;
-        } else if (!isFaceVisible(world, nlx, wy, nlz, nx, wy, nz, block)) {
+        if (sameFluidFamily(neighbor, block)) {
+            // This edge's corner heights are computed the exact same way from
+            // the neighbor's side (averaging the same shared cells), so its
+            // own top face already meets this one exactly here - no vertical
+            // wall needed between two blended fluid surfaces.
             return;
         }
-        float x0 = wx, x1 = wx + 1, y0 = wy + bottom, y1 = wy + top, z0 = wz, z1 = wz + 1;
+        if (!isFaceVisible(world, nlx, wy, nlz, nx, wy, nz, block)) return;
+
+        float x0 = wx, x1 = wx + 1, y0 = wy, z0 = wz, z1 = wz + 1;
         float[][] positions = switch (face) {
-            case EAST -> new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}};
-            case WEST -> new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}};
-            case SOUTH -> new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}};
-            case NORTH -> new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}};
+            case EAST -> new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, yA, z0}, {x1, yB, z1}};
+            case WEST -> new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, yB, z1}, {x0, yA, z0}};
+            case SOUTH -> new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, yB, z1}, {x0, yA, z1}};
+            case NORTH -> new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, yA, z0}, {x1, yB, z0}};
             default -> throw new IllegalArgumentException("Fluid side must be horizontal");
         };
         float light = face == Face.NORTH || face == Face.SOUTH ? LIGHT_NORTH_SOUTH : LIGHT_EAST_WEST;
