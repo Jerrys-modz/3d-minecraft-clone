@@ -9,7 +9,9 @@ import java.util.Random;
 /**
  * Procedural terrain generator. A low-frequency "continental" noise carves large
  * ocean basins and landmasses; layered height noise adds rolling hills and
- * mountains. Climate is arranged in latitude bands (cold toward -Z, hot toward
+ * mountains. A river noise channel carves wide, shallow water channels whose banks
+ * are pulled down to water level, so rivers sit level with the land instead of as
+ * deep trenches. Climate is arranged in latitude bands (cold toward -Z, hot toward
  * +Z) with a temperature + moisture noise pair picking the per-column {@link Biome}
  * (ocean / beach / plains / forest / desert / savanna / taiga / snowy / tundra /
  * mountain), which drives the surface and subsurface blocks, tree type and density,
@@ -36,6 +38,7 @@ public class TerrainGenerator {
     private final Noise moistureNoise;
     private final Noise tempNoise;
     private final Noise caveNoise;
+    private final Noise riverNoise;
     private final Noise oreNoise;
     private final long seed;
 
@@ -45,6 +48,7 @@ public class TerrainGenerator {
         this.moistureNoise = new Noise(seed ^ 0x9E3779B97F4A7C15L);
         this.tempNoise = new Noise(seed ^ 0xC2B2AE3D27D4EB4FL);
         this.caveNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
+        this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
         this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
     }
 
@@ -77,6 +81,14 @@ public class TerrainGenerator {
                 || (z < heights.length - 1 && heights[x][z + 1] < SEA_LEVEL);
     }
 
+    /** True if any of a column's in-chunk orthogonal neighbors is a river column. */
+    private static boolean riverNeighbor(boolean[][] rivers, int x, int z) {
+        return (x > 0 && rivers[x - 1][z])
+                || (x < rivers.length - 1 && rivers[x + 1][z])
+                || (z > 0 && rivers[x][z - 1])
+                || (z < rivers.length - 1 && rivers[x][z + 1]);
+    }
+
     /**
      * The biome used for filling a column: oceans by height, beaches only where the
      * land actually touches water, and inland lowlands near the sea fall through to
@@ -91,16 +103,20 @@ public class TerrainGenerator {
 
     /**
      * The finalized terrain height for a world column: continental + hill noise,
-     * clamping, and ocean deepening. Matches what {@link #generate} fills, so biome
-     * queries agree with the world.
+     * the shallow river carve, clamping, and ocean deepening (rivers stay shallow).
+     * Matches what {@link #generate} fills, so biome queries agree with the world.
      */
     public int terrainHeight(int wx, int wz) {
         double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
         double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
         double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
         int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
+        boolean river = isRiver(wx, wz);
+        if (river) {
+            height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed, water sits near land level
+        }
         height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
-        if (height < SEA_LEVEL) {
+        if (height < SEA_LEVEL && !river) {
             double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
             height = Math.max(2, height - (int) (depth * 5));
         }
@@ -139,6 +155,7 @@ public class TerrainGenerator {
         Random featureRandom = new Random(seed ^ ((long) chunk.getPos().x() * 341873128712L) ^ ((long) chunk.getPos().z() * 132897987541L));
 
         int[][] heights = new int[Chunk.SIZE][Chunk.SIZE];
+        boolean[][] rivers = new boolean[Chunk.SIZE][Chunk.SIZE];
         double[][] temperature = new double[Chunk.SIZE][Chunk.SIZE];
         double[][] moisture = new double[Chunk.SIZE][Chunk.SIZE];
         Biome[][] biomes = new Biome[Chunk.SIZE][Chunk.SIZE];
@@ -158,14 +175,32 @@ public class TerrainGenerator {
                 moisture[x][z] = moistureAt(wx, wz);
 
                 int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
+                boolean river = isRiver(wx, wz);
+                rivers[x][z] = river;
+                if (river) {
+                    height = Math.min(height, SEA_LEVEL - 1); // shallow riverbed
+                }
                 height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
 
-                // Deepen oceans with a slow depth noise so open water is more than a puddle.
-                if (height < SEA_LEVEL) {
+                // Deepen oceans with a slow depth noise so open water is more than a
+                // puddle; rivers stay shallow so their water sits level with the land.
+                if (height < SEA_LEVEL && !river) {
                     double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
                     height = Math.max(2, height - (int) (depth * 5));
                 }
                 heights[x][z] = height;
+            }
+        }
+
+        // Riverbanks: pull the land beside a river down toward water level, so a
+        // river reads as a shallow valley with its water near the land, not a deep
+        // 1-block trench cut through the terrain.
+        for (int x = 0; x < Chunk.SIZE; x++) {
+            for (int z = 0; z < Chunk.SIZE; z++) {
+                if (rivers[x][z]) continue;
+                if (heights[x][z] > SEA_LEVEL + 2 && riverNeighbor(rivers, x, z)) {
+                    heights[x][z] = SEA_LEVEL + 2;
+                }
             }
         }
 
@@ -313,6 +348,12 @@ public class TerrainGenerator {
             case SNOWY, TAIGA -> height > SNOW_LINE ? BlockType.STONE : BlockType.DIRT;
             default -> BlockType.DIRT;
         };
+    }
+
+    /** Winding rivers: the near-zero contour of a low-frequency noise field, thickened into a wide shallow channel. */
+    private boolean isRiver(int wx, int wz) {
+        double r = riverNoise.fbm2(wx * 0.004, wz * 0.004, 2, 0.5, 2.0);
+        return Math.abs(r) < 0.03;
     }
 
     private boolean caveAt(int wx, int y, int wz) {
