@@ -44,8 +44,26 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Build fat jar (Linux/Windows/macOS natives bundled)
-        run: mvn -B package -DskipTests
+      - name: Build fat jar and run unit tests (Linux/Windows/macOS natives bundled)
+        run: mvn -B package
+
+      - name: Headless smoke test
+        id: smoke
+        run: |
+          xvfb-run -a java -cp "target/minecraft-clone.jar" com.minecraftclone.Main \
+            && echo "smoke test ok"
+        env:
+          MCCLONE_AUTOTEST: "1"
+          MCCLONE_AUTOTEST_FRAMES: "20"
+          MCCLONE_AUTOTEST_PATH: smoke.png
+          MCCLONE_SAVE_DIR: ./saves/smoke
+
+      - name: Upload smoke screenshot
+        if: steps.smoke.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshot-pr-${{ steps.meta.outputs.pr }}
+          path: smoke.png
 
       - name: Upload jar
         uses: actions/upload-artifact@v4
