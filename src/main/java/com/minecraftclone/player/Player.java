@@ -158,20 +158,36 @@ public class Player {
         }
     }
 
+    /** What a completed double-tap of W should do, decided by {@link #decideDoubleTapWAction}. */
+    enum WTapAction {NONE, START_FLYING, SPRINT}
+
     /**
-     * Double-tapping W is a second way to trigger the same two toggles their
-     * dedicated keys already do: in creative it starts/stops flying (same as
-     * {@code F}), otherwise it latches sprint on (same as holding {@code Ctrl})
-     * until W is released - Minecraft-style, without needing to hold anything.
+     * Pure decision for what a double-tap of W means: in creative, while not
+     * already flying, it takes off (same as {@code F}); otherwise (not
+     * flying, any mode) it latches sprint on, Minecraft-style, without
+     * needing to hold anything.
+     * <p>
+     * Deliberately one-directional: it only ever starts flying, never stops
+     * it - {@code alreadyFlying} always yields {@code NONE}. A double-tap
+     * toggle in both directions meant any stray double-tap while just trying
+     * to move forward mid-flight - easy to do by accident - dropped you
+     * straight out of the sky. {@code F} still lands you when you actually
+     * mean to. No GLFW/Input dependency, so this is directly unit testable.
      */
+    static WTapAction decideDoubleTapWAction(boolean doubleTapped, boolean alreadyFlying, boolean creative) {
+        if (!doubleTapped || alreadyFlying) return WTapAction.NONE;
+        return creative ? WTapAction.START_FLYING : WTapAction.SPRINT;
+    }
+
     private void updateDoubleTapW(Input input, float dt) {
-        if (wTapDetector.tick(dt, input.isKeyJustPressed(GLFW_KEY_W))) {
-            if (gameMode.isCreative()) {
-                flying = !flying;
+        boolean doubleTapped = wTapDetector.tick(dt, input.isKeyJustPressed(GLFW_KEY_W));
+        switch (decideDoubleTapWAction(doubleTapped, flying, gameMode.isCreative())) {
+            case START_FLYING -> {
+                flying = true;
                 velocity.y = 0;
-            } else {
-                sprintLatched = true;
             }
+            case SPRINT -> sprintLatched = true;
+            case NONE -> {}
         }
         if (!input.isKeyDown(GLFW_KEY_W)) {
             sprintLatched = false;
