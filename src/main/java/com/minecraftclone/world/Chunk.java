@@ -428,25 +428,34 @@ public class Chunk {
      * <p>
      * {@code cx, cz} is the corner's grid position - a corner of block
      * (wx, wz) is at (wx or wx+1, wz or wz+1). The four cells that touch a
-     * given corner are the 2x2 block of cells around it.
+     * given corner are the 2x2 block of cells around it. {@code selfTop} is
+     * the emitting block's own (non-averaged) height - see below.
      */
-    private float fluidCornerTop(BlockAccessor world, int cx, int wy, int cz, BlockType block) {
+    private float fluidCornerTop(BlockAccessor world, int cx, int wy, int cz, BlockType block, float selfTop) {
         float sum = 0f;
-        int count = 0;
         for (int dx = -1; dx <= 0; dx++) {
             for (int dz = -1; dz <= 0; dz++) {
                 int x = cx + dx, z = cz + dz;
                 BlockType t = fluidNeighborType(world, x, wy, z);
-                if (sameFluidFamily(t, block)) {
-                    sum += fluidTop(world, x, wy, z, t);
-                    count++;
-                }
+                // A quadrant cell that isn't the same fluid family (open air,
+                // solid ground, or just nothing filled there yet) has no
+                // surface height of its own to contribute. Treating it as
+                // "missing" and averaging over however many real neighbors
+                // remain - one, at the ragged edge of a flow's reach - let a
+                // single much-shorter or much-taller neighbor swing that
+                // corner on its own, and because which of the 4 quadrant
+                // cells exist changes from corner to corner along a diamond-
+                // shaped flow boundary, adjacent blocks ended up with wildly
+                // different corner heights right next to each other: a sharp
+                // zigzag/sawtooth edge instead of a smooth taper. Standing in
+                // for the missing cell with this block's own height instead
+                // (always averaging over 4 terms) keeps a boundary corner
+                // anchored close to its own block's natural height, nudged
+                // only by whatever real neighbors happen to be there.
+                sum += sameFluidFamily(t, block) ? fluidTop(world, x, wy, z, t) : selfTop;
             }
         }
-        // count is never 0 in practice - block (wx,wz) itself is always one of
-        // the 4 cells sharing each of its own corners, and always matches its
-        // own family - but stay defensive rather than divide by zero.
-        return count > 0 ? sum / count : 0f;
+        return sum / 4f;
     }
 
     /** Emits a lowered translucent surface for fluid instead of a solid full cube. */
@@ -461,10 +470,11 @@ public class Chunk {
         // source) rather than always straight down.
         float[] flowDir = fluidFlowDir(world, wx, wy, wz, block);
 
-        float yNW = wy + fluidCornerTop(world, wx, wy, wz, block);
-        float yNE = wy + fluidCornerTop(world, wx + 1, wy, wz, block);
-        float ySE = wy + fluidCornerTop(world, wx + 1, wy, wz + 1, block);
-        float ySW = wy + fluidCornerTop(world, wx, wy, wz + 1, block);
+        float selfTop = fluidTop(world, wx, wy, wz, block);
+        float yNW = wy + fluidCornerTop(world, wx, wy, wz, block, selfTop);
+        float yNE = wy + fluidCornerTop(world, wx + 1, wy, wz, block, selfTop);
+        float ySE = wy + fluidCornerTop(world, wx + 1, wy, wz + 1, block, selfTop);
+        float ySW = wy + fluidCornerTop(world, wx, wy, wz + 1, block, selfTop);
 
         // isFaceVisible's water branch treats "fluid above" as fully hiding this
         // top face - true when every corner is already at full height, but a
