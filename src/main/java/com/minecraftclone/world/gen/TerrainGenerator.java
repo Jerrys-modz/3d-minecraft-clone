@@ -9,14 +9,14 @@ import java.util.Random;
 /**
  * Procedural terrain generator. A low-frequency "continental" noise carves large
  * ocean basins and landmasses; layered height noise adds rolling hills and
- * mountains; a river noise channel carves winding water channels. A temperature
- * plus a moisture channel pick a per-column {@link Biome} (ocean / beach / plains /
- * forest / desert / savanna / taiga / snowy / mountain) which drives the surface
- * and subsurface blocks, tree type and density, ground cover, and ocean-floor
- * material. Beaches are decided by adjacency to water rather than height alone, so
- * only the coastline turns to sand. 3D noise carves caves and veins ore into
- * remaining stone (with lava pooling in the deepest cave pockets). Everything is
- * deterministic from the world seed.
+ * mountains. A temperature plus a moisture channel pick a per-column {@link Biome}
+ * (ocean / beach / plains / forest / desert / savanna / taiga / snowy / tundra /
+ * mountain) which drives the surface and subsurface blocks, tree type and density,
+ * ground cover, and ocean-floor material. Water only forms where below-sea terrain
+ * connects to a neighbour, so stray 1-2 block puddles never appear, and beaches are
+ * decided by adjacency to water rather than height alone. 3D noise carves caves and
+ * veins ore into remaining stone (with lava pooling in the deepest cave pockets).
+ * Everything is deterministic from the world seed.
  */
 public class TerrainGenerator {
 
@@ -35,7 +35,6 @@ public class TerrainGenerator {
     private final Noise moistureNoise;
     private final Noise tempNoise;
     private final Noise caveNoise;
-    private final Noise riverNoise;
     private final Noise oreNoise;
     private final long seed;
 
@@ -45,7 +44,6 @@ public class TerrainGenerator {
         this.moistureNoise = new Noise(seed ^ 0x9E3779B97F4A7C15L);
         this.tempNoise = new Noise(seed ^ 0xC2B2AE3D27D4EB4FL);
         this.caveNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
-        this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
         this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
     }
 
@@ -91,18 +89,15 @@ public class TerrainGenerator {
     }
 
     /**
-     * The finalized terrain height for a world column: continental + hill noise, the
-     * river carve, clamping, and ocean deepening. Matches what {@link #generate}
-     * fills, so biome queries agree with the world.
+     * The finalized terrain height for a world column: continental + hill noise,
+     * clamping, and ocean deepening. Matches what {@link #generate} fills, so biome
+     * queries agree with the world.
      */
     public int terrainHeight(int wx, int wz) {
         double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
         double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
         double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
         int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
-        if (isRiver(wx, wz)) {
-            height = Math.min(height, SEA_LEVEL - 2);
-        }
         height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
         if (height < SEA_LEVEL) {
             double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
@@ -113,13 +108,16 @@ public class TerrainGenerator {
 
     /**
      * The biome at an arbitrary world column, using the same rules the chunk
-     * generator applies (neighbor-aware beaches included) - for the F3 debug
-     * overlay and any other world-coordinate biome queries.
+     * generator applies (isolated dips stay dry, neighbor-aware beaches included) -
+     * for the F3 debug overlay and any other world-coordinate biome queries.
      */
     public Biome biomeAtWorld(int wx, int wz) {
         double temperature = temperatureAt(wx, wz);
         double moisture = moistureAt(wx, wz);
         int height = terrainHeight(wx, wz);
+        if (height < SEA_LEVEL && !neighborBelowSeaWorld(wx, wz)) {
+            height = SEA_LEVEL; // an isolated dip isn't a puddle
+        }
         if (height < SEA_LEVEL) return Biome.OCEAN;
         if (height <= SEA_LEVEL + 1 && neighborBelowSeaWorld(wx, wz)) return Biome.BEACH;
         Biome b = biomeAt(temperature, moisture, height);
@@ -159,9 +157,6 @@ public class TerrainGenerator {
                 moisture[x][z] = moistureAt(wx, wz);
 
                 int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
-                if (isRiver(wx, wz)) {
-                    height = Math.min(height, SEA_LEVEL - 2);
-                }
                 height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
 
                 // Deepen oceans with a slow depth noise so open water is more than a puddle.
@@ -177,6 +172,13 @@ public class TerrainGenerator {
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 int height = heights[x][z];
+                // A tiny isolated dip below sea would otherwise become a stray 1-2
+                // block puddle; flatten it to sea level so water only forms real
+                // bodies that connect to a neighbor.
+                if (height < SEA_LEVEL && !neighborBelowSea(heights, x, z)) {
+                    height = SEA_LEVEL;
+                    heights[x][z] = height;
+                }
                 Biome biome = biomeForColumn(heights, x, z, temperature[x][z], moisture[x][z], height);
                 biomes[x][z] = biome;
 
@@ -305,12 +307,6 @@ public class TerrainGenerator {
             case SNOWY, TAIGA -> height > SNOW_LINE ? BlockType.STONE : BlockType.DIRT;
             default -> BlockType.DIRT;
         };
-    }
-
-    /** Winding rivers: the near-zero contour of a low-frequency noise field, thickened by a small threshold band. */
-    private boolean isRiver(int wx, int wz) {
-        double r = riverNoise.fbm2(wx * 0.004, wz * 0.004, 2, 0.5, 2.0);
-        return Math.abs(r) < 0.02;
     }
 
     private boolean caveAt(int wx, int y, int wz) {
