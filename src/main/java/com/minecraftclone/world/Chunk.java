@@ -404,7 +404,16 @@ public class Chunk {
         // source) rather than always straight down.
         float[] flowDir = fluidFlowDir(world, wx, wy, wz, block);
 
-        if (isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
+        // isFaceVisible's water branch treats "fluid above" as fully hiding this
+        // top face - true for a full-height cell, but a graded/shorter cell (top
+        // < 1) doesn't actually touch the cell above it even when that cell is
+        // also fluid (its own geometry only ever starts at this cell's ceiling,
+        // y+1, never lower). Skipping the face there left a real gap - looking
+        // down through it showed whatever was below (e.g. the floor a waterfall
+        // just landed on) instead of this cell's own water surface. Below a
+        // full-height (top == 1) cell is the one case the general culling still
+        // correctly applies - two full cells stacked really do hide the seam.
+        if (top < 1f || isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
                     uvs, LIGHT_TOP, blockLight, flow, flowDir[0], flowDir[1]);
