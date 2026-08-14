@@ -4,6 +4,7 @@ import com.minecraftclone.engine.Shader;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.world.gen.TerrainGenerator;
+import com.minecraftclone.world.gen.WorldGenSettings;
 import org.joml.Vector3f;
 
 import java.nio.file.Path;
@@ -63,8 +64,8 @@ public class World implements BlockAccessor {
     private static final float ITEM_HALF_HEIGHT = 0.15f;
     private static final float PICKUP_RADIUS = 1.5f;
 
-    public World(long seed, TextureAtlas atlas, Path saveDir) {
-        this.generator = new TerrainGenerator(seed);
+    public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir) {
+        this.generator = new TerrainGenerator(seed, genSettings);
         this.atlas = atlas;
         this.storage = new ChunkStorage(saveDir);
     }
@@ -322,7 +323,7 @@ public class World implements BlockAccessor {
                 return y;
             }
         }
-        return TerrainGenerator.SEA_LEVEL;
+        return generator.getSeaLevel();
     }
 
     /** The biome at a world column, recomputed deterministically - used by the F3 debug overlay. */

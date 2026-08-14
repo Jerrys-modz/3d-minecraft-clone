@@ -97,4 +97,51 @@ class SettingsTest {
             Files.deleteIfExists(file);
         }
     }
+
+    @Test
+    void brightnessAdjustsAndClamps() {
+        Settings s = new Settings();
+        assertEquals(1f, s.getBrightness(), 1e-6f);
+        assertEquals("100%", s.valueText(Settings.BRIGHTNESS));
+        s.adjust(Settings.BRIGHTNESS, -1);
+        assertEquals(0.95f, s.getBrightness(), 1e-6f);
+        s.setFromFraction(Settings.BRIGHTNESS, 0f);
+        assertEquals(0.5f, s.getBrightness(), 1e-6f); // clamped at min
+        s.setFromFraction(Settings.BRIGHTNESS, 2f);
+        assertEquals(1.5f, s.getBrightness(), 1e-6f); // clamped at max
+    }
+
+    @Test
+    void invertMouseYAndViewBobbingToggleAndPersist() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Settings s = new Settings();
+            assertFalse(s.isInvertMouseY());
+            assertTrue(s.isViewBobbing()); // on by default
+            s.adjust(Settings.INVERT_MOUSE_Y, 1); // flip on
+            s.adjust(Settings.VIEW_BOBBING, 1);   // flip off
+            assertTrue(s.isInvertMouseY());
+            assertFalse(s.isViewBobbing());
+            s.save(file);
+            Settings loaded = Settings.load(file);
+            assertTrue(loaded.isInvertMouseY());
+            assertFalse(loaded.isViewBobbing());
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void tabsCoverAllRowsWithoutOverlap() {
+        int seen = 0;
+        for (int tab = 0; tab < Settings.TAB_COUNT; tab++) {
+            assertTrue(Settings.tabRowCount(tab) >= 0);
+            for (int local = 0; local < Settings.tabRowCount(tab); local++) {
+                int row = Settings.rowInTab(tab, local);
+                assertTrue(row >= 0 && row < Settings.ROW_COUNT, "row " + row + " out of range");
+                seen++;
+            }
+        }
+        assertEquals(Settings.ROW_COUNT, seen, "every settings row should live on exactly one tab");
+    }
 }

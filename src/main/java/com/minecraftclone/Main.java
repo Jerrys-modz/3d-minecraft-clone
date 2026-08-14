@@ -20,6 +20,7 @@ import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
+import com.minecraftclone.world.gen.WorldGenSettings;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
@@ -73,11 +74,140 @@ public class Main {
 
     /** Pushes the current in-memory {@link Settings} into the world/renderer/player. */
     private void applySettings(Settings settings, World world, Player player, Window window) {
-        world.setLeavesTransparent(settings.isLeavesTransparent());
-        world.setRenderDistance(settings.getRenderDistance());
+        if (world != null) {
+            world.setLeavesTransparent(settings.isLeavesTransparent());
+            world.setRenderDistance(settings.getRenderDistance());
+        }
         window.setVsync(settings.isVsync());
         player.setMouseSensitivity(settings.getMouseSensitivity());
         player.setGameMode(settings.getGameMode());
+        player.setInvertMouseY(settings.isInvertMouseY());
+        player.setViewBobbing(settings.isViewBobbing());
+    }
+
+    /**
+     * Shared keyboard + mouse interaction for the settings page, used both by the
+     * in-game Esc menu and the main-menu Settings button. {@code world} may be
+     * null (main menu) - {@link #applySettings} tolerates that. {@code tab}
+     * selects the active section (Graphics / Gameplay / Controls); navigation
+     * wraps within the active tab's rows, and Tab (or clicking a tab) switches.
+     */
+    private void handleSettingsMenuInput(Input input, Settings settings, Path settingsFile, World world,
+                                         Player player, Window window, Hud hud,
+                                         int[] menuSelection, int[] sliderDragRow, int[] bindingAction,
+                                         int[] settingsTab) {
+        int tab = settingsTab[0];
+        int rows = tab == Settings.TAB_CONTROLS ? KeyBindings.COUNT : Settings.tabRowCount(tab);
+
+        // Tab key switches to the next section; the selection resets to the top.
+        if (input.isKeyJustPressed(GLFW_KEY_TAB)) {
+            settingsTab[0] = (tab + 1) % Settings.TAB_COUNT;
+            menuSelection[0] = 0;
+            sliderDragRow[0] = -1;
+            bindingAction[0] = -1;
+            return;
+        }
+
+        if (bindingAction[0] >= 0) {
+            // Capturing a key for a keybind row: bind the next non-modifier
+            // key press (Esc cancels).
+            int pressed = input.consumeLastKeyPressed();
+            if (pressed == GLFW_KEY_ESCAPE) {
+                bindingAction[0] = -1;
+            } else if (pressed != GLFW_KEY_UNKNOWN && !KeyBindings.isModifierKey(pressed)) {
+                settings.getKeyBinds().set(bindingAction[0], pressed);
+                settings.save(settingsFile);
+                bindingAction[0] = -1;
+            }
+        } else {
+            // Navigate with arrows/WASD; toggle/step settings or start a
+            // keybind capture with Enter/Space/Left/Right.
+            if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                menuSelection[0] = Math.floorMod(menuSelection[0] - 1, rows);
+            }
+            if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                menuSelection[0] = Math.floorMod(menuSelection[0] + 1, rows);
+            }
+            if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
+                if (tab != Settings.TAB_CONTROLS) {
+                    adjustSettingsRow(settings, settingsFile, world, player, window,
+                            Settings.rowInTab(tab, menuSelection[0]), -1);
+                }
+            }
+            if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
+                if (tab != Settings.TAB_CONTROLS) {
+                    adjustSettingsRow(settings, settingsFile, world, player, window,
+                            Settings.rowInTab(tab, menuSelection[0]), +1);
+                }
+            }
+            if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                if (tab == Settings.TAB_CONTROLS) {
+                    bindingAction[0] = menuSelection[0];
+                    input.consumeLastKeyPressed(); // discard the Enter/Space that started capture
+                } else {
+                    adjustSettingsRow(settings, settingsFile, world, player, window,
+                            Settings.rowInTab(tab, menuSelection[0]), +1);
+                }
+            }
+        }
+
+        // Mouse: hover to select, click a tab to switch, click a toggle, click
+        // or drag a slider, or click a keybind row to start capturing it.
+        float sLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+        float sLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+        int hoverTab = hud.settingsTabAt(sLx, sLy);
+        if (hoverTab >= 0) {
+            if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT) && hoverTab != tab) {
+                settingsTab[0] = hoverTab;
+                menuSelection[0] = 0;
+                sliderDragRow[0] = -1;
+                bindingAction[0] = -1;
+            }
+            return;
+        }
+        int hoverRow = hud.settingsRowAt(sLx, sLy, tab);
+        if (hoverRow >= 0) {
+            menuSelection[0] = hoverRow;
+        }
+        if (bindingAction[0] < 0 && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+            int clicked = hud.settingsRowAt(sLx, sLy, tab);
+            if (clicked >= 0) {
+                if (tab == Settings.TAB_CONTROLS) {
+                    bindingAction[0] = clicked;
+                    input.consumeLastKeyPressed();
+                } else {
+                    int row = Settings.rowInTab(tab, clicked);
+                    if (Settings.isToggle(row)) {
+                        adjustSettingsRow(settings, settingsFile, world, player, window, row, +1);
+                    } else {
+                        float frac = hud.settingsTrackAt(sLx, sLy, tab);
+                        if (frac >= 0f) {
+                            settings.setFromFraction(row, frac);
+                            applySettings(settings, world, player, window);
+                            settings.save(settingsFile);
+                            sliderDragRow[0] = clicked;
+                        }
+                    }
+                }
+            }
+        }
+        if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && sliderDragRow[0] >= 0) {
+            float frac = hud.settingsSliderAt(sLx, sliderDragRow[0], tab);
+            settings.setFromFraction(Settings.rowInTab(tab, sliderDragRow[0]), frac);
+            applySettings(settings, world, player, window);
+            settings.save(settingsFile);
+        }
+        if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+            sliderDragRow[0] = -1;
+        }
+    }
+
+    /** Steps/toggles a single settings row and pushes the change everywhere it applies. */
+    private void adjustSettingsRow(Settings settings, Path settingsFile, World world, Player player,
+                                   Window window, int row, int direction) {
+        settings.adjust(row, direction);
+        applySettings(settings, world, player, window);
+        settings.save(settingsFile);
     }
 
     /** Closes the inventory screen, returning any cursor/grid items to the inventory. */
@@ -126,26 +256,18 @@ public class Main {
         FontAtlas font = new FontAtlas();
         font.generate();
 
-        Path saveDir = Paths.get(System.getenv().getOrDefault("MCCLONE_SAVE_DIR", "saves/world"));
-        Path settingsFile = saveDir.resolve("settings.txt");
-        long seed = loadOrCreateSeed(saveDir);
+        String saveDirEnv = System.getenv("MCCLONE_SAVE_DIR");
+        Path saveRoot = saveDirEnv != null ? Paths.get(saveDirEnv).getParent() : Paths.get("saves");
+        Path settingsFile = saveRoot.resolve("settings.txt");
         Settings settings = Settings.load(settingsFile);
-        System.out.println("World seed: " + seed + " (save directory: " + saveDir.toAbsolutePath() + ")");
-        World world = new World(seed, atlas, saveDir);
-        world.setRenderDistance(settings.getRenderDistance());
-        world.setLeavesTransparent(settings.isLeavesTransparent());
-
-        // Warm up: generate/mesh the spawn area synchronously before the player drops in,
-        // so they don't fall through an empty world.
-        for (int i = 0; i < 200; i++) {
-            world.update(0, 0);
-        }
-
+        WorldGenSettings genSettings = new WorldGenSettings();
+        System.out.println("Save directory: " + saveRoot.toAbsolutePath());
         Player player = new Player();
-        // Land on a sensible spawn: the origin itself may be ocean, so scan outward
-        // for the nearest dry, non-mountain biome.
-        float[] spawn = findSpawn(world);
-        player.spawn(world, spawn[0], spawn[1]);
+        player.setKeyBinds(settings.getKeyBinds());
+        // The world is created lazily when the player picks a world or creates one.
+        World world = null;
+        boolean[] started = {false};
+        List<String> worldNames = new ArrayList<>();
 
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
@@ -153,6 +275,7 @@ public class Main {
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
         int[] menuSelection = {0};
+        int[] settingsTab = {Settings.TAB_GRAPHICS}; // active settings tab
         int[] sliderDragRow = {-1};
         int[] bindingAction = {-1}; // >= 0: capturing a key for this action (settings menu)
         CraftingGrid craftingGrid = new CraftingGrid();
@@ -161,8 +284,16 @@ public class Main {
         boolean[] creativeOpen = {false};
         int[] creativeTab = {0};
         int[] hoveredSlot = {-1};
+        boolean[] mainMenuOpen = {true};
+        boolean[] mainSettingsOpen = {false}; // settings page opened from the main menu
+        boolean[] worldSelectOpen = {false};
+        boolean[] worldGenOpen = {false};
+        int[] mainMenuSelection = {Hud.MENU_PLAY};
+        int[] worldSelectSelection = {0};
+        int[] worldGenSelection = {0};
+        int[] editingRow = {-1};
 
-        window.setCursorCaptured(true);
+        window.setCursorCaptured(false); // free cursor in the main menu
 
         // Ensure the renderer/player/window all match the loaded settings.
         applySettings(settings, world, player, window);
@@ -206,6 +337,38 @@ public class Main {
         if (System.getenv("MCCLONE_AUTOTEST_MENU") != null) {
             menuOpen[0] = true;
         }
+        if (System.getenv("MCCLONE_AUTOTEST_SETTINGS_TAB") != null) {
+            settingsTab[0] = Math.max(0, Math.min(Settings.TAB_COUNT - 1,
+                    Integer.parseInt(System.getenv("MCCLONE_AUTOTEST_SETTINGS_TAB"))));
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_MAINMENU_SETTINGS") != null) {
+            mainSettingsOpen[0] = true;
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_WORLDSELECT") != null) {
+            worldNames = listWorlds(saveRoot);
+            worldSelectOpen[0] = true;
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_WORLDGEN") != null) {
+            worldGenOpen[0] = true;
+        }
+        if (autoTest && System.getenv("MCCLONE_AUTOTEST_SHOW_MENU") == null) {
+            // Auto-play for the headless smoke test (unless the menu is being screenshotted).
+            Path autoDir = saveDirEnv != null ? Paths.get(saveDirEnv) : saveRoot.resolve("world");
+            genSettings = loadWorldGenSettings(autoDir);
+            genSettings.setName(autoDir.getFileName().toString());
+            saveWorldGenSettings(autoDir, genSettings);
+            long seed = genSettings.resolveSeed();
+            world = new World(seed, genSettings, atlas, autoDir);
+            world.setRenderDistance(settings.getRenderDistance());
+            world.setLeavesTransparent(settings.isLeavesTransparent());
+            for (int i = 0; i < 200; i++) world.update(0, 0);
+            float[] spawn = findSpawn(world);
+            player.spawn(world, spawn[0], spawn[1]);
+            for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+            System.out.println("World seed: " + seed);
+            started[0] = true;
+            mainMenuOpen[0] = false;
+        }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
 
@@ -223,7 +386,165 @@ public class Main {
             timer.updateFps(dt);
             dayNightCycle.update(dt);
             animTime[0] += dt;
+            Raycaster.Hit hit = null;
+            float breakFraction = 0f;
+            boolean screenshotRequested = false;
 
+            // Main menu / world select / world-gen page input (before a world starts).
+            if (!started[0]) {
+                if (mainSettingsOpen[0]) {
+                    // Settings page opened from the main menu: same controls as the
+                    // in-game Esc menu, but Esc returns to the main menu.
+                    handleSettingsMenuInput(input, settings, settingsFile, world, player, window, hud,
+                            menuSelection, sliderDragRow, bindingAction, settingsTab);
+                    if (input.isKeyJustPressed(GLFW_KEY_ESCAPE) && bindingAction[0] < 0) {
+                        mainSettingsOpen[0] = false;
+                        sliderDragRow[0] = -1;
+                        mainMenuSelection[0] = Hud.MENU_SETTINGS;
+                    }
+                } else if (worldGenOpen[0]) {
+                    if (editingRow[0] >= 0) {
+                        String typed = input.consumeTypedChars();
+                        boolean nameRow = editingRow[0] == WorldGenSettings.ROW_NAME;
+                        StringBuilder sb = new StringBuilder(nameRow ? genSettings.getName() : genSettings.getSeedText());
+                        for (int i = 0; i < typed.length(); i++) {
+                            char ch = typed.charAt(i);
+                            if (Character.isLetterOrDigit(ch) || ch == '-' || (nameRow && ch == ' ')) sb.append(ch);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE)) {
+                            if (sb.length() > 0) sb.deleteCharAt(sb.length() - 1);
+                        }
+                        if (nameRow) genSettings.setName(sb.toString());
+                        else genSettings.setSeedText(sb.toString());
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                            editingRow[0] = -1;
+                        }
+                    } else {
+                        if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                            worldGenSelection[0] = Math.floorMod(worldGenSelection[0] - 1, WorldGenSettings.ROW_COUNT + 1);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                            worldGenSelection[0] = Math.floorMod(worldGenSelection[0] + 1, WorldGenSettings.ROW_COUNT + 1);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
+                            genSettings.adjust(worldGenSelection[0], -1);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
+                            genSettings.adjust(worldGenSelection[0], +1);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                            if (worldGenSelection[0] == WorldGenSettings.ROW_NAME || worldGenSelection[0] == WorldGenSettings.ROW_SEED) {
+                                editingRow[0] = worldGenSelection[0];
+                                input.consumeTypedChars();
+                            } else if (worldGenSelection[0] == WorldGenSettings.ROW_COUNT) {
+                                Path worldDir = saveRoot.resolve(genSettings.getName());
+                                saveWorldGenSettings(worldDir, genSettings);
+                                long seed = genSettings.resolveSeed();
+                                if (genSettings.isSeedBlank()) {
+                                    genSettings.setSeedText(Long.toString(seed));
+                                    saveWorldGenSettings(worldDir, genSettings);
+                                }
+                                world = new World(seed, genSettings, atlas, worldDir);
+                                world.setRenderDistance(settings.getRenderDistance());
+                                world.setLeavesTransparent(settings.isLeavesTransparent());
+                                for (int i = 0; i < 200; i++) world.update(0, 0);
+                                float[] spawn = findSpawn(world);
+                                player.spawn(world, spawn[0], spawn[1]);
+                                for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+                                System.out.println("World: " + genSettings.getName() + " seed: " + seed);
+                                started[0] = true;
+                                mainMenuOpen[0] = false;
+                                worldSelectOpen[0] = false;
+                                worldGenOpen[0] = false;
+                                window.setCursorCaptured(true);
+                                input.resetMouseDelta();
+                            } else {
+                                genSettings.adjust(worldGenSelection[0], +1);
+                            }
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                            worldGenOpen[0] = false;
+                            worldSelectOpen[0] = true;
+                            worldSelectSelection[0] = worldNames.size();
+                        }
+                    }
+                } else if (worldSelectOpen[0]) {
+                    int totalWorlds = worldNames.size() + 1;
+                    if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                        worldSelectSelection[0] = Math.floorMod(worldSelectSelection[0] - 1, totalWorlds);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                        worldSelectSelection[0] = Math.floorMod(worldSelectSelection[0] + 1, totalWorlds);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                        if (worldSelectSelection[0] < worldNames.size()) {
+                            genSettings = loadWorldGenSettings(saveRoot.resolve(worldNames.get(worldSelectSelection[0])));
+                            Path worldDir = saveRoot.resolve(genSettings.getName());
+                            long seed = genSettings.resolveSeed();
+                            if (genSettings.isSeedBlank()) {
+                                genSettings.setSeedText(Long.toString(seed));
+                                saveWorldGenSettings(worldDir, genSettings);
+                            }
+                            world = new World(seed, genSettings, atlas, worldDir);
+                            world.setRenderDistance(settings.getRenderDistance());
+                            world.setLeavesTransparent(settings.isLeavesTransparent());
+                            for (int i = 0; i < 200; i++) world.update(0, 0);
+                            float[] spawn = findSpawn(world);
+                            player.spawn(world, spawn[0], spawn[1]);
+                            for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
+                            System.out.println("World: " + genSettings.getName() + " seed: " + seed);
+                            started[0] = true;
+                            mainMenuOpen[0] = false;
+                            worldSelectOpen[0] = false;
+                            window.setCursorCaptured(true);
+                            input.resetMouseDelta();
+                        } else {
+                            genSettings = new WorldGenSettings();
+                            genSettings.setName(uniqueWorldName(worldNames));
+                            worldGenOpen[0] = true;
+                            worldGenSelection[0] = 0;
+                        }
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                        worldSelectOpen[0] = false;
+                        mainMenuOpen[0] = true;
+                    }
+                } else {
+                    // Main menu: navigate with arrows/WASD, or hover + click with the mouse.
+                    if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                        mainMenuSelection[0] = Math.floorMod(mainMenuSelection[0] - 1, Hud.MENU_COUNT);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                        mainMenuSelection[0] = Math.floorMod(mainMenuSelection[0] + 1, Hud.MENU_COUNT);
+                    }
+                    boolean clickedMenu = false;
+                    float mMenuLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                    float mMenuLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                    int hoverMenu = hud.mainMenuItemAt(mMenuLx, mMenuLy);
+                    if (hoverMenu >= 0) {
+                        mainMenuSelection[0] = hoverMenu;
+                        clickedMenu = input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE) || clickedMenu) {
+                        if (mainMenuSelection[0] == Hud.MENU_PLAY) {
+                            worldNames = listWorlds(saveRoot);
+                            worldSelectOpen[0] = true;
+                            worldSelectSelection[0] = 0;
+                        } else if (mainMenuSelection[0] == Hud.MENU_SETTINGS) {
+                            mainSettingsOpen[0] = true;
+                            settingsTab[0] = Settings.TAB_GRAPHICS;
+                            menuSelection[0] = 0;
+                            sliderDragRow[0] = -1;
+                            bindingAction[0] = -1;
+                        } else if (mainMenuSelection[0] == Hud.MENU_QUIT) {
+                            glfwSetWindowShouldClose(window.getHandle(), true);
+                        }
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                        glfwSetWindowShouldClose(window.getHandle(), true);
+                    }
+                }
+            } else {
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 if (bindingAction[0] >= 0) {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
@@ -331,99 +652,14 @@ public class Main {
                     inventoryController.endDrag(hoveredSlot[0]);
                 }
             } else if (menuOpen[0]) {
-                int totalMenuRows = Settings.ROW_COUNT + 1 + KeyBindings.COUNT;
-                if (bindingAction[0] >= 0) {
-                    // Capturing a key for a keybind row: bind the next non-modifier
-                    // key press (Esc cancels).
-                    int pressed = input.consumeLastKeyPressed();
-                    if (pressed == GLFW_KEY_ESCAPE) {
-                        bindingAction[0] = -1;
-                    } else if (pressed != GLFW_KEY_UNKNOWN && !KeyBindings.isModifierKey(pressed)) {
-                        settings.getKeyBinds().set(bindingAction[0], pressed);
-                        settings.save(settingsFile);
-                        bindingAction[0] = -1;
-                    }
-                } else {
-                    // Navigate with arrows/WASD; toggle/step settings or start a
-                    // keybind capture with Enter/Space/Left/Right.
-                    if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
-                        menuSelection[0] = Math.floorMod(menuSelection[0] - 1, totalMenuRows);
-                    }
-                    if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
-                        menuSelection[0] = Math.floorMod(menuSelection[0] + 1, totalMenuRows);
-                    }
-                    if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
-                        if (menuSelection[0] < Settings.ROW_COUNT) {
-                            settings.adjust(menuSelection[0], -1);
-                            applySettings(settings, world, player, window);
-                            settings.save(settingsFile);
-                        }
-                    }
-                    if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
-                        if (menuSelection[0] < Settings.ROW_COUNT) {
-                            settings.adjust(menuSelection[0], +1);
-                            applySettings(settings, world, player, window);
-                            settings.save(settingsFile);
-                        }
-                    }
-                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
-                        if (menuSelection[0] < Settings.ROW_COUNT) {
-                            settings.adjust(menuSelection[0], +1);
-                            applySettings(settings, world, player, window);
-                            settings.save(settingsFile);
-                        } else if (menuSelection[0] > Settings.ROW_COUNT) {
-                            bindingAction[0] = menuSelection[0] - Settings.ROW_COUNT - 1;
-                            input.consumeLastKeyPressed(); // discard the Enter/Space that started capture
-                        }
-                    }
-                }
-
-                // Mouse: hover to select, click a toggle, click or drag a slider,
-                // or click a keybind row to start capturing it.
-                float sLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
-                float sLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
-                int hoverRow = hud.settingsRowAt(sLx, sLy);
-                if (hoverRow >= 0) {
-                    menuSelection[0] = hoverRow;
-                }
-                if (bindingAction[0] < 0 && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-                    int clicked = hud.settingsRowAt(sLx, sLy);
-                    if (clicked >= 0) {
-                        if (clicked < Settings.ROW_COUNT) {
-                            if (Settings.isToggle(clicked)) {
-                                settings.adjust(clicked, +1);
-                                applySettings(settings, world, player, window);
-                                settings.save(settingsFile);
-                            } else {
-                                float frac = hud.settingsTrackAt(sLx, sLy);
-                                if (frac >= 0f) {
-                                    settings.setFromFraction(clicked, frac);
-                                    applySettings(settings, world, player, window);
-                                    settings.save(settingsFile);
-                                    sliderDragRow[0] = clicked;
-                                }
-                            }
-                        } else if (clicked > Settings.ROW_COUNT) {
-                            bindingAction[0] = clicked - Settings.ROW_COUNT - 1;
-                            input.consumeLastKeyPressed();
-                        }
-                    }
-                }
-                if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && sliderDragRow[0] >= 0) {
-                    float frac = hud.settingsSliderAt(sLx, sliderDragRow[0]);
-                    settings.setFromFraction(sliderDragRow[0], frac);
-                    applySettings(settings, world, player, window);
-                    settings.save(settingsFile);
-                }
-                if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
-                    sliderDragRow[0] = -1;
-                }
+                handleSettingsMenuInput(input, settings, settingsFile, world, player, window, hud,
+                        menuSelection, sliderDragRow, bindingAction, settingsTab);
             }
 
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.DEBUG))) {
                 showDebug[0] = !showDebug[0];
             }
-            boolean screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
+            screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 player.update(dt, input, world);
@@ -466,11 +702,11 @@ public class Main {
             timeSinceAutosave += dt;
             if (timeSinceAutosave >= AUTOSAVE_INTERVAL_SECONDS) {
                 timeSinceAutosave = 0f;
-                world.saveAllModified();
+                if (world != null) world.saveAllModified();
             }
 
-            Raycaster.Hit hit = null;
-            float breakFraction = 0f;
+            hit = null;
+            breakFraction = 0f;
 
             // Block selection via number keys / scroll wheel - the hotbar is the
             // first 9 inventory slots (only in gameplay).
@@ -596,6 +832,8 @@ public class Main {
                 }
             }
 
+            }
+
             // --- Render ---
             Matrix4f projection = player.getCamera().getProjectionMatrix(settings.getFov(), window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
             Matrix4f view = player.getCamera().getViewMatrix();
@@ -616,6 +854,7 @@ public class Main {
                     dayNightCycle.getNightZenithColor(), dayNightCycle.getSunColor(), dayNightCycle.getMoonColor());
             glEnable(GL_DEPTH_TEST);
 
+            if (started[0]) {
             chunkShader.bind();
             chunkShader.setUniform("projection", projection);
             chunkShader.setUniform("view", view);
@@ -623,15 +862,16 @@ public class Main {
             chunkShader.setUniform("fogColor", horizonColor);
             chunkShader.setUniform("fogStart", (world.getRenderDistance() - 2) * 16f);
             chunkShader.setUniform("fogEnd", world.getRenderDistance() * 16f);
-            chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness());
+            chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness() * settings.getBrightness());
             chunkShader.setUniform("time", animTime[0]);
             chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
             world.render(chunkShader);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             chunkShader.unbind();
+            }
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 if (hit != null) {
                     float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
                     hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
@@ -664,7 +904,18 @@ public class Main {
                         -0.95f, y - 3f * step, textSize, WHITE, aspect);
             }
             if (menuOpen[0]) {
-                hud.renderSettingsMenu(settings, menuSelection[0], bindingAction[0], window.getAspectRatio());
+                hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio());
+            }
+            if (!started[0]) {
+                if (mainSettingsOpen[0]) {
+                    hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio());
+                } else if (worldGenOpen[0]) {
+                    hud.renderWorldGenMenu(genSettings, worldGenSelection[0], editingRow[0], window.getAspectRatio());
+                } else if (worldSelectOpen[0]) {
+                    hud.renderWorldSelectMenu(worldNames, worldSelectSelection[0], window.getAspectRatio());
+                } else {
+                    hud.renderMainMenu(mainMenuSelection[0], window.getAspectRatio());
+                }
             }
             if (inventoryOpen[0]) {
                 // Scale mouse X back by aspect to match the HUD's logical-square space.
@@ -696,7 +947,7 @@ public class Main {
             }
         }
 
-        world.saveAllModified();
+        if (world != null) world.saveAllModified();
         settings.save(settingsFile);
 
         hud.destroy();
@@ -709,10 +960,68 @@ public class Main {
         atlas.destroy();
         itemTextures.destroy();
         font.destroy();
-        world.destroy();
+        if (world != null) world.destroy();
         window.close();
     }
 
+
+    /** Names of the saved worlds (folders directly under {@code saveRoot}), sorted. */
+    private static List<String> listWorlds(Path saveRoot) {
+        List<String> names = new ArrayList<>();
+        if (Files.isDirectory(saveRoot)) {
+            try (var stream = Files.list(saveRoot)) {
+                stream.filter(Files::isDirectory)
+                        .filter(p -> !p.getFileName().toString().startsWith("."))
+                        .map(p -> p.getFileName().toString())
+                        .sorted()
+                        .forEach(names::add);
+            } catch (IOException ignored) {
+            }
+        }
+        return names;
+    }
+
+    /** Loads a world's worldgen settings from its {@code world.txt}; the folder name is the default name. */
+    private static WorldGenSettings loadWorldGenSettings(Path worldDir) {
+        WorldGenSettings g = new WorldGenSettings();
+        if (worldDir.getFileName() != null) {
+            g.setName(worldDir.getFileName().toString());
+        }
+        Path file = worldDir.resolve("world.txt");
+        if (Files.isRegularFile(file)) {
+            try {
+                for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                    int eq = line.indexOf('=');
+                    if (eq > 0) {
+                        g.loadEntry(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+                    }
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return g;
+    }
+
+    /** Writes a world's worldgen settings to its {@code world.txt}, creating the folder if needed. */
+    private static void saveWorldGenSettings(Path worldDir, WorldGenSettings g) {
+        List<String> lines = new ArrayList<>();
+        g.saveLines(lines);
+        try {
+            Files.createDirectories(worldDir);
+            Files.write(worldDir.resolve("world.txt"), lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            System.err.println("Could not save world settings to " + worldDir + ": " + e.getMessage());
+        }
+    }
+
+    /** A world name that doesn't collide with an existing save: "New World", "New World 2", ... */
+    private static String uniqueWorldName(List<String> existing) {
+        String base = "New World";
+        if (!existing.contains(base)) return base;
+        int n = 2;
+        while (existing.contains(base + " " + n)) n++;
+        return base + " " + n;
+    }
     /** Finds a dry, non-mountain spawn near the origin by scanning outward in square rings. */
     private static float[] findSpawn(World world) {
         for (int r = 0; r <= 50; r++) {
