@@ -151,8 +151,10 @@ public class MobRenderer {
                 v.add(k == 1 || k == 2 ? 1f : 0f);
                 v.add(k == 0 || k == 1 ? 1f : 0f);
                 v.add(1f);
+                v.add(0f);  // blockLight
+                v.add(0f);  // fluidFlow
                 v.add(0f);
-                v.add(0f);
+                v.add(0f);  // flowDir
             }
             i.add(base);
             i.add(base + 1);
@@ -200,6 +202,8 @@ public class MobRenderer {
                 v.add(lights[f]);
                 v.add(0f);  // blockLight
                 v.add(0f);  // fluidFlow
+                v.add(0f);
+                v.add(0f);  // flowDir
             }
             i.add(base);
             i.add(base + 1);
