@@ -761,7 +761,7 @@ public class TerrainGenerator {
             StructureType s = structureFor(biomes[x][z]);
             if (s == StructureType.NONE) continue;
             int height = heights[x][z];
-            if (height < SEA_LEVEL || height >= Chunk.HEIGHT - 12) continue;
+            if (height < seaLevel || height >= Chunk.HEIGHT - 12) continue;
             if (!flatArea(heights, x, z, footprint(s))) continue;
             buildStructure(chunk, s, x, height + 1, z, rnd);
             return;
@@ -903,7 +903,7 @@ public class TerrainGenerator {
         Biome b = biomeAtWorld(centerX, centerZ);
         if (!villageBiome(b)) return;
         int floor = terrainHeight(centerX, centerZ);
-        if (floor < SEA_LEVEL || floor > SEA_LEVEL + 12) return; // not on buildable lowland
+        if (floor < seaLevel || floor > seaLevel + 12) return; // not on buildable lowland
 
         boolean sand = b == Biome.DESERT || b == Biome.SAVANNA;
         BlockType surfaceBlock = sand ? BlockType.SAND : BlockType.GRASS;
