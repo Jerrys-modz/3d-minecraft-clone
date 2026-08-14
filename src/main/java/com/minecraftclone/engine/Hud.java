@@ -86,6 +86,7 @@ public class Hud {
     private static final float SETTINGS_TITLE_H = 0.07f;
     private static final float SETTINGS_TAB_H = 0.055f;     // the tab strip under the title
     private static final float SETTINGS_TAB_GAP = 0.015f;
+    private static final float SETTINGS_TAB_ROWS_GAP = 0.035f; // breathing room between the tabs and the first row
     private static final float SETTINGS_PAD = 0.035f;
     private static final float SETTINGS_CENTER_Y = 0.12f;
     // The panel is sized for the tallest tab (Controls: the keybind list) so the
@@ -510,7 +511,8 @@ public class Hud {
 
         float size = SETTINGS_SIZE;
         float panelW = settingsPanelWidth();
-        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
         float left = -panelW / 2f;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
 
@@ -676,6 +678,20 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    /** The main-menu button under the mouse (Play/Settings/Quit), or -1. */
+    public int mainMenuItemAt(float logicalX, float logicalY) {
+        String[] items = {"Play", "Settings", "Quit"};
+        for (int i = 0; i < items.length; i++) {
+            float y = 0.05f - i * 0.1f;
+            // Hover band around each button: about twice the text height and a
+            // generous half-width so clicking the label or its surroundings works.
+            if (Math.abs(logicalY - y) <= 0.045f && Math.abs(logicalX) <= 0.4f) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
 
     /** The world-selection screen (Minecraft singleplayer): saved worlds + a Create New World button. */
     public void renderWorldSelectMenu(java.util.List<String> worldNames, int selectedIndex, float aspectRatio) {
@@ -789,7 +805,8 @@ public class Hud {
 
     /** Logical center-y of the tab strip. */
     private float settingsTabCenterY() {
-        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H / 2f;
     }
@@ -815,9 +832,10 @@ public class Hud {
 
     /** Top edge (logical y) of row {@code i} on the given tab. */
     private float settingsRowTop(int tab, int i) {
-        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
-        return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H - i * SETTINGS_ROW_H;
+        return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H - SETTINGS_TAB_ROWS_GAP - i * SETTINGS_ROW_H;
     }
 
     /** Top edge (logical y) of row {@code i} in the world-generation page's own panel. */

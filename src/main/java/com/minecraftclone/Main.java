@@ -510,13 +510,22 @@ public class Main {
                         mainMenuOpen[0] = true;
                     }
                 } else {
+                    // Main menu: navigate with arrows/WASD, or hover + click with the mouse.
                     if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
                         mainMenuSelection[0] = Math.floorMod(mainMenuSelection[0] - 1, Hud.MENU_COUNT);
                     }
                     if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
                         mainMenuSelection[0] = Math.floorMod(mainMenuSelection[0] + 1, Hud.MENU_COUNT);
                     }
-                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                    boolean clickedMenu = false;
+                    float mMenuLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                    float mMenuLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                    int hoverMenu = hud.mainMenuItemAt(mMenuLx, mMenuLy);
+                    if (hoverMenu >= 0) {
+                        mainMenuSelection[0] = hoverMenu;
+                        clickedMenu = input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE) || clickedMenu) {
                         if (mainMenuSelection[0] == Hud.MENU_PLAY) {
                             worldNames = listWorlds(saveRoot);
                             worldSelectOpen[0] = true;
