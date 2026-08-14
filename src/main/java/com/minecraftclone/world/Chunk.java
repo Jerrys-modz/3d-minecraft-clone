@@ -505,11 +505,11 @@ public class Chunk {
 
     /**
      * A fluid block's vertical side face. {@code yA, yB} are the two corner
-     * heights (absolute world Y) at this edge - the same values the top face
-     * uses at its matching corners (see {@link #fluidCornerTop}), so this
-     * face's top edge lines up with the top face exactly, whatever shape it
-     * has. {@code yA} is the edge's "first" corner and {@code yB} its
-     * "second", in the same order as each face's vertex winding below.
+     * heights (absolute world Y) at this edge - normally the same values the
+     * top face uses at its matching corners (see {@link #fluidCornerTop}),
+     * so this face's top edge lines up with the top face exactly, whatever
+     * shape it has. {@code yA} is the edge's "first" corner and {@code yB}
+     * its "second", in the same order as each face's vertex winding below.
      */
     private void emitFluidSide(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
                                 int wx, int wy, int wz, BlockType block, float blockLight, float flow,
@@ -520,10 +520,42 @@ public class Chunk {
 
         BlockType neighbor = inBounds(nlx, wy, nlz) ? getLocal(nlx, wy, nlz) : world.getBlock(nx, wy, nz);
         if (sameFluidFamily(neighbor, block)) {
-            // This edge's corner heights are computed the exact same way from
-            // the neighbor's side (averaging the same shared cells), so its
-            // own top face already meets this one exactly here - no vertical
-            // wall needed between two blended fluid surfaces.
+            // fluidCornerTop falls back to *this* block's own height for any
+            // quadrant cell that isn't fluid (see its doc) - which means the
+            // neighbor across this edge, computing the very same shared
+            // corners, can land on a different number: its fallback is its
+            // own (different) height, not ours. Two independently-graded
+            // cells meeting at a concave corner (e.g. two waterfall walls
+            // landing next to each other) routinely disagree this way. The
+            // corners usually still line up - but "usually" isn't "always",
+            // and silently skipping the wall on the strength of "usually"
+            // left a real hole (solid ground visible through the water)
+            // exactly where they didn't. So actually check, using the
+            // neighbor's own fallback the same way its own top face would.
+            int[] cxA = {wx, wz}, cxB = {wx, wz};
+            switch (face) {
+                case EAST -> { cxA[0] = wx + 1; cxA[1] = wz; cxB[0] = wx + 1; cxB[1] = wz + 1; }
+                case WEST -> { cxA[0] = wx; cxA[1] = wz; cxB[0] = wx; cxB[1] = wz + 1; }
+                case SOUTH -> { cxA[0] = wx; cxA[1] = wz + 1; cxB[0] = wx + 1; cxB[1] = wz + 1; }
+                case NORTH -> { cxA[0] = wx; cxA[1] = wz; cxB[0] = wx + 1; cxB[1] = wz; }
+                default -> throw new IllegalArgumentException("Fluid side must be horizontal");
+            }
+            float neighborSelfTop = fluidTop(world, nx, wy, nz, neighbor);
+            float nyA = wy + fluidCornerTop(world, cxA[0], wy, cxA[1], neighbor, neighborSelfTop);
+            float nyB = wy + fluidCornerTop(world, cxB[0], wy, cxB[1], neighbor, neighborSelfTop);
+            if (Math.abs(nyA - yA) < 0.001f && Math.abs(nyB - yB) < 0.001f) {
+                // Corners genuinely agree - the neighbor's own top face
+                // already meets this one exactly here, no wall needed.
+                return;
+            }
+            // They don't: patch the gap with a thin curtain from this edge's
+            // corners down (or up) to what the neighbor thinks they are,
+            // rather than leaving whatever's below exposed. Double-sided
+            // since either edge could be the taller one.
+            float xA = cxA[0], zA = cxA[1], xB = cxB[0], zB = cxB[1];
+            emitQuadBothSides(vertices, indices, vertexCounter,
+                    new float[][]{{xA, yA, zA}, {xB, yB, zB}, {xB, nyB, zB}, {xA, nyA, zA}},
+                    uvs, LIGHT_EAST_WEST, blockLight);
             return;
         }
         if (!isFaceVisible(world, nlx, wy, nlz, nx, wy, nz, block)) return;
