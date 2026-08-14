@@ -27,6 +27,7 @@ public class Chunk {
     private final ChunkPos pos;
     private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
     private final Mesh mesh = new Mesh();
+    private final Mesh waterMesh = new Mesh(); // translucent water faces, drawn in a separate pass
     // Local positions (+ light level) of every light-emitting block (torches) currently
     // in this chunk, kept incrementally up to date - see setLocal/setRawBlocks. Small and
     // rare enough that a flat list beats a spatial index; consulted by rebuildMesh to bake
@@ -39,6 +40,7 @@ public class Chunk {
     private volatile boolean dirty = true;
     private boolean generated = false;
     private boolean hasMeshData = false;
+    private boolean hasWaterMeshData = false;
     private boolean modifiedByPlayer = false;
     private boolean leavesTransparent = false;
 
@@ -186,6 +188,9 @@ public class Chunk {
         FloatArray vertices = new FloatArray(4096);
         IntArray indices = new IntArray(4096);
         int[] vertexCounter = {0};
+        FloatArray waterVertices = new FloatArray(1024);
+        IntArray waterIndices = new IntArray(1024);
+        int[] waterCounter = {0};
 
         int originX = getOriginX();
         int originZ = getOriginZ();
@@ -201,52 +206,66 @@ public class Chunk {
                     int wz = originZ + z;
                     float blockLight = computeBlockLight(nearbyLights, wx + 0.5f, wy + 0.5f, wz + 0.5f);
 
+                    // Water renders translucent in a separate pass; everything else is opaque.
+                    boolean water = block.isWater();
+                    FloatArray v = water ? waterVertices : vertices;
+                    IntArray idx = water ? waterIndices : indices;
+                    int[] counter = water ? waterCounter : vertexCounter;
+
                     if (block.cross) {
                         // Decoration (grass/flowers): two crossed planes, always fully
                         // visible - no face culling, since it never covers a whole cell.
-                        emitCross(vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        emitCross(v, idx, counter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
                     if (block.slab) {
-                        emitSlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        emitSlab(world, v, idx, counter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
 
                     // +Y top
-                    if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.TOP, block, atlas, blockLight);
+                    if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz, block)) {
+                        emitFace(v, idx, counter, wx, wy, wz, Face.TOP, block, atlas, blockLight);
                     }
                     // -Y bottom
-                    if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
+                    if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz, block)) {
+                        emitFace(v, idx, counter, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
                     }
                     // +X east
-                    if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.EAST, block, atlas, blockLight);
+                    if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz, block)) {
+                        emitFace(v, idx, counter, wx, wy, wz, Face.EAST, block, atlas, blockLight);
                     }
                     // -X west
-                    if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.WEST, block, atlas, blockLight);
+                    if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz, block)) {
+                        emitFace(v, idx, counter, wx, wy, wz, Face.WEST, block, atlas, blockLight);
                     }
                     // +Z south
-                    if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
+                    if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1, block)) {
+                        emitFace(v, idx, counter, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
                     }
                     // -Z north
-                    if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1)) {
-                        emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
+                    if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1, block)) {
+                        emitFace(v, idx, counter, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
                     }
                 }
             }
         }
 
         mesh.upload(vertices.toArray(), indices.toArray());
+        waterMesh.upload(waterVertices.toArray(), waterIndices.toArray());
         hasMeshData = indices.size() > 0;
+        hasWaterMeshData = waterIndices.size() > 0;
         dirty = false;
     }
 
-    /** A face is drawn if the neighboring cell (which may be outside this chunk) is empty (air). */
-    private boolean isFaceVisible(BlockAccessor world, int localX, int localY, int localZ, int worldX, int worldY, int worldZ) {
+    /**
+     * A face is drawn if the neighboring cell (which may be outside this chunk) is
+     * empty or translucent relative to the block owning the face. Water faces are
+     * only drawn toward non-water (air/decoration/solid); solid faces are drawn
+     * toward anything non-opaque, including translucent water, so you can see the
+     * sea floor through the water instead of a see-through hole.
+     */
+    private boolean isFaceVisible(BlockAccessor world, int localX, int localY, int localZ, int worldX, int worldY, int worldZ, BlockType block) {
         if (worldY < 0) return false;   // treat below-bedrock as solid void: never draw bottom faces
         if (worldY >= HEIGHT) return true; // above world height is open sky: always draw top faces
         BlockType neighbor;
@@ -255,11 +274,17 @@ public class Chunk {
         } else {
             neighbor = world.getBlock(worldX, worldY, worldZ);
         }
-        // Cross-shaped decoration (grass/flowers) doesn't cover a full cell, so a
-        // solid neighbor's face toward it must still be drawn - treat it like air
-        // for culling purposes. Slabs are the same: they only fill the bottom half,
-        // so a full block's face toward one is still drawn.
-        if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab) return true;
+
+        if (block.isWater()) {
+            // Translucent water: cull faces toward other water (and toward solid -
+            // the solid's own face shows through the water instead).
+            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab;
+        }
+
+        // Cross-shaped decoration (grass/flowers) and slabs don't cover a full cell,
+        // and translucent water doesn't occlude, so a solid neighbor's face toward
+        // them must still be drawn - treat them like air for culling purposes.
+        if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isWater()) return true;
         // With see-through leaves on, leaf blocks stop occluding faces too - both
         // the leaf block's own faces and the blocks behind it get drawn, so the
         // cutout holes in the leaves texture actually show what's behind.
@@ -438,7 +463,15 @@ public class Chunk {
         }
     }
 
+    /** Renders the translucent water faces (call after the opaque pass, with depth writes off). */
+    public void renderTransparent() {
+        if (hasWaterMeshData) {
+            waterMesh.render();
+        }
+    }
+
     public void destroy() {
         mesh.destroy();
+        waterMesh.destroy();
     }
 }

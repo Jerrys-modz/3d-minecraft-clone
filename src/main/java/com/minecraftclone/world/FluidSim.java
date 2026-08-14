@@ -91,9 +91,9 @@ public final class FluidSim {
             Node n = queue.poll();
             BlockType below = world.getBlock(n.x, n.y - 1, n.z);
 
-            if (below.isFluid()) {
-                // Resting on another fluid cell (source/flow/static): part of a body.
-                // Don't spread or fall - the bottom of the column handles spreading.
+            if (below == BlockType.AIR || below.cross) {
+                // Air (or a cross decoration): fall straight down, preserving distance.
+                spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
             } else if (below.isCollidable()) {
                 // Resting on solid ground: spread horizontally.
                 if (n.dist + 1 <= maxDistance(n.flowType)) {
@@ -102,10 +102,13 @@ public final class FluidSim {
                     spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                     spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                 }
-            } else {
-                // Air (or a cross decoration): fall straight down.
+            } else if (below == n.flowType || below == sourceOf(n.flowType)) {
+                // Resting on more of the same fluid (a column): don't spread, but
+                // traverse down through it so the existing flow stays "reached"
+                // instead of being dried up and re-filled every other tick.
                 spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
             }
+            // else: static water/lava or a different fluid -> barrier; no action.
         }
 
         Set<Long> remove = new HashSet<>();

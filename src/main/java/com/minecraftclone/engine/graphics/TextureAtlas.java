@@ -54,7 +54,7 @@ public class TextureAtlas {
         paintTile(image, 3, rnd, 0x8B5A2B, 0x6E4623, true);   // dirt
         paintTile(image, 4, rnd, 0x8A8A8A, 0x777777, true);   // stone
         paintTile(image, 5, rnd, 0xE0D2A0, 0xCBBB84, true);   // sand
-        paintTile(image, 6, rnd, 0x3B6FD1, 0x2E58A8, false);  // water
+        paintWater(image, 6, rnd);  // water (semi-transparent)
         paintTile(image, 7, rnd, 0x6E4A2A, 0x543A20, false);  // log side (bark stripes)
         paintLogStripes(image, 7, rnd);
         paintTile(image, 8, rnd, 0xC9A063, 0xAE8850, true);   // log top rings
@@ -95,6 +95,18 @@ public class TextureAtlas {
 
     private static int tileY(int index) {
         return (index / GRID) * TILE_PX;
+    }
+
+    private void paintWater(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int color = rnd.nextFloat() < 0.5f ? 0x3B6FD1 : 0x2E58A8;
+                // ~50% alpha so the water is translucent (see the world below, Minecraft-style).
+                img.setRGB(ox + x, oy + y, (0x80 << 24) | color);
+            }
+        }
     }
 
     private void paintTile(BufferedImage img, int index, Random rnd, int baseColor, int altColor, boolean speckled) {

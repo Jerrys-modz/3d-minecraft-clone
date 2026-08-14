@@ -436,6 +436,11 @@ public class Main {
             chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness());
             atlas.bind();
             world.render(chunkShader);
+            // Translucent water: drawn after opaque blocks, without writing depth, so
+            // it blends over what's behind it instead of showing x-ray through holes.
+            glDepthMask(false);
+            world.renderTransparent(chunkShader);
+            glDepthMask(true);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             chunkShader.unbind();
 

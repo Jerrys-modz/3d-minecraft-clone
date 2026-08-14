@@ -291,6 +291,13 @@ public class World implements BlockAccessor {
         }
     }
 
+    /** Renders translucent water faces - call after {@link #render}, with depth writes disabled. */
+    public void renderTransparent(Shader shader) {
+        for (Chunk chunk : chunks.values()) {
+            chunk.renderTransparent();
+        }
+    }
+
     /** Spawns a dropped item of {@code type} at the given block position (centered, with a small random kick). */
     public void spawnItem(int blockX, int blockY, int blockZ, BlockType type, int count, java.util.Random rnd) {
         ItemEntity e = new ItemEntity(type, count, blockX + 0.5f, blockY + 0.5f, blockZ + 0.5f);
