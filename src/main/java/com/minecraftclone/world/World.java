@@ -562,6 +562,11 @@ public class World implements BlockAccessor {
         return chunks.size();
     }
 
+    /** How many loaded chunks actually passed the frustum test in the most recent {@link #render}. */
+    public int getVisibleChunkCount() {
+        return visibleChunks.size();
+    }
+
     /** All currently-alive mobs (read-only; rendered by the caller). */
     public List<Mob> getMobs() {
         return mobs;
