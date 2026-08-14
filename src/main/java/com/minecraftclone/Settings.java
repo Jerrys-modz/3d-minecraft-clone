@@ -112,6 +112,22 @@ public class Settings {
         ranges[row] = Math.max(minValue(row), Math.min(maxValue(row), next));
     }
 
+    /** 0..1 fill fraction for a range row's slider (0 for toggles). */
+    public float fraction(int row) {
+        float denom = maxValue(row) - minValue(row);
+        if (denom == 0f) return 1f;
+        return (ranges[row] - minValue(row)) / denom;
+    }
+
+    /** Sets a range row from a slider fraction (0..1); discrete rows (game mode) round to the nearest option. */
+    public void setFromFraction(int row, float fraction) {
+        if (isToggle(row)) return;
+        float f = Math.max(0f, Math.min(1f, fraction));
+        float v = minValue(row) + (maxValue(row) - minValue(row)) * f;
+        if (row == GAME_MODE) v = Math.round(v);
+        ranges[row] = clamp(row, v);
+    }
+
     public boolean isLeavesTransparent() {
         return toggles[LEAVES_TRANSPARENT];
     }

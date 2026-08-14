@@ -72,6 +72,19 @@ public class Hud {
     private static final float TAB_CENTER_Y = 0.80f;        // center y of the tab strip
     private static final float TAB_H = 0.07f;
 
+    // Settings menu layout (logical square units) - shared by rendering and mouse hit-testing.
+    private static final float SETTINGS_SIZE = 0.034f;
+    private static final float SETTINGS_LEFT_PAD = 0.075f;
+    private static final float SETTINGS_RIGHT_PAD = 0.07f;
+    private static final float SETTINGS_LABEL_GAP = 0.12f;  // label end -> slider/toggle start
+    private static final float SETTINGS_TRACK_W = 0.22f;    // slider track width
+    private static final float SETTINGS_VALUE_W = 0.24f;    // value text width beside the track
+    private static final float SETTINGS_VALUE_GAP = 0.02f;  // track -> value text gap
+    private static final float SETTINGS_ROW_H = 0.05f;
+    private static final float SETTINGS_TITLE_H = 0.07f;
+    private static final float SETTINGS_PAD = 0.035f;
+    private static final float SETTINGS_CENTER_Y = 0.12f;
+
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
 
     private final Shader lineShader;
@@ -93,6 +106,8 @@ public class Hud {
     private final LineMesh inventorySlotBg = new LineMesh(GL_TRIANGLES);
     private final LineMesh inventoryHover = new LineMesh(GL_LINES);
     private final LineMesh tooltipPanel = new LineMesh(GL_TRIANGLES);
+    private final LineMesh settingsTrack = new LineMesh(GL_TRIANGLES);
+    private final LineMesh settingsFill = new LineMesh(GL_TRIANGLES);
 
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
@@ -482,31 +497,18 @@ public class Hud {
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         int rows = Settings.ROW_COUNT;
-        float size = 0.034f;
-        float leftPad = 0.075f;   // panel-left edge to label start
-        float rightPad = 0.07f;   // panel-right edge to value end
-        float labelValueGap = 0.1f;
-
-        // Panel width adapts to the longest row so nothing ever overflows.
-        float widest = 0f;
-        for (int i = 0; i < rows; i++) {
-            widest = Math.max(widest,
-                    text.measure(Settings.label(i), size) + labelValueGap + text.measure(settings.valueText(i), size));
-        }
-        float panelW = widest + leftPad + rightPad;
-
-        float rowH = 0.05f;
-        float titleH = 0.07f;
-        float pad = 0.035f;
-        float panelH = pad * 2f + titleH + rows * rowH;
-        float centerY = 0.12f;
+        float size = SETTINGS_SIZE;
+        float panelW = settingsPanelWidth();
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
         float left = -panelW / 2f;
-        float top = centerY + panelH / 2f;
+        float top = SETTINGS_CENTER_Y + panelH / 2f;
 
         // Semi-transparent panel background.
         float[] panel = {
-                left, centerY - panelH / 2f, 0, left + panelW, centerY - panelH / 2f, 0, left + panelW, centerY + panelH / 2f, 0,
-                left, centerY - panelH / 2f, 0, left + panelW, centerY + panelH / 2f, 0, left, centerY + panelH / 2f, 0,
+                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y - panelH / 2f, 0,
+                left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                left, SETTINGS_CENTER_Y + panelH / 2f, 0,
         };
         settingsPanel.upload(panel);
         lineShader.bind();
@@ -518,27 +520,135 @@ public class Hud {
         lineShader.unbind();
 
         // Title, centered near the top of the panel.
-        drawCenteredText("Settings", 0f, top - pad - 0.04f, 0.042f, WHITE);
+        drawCenteredText("Settings", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
 
-        // One row per setting: ">" marker + label on the left, value on the right.
+        // One row per setting: ">" marker + label on the left, a toggle text or a
+        // slider track on the right.
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
         for (int i = 0; i < rows; i++) {
-            float rowTop = top - pad - titleH - i * rowH;
-            float baseline = rowTop - rowH + 0.013f;
+            float baseline = settingsRowTop(i) - SETTINGS_ROW_H + 0.013f;
             boolean selected = i == selectedIndex;
-            String value = settings.valueText(i);
-            float valueWidth = text.measure(value, size);
             drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
-            drawTextAt(Settings.label(i), left + leftPad, baseline, size, selected ? highlight : idle);
-            drawTextAt(value, left + panelW - rightPad - valueWidth, baseline, size, selected ? highlight : idleValue);
+            drawTextAt(Settings.label(i), left + SETTINGS_LEFT_PAD, baseline, size, selected ? highlight : idle);
+            // The current value, always visible beside the control.
+            String value = settings.valueText(i);
+            if (Settings.isToggle(i)) {
+                float valueWidth = text.measure(value, size);
+                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                        selected ? highlight : idleValue);
+            } else {
+                float valueWidth = text.measure(value, 0.024f);
+                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, 0.024f,
+                        selected ? highlight : idleValue);
+            }
         }
 
-        drawCenteredText("Up/Down: select    Left/Right: change    Esc: close",
-                0f, centerY - panelH / 2f - 0.045f, 0.026f, idleValue);
+        // Sliders for the range rows, drawn together with one line-shader pass.
+        float[] cx = settingsControlX();
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        for (int i = 0; i < rows; i++) {
+            if (Settings.isToggle(i)) continue;
+            float trackY = settingsRowTop(i) - SETTINGS_ROW_H / 2f;
+            float trackH = 0.012f;
+            float frac = settings.fraction(i);
+            float fillEnd = cx[0] + (cx[1] - cx[0]) * frac;
+
+            // Track background.
+            settingsTrack.upload(new float[]{
+                    cx[0], trackY - trackH / 2f, 0, cx[1], trackY - trackH / 2f, 0, cx[1], trackY + trackH / 2f, 0,
+                    cx[0], trackY - trackH / 2f, 0, cx[1], trackY + trackH / 2f, 0, cx[0], trackY + trackH / 2f, 0,
+            });
+            lineShader.setUniform("color", new Vector4f(0.15f, 0.15f, 0.15f, 0.8f));
+            settingsTrack.render();
+
+            // Fill up to the current value.
+            if (frac > 0f) {
+                settingsFill.upload(new float[]{
+                        cx[0], trackY - trackH / 2f, 0, fillEnd, trackY - trackH / 2f, 0, fillEnd, trackY + trackH / 2f, 0,
+                        cx[0], trackY - trackH / 2f, 0, fillEnd, trackY + trackH / 2f, 0, cx[0], trackY + trackH / 2f, 0,
+                });
+                lineShader.setUniform("color", i == selectedIndex
+                        ? new Vector4f(0.4f, 0.85f, 1f, 0.95f)
+                        : new Vector4f(0.6f, 0.6f, 0.6f, 0.9f));
+                settingsFill.render();
+            }
+
+            // Knob.
+            float knobHalf = 0.02f;
+            settingsFill.upload(new float[]{
+                    fillEnd - knobHalf, trackY - knobHalf, 0, fillEnd + knobHalf, trackY - knobHalf, 0,
+                    fillEnd + knobHalf, trackY + knobHalf, 0,
+                    fillEnd - knobHalf, trackY - knobHalf, 0, fillEnd + knobHalf, trackY + knobHalf, 0,
+                    fillEnd - knobHalf, trackY + knobHalf, 0,
+            });
+            lineShader.setUniform("color", new Vector4f(0.95f, 0.95f, 0.95f, 1f));
+            settingsFill.render();
+        }
+        lineShader.unbind();
+
+        drawCenteredText("Click to select, drag sliders, Esc to close",
+                0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
 
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Width of the settings panel: widest label + room for a slider track and its value text. */
+    private float settingsPanelWidth() {
+        float widest = 0f;
+        for (int i = 0; i < Settings.ROW_COUNT; i++) {
+            widest = Math.max(widest, text.measure(Settings.label(i), SETTINGS_SIZE));
+        }
+        return widest + SETTINGS_LABEL_GAP + SETTINGS_TRACK_W + SETTINGS_VALUE_GAP + SETTINGS_VALUE_W
+                + SETTINGS_LEFT_PAD + SETTINGS_RIGHT_PAD;
+    }
+
+    /** Top edge (logical y) of settings row {@code i}. */
+    private float settingsRowTop(int i) {
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + Settings.ROW_COUNT * SETTINGS_ROW_H;
+        float top = SETTINGS_CENTER_Y + panelH / 2f;
+        return top - SETTINGS_PAD - SETTINGS_TITLE_H - i * SETTINGS_ROW_H;
+    }
+
+    /** Slider control x-range {left, right} for the settings rows. */
+    private float[] settingsControlX() {
+        float panelW = settingsPanelWidth();
+        float left = -panelW / 2f;
+        float right = left + panelW - SETTINGS_RIGHT_PAD - SETTINGS_VALUE_GAP - SETTINGS_VALUE_W;
+        return new float[]{right - SETTINGS_TRACK_W, right};
+    }
+
+    /** The settings row under the mouse, or -1. */
+    public int settingsRowAt(float logicalX, float logicalY) {
+        float panelW = settingsPanelWidth();
+        float left = -panelW / 2f;
+        for (int i = 0; i < Settings.ROW_COUNT; i++) {
+            float rowTop = settingsRowTop(i);
+            if (logicalX >= left && logicalX <= left + panelW
+                    && logicalY <= rowTop && logicalY >= rowTop - SETTINGS_ROW_H) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** If the mouse is over a range row's slider track, the click fraction (0..1); otherwise -1. */
+    public float settingsTrackAt(float logicalX, float logicalY) {
+        int row = settingsRowAt(logicalX, logicalY);
+        if (row < 0 || Settings.isToggle(row)) return -1f;
+        float[] cx = settingsControlX();
+        if (logicalX < cx[0] - 0.012f || logicalX > cx[1] + 0.012f) return -1f;
+        return settingsSliderAt(logicalX, row);
+    }
+
+    /** Clamped slider fraction (0..1) from an x position - for dragging a known row. */
+    public float settingsSliderAt(float logicalX, int row) {
+        float[] cx = settingsControlX();
+        return Math.max(0f, Math.min(1f, (logicalX - cx[0]) / (cx[1] - cx[0])));
     }
 
     /** Draws one line of text left-aligned at (bottomLeftX, bottomY), assuming {@link #hudTransform} is already set up. */
@@ -1070,5 +1180,7 @@ public class Hud {
         inventorySlotBg.destroy();
         inventoryHover.destroy();
         tooltipPanel.destroy();
+        settingsTrack.destroy();
+        settingsFill.destroy();
     }
 }
