@@ -127,10 +127,10 @@ public class Player {
         if (gameMode.isInvulnerable()) {
             stats.forceFull();
         } else {
-            boolean inLava = overlaps(world, aabbAt(position), BlockType.LAVA);
+            boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             boolean submerged = world.getBlock(
                     (int) Math.floor(position.x), (int) Math.floor(position.y + EYE_HEIGHT), (int) Math.floor(position.z))
-                    == BlockType.WATER;
+                    .isWater();
             stats.update(dt, inLava, submerged, sprintingAndMoving, lastFallImpactSpeed);
         }
         lastFallImpactSpeed = 0f;
@@ -219,8 +219,8 @@ public class Player {
         return false;
     }
 
-    /** True if any block of the given (non-collidable) type overlaps the box - used for lava/water hazard checks. */
-    private boolean overlaps(World world, AABB box, BlockType wanted) {
+    /** True if any block matching {@code predicate} overlaps the box - used for lava/water hazard checks. */
+    private boolean overlapsAny(World world, AABB box, java.util.function.Predicate<BlockType> predicate) {
         int minX = (int) Math.floor(box.minX);
         int maxX = (int) Math.floor(box.maxX - 1e-4f);
         int minY = (int) Math.floor(box.minY);
@@ -231,7 +231,7 @@ public class Player {
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
-                    if (world.getBlock(x, y, z) == wanted) {
+                    if (predicate.test(world.getBlock(x, y, z))) {
                         AABB blockBox = new AABB(x, y, z, x + 1, y + 1, z + 1);
                         if (box.intersects(blockBox)) return true;
                     }

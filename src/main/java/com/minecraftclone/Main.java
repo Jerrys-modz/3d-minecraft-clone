@@ -62,7 +62,7 @@ public class Main {
             BlockType.GRAVEL, BlockType.SNOW,
             BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
             BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.CACTUS,
-            BlockType.LAVA, BlockType.GLASS, BlockType.TORCH, BlockType.LAMP, BlockType.FURNACE,
+            BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE, BlockType.GLASS, BlockType.TORCH, BlockType.LAMP, BlockType.FURNACE,
             BlockType.STONE_SLAB, BlockType.PLANKS_SLAB,
             BlockType.APPLE, BlockType.BERRIES,
             BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
@@ -376,8 +376,11 @@ public class Main {
                         world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
                         if (!mode.isCreative()) {
                             // Drop the item into the world (to be picked up) rather than
-                            // adding it straight to the inventory.
-                            if (targetType == BlockType.BERRY_BUSH) {
+                            // adding it straight to the inventory. Transient fluid flow drops
+                            // nothing - only a fluid source drops itself.
+                            if (targetType.isFluidFlow()) {
+                                // nothing to drop
+                            } else if (targetType == BlockType.BERRY_BUSH) {
                                 world.spawnItem(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
                             } else {
                                 world.spawnItem(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, targetType, 1, loot);

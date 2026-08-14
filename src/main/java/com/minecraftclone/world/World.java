@@ -138,6 +138,57 @@ public class World implements BlockAccessor {
     }
 
     /**
+     * Sets a block without flagging the chunk as player-modified - used by the
+     * fluid simulation for transient flow cells, which are recomputed (not saved).
+     */
+    public void setFluidBlock(int worldX, int worldY, int worldZ, BlockType type) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return;
+        int cx = worldToChunk(worldX);
+        int cz = worldToChunk(worldZ);
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk == null) return;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        chunk.setLocal(lx, worldY, lz, type);
+        if (lx == 0) markNeighborDirty(cx - 1, cz);
+        if (lx == Chunk.SIZE - 1) markNeighborDirty(cx + 1, cz);
+        if (lz == 0) markNeighborDirty(cx, cz - 1);
+        if (lz == Chunk.SIZE - 1) markNeighborDirty(cx, cz + 1);
+    }
+
+    /**
+     * Recomputes the fluid flow field from every loaded fluid source: fills
+     * empty cells within reach with flow, and dries up flow cells that are no
+     * longer connected to a source. Runs once per frame.
+     */
+    public void updateFluids() {
+        List<FluidSim.FluidBlock> sources = new ArrayList<>();
+        List<FluidSim.FluidBlock> flows = new ArrayList<>();
+        for (Chunk c : chunks.values()) {
+            int ox = c.getOriginX();
+            int oz = c.getOriginZ();
+            for (int[] local : c.getLocalFluidBlocks()) {
+                int wx = ox + local[0], wy = local[1], wz = oz + local[2];
+                BlockType t = c.getLocal(local[0], local[1], local[2]);
+                if (t.isFluidSource()) {
+                    sources.add(new FluidSim.FluidBlock(wx, wy, wz, t));
+                } else if (t.isFluidFlow()) {
+                    flows.add(new FluidSim.FluidBlock(wx, wy, wz, t));
+                }
+            }
+        }
+        if (sources.isEmpty() && flows.isEmpty()) return;
+
+        FluidSim.Result result = FluidSim.compute(this, sources, flows);
+        for (Map.Entry<Long, BlockType> e : result.fill().entrySet()) {
+            setFluidBlock(FluidSim.keyX(e.getKey()), FluidSim.keyY(e.getKey()), FluidSim.keyZ(e.getKey()), e.getValue());
+        }
+        for (long k : result.remove()) {
+            setFluidBlock(FluidSim.keyX(k), FluidSim.keyY(k), FluidSim.keyZ(k), BlockType.AIR);
+        }
+    }
+
+    /**
      * Every light-emitting block within reach of chunk {@code center}, as world-space
      * {wx, wy, wz, lightLevel} - gathered from the chunk itself plus its 8 immediate
      * neighbors (the light falloff radius is well under a chunk's width, so nothing
@@ -177,6 +228,9 @@ public class World implements BlockAccessor {
     public void update(float playerWorldX, float playerWorldZ) {
         int pcx = worldToChunk((int) Math.floor(playerWorldX));
         int pcz = worldToChunk((int) Math.floor(playerWorldZ));
+
+        // Flow the fluids (water/lava sources spread, and stale flow dries up).
+        updateFluids();
 
         // Load / generate.
         int generated = 0;
