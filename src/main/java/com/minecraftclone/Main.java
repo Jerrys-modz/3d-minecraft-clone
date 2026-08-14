@@ -20,6 +20,7 @@ import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Mining;
+import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import org.joml.Matrix4f;
@@ -185,6 +186,8 @@ public class Main {
         DayNightCycle dayNightCycle = new DayNightCycle();
         MiningController mining = new MiningController();
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
+        float[] attackCooldown = {0f}; // time until the next mob hit can land
+        Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
         System.out.println("          F to fly (double-tap W also takes off in creative and boosts speed");
@@ -236,6 +239,7 @@ public class Main {
             timer.updateFps(dt);
             dayNightCycle.update(dt);
             animTime[0] += dt;
+            attackCooldown[0] -= dt;
 
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 if (bindingAction[0] >= 0) {
@@ -524,8 +528,32 @@ public class Main {
                 BlockType heldItem = player.getInventory().typeOf(selectedSlot[0]);
                 GameMode mode = settings.getGameMode();
 
+                // What the crosshair is aimed at: a mob takes priority over the block
+                // behind it, so swinging at a pig doesn't dig up the ground behind it.
+                Mob targetedMob = world.raycastMob(player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
+                targetedMobRef[0] = targetedMob;
+
+                // Attacking: holding left-click hits the targeted mob on a short cooldown
+                // (mobs can't be hurt in spectator - no interaction).
+                if (targetedMob != null && !mode.isSpectator()
+                        && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && attackCooldown[0] <= 0f) {
+                    // Creative kills in one hit; survival/adventure deal tool damage
+                    // (a sword hits harder than a bare-handed punch).
+                    float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldItem);
+                    world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
+                    attackCooldown[0] = 0.45f;
+                    // Swords wear out with use (creative tools never break).
+                    if (!mode.isCreative() && Mining.isSword(heldItem) && player.getDurability().use(heldItem)) {
+                        player.getInventory().remove(heldItem, 1);
+                        System.out.println("Your " + heldItem + " broke!");
+                        showMessage(messages, "Your " + heldItem + " broke!",
+                                new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+                    }
+                }
+
                 // Breaking: creative breaks instantly; adventure/spectator can't break.
-                if (mode.canBreak()) {
+                // Aiming at a mob means the swing is an attack, not a dig.
+                if (mode.canBreak() && targetedMobRef[0] == null) {
                     boolean holding = hit != null && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
                     if (mode.isCreative()) {
                         // One block per click (a fresh press), not "instant-break
@@ -568,7 +596,9 @@ public class Main {
                 }
 
                 // Placing: creative places for free; adventure/spectator can't place.
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null && mode.canPlace() && heldItem != null) {
+                // (Never place into the mob the crosshair is on.)
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null && mode.canPlace()
+                        && heldItem != null && targetedMobRef[0] == null) {
                     if (heldItem.isEdible() && !mode.isCreative()) {
                         player.eat(heldItem);
                     } else if (!heldItem.isItem) {
@@ -622,7 +652,7 @@ public class Main {
             chunkShader.unbind();
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                if (hit != null) {
+                if (hit != null && targetedMobRef[0] == null) {
                     float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
                     hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
                 }
