@@ -21,11 +21,12 @@ import static org.lwjgl.system.MemoryUtil.memFree;
  */
 public class SkyRenderer {
 
+    // A single oversized triangle that always covers the whole screen (no strip
+    // winding/alternation to trip over), even when back-face culling is active.
     private static final float[] QUAD = {
             -1f, -1f,
-             1f, -1f,
-             1f,  1f,
-            -1f,  1f,
+             3f, -1f,
+            -1f,  3f,
     };
 
     private final int vaoId;
@@ -65,7 +66,16 @@ public class SkyRenderer {
         skyShader.setUniform("moonColor", moon);
 
         glBindVertexArray(vaoId);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        // The game culls back faces globally; the sky quad must always cover the
+        // whole screen, so draw it with culling off (state is restored after).
+        boolean cull = glIsEnabled(GL_CULL_FACE);
+        if (cull) {
+            glDisable(GL_CULL_FACE);
+        }
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        if (cull) {
+            glEnable(GL_CULL_FACE);
+        }
         glBindVertexArray(0);
         skyShader.unbind();
     }
