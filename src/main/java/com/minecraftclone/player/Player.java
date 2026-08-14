@@ -1,5 +1,6 @@
 package com.minecraftclone.player;
 
+import com.minecraftclone.GameMode;
 import com.minecraftclone.engine.Camera;
 import com.minecraftclone.engine.Input;
 import com.minecraftclone.util.AABB;
@@ -40,6 +41,7 @@ public class Player {
     private final ToolDurability durability = new ToolDurability();
 
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
+    private GameMode gameMode = GameMode.SURVIVAL;
 
     private boolean onGround = false;
     private boolean flying = false;
@@ -92,6 +94,18 @@ public class Player {
         this.mouseSensitivity = value;
     }
 
+    /** Sets the current game mode (creative/spectator are invulnerable, spectator is no-clip). */
+    public void setGameMode(GameMode mode) {
+        this.gameMode = mode;
+        if (mode.isSpectator()) {
+            flying = true;
+        }
+    }
+
+    public GameMode getGameMode() {
+        return gameMode;
+    }
+
     /** Attempts to eat one unit of {@code food} from the inventory. Returns false if it's not food or there's none held. */
     public boolean eat(BlockType food) {
         if (!food.isEdible()) return false;
@@ -102,15 +116,23 @@ public class Player {
 
     public void update(float dt, Input input, World world) {
         updateLook(input);
-        updateFlyToggle(input);
+        if (gameMode.isSpectator()) {
+            flying = true; // always in no-clip flight
+        } else {
+            updateFlyToggle(input);
+        }
         boolean sprintingAndMoving = updateMovement(dt, input, world);
         camera.setPosition(position.x, position.y + EYE_HEIGHT, position.z);
 
-        boolean inLava = overlaps(world, aabbAt(position), BlockType.LAVA);
-        boolean submerged = world.getBlock(
-                (int) Math.floor(position.x), (int) Math.floor(position.y + EYE_HEIGHT), (int) Math.floor(position.z))
-                == BlockType.WATER;
-        stats.update(dt, inLava, submerged, sprintingAndMoving, lastFallImpactSpeed);
+        if (gameMode.isInvulnerable()) {
+            stats.forceFull();
+        } else {
+            boolean inLava = overlaps(world, aabbAt(position), BlockType.LAVA);
+            boolean submerged = world.getBlock(
+                    (int) Math.floor(position.x), (int) Math.floor(position.y + EYE_HEIGHT), (int) Math.floor(position.z))
+                    == BlockType.WATER;
+            stats.update(dt, inLava, submerged, sprintingAndMoving, lastFallImpactSpeed);
+        }
         lastFallImpactSpeed = 0f;
     }
 
@@ -221,6 +243,15 @@ public class Player {
 
     /** Moves the player by (dx, dy, dz), resolving collisions one axis at a time. */
     private void moveAndCollide(World world, float dx, float dy, float dz) {
+        // Spectator: no-clip, move freely through everything.
+        if (gameMode.isSpectator()) {
+            position.x += dx;
+            position.y += dy;
+            position.z += dz;
+            onGround = false;
+            return;
+        }
+
         onGround = false;
 
         // Y axis

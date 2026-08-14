@@ -23,7 +23,8 @@ public class Settings {
     public static final int VSYNC = 2;
     public static final int FOV = 3;
     public static final int SENSITIVITY = 4;
-    public static final int ROW_COUNT = 5;
+    public static final int GAME_MODE = 5;
+    public static final int ROW_COUNT = 6;
 
     private final boolean[] toggles = new boolean[ROW_COUNT];
     private final float[] ranges = new float[ROW_COUNT];
@@ -47,6 +48,7 @@ public class Settings {
             case VSYNC -> "VSync";
             case FOV -> "Field of view";
             case SENSITIVITY -> "Mouse sensitivity";
+            case GAME_MODE -> "Game mode";
             default -> "?";
         };
     }
@@ -57,6 +59,7 @@ public class Settings {
             case RENDER_DISTANCE -> 1f;
             case FOV -> 5f;
             case SENSITIVITY -> 0.01f;
+            case GAME_MODE -> 1f;
             default -> 0f;
         };
     }
@@ -66,6 +69,7 @@ public class Settings {
             case RENDER_DISTANCE -> 3f;
             case FOV -> 60f;
             case SENSITIVITY -> 0.03f;
+            case GAME_MODE -> 0f;
             default -> 0f;
         };
     }
@@ -75,6 +79,7 @@ public class Settings {
             case RENDER_DISTANCE -> 12f;
             case FOV -> 110f;
             case SENSITIVITY -> 0.4f;
+            case GAME_MODE -> GameMode.values().length - 1f;
             default -> 0f;
         };
     }
@@ -86,6 +91,9 @@ public class Settings {
         }
         if (row == SENSITIVITY) {
             return String.format("%.2f", ranges[row]);
+        }
+        if (row == GAME_MODE) {
+            return getGameMode().toString();
         }
         return String.valueOf(Math.round(ranges[row]));
     }
@@ -120,6 +128,7 @@ public class Settings {
         lines.add("vsync=" + (toggles[VSYNC] ? 1 : 0));
         lines.add("fov=" + Math.round(ranges[FOV]));
         lines.add("mouse_sensitivity=" + ranges[SENSITIVITY]);
+        lines.add("game_mode=" + getGameMode().ordinal());
         try {
             if (file.getParent() != null) {
                 Files.createDirectories(file.getParent());
@@ -151,6 +160,7 @@ public class Settings {
                         case "vsync" -> s.toggles[VSYNC] = parseBool(value);
                         case "fov" -> s.ranges[FOV] = clamp(FOV, Float.parseFloat(value));
                         case "mouse_sensitivity" -> s.ranges[SENSITIVITY] = clamp(SENSITIVITY, Float.parseFloat(value));
+                        case "game_mode" -> s.ranges[GAME_MODE] = clamp(GAME_MODE, Float.parseFloat(value));
                         default -> { /* ignore unknown keys for forward compatibility */ }
                     }
                 } catch (NumberFormatException ignored) {
@@ -185,5 +195,11 @@ public class Settings {
 
     public float getMouseSensitivity() {
         return ranges[SENSITIVITY];
+    }
+
+    public GameMode getGameMode() {
+        int idx = Math.round(ranges[GAME_MODE]);
+        GameMode[] modes = GameMode.values();
+        return modes[Math.max(0, Math.min(modes.length - 1, idx))];
     }
 }
