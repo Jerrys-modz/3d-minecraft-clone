@@ -7,18 +7,18 @@ import com.minecraftclone.world.Chunk;
 import java.util.Random;
 
 /**
- * Procedural terrain generator: a heightmap built from layered noise decides
- * ground level per column, a river noise channel carves winding water
- * channels into it, a second noise channel picks a rough "biome" (desert /
- * plains / forest / mountains), 3D noise carves caves and veins ore into
- * remaining stone (with lava pooling in the deepest cave pockets), and a
- * splash of trees/grass/flowers/cacti dresses up the surface. Everything is
- * deterministic from the world seed.
+ * Procedural terrain generator: a low-frequency "continental" noise carves large
+ * ocean basins and landmasses, a heightmap built from layered noise decides ground
+ * level per column, a river noise channel carves winding water channels into it,
+ * a second noise channel picks a rough "biome" (desert / plains / forest /
+ * mountains), 3D noise carves caves and veins ore into remaining stone (with lava
+ * pooling in the deepest cave pockets), and a splash of trees/grass/flowers/cacti
+ * dresses up the surface. Everything is deterministic from the world seed.
  */
 public class TerrainGenerator {
 
-    public static final int SEA_LEVEL = 34;
-    private static final int BASE_HEIGHT = 40;
+    public static final int SEA_LEVEL = 41;
+    private static final int BASE_HEIGHT = 42;
     private static final int SNOW_LINE = 78;
     private static final int MOUNTAIN_LINE = SEA_LEVEL + 25; // above this: pine forest instead of oak
     private static final int LAVA_LEVEL = 10;                // cave pockets at/below this fill with lava instead of air
@@ -54,10 +54,14 @@ public class TerrainGenerator {
 
                 double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
                 double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
+                // A low-frequency "continental" term creates large ocean basins and
+                // landmasses, so the sea level sits naturally among the terrain
+                // instead of only appearing at the very bottom of the deepest valleys.
+                double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
                 double moist = moistureAt(wx, wz);
                 moisture[x][z] = moist;
 
-                int height = BASE_HEIGHT + (int) Math.round(h * 14 + Math.max(0, mountains) * 40);
+                int height = BASE_HEIGHT + (int) Math.round(continent * 20 + h * 12 + Math.max(0, mountains) * 40);
                 height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
                 if (isRiver(wx, wz)) {
                     height = Math.min(height, SEA_LEVEL - 2);
