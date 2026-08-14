@@ -91,24 +91,24 @@ public final class FluidSim {
             Node n = queue.poll();
             BlockType below = world.getBlock(n.x, n.y - 1, n.z);
 
-            if (below.isFluid()) {
-                // A source placed on the matching generated water/lava sea can still
-                // spread; flow cells already form the bottom of a falling column.
-                if ((below == BlockType.WATER && n.flowType == BlockType.WATER_FLOW)
-                        || (below == BlockType.LAVA && n.flowType == BlockType.LAVA_FLOW)) {
-                    spreadHorizontally(world, n, queue, visited, fill, reachedFlow);
+            if (below == BlockType.AIR || below.cross) {
+                // Air (or a cross decoration): fall straight down - a cell in free-fall
+                // doesn't spread sideways, which keeps waterfalls narrow.
+                spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
+            } else {
+                // Supported - below is solid OR more of the same fluid: spread
+                // horizontally (so a pool's surface fills a freshly-broken block, and
+                // a source resting on water still spreads), and keep traversing down
+                // through existing fluid so a column stays "reached".
+                if (below == n.flowType || below == sourceOf(n.flowType)) {
+                    spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
                 }
-            } else if (below.isCollidable()) {
-                // Resting on solid ground: spread horizontally.
                 if (n.dist + 1 <= maxDistance(n.flowType)) {
                     spread(world, n.x + 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                     spread(world, n.x - 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                     spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                     spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
                 }
-            } else {
-                // Air (or a cross decoration): fall straight down.
-                spread(world, n.x, n.y - 1, n.z, n.dist, n.flowType, queue, visited, fill, reachedFlow);
             }
         }
 
@@ -120,16 +120,6 @@ public final class FluidSim {
             }
         }
         return new Result(fill, remove);
-    }
-
-    private static void spreadHorizontally(BlockAccessor world, Node n, ArrayDeque<Node> queue,
-                                           Set<Long> visited, Map<Long, BlockType> fill,
-                                           Set<Long> reachedFlow) {
-        if (n.dist + 1 > maxDistance(n.flowType)) return;
-        spread(world, n.x + 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
-        spread(world, n.x - 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
-        spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
-        spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
     }
 
     /** Expands the flood into one neighbor cell, filling air/cross or passing through the same fluid. */
