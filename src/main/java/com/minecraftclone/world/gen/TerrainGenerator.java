@@ -31,6 +31,10 @@ public class TerrainGenerator {
     private static final int LAVA_LEVEL = 10;                // cave pockets at/below this fill with lava instead of air
     private static final int RIVER_ZONE = 6;                 // rivers only form in lowland within this of sea level, so they never become ravines
 
+    private static final int VILLAGE_SPACING = 36;           // ~1 in 36 chunks can be a village origin
+    private static final int VILLAGE_RADIUS = 3;             // chunks away a village origin is still detected
+    private static final int VILLAGE_EXTENT = 14;            // plaza half-width in blocks around the village center
+
     /** The biomes a column can be assigned, from its temperature, moisture and height. */
     public enum Biome {
         OCEAN, FROZEN_OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, BADLANDS, JUNGLE,
@@ -52,6 +56,22 @@ public class TerrainGenerator {
             case MOUNTAIN, BADLANDS -> StructureType.STONE_RUIN;
             default -> StructureType.NONE;
         };
+    }
+
+    /** True if this chunk coordinate is the origin of a village, deterministically. */
+    public static boolean isVillageChunk(long seed, int cx, int cz) {
+        long h = seed ^ (cx * 0x9E3779B97F4A7C15L) ^ (cz * 0xBF58476D1CE4E5B9L);
+        h ^= h >>> 33;
+        h *= 0xFF51AFD7ED558CCDL;
+        h ^= h >>> 33;
+        return (h & 0xFFFF) % VILLAGE_SPACING == 0;
+    }
+
+    /** Biomes villages can appear in (flat, buildable lowlands). */
+    public static boolean villageBiome(Biome b) {
+        return b == Biome.PLAINS || b == Biome.DESERT || b == Biome.SAVANNA
+                || b == Biome.TAIGA || b == Biome.TUNDRA || b == Biome.FLOWER_MEADOW
+                || b == Biome.CHERRY_GROVE;
     }
 
     private final Noise heightNoise;
@@ -492,6 +512,10 @@ public class TerrainGenerator {
             placeStructure(chunk, featureRandom, heights, biomes);
         }
 
+        // Villages: deterministic multi-chunk clusters - each chunk builds the
+        // portion of every nearby village that falls inside it.
+        placeVillages(chunk, originX, originZ);
+
         chunk.markGenerated();
         chunk.markDirty();
     }
@@ -767,6 +791,95 @@ public class TerrainGenerator {
         chunk.setLocal(x - 1, y + 2, z - 1, BlockType.STONE);
         chunk.setLocal(x, y + 2, z - 1, BlockType.STONE);
         chunk.setLocal(x + 1, y + 2, z - 1, BlockType.STONE);
+    }
+
+    /** Writes a block at a world position, silently ignoring anything outside this chunk. */
+    private void setWorldBlock(Chunk chunk, int originX, int originZ, int wx, int wy, int wz, BlockType t) {
+        int lx = wx - originX, lz = wz - originZ;
+        if (lx < 0 || lx >= Chunk.SIZE || lz < 0 || lz >= Chunk.SIZE) return;
+        if (wy < 0 || wy >= Chunk.HEIGHT) return;
+        chunk.setLocal(lx, wy, lz, t);
+    }
+
+    /**
+     * Builds every nearby village's portion of this chunk. Village origins are a
+     * deterministic hash of the chunk coords, so all the chunks a village spans
+     * agree on the layout and each flatten/build only their own slice.
+     */
+    private void placeVillages(Chunk chunk, int originX, int originZ) {
+        int cx = originX >> 4, cz = originZ >> 4;
+        for (int dx = -VILLAGE_RADIUS; dx <= VILLAGE_RADIUS; dx++) {
+            for (int dz = -VILLAGE_RADIUS; dz <= VILLAGE_RADIUS; dz++) {
+                int vx = cx + dx, vz = cz + dz;
+                if (isVillageChunk(seed, vx, vz)) {
+                    buildVillage(chunk, originX, originZ, vx * Chunk.SIZE + 8, vz * Chunk.SIZE + 8);
+                }
+            }
+        }
+    }
+
+    /** Flattens a plaza around the village center, then places houses and a well. */
+    private void buildVillage(Chunk chunk, int originX, int originZ, int centerX, int centerZ) {
+        Biome b = biomeAtWorld(centerX, centerZ);
+        if (!villageBiome(b)) return;
+        int floor = terrainHeight(centerX, centerZ);
+        if (floor < SEA_LEVEL || floor > SEA_LEVEL + 12) return; // not on buildable lowland
+
+        boolean sand = b == Biome.DESERT || b == Biome.SAVANNA;
+        BlockType surfaceBlock = sand ? BlockType.SAND : BlockType.GRASS;
+
+        // Flatten the plaza and fill any dips.
+        for (int wx = centerX - VILLAGE_EXTENT; wx <= centerX + VILLAGE_EXTENT; wx++) {
+            for (int wz = centerZ - VILLAGE_EXTENT; wz <= centerZ + VILLAGE_EXTENT; wz++) {
+                int lx = wx - originX, lz = wz - originZ;
+                if (lx < 0 || lx >= Chunk.SIZE || lz < 0 || lz >= Chunk.SIZE) continue;
+                for (int y = floor + 14; y > floor; y--) {
+                    if (chunk.getLocal(lx, y, lz) != BlockType.AIR) {
+                        chunk.setLocal(lx, y, lz, BlockType.AIR);
+                    }
+                }
+                chunk.setLocal(lx, floor, lz, surfaceBlock);
+                for (int y = floor - 1; y >= floor - 3; y--) {
+                    if (chunk.getLocal(lx, y, lz) == BlockType.AIR) {
+                        chunk.setLocal(lx, y, lz, BlockType.DIRT);
+                    }
+                }
+            }
+        }
+
+        // A handful of houses around the plaza.
+        int[][] houses = {{4, -4}, {-4, -4}, {4, 4}, {-4, 4}, {0, 6}};
+        for (int[] h : houses) {
+            buildHouse(chunk, originX, originZ, centerX + h[0], centerZ + h[1], floor + 1, sand);
+        }
+
+        // A well at the center.
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (Math.abs(dx) == 1 || Math.abs(dz) == 1) {
+                    setWorldBlock(chunk, originX, originZ, centerX + dx, floor + 1, centerZ + dz, BlockType.STONE);
+                }
+            }
+        }
+        setWorldBlock(chunk, originX, originZ, centerX, floor + 1, centerZ, BlockType.WATER_SOURCE);
+    }
+
+    /** A small house: walls with a doorway and a flat roof, all clipped to this chunk. */
+    private void buildHouse(Chunk chunk, int originX, int originZ, int wx, int wz, int baseY, boolean sand) {
+        BlockType mat = sand ? BlockType.SAND : BlockType.PLANKS;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                boolean perimeter = Math.abs(dx) == 2 || Math.abs(dz) == 1;
+                if (perimeter) {
+                    for (int h = 0; h < 2; h++) {
+                        if (!(h == 0 && dx == 0 && dz == 1)) { // leave a door on the front
+                            setWorldBlock(chunk, originX, originZ, wx + dx, baseY + h, wz + dz, mat);
+                        }
+                    }
+                }
+                setWorldBlock(chunk, originX, originZ, wx + dx, baseY + 2, wz + dz, mat); // flat roof
+            }
+        }
     }
 
     /** A tall jungle tree: a longer trunk and a bigger, lusher canopy than the oak. */
