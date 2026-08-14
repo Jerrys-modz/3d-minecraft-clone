@@ -76,6 +76,9 @@ public final class Mining {
         put(BlockType.LILY_PAD, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.SEAWEED, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.DOOR, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.DOOR_OPEN, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.TRAPDOOR, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.TRAPDOOR_OPEN, 0f, ToolKind.NONE, TIER_HAND);
 
         // Biome surface blocks - soft, no tool required.
         put(BlockType.SWAMP_GRASS, 0.6f, ToolKind.NONE, TIER_HAND);

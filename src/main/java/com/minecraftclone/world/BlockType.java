@@ -71,7 +71,10 @@ public enum BlockType {
     LILY_PAD(61, false, true, 43),
     PUMPKIN(62, true, false, 44, 44, 44),
     SEAWEED(63, false, true, 45),
-    DOOR(64, false, true, 46),
+    DOOR(64, true, false, 46, 46, 46),
+    DOOR_OPEN(70, false, true, 46),
+    TRAPDOOR(71, true, false, 47, 47, 47),
+    TRAPDOOR_OPEN(72, false, true, 47),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -289,6 +292,16 @@ public enum BlockType {
      */
     public boolean isSubmersible() {
         return this == SEAWEED;
+    }
+
+    /** True for either half of a functional door (closed solid, or open walk-through). */
+    public boolean isDoor() {
+        return this == DOOR || this == DOOR_OPEN;
+    }
+
+    /** True for a functional trapdoor (closed solid panel, or open walk-through). */
+    public boolean isTrapdoor() {
+        return this == TRAPDOOR || this == TRAPDOOR_OPEN;
     }
 
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */

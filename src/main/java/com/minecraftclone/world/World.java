@@ -345,6 +345,14 @@ public class World implements BlockAccessor {
         return generator.getSeaLevel();
     }
 
+    /** Sets the per-block facing hint (used by doors) at a world position. */
+    public void setBlockOrientation(int worldX, int worldY, int worldZ, byte orientation) {
+        int cx = worldToChunk(worldX), cz = worldToChunk(worldZ);
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk == null) return;
+        chunk.setOrientation(Math.floorMod(worldX, Chunk.SIZE), worldY, Math.floorMod(worldZ, Chunk.SIZE), orientation);
+    }
+
     /** The biome at a world column, recomputed deterministically - used by the F3 debug overlay. */
     public TerrainGenerator.Biome getBiome(int worldX, int worldZ) {
         return generator.biomeAtWorld(worldX, worldZ);

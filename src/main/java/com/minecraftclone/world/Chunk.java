@@ -26,6 +26,8 @@ public class Chunk {
 
     private final ChunkPos pos;
     private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
+    // Per-block facing hint for doors (0:+Z, 1:-Z, 2:+X, 3:-X) - only doors use it.
+    private final byte[] orientations = new byte[SIZE * HEIGHT * SIZE];
     private final Mesh mesh = new Mesh();
     private final Mesh translucentMesh = new Mesh();
     // Local positions (+ light level) of every light-emitting block (torches) currently
@@ -102,6 +104,18 @@ public class Chunk {
     public BlockType getLocal(int x, int y, int z) {
         if (!inBounds(x, y, z)) return BlockType.AIR;
         return BlockType.byId(blocks[index(x, y, z)]);
+    }
+
+    /** The stored facing hint for a door block (0:+Z, 1:-Z, 2:+X, 3:-X). */
+    public byte getOrientation(int x, int y, int z) {
+        if (!inBounds(x, y, z)) return 0;
+        return orientations[index(x, y, z)];
+    }
+
+    public void setOrientation(int x, int y, int z, byte orientation) {
+        if (inBounds(x, y, z)) {
+            orientations[index(x, y, z)] = orientation;
+        }
     }
 
     public void setLocal(int x, int y, int z, BlockType type) {
@@ -300,6 +314,19 @@ public class Chunk {
                     }
                     if (block == BlockType.AIR) continue;
 
+                    // Doors are thin panels: closed facing their stored direction,
+                    // open swung 90 degrees on the hinge.
+                    if (block.isDoor()) {
+                        emitDoorPanel(vertices, indices, vertexCounter, wx, wy, wz,
+                                getOrientation(x, y, z), block == BlockType.DOOR_OPEN, atlas, blockLight);
+                        continue;
+                    }
+                    // Trapdoors: a flat horizontal hatch when closed, a vertical panel when open.
+                    if (block.isTrapdoor()) {
+                        emitTrapdoorPanel(vertices, indices, vertexCounter, wx, wy, wz,
+                                getOrientation(x, y, z), block == BlockType.TRAPDOOR_OPEN, atlas, blockLight);
+                        continue;
+                    }
                     if (block.cross) {
                         // Decoration (grass/flowers): two crossed planes, always fully
                         // visible - no face culling, since it never covers a whole cell.
@@ -390,6 +417,9 @@ public class Chunk {
         // and translucent water doesn't occlude, so a solid neighbor's face toward
         // them must still be drawn - treat them like air for culling purposes.
         if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isWater()) return true;
+        // Doors and trapdoors are thin panels, so they don't occlude the faces
+        // around a doorway or hatch.
+        if (neighbor.isDoor() || neighbor.isTrapdoor()) return true;
         // Glass/ice are see-through, so a block behind them still gets its face
         // drawn (it shows through the glass instead of a hole).
         if (neighbor.isTranslucent()) return true;
@@ -733,6 +763,60 @@ public class Chunk {
      * drawn as two quads with opposite winding so it's visible from both sides
      * without needing to disable backface culling.
      */
+    /** The orientation a door swings to when open (90 degrees from its closed facing). */
+    private static byte swingOrientation(byte o) {
+        return switch (o) {
+            case 0 -> 2; // +Z closed -> open toward +X
+            case 1 -> 3; // -Z closed -> open toward -X
+            case 2 -> 0; // +X closed -> open toward +Z
+            default -> 1; // -X closed -> open toward -Z
+        };
+    }
+
+    /** The thin vertical door panel quad for a facing direction. */
+    private static float[][] doorPlane(int wx, int wy, int wz, byte orientation) {
+        float thin = 0.06f;
+        float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + 1, z0 = wz, z1 = wz + 1;
+        return switch (orientation) {
+            case 1 -> new float[][]{{x0, y0, z0 + thin}, {x1, y0, z0 + thin}, {x1, y1, z0 + thin}, {x0, y1, z0 + thin}}; // -Z
+            case 2 -> new float[][]{{x1 - thin, y0, z0}, {x1 - thin, y0, z1}, {x1 - thin, y1, z1}, {x1 - thin, y1, z0}}; // +X
+            case 3 -> new float[][]{{x0 + thin, y0, z0}, {x0 + thin, y0, z1}, {x0 + thin, y1, z1}, {x0 + thin, y1, z0}}; // -X
+            default -> new float[][]{{x0, y0, z1 - thin}, {x1, y0, z1 - thin}, {x1, y1, z1 - thin}, {x0, y1, z1 - thin}}; // +Z
+        };
+    }
+
+    /** A door: a thin vertical panel, facing its stored direction (or swung open), both sides visible. */
+    private void emitDoorPanel(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                               int wx, int wy, int wz, byte orientation, boolean open,
+                               TextureAtlas atlas, float blockLight) {
+        byte plane = open ? swingOrientation(orientation) : orientation;
+        float[][] positions = doorPlane(wx, wy, wz, plane);
+        float light = (plane == 2 || plane == 3) ? LIGHT_EAST_WEST : LIGHT_NORTH_SOUTH;
+        float[] uv = atlas.getUV(BlockType.DOOR.topTile);
+        float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
+        emitQuadBothSides(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
+    }
+
+    /** A trapdoor: a thin flat hatch across the top of its cell (closed) or a vertical panel hung on its hinge (open). */
+    private void emitTrapdoorPanel(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                                   int wx, int wy, int wz, byte orientation, boolean open,
+                                   TextureAtlas atlas, float blockLight) {
+        float thin = 0.12f;
+        float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + 1, z0 = wz, z1 = wz + 1;
+        float[][] positions;
+        float light;
+        if (open) {
+            positions = doorPlane(wx, wy, wz, orientation);
+            light = (orientation == 2 || orientation == 3) ? LIGHT_EAST_WEST : LIGHT_NORTH_SOUTH;
+        } else {
+            positions = new float[][]{{x0, y1 - thin, z0}, {x1, y1 - thin, z0}, {x1, y1 - thin, z1}, {x0, y1 - thin, z1}};
+            light = LIGHT_TOP;
+        }
+        float[] uv = atlas.getUV(BlockType.TRAPDOOR.topTile);
+        float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
+        emitQuadBothSides(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
+    }
+
     private void emitCross(FloatArray vertices, IntArray indices, int[] vertexCounter,
                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
         float[] uv = atlas.getUV(block.topTile);

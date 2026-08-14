@@ -20,6 +20,7 @@ import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Door;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.World;
@@ -816,12 +817,15 @@ public class Main {
                     if (breakFraction >= 1f) {
                         mining.reset();
                         breakFraction = 0f;
-                        if (targetingOverlay) {
+                        int bx = hit.blockPos.x, by = hit.blockPos.y, bz = hit.blockPos.z;
+                        if (Door.isDoor(targetType)) {
+                            Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
+                        } else if (targetingOverlay) {
                             // Clear just the decoration - the water (or whatever else)
                             // it was sitting inside is untouched.
-                            world.setOverlay(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                            world.setOverlay(bx, by, bz, BlockType.AIR);
                         } else {
-                            world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                            world.setBlock(bx, by, bz, BlockType.AIR);
                         }
                         if (!mode.isCreative()) {
                             // Drop the item into the world (to be picked up) rather than
@@ -830,11 +834,14 @@ public class Main {
                             if (targetType.isFluidFlow()) {
                                 // nothing to drop
                             } else if (targetType == BlockType.BERRY_BUSH) {
-                                world.spawnItem(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
+                                world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
                             } else {
-                                world.spawnItem(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, targetType, 1, loot);
+                                // An open door/trapdoor drops the closed item.
+                                BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR
+                                        : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR : targetType;
+                                world.spawnItem(bx, by, bz, drop, 1, loot);
                                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
-                                    world.spawnItem(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.APPLE, 1, loot);
+                                    world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
                                 }
                             }
 
@@ -849,33 +856,59 @@ public class Main {
                     }
                 }
 
-                // Placing: creative places for free; adventure/spectator can't place.
-                // (Never place into the mob the crosshair is on.)
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null && mode.canPlace()
-                        && heldItem != null && targetedMobRef[0] == null) {
-                    if (heldItem.isEdible() && !mode.isCreative()) {
-                        player.eat(heldItem);
-                    } else if (!heldItem.isItem) {
-                        // Pure inventory items (tools, and any future non-edible item)
-                        // have no world tile and can never be placed as a block.
-                        Vector3i p = hit.placePos;
-                        // A submersible decoration (seaweed) placed where a fluid
-                        // already is grows inside it instead of replacing it - the
-                        // same rule world-gen follows (see TerrainGenerator). If that
-                        // cell's overlay slot is already taken, there's simply nowhere
-                        // to put it - skip placing rather than fall through and
-                        // overwrite the fluid it would have grown inside.
-                        boolean targetIsFluid = world.getBlock(p.x, p.y, p.z).isFluid();
-                        boolean overlayFull = world.getOverlay(p.x, p.y, p.z) != BlockType.AIR;
-                        boolean blocked = heldItem.isSubmersible() ? (targetIsFluid && overlayFull) : false;
-                        boolean intoFluid = heldItem.isSubmersible() && targetIsFluid && !overlayFull;
-                        if (!blocked && !intersectsPlayer(player, p)) {
-                            boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
-                            if (placed) {
-                                if (intoFluid) {
-                                    world.setOverlay(p.x, p.y, p.z, heldItem);
-                                } else {
-                                    world.setBlock(p.x, p.y, p.z, heldItem);
+                // Right-click: toggle a door/trapdoor, place a block, or eat food.
+                // (Never interact through a mob - check targetedMobRef first.)
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
+                    boolean noMob = targetedMobRef[0] == null;
+                    BlockType targeted = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                    if (Door.isDoor(targeted)) {
+                        if (noMob && mode.canPlace()) {
+                            Door.toggle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        }
+                    } else if (Door.isTrapdoor(targeted)) {
+                        if (noMob && mode.canPlace()) {
+                            Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        }
+                    } else if (noMob && mode.canPlace() && heldItem != null) {
+                        if (heldItem.isEdible() && !mode.isCreative()) {
+                            player.eat(heldItem);
+                        } else if (!heldItem.isItem) {
+                            // Pure inventory items (tools, and any future non-edible item)
+                            // have no world tile and can never be placed as a block.
+                            Vector3i p = hit.placePos;
+                            // A submersible decoration (seaweed) placed where a fluid
+                            // already is grows inside it instead of replacing it - the
+                            // same rule world-gen follows (see TerrainGenerator). If that
+                            // cell's overlay slot is already taken, there's simply nowhere
+                            // to put it - skip placing rather than fall through and
+                            // overwrite the fluid it would have grown inside.
+                            boolean targetIsFluid = world.getBlock(p.x, p.y, p.z).isFluid();
+                            boolean overlayFull = world.getOverlay(p.x, p.y, p.z) != BlockType.AIR;
+                            boolean blocked = heldItem.isSubmersible() ? (targetIsFluid && overlayFull) : false;
+                            boolean intoFluid = heldItem.isSubmersible() && targetIsFluid && !overlayFull;
+                            if (!blocked && !intersectsPlayer(player, p)) {
+                                boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
+                                if (placed) {
+                                    if (intoFluid) {
+                                        world.setOverlay(p.x, p.y, p.z, heldItem);
+                                    } else {
+                                        world.setBlock(p.x, p.y, p.z, heldItem);
+                                    }
+                                    // Doors and trapdoors face the player: the panel sits
+                                    // on the side of the block nearest to them (opposite
+                                    // the look direction).
+                                    if (heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
+                                        Vector3f front = player.getCamera().getFront();
+                                        byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
+                                                ? (front.x >= 0 ? 3 : 2)
+                                                : (front.z >= 0 ? 1 : 0));
+                                        world.setBlockOrientation(p.x, p.y, p.z, facing);
+                                        // A door is 2 blocks tall: also place the top half.
+                                        if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
+                                            world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
+                                            world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
+                                        }
+                                    }
                                 }
                             }
                         }

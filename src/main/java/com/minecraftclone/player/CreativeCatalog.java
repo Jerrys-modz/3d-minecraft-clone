@@ -29,7 +29,7 @@ public final class CreativeCatalog {
                     BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,
                     BlockType.BERRY_BUSH, BlockType.TORCH, BlockType.DEAD_BUSH,
                     BlockType.MUSHROOM_RED, BlockType.MUSHROOM_BROWN, BlockType.VINE,
-                    BlockType.BAMBOO, BlockType.LILY_PAD, BlockType.SEAWEED, BlockType.DOOR,
+                    BlockType.BAMBOO, BlockType.LILY_PAD, BlockType.SEAWEED, BlockType.DOOR, BlockType.TRAPDOOR,
             }),
             new Tab("Materials", new BlockType[]{
                     BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
