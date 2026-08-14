@@ -312,6 +312,14 @@ public class TerrainGenerator {
                         }
                         chunk.setLocal(x, y, z, fill);
                     }
+                    // Seaweed on shallow, warm ocean floors.
+                    if (biome == Biome.OCEAN && height >= SEA_LEVEL - 8 && featureRandom.nextInt(4) == 0) {
+                        for (int i = 1; i <= 2; i++) {
+                            if (chunk.getLocal(x, height + i, z) == BlockType.WATER) {
+                                chunk.setLocal(x, height + i, z, BlockType.SEAWEED);
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -18,6 +18,7 @@ import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.World;
+import com.minecraftclone.world.gen.TerrainGenerator;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
@@ -134,7 +135,10 @@ public class Main {
         }
 
         Player player = new Player();
-        player.spawn(world, 0.5f, 0.5f);
+        // Land on a sensible spawn: the origin itself may be ocean, so scan outward
+        // for the nearest dry, non-mountain biome.
+        float[] spawn = findSpawn(world);
+        player.spawn(world, spawn[0], spawn[1]);
 
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
@@ -606,9 +610,24 @@ public class Main {
         window.close();
     }
 
+    /** Finds a dry, non-mountain spawn near the origin by scanning outward in square rings. */
+    private static float[] findSpawn(World world) {
+        for (int r = 0; r <= 50; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue; // ring only
+                    TerrainGenerator.Biome b = world.getBiome(dx, dz);
+                    if (b == TerrainGenerator.Biome.OCEAN || b == TerrainGenerator.Biome.FROZEN_OCEAN
+                            || b == TerrainGenerator.Biome.MOUNTAIN) continue;
+                    return new float[]{dx + 0.5f, dz + 0.5f};
+                }
+            }
+        }
+        return new float[]{0.5f, 0.5f};
+    }
+
     /** Reuses the seed from a previous run if this save directory already has one, otherwise mints and stores a new one. */
-    private static long loadOrCreateSeed(Path saveDir) {
-        Path seedFile = saveDir.resolve("seed.txt");
+    private static long loadOrCreateSeed(Path saveDir) {        Path seedFile = saveDir.resolve("seed.txt");
         try {
             if (Files.isRegularFile(seedFile)) {
                 return Long.parseLong(Files.readString(seedFile, StandardCharsets.UTF_8).trim());

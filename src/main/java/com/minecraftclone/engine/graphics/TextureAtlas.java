@@ -95,6 +95,7 @@ public class TextureAtlas {
         paintBamboo(image, 42, rnd);
         paintLilyPad(image, 43, rnd);
         paintTile(image, 44, rnd, 0xE08A2E, 0xC7731F, true);   // pumpkin
+        paintSeaweed(image, 45, rnd);
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
@@ -385,6 +386,24 @@ public class TextureAtlas {
                 if (d <= r) {
                     img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.3f ? 0x3E8E35 : 0x2F701F));
                 }
+            }
+        }
+    }
+
+    /** Wavy green strands of seaweed, on a transparent background - grows on ocean floors. */
+    private void paintSeaweed(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int b = 0; b < 3; b++) {
+            int bx = 3 + b * 4 + rnd.nextInt(2);
+            int height = 9 + rnd.nextInt(6);
+            int topY = TILE_PX - height;
+            int sway = (rnd.nextBoolean() ? 1 : -1) * (1 + rnd.nextInt(2));
+            for (int y = topY; y < TILE_PX; y++) {
+                int t = y - topY;
+                int x = bx + (sway * t * t) / Math.max(1, height * height);
+                if (x < 0 || x >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | 0x2F8F3A);
             }
         }
     }
