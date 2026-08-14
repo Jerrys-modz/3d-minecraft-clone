@@ -1,49 +1,145 @@
 package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
-
-import java.util.EnumMap;
-import java.util.Map;
+import com.minecraftclone.world.Mining;
 
 /**
- * The player's held blocks: a simple count per {@link BlockType}, no stack
- * limits. Breaking a block adds one to its count; placing a block spends one.
- * Not persisted across sessions - a fresh session starts empty, matching a
- * survival-style "gather before you can build" loop.
+ * The player's carried items, Minecraft-style: a fixed grid of {@link #SIZE}
+ * slots, each holding a stack of one {@link BlockType} with a bounded count.
+ * Slots {@code 0..HOTBAR_SIZE-1} are the hotbar; the remaining
+ * {@code HOTBAR_SIZE..SIZE-1} are the main (3x9) inventory shown on the
+ * inventory screen.
+ * <p>
+ * Unlike the old type-to-count map, items now live in a specific slot and
+ * stack up to a limit ({@link #STACK_MAX} for blocks/food, 1 for tools, which
+ * aren't stackable). {@link #add} tops up existing stacks before opening new
+ * slots, and returns anything that didn't fit.
  */
 public class Inventory {
 
-    private final Map<BlockType, Integer> counts = new EnumMap<>(BlockType.class);
+    public static final int HOTBAR_SIZE = 9;
+    public static final int ROWS = 3;
+    public static final int MAIN_SIZE = HOTBAR_SIZE * ROWS;      // 27
+    public static final int SIZE = HOTBAR_SIZE + MAIN_SIZE;      // 36
 
-    public int getCount(BlockType type) {
-        return counts.getOrDefault(type, 0);
+    /** Default stack limit: 64, like Minecraft. */
+    public static final int STACK_MAX = 64;
+
+    private final BlockType[] types = new BlockType[SIZE];
+    private final int[] counts = new int[SIZE];
+
+    public int size() {
+        return SIZE;
     }
 
-    public void add(BlockType type, int amount) {
-        if (amount <= 0) return;
-        counts.merge(type, amount, Integer::sum);
+    public BlockType typeOf(int slot) {
+        return types[slot];
     }
 
-    /** Attempts to spend {@code amount} of {@code type}; returns false (no change) if there isn't enough. */
-    public boolean remove(BlockType type, int amount) {
-        int have = getCount(type);
-        if (have < amount) return false;
-        int remaining = have - amount;
-        if (remaining == 0) {
-            counts.remove(type);
-        } else {
-            counts.put(type, remaining);
+    public int countOf(int slot) {
+        return counts[slot];
+    }
+
+    public boolean isEmpty(int slot) {
+        return types[slot] == null;
+    }
+
+    /** True if there are no items at all (used to seed the creative inventory once). */
+    public boolean isEmpty() {
+        for (int i = 0; i < SIZE; i++) {
+            if (types[i] != null) return false;
         }
         return true;
     }
 
-    /** Empties the inventory entirely - used as the death penalty on respawn. */
-    public void clear() {
-        counts.clear();
+    /** Maximum items a single stack of {@code type} can hold (1 for tools, else {@link #STACK_MAX}). */
+    public static int maxStack(BlockType type) {
+        return Mining.isTool(type) ? 1 : STACK_MAX;
     }
 
-    /** A copy of the current contents (type -> count), safe to iterate while the inventory changes. */
-    public Map<BlockType, Integer> snapshot() {
-        return new EnumMap<>(counts);
+    /** Replaces slot {@code slot}'s stack; a null type or non-positive count clears it. */
+    public void setSlot(int slot, BlockType type, int count) {
+        if (type == null || count <= 0) {
+            types[slot] = null;
+            counts[slot] = 0;
+        } else {
+            types[slot] = type;
+            counts[slot] = count;
+        }
+    }
+
+    public void clearSlot(int slot) {
+        types[slot] = null;
+        counts[slot] = 0;
+    }
+
+    /**
+     * Adds {@code amount} of {@code type}, topping up existing stacks first and
+     * then filling empty slots. Returns the amount that couldn't fit (0 = all
+     * placed), which is the caller's signal that the inventory is full.
+     */
+    public int add(BlockType type, int amount) {
+        if (type == null || amount <= 0) return amount;
+        int max = maxStack(type);
+        int remaining = amount;
+        for (int i = 0; i < SIZE && remaining > 0; i++) {
+            if (types[i] == type && counts[i] < max) {
+                int space = max - counts[i];
+                int take = Math.min(space, remaining);
+                counts[i] += take;
+                remaining -= take;
+            }
+        }
+        for (int i = 0; i < SIZE && remaining > 0; i++) {
+            if (types[i] == null) {
+                int take = Math.min(max, remaining);
+                types[i] = type;
+                counts[i] = take;
+                remaining -= take;
+            }
+        }
+        return remaining;
+    }
+
+    /** Removes {@code amount} of {@code type} across whatever slots hold it; false if there isn't enough. */
+    public boolean remove(BlockType type, int amount) {
+        if (type == null || amount <= 0) return false;
+        if (getCount(type) < amount) return false;
+        int remaining = amount;
+        for (int i = 0; i < SIZE && remaining > 0; i++) {
+            if (types[i] == type) {
+                int take = Math.min(counts[i], remaining);
+                counts[i] -= take;
+                remaining -= take;
+                if (counts[i] == 0) types[i] = null;
+            }
+        }
+        return true;
+    }
+
+    /** Total count of {@code type} across all slots. */
+    public int getCount(BlockType type) {
+        if (type == null) return 0;
+        int total = 0;
+        for (int i = 0; i < SIZE; i++) {
+            if (types[i] == type) total += counts[i];
+        }
+        return total;
+    }
+
+    /** Empties every slot - the death penalty, applied on respawn. */
+    public void clear() {
+        for (int i = 0; i < SIZE; i++) {
+            types[i] = null;
+            counts[i] = 0;
+        }
+    }
+
+    /** True if every slot is occupied (no room for a new stack). */
+    public boolean isFull() {
+        for (int i = 0; i < SIZE; i++) {
+            if (types[i] == null) return false;
+        }
+        return true;
     }
 }

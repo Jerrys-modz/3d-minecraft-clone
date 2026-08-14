@@ -82,6 +82,14 @@ public class Input {
         return mouseDown[button] && !mouseDownPrev[button];
     }
 
+    public double getMouseX() {
+        return mouseX;
+    }
+
+    public double getMouseY() {
+        return mouseY;
+    }
+
     public double getDeltaX() {
         return deltaX;
     }
