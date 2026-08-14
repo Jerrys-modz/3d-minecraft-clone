@@ -54,7 +54,7 @@ public class TextureAtlas {
         paintTile(image, 3, rnd, 0x8B5A2B, 0x6E4623, true);   // dirt
         paintTile(image, 4, rnd, 0x8A8A8A, 0x777777, true);   // stone
         paintTile(image, 5, rnd, 0xE0D2A0, 0xCBBB84, true);   // sand
-        paintFluidTile(image, 6, 0x3B6FD1, 0x2E58A8, 190);     // water
+        paintFluidTile(image, 6, 0x3B6FD1, 0x2E58A8, 190);     // water (translucent)
         paintTile(image, 7, rnd, 0x6E4A2A, 0x543A20, false);  // log side (bark stripes)
         paintLogStripes(image, 7, rnd);
         paintTile(image, 8, rnd, 0xC9A063, 0xAE8850, true);   // log top rings

@@ -217,27 +217,27 @@ public class Chunk {
                     }
 
                     // +Y top
-                    if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz)) {
+                    if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz, block)) {
                         emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.TOP, block, atlas, blockLight);
                     }
                     // -Y bottom
-                    if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz)) {
+                    if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz, block)) {
                         emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
                     }
                     // +X east
-                    if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz)) {
+                    if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz, block)) {
                         emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.EAST, block, atlas, blockLight);
                     }
                     // -X west
-                    if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz)) {
+                    if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz, block)) {
                         emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.WEST, block, atlas, blockLight);
                     }
                     // +Z south
-                    if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1)) {
+                    if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1, block)) {
                         emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
                     }
                     // -Z north
-                    if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1)) {
+                    if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1, block)) {
                         emitFace(vertices, indices, vertexCounter, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
                     }
                 }
@@ -249,8 +249,14 @@ public class Chunk {
         dirty = false;
     }
 
-    /** A face is drawn if the neighboring cell (which may be outside this chunk) is empty (air). */
-    private boolean isFaceVisible(BlockAccessor world, int localX, int localY, int localZ, int worldX, int worldY, int worldZ) {
+    /**
+     * A face is drawn if the neighboring cell (which may be outside this chunk) is
+     * empty or translucent relative to the block owning the face. Water faces are
+     * only drawn toward non-water (air/decoration/solid); solid faces are drawn
+     * toward anything non-opaque, including translucent water, so you can see the
+     * sea floor through the water instead of a see-through hole.
+     */
+    private boolean isFaceVisible(BlockAccessor world, int localX, int localY, int localZ, int worldX, int worldY, int worldZ, BlockType block) {
         if (worldY < 0) return false;   // treat below-bedrock as solid void: never draw bottom faces
         if (worldY >= HEIGHT) return true; // above world height is open sky: always draw top faces
         BlockType neighbor;
@@ -259,11 +265,17 @@ public class Chunk {
         } else {
             neighbor = world.getBlock(worldX, worldY, worldZ);
         }
-        // Cross-shaped decoration (grass/flowers) doesn't cover a full cell, so a
-        // solid neighbor's face toward it must still be drawn - treat it like air
-        // for culling purposes. Slabs are the same: they only fill the bottom half,
-        // so a full block's face toward one is still drawn.
-        if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab) return true;
+
+        if (block.isWater()) {
+            // Translucent water: cull faces toward other water (and toward solid -
+            // the solid's own face shows through the water instead).
+            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab;
+        }
+
+        // Cross-shaped decoration (grass/flowers) and slabs don't cover a full cell,
+        // and translucent water doesn't occlude, so a solid neighbor's face toward
+        // them must still be drawn - treat them like air for culling purposes.
+        if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isWater()) return true;
         // With see-through leaves on, leaf blocks stop occluding faces too - both
         // the leaf block's own faces and the blocks behind it get drawn, so the
         // cutout holes in the leaves texture actually show what's behind.
@@ -301,28 +313,28 @@ public class Chunk {
         float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
         float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + top, z1 = wz + 1;
 
-        if (isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz)) {
+        if (isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
                     uvs, LIGHT_TOP, blockLight);
         }
-        if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz)) {
+        if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
                     uvs, LIGHT_BOTTOM, blockLight);
         }
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, blockLight, top, Face.EAST, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, blockLight, top, Face.WEST, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, blockLight, top, Face.SOUTH, uvs);
-        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, blockLight, top, Face.NORTH, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.EAST, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.WEST, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.SOUTH, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, top, Face.NORTH, uvs);
     }
 
     private void emitFluidSide(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
-                                int wx, int wy, int wz, float blockLight, float top,
+                                int wx, int wy, int wz, BlockType block, float blockLight, float top,
                                 Face face, float[][] uvs) {
         int nx = wx + (face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0);
         int nz = wz + (face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0);
-        if (!isFaceVisible(world, nx - getOriginX(), wy, nz - getOriginZ(), nx, wy, nz)) return;
+        if (!isFaceVisible(world, nx - getOriginX(), wy, nz - getOriginZ(), nx, wy, nz, block)) return;
         float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + top, z0 = wz, z1 = wz + 1;
         float[][] positions = switch (face) {
             case EAST -> new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}};
