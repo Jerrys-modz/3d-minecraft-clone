@@ -220,6 +220,11 @@ public class World implements BlockAccessor {
         return TerrainGenerator.SEA_LEVEL;
     }
 
+    /** The biome at a world column, recomputed deterministically - used by the F3 debug overlay. */
+    public TerrainGenerator.Biome getBiome(int worldX, int worldZ) {
+        return generator.biomeAtWorld(worldX, worldZ);
+    }
+
     /**
      * Streams chunks around the given world position: generates newly-visible
      * chunks, unloads far-away ones, and rebuilds a limited number of dirty

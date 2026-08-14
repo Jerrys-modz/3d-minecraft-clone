@@ -555,6 +555,8 @@ public class Main {
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
                         -0.95f, y - 2f * step, textSize, WHITE, aspect);
+                hud.drawTextLeft("Biome: " + world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z)),
+                        -0.95f, y - 3f * step, textSize, WHITE, aspect);
             }
             if (menuOpen[0]) {
                 hud.renderSettingsMenu(settings, menuSelection[0], window.getAspectRatio());

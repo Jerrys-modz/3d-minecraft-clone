@@ -17,6 +17,7 @@ class TerrainGeneratorTest {
     void temperatureSplitsColdAndHot() {
         assertEquals(TerrainGenerator.Biome.SNOWY, TerrainGenerator.biomeAt(-0.5, 0, 50));
         assertEquals(TerrainGenerator.Biome.TAIGA, TerrainGenerator.biomeAt(-0.5, 0.5, 50));
+        assertEquals(TerrainGenerator.Biome.TUNDRA, TerrainGenerator.biomeAt(-0.2, 0, 50));
         assertEquals(TerrainGenerator.Biome.DESERT, TerrainGenerator.biomeAt(0.5, -0.5, 50));
         assertEquals(TerrainGenerator.Biome.SAVANNA, TerrainGenerator.biomeAt(0.5, 0.5, 50));
     }

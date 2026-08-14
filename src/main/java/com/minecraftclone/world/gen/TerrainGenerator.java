@@ -28,7 +28,7 @@ public class TerrainGenerator {
 
     /** The biomes a column can be assigned, from its temperature, moisture and height. */
     public enum Biome {
-        OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, TAIGA, SNOWY, MOUNTAIN
+        OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, TAIGA, SNOWY, TUNDRA, MOUNTAIN
     }
 
     private final Noise heightNoise;
@@ -52,13 +52,16 @@ public class TerrainGenerator {
     /**
      * Picks the biome for a column from its temperature / moisture noise values and
      * its (pre-clamp) surface height. Height dominates first (ocean/beach/mountain),
-     * then the temperature/moisture plane splits the rest into the lowland biomes.
+     * then temperature splits cold / temperate / hot, with a {@link #TUNDRA} band
+     * between frozen and temperate so snow never butts straight up against lush
+     * plains, and moisture picks forest vs plains / desert vs savanna.
      */
     public static Biome biomeAt(double temperature, double moisture, int height) {
         if (height < SEA_LEVEL) return Biome.OCEAN;
         if (height <= SEA_LEVEL + 1) return Biome.BEACH;
         if (height > MOUNTAIN_LINE) return Biome.MOUNTAIN;
-        if (temperature < -0.20) return moisture > 0.05 ? Biome.TAIGA : Biome.SNOWY;
+        if (temperature < -0.28) return moisture > 0.05 ? Biome.TAIGA : Biome.SNOWY;
+        if (temperature < -0.10) return Biome.TUNDRA;
         if (temperature > 0.20) return moisture < -0.10 ? Biome.DESERT : Biome.SAVANNA;
         return moisture > 0.10 ? Biome.FOREST : Biome.PLAINS;
     }
@@ -85,6 +88,50 @@ public class TerrainGenerator {
         if (height <= SEA_LEVEL + 1 && neighborBelowSea(heights, x, z)) return Biome.BEACH;
         Biome b = biomeAt(temperature, moisture, height);
         return b == Biome.BEACH ? Biome.PLAINS : b;
+    }
+
+    /**
+     * The finalized terrain height for a world column: continental + hill noise, the
+     * river carve, clamping, and ocean deepening. Matches what {@link #generate}
+     * fills, so biome queries agree with the world.
+     */
+    public int terrainHeight(int wx, int wz) {
+        double h = heightNoise.fbm2(wx * 0.01, wz * 0.01, 5, 0.5, 2.0);
+        double mountains = heightNoise.fbm2(wx * 0.004, wz * 0.004, 3, 0.5, 2.0);
+        double continent = heightNoise.fbm2(wx * 0.0035, wz * 0.0035, 2, 0.5, 2.0);
+        int height = BASE_HEIGHT + (int) Math.round(continent * 16 + h * 18 + Math.max(0, mountains) * 90);
+        if (isRiver(wx, wz)) {
+            height = Math.min(height, SEA_LEVEL - 2);
+        }
+        height = Math.max(2, Math.min(Chunk.HEIGHT - 10, height));
+        if (height < SEA_LEVEL) {
+            double depth = heightNoise.fbm2(wx * 0.008 + 91, wz * 0.008 + 91, 3, 0.5, 2.0);
+            height = Math.max(2, height - (int) (depth * 5));
+        }
+        return height;
+    }
+
+    /**
+     * The biome at an arbitrary world column, using the same rules the chunk
+     * generator applies (neighbor-aware beaches included) - for the F3 debug
+     * overlay and any other world-coordinate biome queries.
+     */
+    public Biome biomeAtWorld(int wx, int wz) {
+        double temperature = temperatureAt(wx, wz);
+        double moisture = moistureAt(wx, wz);
+        int height = terrainHeight(wx, wz);
+        if (height < SEA_LEVEL) return Biome.OCEAN;
+        if (height <= SEA_LEVEL + 1 && neighborBelowSeaWorld(wx, wz)) return Biome.BEACH;
+        Biome b = biomeAt(temperature, moisture, height);
+        return b == Biome.BEACH ? Biome.PLAINS : b;
+    }
+
+    /** True if any orthogonal neighbor of a world column sits below sea level. */
+    private boolean neighborBelowSeaWorld(int wx, int wz) {
+        return terrainHeight(wx - 1, wz) < SEA_LEVEL
+                || terrainHeight(wx + 1, wz) < SEA_LEVEL
+                || terrainHeight(wx, wz - 1) < SEA_LEVEL
+                || terrainHeight(wx, wz + 1) < SEA_LEVEL;
     }
 
     public void generate(Chunk chunk) {
