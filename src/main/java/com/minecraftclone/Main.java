@@ -950,7 +950,7 @@ public class Main {
             chunkShader.setUniform("time", animTime[0]);
             chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
-            world.render(chunkShader);
+            world.render(chunkShader, projection, view);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
             chunkShader.unbind();

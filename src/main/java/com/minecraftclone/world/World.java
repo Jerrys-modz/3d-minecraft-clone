@@ -6,6 +6,8 @@ import com.minecraftclone.player.Inventory;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import com.minecraftclone.world.gen.WorldGenSettings;
+import org.joml.FrustumIntersection;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.nio.file.Path;
@@ -71,6 +73,14 @@ public class World implements BlockAccessor {
     // this is independent of frame rate altogether.
     private static final double FLUID_TICK_SECONDS = 0.15;
     private double lastFluidTickNanos = Double.NaN;
+
+    // Reused across frames (see render) rather than allocated fresh each call -
+    // frustum culling runs every single frame regardless of whether anything
+    // actually changed, so its own bookkeeping shouldn't add GC churn on top
+    // of whatever it saves by skipping off-screen chunks.
+    private final Matrix4f viewProjection = new Matrix4f();
+    private final FrustumIntersection frustum = new FrustumIntersection();
+    private final List<Chunk> visibleChunks = new ArrayList<>();
 
     // Dropped item entities (from breaking blocks / death). Transient - not saved.
     private final List<ItemEntity> items = new ArrayList<>();
@@ -454,18 +464,40 @@ public class World implements BlockAccessor {
         }
     }
 
-    public void render(Shader shader) {
+    /**
+     * Renders every loaded chunk whose bounding box is inside {@code projection * view}'s
+     * view frustum - at max render distance, most of the (up to a few hundred) loaded
+     * chunks are behind or well off to the side of the camera at any given moment, so
+     * skipping those avoids paying for their draw calls (and the GL state changes/vertex
+     * shader invocations that go with them) every single frame for geometry that was
+     * never going to end up on screen anyway.
+     */
+    public void render(Shader shader, Matrix4f projection, Matrix4f view) {
+        projection.mul(view, viewProjection);
+        frustum.set(viewProjection);
+
+        visibleChunks.clear();
         for (Chunk chunk : chunks.values()) {
+            if (isChunkVisible(chunk)) visibleChunks.add(chunk);
+        }
+
+        for (Chunk chunk : visibleChunks) {
             chunk.render();
         }
         // See-through geometry (glass/ice) draws after everything opaque and blends
         // over it; depth writes are off so overlapping translucent faces don't cull
         // each other.
         glDepthMask(false);
-        for (Chunk chunk : chunks.values()) {
+        for (Chunk chunk : visibleChunks) {
             chunk.renderTranslucent();
         }
         glDepthMask(true);
+    }
+
+    private boolean isChunkVisible(Chunk chunk) {
+        int originX = chunk.getOriginX();
+        int originZ = chunk.getOriginZ();
+        return frustum.testAab(originX, 0, originZ, originX + Chunk.SIZE, Chunk.HEIGHT, originZ + Chunk.SIZE);
     }
 
     /** Spawns a dropped item of {@code type} at the given block position (centered, with a small random kick). */
