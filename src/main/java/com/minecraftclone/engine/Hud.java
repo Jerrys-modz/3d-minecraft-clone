@@ -7,6 +7,7 @@ import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.LineMesh;
 import com.minecraftclone.engine.graphics.TextRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.ToolDurability;
 import com.minecraftclone.util.FloatArray;
@@ -63,6 +64,10 @@ public class Hud {
     private final LineMesh durabilityBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarFill = new LineMesh(GL_TRIANGLES);
     private final LineMesh settingsPanel = new LineMesh(GL_TRIANGLES);
+    private final LineMesh craftPanel = new LineMesh(GL_TRIANGLES);
+    private final LineMesh craftCursor = new LineMesh(GL_LINES);
+    private final IconMesh craftBlockIcons = new IconMesh();  // batched: grid cells sampling the shared block atlas
+    private final IconMesh craftItemIcon = new IconMesh();    // reused per grid cell: item icons have their own textures
 
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
@@ -525,6 +530,167 @@ public class Hud {
         blockVertexCounter += 4;
     }
 
+    /**
+     * Draws the shaped-crafting screen: a 3x3 grid of placed items with a cursor
+     * highlight, plus an output slot showing the recipe result. {@code output} is
+     * the current match (may be null), {@code cursor} is the hovered grid cell
+     * (0-8), and {@code selectedType} is the hotbar item available to place.
+     */
+    public void renderCraftingGrid(CraftingGrid grid, BlockType output, int cursor, BlockType selectedType,
+                                   Inventory inventory, TextureAtlas atlas, ItemTextures itemTextures, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        float slot = 0.1f;
+        float gap = 0.03f;
+        float gridW = 3 * slot + 2 * gap;
+        float gridLeft = -gridW / 2f - 0.1f;
+        float gridTop = 0.22f; // y of the top row's center
+
+        float panelW = gridW + slot + 0.24f;
+        float panelH = 0.42f;
+        float panelCenterY = 0.02f;
+        float left = -panelW / 2f;
+        float top = panelCenterY + panelH / 2f;
+        float bottom = panelCenterY - panelH / 2f;
+
+        // Panel background.
+        float[] panel = {
+                left, bottom, 0, left + panelW, bottom, 0, left + panelW, top, 0,
+                left, bottom, 0, left + panelW, top, 0, left, top, 0,
+        };
+        craftPanel.upload(panel);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.55f));
+        craftPanel.render();
+        lineShader.unbind();
+
+        // Title + hint.
+        drawCenteredText("Crafting", 0f, top - 0.055f, 0.045f, WHITE);
+        drawCenteredText("Arrows: move    Space: place/remove    C: craft    E: close",
+                0f, bottom + 0.012f, 0.024f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+
+        // Grid cell icons: block items batch through the atlas, item icons bind individually.
+        FloatArray blockV = new FloatArray(256);
+        IntArray blockI = new IntArray(256);
+        int[] counter = {0};
+        for (int i = 0; i < CraftingGrid.SIZE; i++) {
+            BlockType type = grid.get(i);
+            if (type == null) continue;
+            int r = i / 3, c = i % 3;
+            float cx = gridLeft + c * (slot + gap) + slot / 2f;
+            float cy = gridTop - r * (slot + gap);
+            float half = slot / 2f - 0.008f;
+            if (type.isItem) {
+                float[] qv = {cx - half, cy - half, 0f, 1f, cx + half, cy - half, 1f, 1f,
+                        cx + half, cy + half, 1f, 0f, cx - half, cy + half, 0f, 0f};
+                craftItemIcon.upload(qv, QUAD_INDICES);
+                hudShader.bind();
+                hudShader.setUniform("transform", hudTransform);
+                hudShader.setUniform("atlas", 0);
+                hudShader.setUniform("color", WHITE);
+                itemTextures.bind(type);
+                craftItemIcon.render();
+                hudShader.unbind();
+            } else {
+                addGridQuad(blockV, blockI, counter, cx - half, cy - half, cx + half, cy + half, atlas.getUV(type.topTile));
+            }
+        }
+
+        hudShader.bind();
+        hudShader.setUniform("transform", hudTransform);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", WHITE);
+        craftBlockIcons.upload(toFloats(blockV), toInts(blockI));
+        atlas.bind();
+        craftBlockIcons.render();
+        hudShader.unbind();
+
+        // Output slot (right of the grid): show the current match.
+        float ox = gridLeft + gridW + 0.16f;
+        float oy = gridTop - (slot + gap);
+        if (output != null) {
+            float half = slot / 2f - 0.008f;
+            if (output.isItem) {
+                float[] qv = {ox - half, oy - half, 0f, 1f, ox + half, oy - half, 1f, 1f,
+                        ox + half, oy + half, 1f, 0f, ox - half, oy + half, 0f, 0f};
+                craftItemIcon.upload(qv, QUAD_INDICES);
+                hudShader.bind();
+                hudShader.setUniform("transform", hudTransform);
+                hudShader.setUniform("atlas", 0);
+                hudShader.setUniform("color", WHITE);
+                itemTextures.bind(output);
+                craftItemIcon.render();
+                hudShader.unbind();
+            } else {
+                FloatArray ov = new FloatArray(32);
+                IntArray oi = new IntArray(16);
+                int[] oc = {0};
+                addGridQuad(ov, oi, oc, ox - half, oy - half, ox + half, oy + half, atlas.getUV(output.topTile));
+                hudShader.bind();
+                hudShader.setUniform("transform", hudTransform);
+                hudShader.setUniform("atlas", 0);
+                hudShader.setUniform("color", WHITE);
+                craftBlockIcons.upload(toFloats(ov), toInts(oi));
+                atlas.bind();
+                craftBlockIcons.render();
+                hudShader.unbind();
+            }
+        }
+
+        // Cursor highlight on the hovered cell.
+        int cr = cursor / 3, cc = cursor % 3;
+        float ccx = gridLeft + cc * (slot + gap) + slot / 2f;
+        float ccy = gridTop - cr * (slot + gap);
+        float hs = slot / 2f + 0.005f;
+        float[] hl = {
+                ccx - hs, ccy - hs, 0, ccx + hs, ccy - hs, 0,
+                ccx + hs, ccy - hs, 0, ccx + hs, ccy + hs, 0,
+                ccx + hs, ccy + hs, 0, ccx - hs, ccy + hs, 0,
+                ccx - hs, ccy + hs, 0, ccx - hs, ccy - hs, 0,
+        };
+        craftCursor.upload(hl);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(1f, 0.85f, 0.4f, 0.95f));
+        glLineWidth(2f);
+        craftCursor.render();
+        lineShader.unbind();
+
+        // Selected ingredient hint (what Space will place).
+        String selName = selectedType == null ? "-" : selectedType.toString();
+        drawCenteredText("Placing: " + selName + " (" + inventory.getCount(selectedType) + ")",
+                0f, bottom - 0.045f, 0.024f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    private void addGridQuad(FloatArray vertices, IntArray indices, int[] counter,
+                             float minX, float minY, float maxX, float maxY, float[] uv) {
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        int base = counter[0];
+        vertices.add(minX); vertices.add(minY); vertices.add(u0); vertices.add(v1);
+        vertices.add(maxX); vertices.add(minY); vertices.add(u1); vertices.add(v1);
+        vertices.add(maxX); vertices.add(maxY); vertices.add(u1); vertices.add(v0);
+        vertices.add(minX); vertices.add(maxY); vertices.add(u0); vertices.add(v0);
+        indices.add(base); indices.add(base + 1); indices.add(base + 2);
+        indices.add(base); indices.add(base + 2); indices.add(base + 3);
+        counter[0] += 4;
+    }
+
+    private static float[] toFloats(FloatArray values) {
+        return values.toArray();
+    }
+
+    private static int[] toInts(IntArray values) {
+        return values.toArray();
+    }
+
     public void destroy() {
         crosshair.destroy();
         cubeOutline.destroy();
@@ -538,5 +704,9 @@ public class Hud {
         durabilityBarBackground.destroy();
         durabilityBarFill.destroy();
         settingsPanel.destroy();
+        craftPanel.destroy();
+        craftCursor.destroy();
+        craftBlockIcons.destroy();
+        craftItemIcon.destroy();
     }
 }
