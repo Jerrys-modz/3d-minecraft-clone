@@ -54,7 +54,11 @@ public final class GenerateItemTextures {
         write(outDir, "iron_sword", paintSword(0xE8E8E8));
         write(outDir, "diamond_sword", paintSword(0x5FE0E0));
 
-        System.out.println("Wrote 15 item textures to " + outDir.getAbsolutePath());
+        write(outDir, "iron_ingot", paintIngot(0xE8E8E8));
+        write(outDir, "gold_ingot", paintIngot(0xE8C93A));
+        write(outDir, "diamond", paintGem(0x5FE0E0));
+
+        System.out.println("Wrote 18 item textures to " + outDir.getAbsolutePath());
     }
 
     private static void write(File outDir, String name, BufferedImage image) throws IOException {
@@ -145,6 +149,49 @@ public final class GenerateItemTextures {
             img.setRGB(8, y, 0xFF000000 | 0x4C8C2C);
         }
         return img;
+    }
+
+    /** A small rounded metal ingot bar, tinted by material - the smelted form of ore. */
+    private static BufferedImage paintIngot(int color) {
+        BufferedImage img = blank();
+        for (int y = 6; y <= 10; y++) {
+            for (int x = 3; x <= 12; x++) {
+                boolean corner = (x == 3 || x == 12) && (y == 6 || y == 10);
+                if (!corner) {
+                    img.setRGB(x, y, 0xFF000000 | color);
+                }
+            }
+        }
+        // A light highlight along the top edge.
+        for (int x = 4; x <= 11; x++) {
+            img.setRGB(x, 7, 0xFF000000 | lighten(color));
+        }
+        return img;
+    }
+
+    /** A faceted gem (diamond shape), tinted by material - the smelted form of diamond ore. */
+    private static BufferedImage paintGem(int color) {
+        BufferedImage img = blank();
+        int cx = 8, cy = 8;
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (Math.abs(x - cx) + Math.abs(y - cy) <= 5) {
+                    img.setRGB(x, y, 0xFF000000 | color);
+                }
+            }
+        }
+        // A bright facet highlight.
+        for (int i = 0; i < 3; i++) {
+            img.setRGB(cx - 1 + i, cy - 2, 0xFF000000 | lighten(color));
+        }
+        return img;
+    }
+
+    private static int lighten(int color) {
+        int r = Math.min(255, ((color >> 16) & 0xFF) + 40);
+        int g = Math.min(255, ((color >> 8) & 0xFF) + 40);
+        int b = Math.min(255, (color & 0xFF) + 40);
+        return (r << 16) | (g << 8) | b;
     }
 
     /** Plots a ~2px-thick straight line between two points. */

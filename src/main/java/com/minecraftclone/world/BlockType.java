@@ -33,6 +33,7 @@ public enum BlockType {
     BERRY_BUSH(22, false, true, 37),
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
     LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
+    FURNACE(40, true, false, 4, 26, 4), // smelting station: stone top/bottom, furnace-face sides (tile 26)
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -53,7 +54,10 @@ public enum BlockType {
     WOOD_SWORD(34, 0),
     STONE_SWORD(35, 0),
     IRON_SWORD(36, 0),
-    DIAMOND_SWORD(37, 0);
+    DIAMOND_SWORD(37, 0),
+    IRON_INGOT(41, 0), // smelted from iron ore (see Smelting)
+    GOLD_INGOT(42, 0), // smelted from gold ore
+    DIAMOND(43, 0);    // smelted from diamond ore
 
     public final byte id;
     public final boolean solid;
