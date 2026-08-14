@@ -234,7 +234,9 @@ public class Main {
 
             if (inventoryOpen[0]) {
                 // Mouse-driven inventory: resolve the hovered slot and apply clicks/drag.
-                float logicalX = (float) input.getMouseX() / window.getWidth() * 2f - 1f;
+                // The HUD draws in logical-square space then scales X by 1/aspect, so the
+                // mouse's normalized X must be scaled back by aspect to hit-test correctly.
+                float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
                 hoveredSlot[0] = hud.inventorySlotAt(logicalX, logicalY);
 
@@ -478,7 +480,8 @@ public class Main {
                 hud.renderSettingsMenu(settings, menuSelection[0], window.getAspectRatio());
             }
             if (inventoryOpen[0]) {
-                float logicalX = (float) input.getMouseX() / window.getWidth() * 2f - 1f;
+                // Scale mouse X back by aspect to match the HUD's logical-square space.
+                float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
                 hud.renderInventory(player.getInventory(), craftingGrid, inventoryController, hoveredSlot[0],
                         atlas, itemTextures, player.getDurability(), window.getAspectRatio(), logicalX, logicalY);
