@@ -9,9 +9,10 @@ import java.util.Random;
 /**
  * Procedural terrain generator. A low-frequency "continental" noise carves large
  * ocean basins and landmasses; layered height noise adds rolling hills and
- * mountains. A temperature plus a moisture channel pick a per-column {@link Biome}
+ * mountains. Climate is arranged in latitude bands (cold toward -Z, hot toward
+ * +Z) with a temperature + moisture noise pair picking the per-column {@link Biome}
  * (ocean / beach / plains / forest / desert / savanna / taiga / snowy / tundra /
- * mountain) which drives the surface and subsurface blocks, tree type and density,
+ * mountain), which drives the surface and subsurface blocks, tree type and density,
  * ground cover, and ocean-floor material. Water only forms where below-sea terrain
  * connects to a neighbour, so stray 1-2 block puddles never appear, and beaches are
  * decided by adjacency to water rather than height alone. 3D noise carves caves and
@@ -59,8 +60,8 @@ public class TerrainGenerator {
         if (height <= SEA_LEVEL + 1) return Biome.BEACH;
         if (height > MOUNTAIN_LINE) return Biome.MOUNTAIN;
         if (temperature < -0.28) return moisture > 0.05 ? Biome.TAIGA : Biome.SNOWY;
-        if (temperature < -0.10) return Biome.TUNDRA;
-        if (temperature > 0.20) return moisture < -0.10 ? Biome.DESERT : Biome.SAVANNA;
+        if (temperature < -0.04) return Biome.TUNDRA;
+        if (temperature > 0.18) return moisture < -0.08 ? Biome.DESERT : Biome.SAVANNA;
         return moisture > 0.10 ? Biome.FOREST : Biome.PLAINS;
     }
 
@@ -285,7 +286,12 @@ public class TerrainGenerator {
     }
 
     private double temperatureAt(int wx, int wz) {
-        return tempNoise.fbm2(wx * 0.009 + 900, wz * 0.009 + 900, 3, 0.5, 2.0) * 1.6;
+        // Climate runs in latitude bands: colder toward -Z (north), hotter toward
+        // +Z (south), with a little noise for local variety. So snow forms a
+        // northern region rather than random patches plopped next to plains/oceans.
+        double latitude = wz * 0.0012;
+        double noise = tempNoise.fbm2(wx * 0.006 + 900, wz * 0.006 + 900, 3, 0.5, 2.0) * 0.55;
+        return latitude + noise;
     }
 
     /** The top surface block for a biome (oceans get their sea-floor material). */
