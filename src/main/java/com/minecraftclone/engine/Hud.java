@@ -765,7 +765,7 @@ public class Hud {
 
         // Title + hint line.
         drawCenteredText("Inventory", 0f, panelTop - 0.05f, 0.045f, WHITE);
-        drawCenteredText("Left: pick up    Right: one    Shift-click: move    Drag: split    Esc: close",
+        drawCenteredText("Left: take/place stack    Right: one item    Shift-click: move    Drag: spread    Esc: close",
                 0f, panelBottom - 0.04f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
         glEnable(GL_DEPTH_TEST);

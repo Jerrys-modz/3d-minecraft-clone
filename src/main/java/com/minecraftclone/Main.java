@@ -247,22 +247,22 @@ public class Main {
                                 if (shift) {
                                     inventoryController.click(hb, false, true);
                                 } else {
-                                    inventoryController.beginDrag(hb);
+                                    inventoryController.beginDrag(hb, false);
                                 }
                             }
                         }
                     }
                 }
-                if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+                if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) || input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT)) {
                     inventoryController.continueDrag(hud.hotbarSlotAt(logicalX, logicalY));
                 }
-                if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
-                    inventoryController.endDrag();
+                if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && !input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT)) {
+                    inventoryController.endDrag(hud.hotbarSlotAt(logicalX, logicalY));
                 }
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)) {
                     int hb = hud.hotbarSlotAt(logicalX, logicalY);
                     if (hb >= 0) {
-                        inventoryController.click(hb, true, false);
+                        inventoryController.beginDrag(hb, true);
                     }
                     int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0]);
                     if (item >= 0) {
@@ -282,17 +282,21 @@ public class Main {
                     if (shift) {
                         inventoryController.click(hoveredSlot[0], false, true);
                     } else {
-                        inventoryController.beginDrag(hoveredSlot[0]);
+                        inventoryController.beginDrag(hoveredSlot[0], false);
                     }
                 }
-                if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)) {
+                    if (shift) {
+                        inventoryController.click(hoveredSlot[0], true, true);
+                    } else {
+                        inventoryController.beginDrag(hoveredSlot[0], true);
+                    }
+                }
+                if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) || input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT)) {
                     inventoryController.continueDrag(hoveredSlot[0]);
                 }
-                if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
-                    inventoryController.endDrag();
-                }
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)) {
-                    inventoryController.click(hoveredSlot[0], true, false);
+                if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && !input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT)) {
+                    inventoryController.endDrag(hoveredSlot[0]);
                 }
             } else if (menuOpen[0]) {
                 // Pause menu: navigate with arrows/WASD; toggle boolean settings or
