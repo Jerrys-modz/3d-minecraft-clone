@@ -211,6 +211,10 @@ public class Chunk {
                         emitSlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
+                    if (block.isFluid()) {
+                        emitFluid(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        continue;
+                    }
 
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz)) {
@@ -287,6 +291,49 @@ public class Chunk {
     }
 
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
+
+    /** Emits a lowered translucent surface for fluid instead of a solid full cube. */
+    private void emitFluid(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                            int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
+        float top = (block == BlockType.WATER || block == BlockType.LAVA || block.isFluidSource()) ? 0.9f
+                : (world.getBlock(wx, wy - 1, wz) == BlockType.AIR ? 1f : 0.78f);
+        float[] uv = atlas.getUV(block.topTile);
+        float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + top, z1 = wz + 1;
+
+        if (isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz)) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
+                    uvs, LIGHT_TOP, blockLight);
+        }
+        if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz)) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
+                    uvs, LIGHT_BOTTOM, blockLight);
+        }
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, blockLight, top, Face.EAST, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, blockLight, top, Face.WEST, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, blockLight, top, Face.SOUTH, uvs);
+        emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, blockLight, top, Face.NORTH, uvs);
+    }
+
+    private void emitFluidSide(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                                int wx, int wy, int wz, float blockLight, float top,
+                                Face face, float[][] uvs) {
+        int nx = wx + (face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0);
+        int nz = wz + (face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0);
+        if (!isFaceVisible(world, nx - getOriginX(), wy, nz - getOriginZ(), nx, wy, nz)) return;
+        float x0 = wx, x1 = wx + 1, y0 = wy, y1 = wy + top, z0 = wz, z1 = wz + 1;
+        float[][] positions = switch (face) {
+            case EAST -> new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}};
+            case WEST -> new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}};
+            case SOUTH -> new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}};
+            case NORTH -> new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}};
+            default -> throw new IllegalArgumentException("Fluid side must be horizontal");
+        };
+        float light = face == Face.NORTH || face == Face.SOUTH ? LIGHT_NORTH_SOUTH : LIGHT_EAST_WEST;
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
+    }
 
     private void emitFace(FloatArray vertices, IntArray indices, int[] vertexCounter,
                            int wx, int wy, int wz, Face face, BlockType block, TextureAtlas atlas, float blockLight) {

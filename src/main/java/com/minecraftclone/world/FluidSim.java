@@ -92,8 +92,12 @@ public final class FluidSim {
             BlockType below = world.getBlock(n.x, n.y - 1, n.z);
 
             if (below.isFluid()) {
-                // Resting on another fluid cell (source/flow/static): part of a body.
-                // Don't spread or fall - the bottom of the column handles spreading.
+                // A source placed on the matching generated water/lava sea can still
+                // spread; flow cells already form the bottom of a falling column.
+                if ((below == BlockType.WATER && n.flowType == BlockType.WATER_FLOW)
+                        || (below == BlockType.LAVA && n.flowType == BlockType.LAVA_FLOW)) {
+                    spreadHorizontally(world, n, queue, visited, fill, reachedFlow);
+                }
             } else if (below.isCollidable()) {
                 // Resting on solid ground: spread horizontally.
                 if (n.dist + 1 <= maxDistance(n.flowType)) {
@@ -116,6 +120,16 @@ public final class FluidSim {
             }
         }
         return new Result(fill, remove);
+    }
+
+    private static void spreadHorizontally(BlockAccessor world, Node n, ArrayDeque<Node> queue,
+                                           Set<Long> visited, Map<Long, BlockType> fill,
+                                           Set<Long> reachedFlow) {
+        if (n.dist + 1 > maxDistance(n.flowType)) return;
+        spread(world, n.x + 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
+        spread(world, n.x - 1, n.y, n.z, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
+        spread(world, n.x, n.y, n.z + 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
+        spread(world, n.x, n.y, n.z - 1, n.dist + 1, n.flowType, queue, visited, fill, reachedFlow);
     }
 
     /** Expands the flood into one neighbor cell, filling air/cross or passing through the same fluid. */
