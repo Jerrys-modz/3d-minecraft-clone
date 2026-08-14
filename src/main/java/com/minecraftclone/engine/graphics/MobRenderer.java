@@ -9,13 +9,13 @@ import java.util.List;
 /**
  * Draws {@link Mob}s as small 3D voxel animals - each one a handful of textured
  * boxes (body, head, four legs) using the same interleaved vertex format and
- * baked directional shading as the world's chunk mesh, so they render as solid
- * creatures that sit in the blocky scene rather than flat camera-facing
- * sprites. The boxes are rotated to face the mob's heading, and all mobs of the
- * same kind are batched into a single mesh (one draw call per kind). Faces map
- * onto per-kind skin regions (see {@link MobTextures}); the head's front face
- * uses the "face" region with eyes/snout, and the body top uses the lighter
- * top region.
+ * baked directional shading as the world's chunk mesh (position, uv, light,
+ * blockLight, fluidFlow), so they render as solid creatures that sit in the
+ * blocky scene rather than flat camera-facing sprites. The boxes are rotated to
+ * face the mob's heading, and all mobs of the same kind are batched into a
+ * single mesh (one draw call per kind). Faces map onto per-kind skin regions
+ * (see {@link MobTextures}); the head's front face uses the "face" region with
+ * eyes/snout, and the body top uses the lighter top region.
  */
 public class MobRenderer {
 
@@ -92,7 +92,7 @@ public class MobRenderer {
             if (count == 0) continue;
 
             Part[] parts = parts(type);
-            FloatArray v = new FloatArray(count * parts.length * 240); // 6 faces * 4 verts * 10 floats
+            FloatArray v = new FloatArray(count * parts.length * 192); // 6 faces * 4 verts * 8 floats
             IntArray i = new IntArray(count * parts.length * 36);      // 6 faces * 6 indices
             int[] c = {0};
             for (Mob m : mobs) {
@@ -143,8 +143,6 @@ public class MobRenderer {
                 v.add(lights[f]);
                 v.add(0f);  // blockLight
                 v.add(0f);  // fluidFlow
-                v.add(0f);
-                v.add(0f);  // flowDir
             }
             i.add(base);
             i.add(base + 1);
