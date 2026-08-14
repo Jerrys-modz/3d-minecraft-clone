@@ -30,6 +30,8 @@ public class Player {
     private static final float TERMINAL_VELOCITY = -50f;
 
     private static final float DEFAULT_MOUSE_SENSITIVITY = 0.12f;
+    /** Max gap between two W presses for it to count as a double-tap (sprint, or fly-toggle in creative). */
+    private static final float DOUBLE_TAP_WINDOW = 0.3f;
 
     /** Feet position: bottom-center of the player's bounding box. */
     private final Vector3f position = new Vector3f();
@@ -46,6 +48,8 @@ public class Player {
     private boolean onGround = false;
     private boolean flying = false;
     private float lastFallImpactSpeed = 0f;
+    private final DoubleTapDetector wTapDetector = new DoubleTapDetector(DOUBLE_TAP_WINDOW);
+    private boolean sprintLatched = false; // sprint started by a double-tap, held until W is released
 
     public void spawn(World world, float x, float z) {
         int surfaceY = world.getSurfaceHeight((int) Math.floor(x), (int) Math.floor(z));
@@ -124,6 +128,7 @@ public class Player {
         } else if (gameMode.isCreative()) {
             updateFlyToggle(input); // F toggles flight in creative only
         }
+        updateDoubleTapW(input, dt);
         boolean sprintingAndMoving = updateMovement(dt, input, world);
         camera.setPosition(position.x, position.y + EYE_HEIGHT, position.z);
 
@@ -153,6 +158,26 @@ public class Player {
         }
     }
 
+    /**
+     * Double-tapping W is a second way to trigger the same two toggles their
+     * dedicated keys already do: in creative it starts/stops flying (same as
+     * {@code F}), otherwise it latches sprint on (same as holding {@code Ctrl})
+     * until W is released - Minecraft-style, without needing to hold anything.
+     */
+    private void updateDoubleTapW(Input input, float dt) {
+        if (wTapDetector.tick(dt, input.isKeyJustPressed(GLFW_KEY_W))) {
+            if (gameMode.isCreative()) {
+                flying = !flying;
+                velocity.y = 0;
+            } else {
+                sprintLatched = true;
+            }
+        }
+        if (!input.isKeyDown(GLFW_KEY_W)) {
+            sprintLatched = false;
+        }
+    }
+
     /** Returns true if the player is sprinting and actually moving this frame (for stamina/hunger drain). */
     private boolean updateMovement(float dt, Input input, World world) {
         Vector3f front = camera.getFrontFlat();
@@ -171,7 +196,7 @@ public class Player {
             moveZ /= len;
         }
 
-        boolean sprinting = input.isKeyDown(GLFW_KEY_LEFT_CONTROL) && stats.canSprint();
+        boolean sprinting = (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || sprintLatched) && stats.canSprint();
         float speed = flying ? FLY_SPEED : (sprinting ? SPRINT_SPEED : WALK_SPEED);
 
         velocity.x = moveX * speed;
