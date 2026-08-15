@@ -14,12 +14,15 @@ import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
+import com.minecraftclone.player.JoinedStorage;
 import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
+import com.minecraftclone.player.StorageContainer;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
+import com.minecraftclone.world.Barrel;
 import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Furnace;
@@ -433,13 +436,21 @@ public class Main {
             }
         }
         // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
-        // the container screen can be screenshotted.
+        // the container screen can be screenshotted. MCCLONE_AUTOTEST_DOUBLE
+        // merges a second chest beside it to screenshot a 54-slot double chest.
         if (System.getenv("MCCLONE_AUTOTEST_CHEST_GUI") != null && started[0]) {
-            Chest chest = world.getOrCreateChest(0, 0, 0);
-            chest.setSlot(0, BlockType.IRON_INGOT, 5);
-            chest.setSlot(1, BlockType.APPLE, 12);
-            chest.setSlot(2, BlockType.WOOD_LOG, 64);
-            activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, chest);
+            Chest west = world.getOrCreateChest(0, 0, 0);
+            west.setSlot(0, BlockType.IRON_INGOT, 5);
+            west.setSlot(1, BlockType.APPLE, 12);
+            west.setSlot(2, BlockType.WOOD_LOG, 64);
+            StorageContainer container = west;
+            if (System.getenv("MCCLONE_AUTOTEST_DOUBLE") != null) {
+                Chest east = world.getOrCreateChest(1, 0, 0);
+                east.setSlot(3, BlockType.GOLD_INGOT, 4);
+                east.setSlot(4, BlockType.DIAMOND, 2);
+                container = new JoinedStorage(west, east);
+            }
+            activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, container);
             openGui(inventoryController, activeGui, window, input, inventoryOpen);
         }
         // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
@@ -954,6 +965,18 @@ public class Main {
                                         world.removeBlockEntity(bx, by, bz);
                                     }
                                 }
+                                if (targetType == BlockType.BARREL) {
+                                    // A broken barrel spills its contents.
+                                    Barrel barrel = world.barrelAt(bx, by, bz);
+                                    if (barrel != null) {
+                                        for (int s = 0; s < Chest.SLOT_COUNT; s++) {
+                                            if (barrel.typeOf(s) != null) {
+                                                world.spawnItem(bx, by, bz, barrel.typeOf(s), barrel.countOf(s), loot);
+                                            }
+                                        }
+                                        world.removeBlockEntity(bx, by, bz);
+                                    }
+                                }
                                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
                                     world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
                                 }
@@ -995,9 +1018,17 @@ public class Main {
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, player.getInventory(), craftingGrid, null);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen);
                     } else if (noMob && targeted == BlockType.CHEST) {
-                        // Right-click a chest to open its storage gui.
-                        Chest chest = world.getOrCreateChest(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
-                        activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, chest);
+                        // Right-click a chest to open its storage gui; an adjacent
+                        // chest merges into a 54-slot double chest.
+                        world.getOrCreateChest(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
+                                world.chestContainerAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen);
+                    } else if (noMob && targeted == BlockType.BARREL) {
+                        // Right-click a barrel to open its storage gui.
+                        world.getOrCreateBarrel(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
+                                world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
                         openGui(inventoryController, activeGui, window, input, inventoryOpen);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         if (heldItem.isEdible() && !mode.isCreative()) {

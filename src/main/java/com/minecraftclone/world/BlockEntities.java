@@ -23,6 +23,7 @@ public final class BlockEntities {
     static {
         register(Furnace.TYPE, Furnace::new);
         register(Chest.TYPE, Chest::new);
+        register(Barrel.TYPE, Barrel::new);
     }
 
     private BlockEntities() {

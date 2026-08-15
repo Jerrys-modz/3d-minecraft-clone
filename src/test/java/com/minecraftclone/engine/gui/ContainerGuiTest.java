@@ -3,6 +3,7 @@ package com.minecraftclone.engine.gui;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
+import com.minecraftclone.player.JoinedStorage;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.Furnace;
@@ -217,5 +218,34 @@ class ContainerGuiTest {
         c.click(ContainerGui.CONTAINER_START + 2, false, true);
         assertEquals(7, inv.getCount(BlockType.APPLE));
         assertTrue(chest.isEmpty(2));
+    }
+
+    @Test
+    void doubleChestGuiPresents54SlotsAcrossBothHalves() {
+        Inventory inv = new Inventory();
+        Chest west = new Chest();
+        Chest east = new Chest();
+        JoinedStorage doubleChest = new JoinedStorage(west, east);
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), doubleChest);
+        InventoryController c = new InventoryController(gui);
+
+        assertEquals(Inventory.SIZE + 54, gui.slotCount());
+        assertTrue(gui.isContainerSlot(ContainerGui.CONTAINER_START + 53));
+        assertFalse(gui.isContainerSlot(ContainerGui.CONTAINER_START + 54));
+
+        // Slot 30 lands in the east half.
+        inv.setSlot(0, BlockType.SAND, 3);
+        c.click(0, false, false);
+        c.click(ContainerGui.CONTAINER_START + 30, false, false);
+        assertEquals(BlockType.SAND, east.typeOf(30 - Chest.SLOT_COUNT));
+        assertEquals(3, east.countOf(30 - Chest.SLOT_COUNT));
+        assertTrue(inv.isEmpty(0));
+
+        // Shift-click from the inventory fills the double chest west-first.
+        inv.setSlot(1, BlockType.DIRT, 4);
+        InventoryController c2 = new InventoryController(gui);
+        c2.click(1, false, true);
+        assertEquals(4, west.getCount(BlockType.DIRT));
+        assertTrue(inv.isEmpty(1));
     }
 }

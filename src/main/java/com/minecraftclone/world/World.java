@@ -280,6 +280,20 @@ public class World implements BlockAccessor {
         return blockEntityAt(x, y, z) instanceof Chest chest ? chest : null;
     }
 
+    /** The barrel at a block position, or null if none (no barrel placed / never opened). */
+    public Barrel barrelAt(int x, int y, int z) {
+        return blockEntityAt(x, y, z) instanceof Barrel barrel ? barrel : null;
+    }
+
+    /** Returns the barrel at a position, creating (and registering) it on first use. */
+    public Barrel getOrCreateBarrel(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof Barrel barrel) return barrel;
+        Barrel barrel = new Barrel();
+        blockEntities.put(blockKey(x, y, z), barrel);
+        return barrel;
+    }
+
     /** Returns the chest at a position, creating (and registering) it on first use. */
     public Chest getOrCreateChest(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
@@ -287,6 +301,24 @@ public class World implements BlockAccessor {
         Chest chest = new Chest();
         blockEntities.put(blockKey(x, y, z), chest);
         return chest;
+    }
+
+    /**
+     * The storage the player sees when opening the chest at a position: a single
+     * 27-slot chest, or a 54-slot {@link JoinedStorage} when it has a chest
+     * immediately beside it on the east-west axis (a Minecraft-style double
+     * chest). The two halves keep their own persisted slots - the merge is just
+     * a combined view, ordered west-first so the layout is stable whichever half
+     * you open. Same-y/z requirement keeps stacked or north-south chests single.
+     */
+    public com.minecraftclone.player.StorageContainer chestContainerAt(int x, int y, int z) {
+        Chest here = chestAt(x, y, z);
+        if (here == null) return null;
+        Chest west = chestAt(x - 1, y, z);
+        Chest east = chestAt(x + 1, y, z);
+        if (west != null) return new com.minecraftclone.player.JoinedStorage(west, here);
+        if (east != null) return new com.minecraftclone.player.JoinedStorage(here, east);
+        return here;
     }
 
     /** True if the block at this position is currently active - for a furnace, that it's burning (its front glows). */

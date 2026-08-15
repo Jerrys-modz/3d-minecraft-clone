@@ -43,6 +43,8 @@ public class TextureAtlas {
     public static final int FURNACE_LIT_TILE = 49;
     /** Tile index of the chest's lid/front face. */
     public static final int CHEST_TILE = 50;
+    /** Tile index of the barrel's face. */
+    public static final int BARREL_TILE = 51;
 
     private int textureId;
 
@@ -109,6 +111,7 @@ public class TextureAtlas {
         paintFurnaceLit(image, FURNACE_LIT_TILE);
         paintCraftingTable(image, CRAFTING_TABLE_TILE);
         paintChest(image, CHEST_TILE);
+        paintBarrel(image, BARREL_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
 
@@ -655,6 +658,35 @@ public class TextureAtlas {
             }
         }
         img.setRGB(ox + 8, oy + 8, 0xFF000000 | lock);
+    }
+
+    /** A wooden barrel: vertical stave planks with a metal band across the middle and a bung. */
+    private void paintBarrel(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int stave = 0xA8763A;
+        int grain = 0x8F5F2A;
+        int band = 0x8A8A8A;
+        int bung = 0x5A3D1D;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (y % 3 == 0 ? grain : stave));
+            }
+        }
+        // Metal band across the middle.
+        for (int y = 7; y < 10; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | band);
+            }
+        }
+        // A dark bung (the stopper hole) just above the band, off-center.
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int x = 11 + dx, y = 5 + dy;
+                if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | bung);
+            }
+        }
     }
 
     /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background - the torch light source. */

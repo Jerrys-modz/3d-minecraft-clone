@@ -76,9 +76,11 @@ public class Hud {
     private static final float FURNACE_ARROW_X0 = FURNACE_FLAME_X + 0.035f;
     private static final float FURNACE_ARROW_X1 = FURNACE_OUTPUT_X - 0.09f;
 
-    // Chest GUI layout: a 3x9 grid of the chest's slots, stacked directly above
-    // the player's 3x9 main grid (the hotbar sits below that as row 3).
-    private static final float CHEST_TOP_ROW_Y = INV_TOP_ROW_Y + 3f * INV_STEP; // center y of the chest's top row
+    // Chest GUI layout: a grid of the chest's slots (3x9 single, 6x9 double)
+    // stacked directly above the player's 3x9 main grid (the hotbar sits below
+    // that as row 3). The top row rises to fit however many rows the container
+    // has.
+    private static final int CHEST_COLUMNS = 9;
 
     // Creative inventory screen layout (logical square units).
     private static final float CAT_SLOT = 0.09f;
@@ -997,6 +999,12 @@ public class Hud {
         return INV_GRID_CENTER_X - invGridWidth() / 2f + INV_SLOT / 2f;
     }
 
+    /** Center y of a chest gui's top row: high enough that all chest rows sit above the player grid. */
+    private float chestTopRowY(ContainerGui gui) {
+        int rows = (gui.container().size() + CHEST_COLUMNS - 1) / CHEST_COLUMNS;
+        return INV_TOP_ROW_Y + rows * INV_STEP;
+    }
+
     /** Center (logical x, y) of the given slot id in the open gui; see {@link ContainerGui} for numbering. */
     private float[] slotCenter(ContainerGui gui, int slotId) {
         if (gui.isOutputSlot(slotId)) {
@@ -1010,9 +1018,9 @@ public class Hud {
         if (gui.isContainerSlot(slotId)) {
             int cs = slotId - ContainerGui.CONTAINER_START;
             if (gui.kind() == ContainerGui.Kind.CHEST) {
-                // A chest is a 3x9 grid of slots above the player's inventory.
-                int r = cs / 9, c = cs % 9;
-                return new float[]{invGridLeft() + c * INV_STEP, CHEST_TOP_ROW_Y - r * INV_STEP};
+                // A chest is a rows-by-9 grid of slots above the player's inventory.
+                int r = cs / CHEST_COLUMNS, c = cs % CHEST_COLUMNS;
+                return new float[]{invGridLeft() + c * INV_STEP, chestTopRowY(gui) - r * INV_STEP};
             }
             // Furnace: a 3-slot column - input, fuel, output.
             int fs = cs;
@@ -1122,14 +1130,14 @@ public class Hud {
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         // Panel background spanning the container area and the inventory grid.
-        // A chest's 3x9 grid stacks above the player grid, so its panel extends
-        // upward to cover it.
+        // A chest's grid stacks above the player grid, so its panel extends
+        // upward to cover it (higher for a 54-slot double chest).
         float gridW = invGridWidth();
         float panelLeft = CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
         float panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
         boolean chest = gui.kind() == ContainerGui.Kind.CHEST;
         float panelTop = chest
-                ? CHEST_TOP_ROW_Y + INV_SLOT / 2f + 0.055f
+                ? chestTopRowY(gui) + INV_SLOT / 2f + 0.055f
                 : INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
         float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f;
         float[] panel = {
