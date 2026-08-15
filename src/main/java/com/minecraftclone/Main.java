@@ -8,6 +8,7 @@ import com.minecraftclone.engine.graphics.MobRenderer;
 import com.minecraftclone.engine.graphics.MobTextures;
 import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
@@ -15,11 +16,11 @@ import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
-import com.minecraftclone.player.Smelting;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Door;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.Mob;
@@ -54,7 +55,7 @@ import static org.lwjgl.opengl.GL11.*;
  * hold Left-click to break the targeted block (speed and whether it's even
  * possible depend on the selected tool - see {@link com.minecraftclone.world.Mining} - creative instead
  * breaks one block per click), Right-click to place the selected block
- * (or eat it, if it's food), C to smelt the selected ore (aim at a furnace),
+ * (or eat it, if it's food; or open a furnace/crafting table's GUI when aiming at one),
  * E to open the inventory (click/drag items, craft on the 3x3 grid),
  * 1-9 or scroll wheel to pick a hotbar slot, F3 to toggle the on-screen debug
  * overlay, Esc to open/close the settings menu (where graphics options like
@@ -215,11 +216,20 @@ public class Main {
         settings.save(settingsFile);
     }
 
-    /** Closes the inventory screen, returning any cursor/grid items to the inventory. */
-    private void closeInventory(InventoryController controller, boolean[] inventoryOpen) {
+    /** Closes any open container screen (inventory/crafting table/furnace), returning cursor/grid items to the inventory. */
+    private void closeInventory(InventoryController controller, ContainerGui[] activeGui, ContainerGui inventoryGui, boolean[] inventoryOpen) {
         controller.returnGridToInventory();
         controller.returnCursorToInventory();
+        activeGui[0] = inventoryGui;
         inventoryOpen[0] = false;
+    }
+
+    /** Opens the given container gui, rebinding the controller and releasing the cursor for mouse use. */
+    private void openGui(InventoryController controller, ContainerGui[] activeGui, Window window, Input input, boolean[] inventoryOpen) {
+        controller.setGui(activeGui[0]);
+        inventoryOpen[0] = true;
+        window.setCursorCaptured(false);
+        input.resetMouseDelta();
     }
 
     /** Closes the creative screen, returning any cursor item to the inventory. */
@@ -288,6 +298,8 @@ public class Main {
         int[] bindingAction = {-1}; // >= 0: capturing a key for this action (settings menu)
         CraftingGrid craftingGrid = new CraftingGrid();
         InventoryController inventoryController = new InventoryController(player.getInventory(), craftingGrid);
+        ContainerGui inventoryGui = new ContainerGui(ContainerGui.Kind.INVENTORY, player.getInventory(), craftingGrid, null);
+        ContainerGui[] activeGui = {inventoryGui}; // the container screen currently shown, if any
         boolean[] inventoryOpen = {false};
         boolean[] creativeOpen = {false};
         int[] creativeTab = {0};
@@ -320,7 +332,8 @@ public class Main {
         System.out.println("          hold Left-click to mine (speed/possibility depends on your tool;");
         System.out.println("          creative breaks one block per click),");
         System.out.println("          Right-click place (or eat, if selected item is food),");
-        System.out.println("          E inventory (click/drag items), C smelt (aim at a furnace), 1-9/scroll select,");
+        System.out.println("          E inventory (click/drag items), 1-9/scroll select,");
+        System.out.println("          right-click a furnace/crafting table for its GUI,");
         System.out.println("          F3 debug, Esc settings.");
 
         glEnable(GL_BLEND);
@@ -566,7 +579,7 @@ public class Main {
                 if (bindingAction[0] >= 0) {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
                 } else if (inventoryOpen[0]) {
-                    closeInventory(inventoryController, inventoryOpen);
+                    closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen);
                 } else if (creativeOpen[0]) {
                     closeCreative(inventoryController, creativeOpen);
                 } else {
@@ -578,13 +591,14 @@ public class Main {
 
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY))) {
                 if (inventoryOpen[0]) {
-                    closeInventory(inventoryController, inventoryOpen);
+                    closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen);
                 } else if (creativeOpen[0]) {
                     closeCreative(inventoryController, creativeOpen);
                 } else if (settings.getGameMode().isCreative()) {
                     creativeOpen[0] = true;
                     menuOpen[0] = false;
                 } else {
+                    activeGui[0] = inventoryGui;
                     inventoryOpen[0] = true;
                     menuOpen[0] = false;
                 }
@@ -645,7 +659,7 @@ public class Main {
                 // mouse's normalized X must be scaled back by aspect to hit-test correctly.
                 float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
-                hoveredSlot[0] = hud.inventorySlotAt(logicalX, logicalY);
+                hoveredSlot[0] = hud.containerSlotAt(activeGui[0], logicalX, logicalY);
 
                 boolean shift = input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT);
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -706,6 +720,9 @@ public class Main {
             // Item-entity physics + pickup.
             world.updateItems(dt, player.getPosition(), player.getInventory());
 
+            // Furnaces smelt in the background, ticking forward with world time.
+            world.tickFurnaces(dt);
+
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
             // to the player's health, where the existing death/respawn handling picks
@@ -753,21 +770,6 @@ public class Main {
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
-
-                if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SMELT))) {
-                    BlockType selected = player.getInventory().typeOf(selectedSlot[0]);
-                    // Smelting: pressing C while aiming at a furnace smelts the selected
-                    // ore into its ingot/gem (consuming coal as fuel).
-                    BlockType targeted = hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
-                    if (selected != null && targeted == BlockType.FURNACE && Smelting.isSmeltable(selected)) {
-                        if (Smelting.smelt(player.getInventory(), selected) != null) {
-                            System.out.println("Smelted " + selected);
-                            showMessage(messages, "Smelted " + selected, new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
-                        } else {
-                            showMessage(messages, "Smelting needs ore and coal", new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
-                        }
-                    }
-                }
 
                 // A cell can hold an overlay decoration inside its primary block (e.g.
                 // seaweed inside water - see BlockType#isSubmersible); aiming at one
@@ -843,6 +845,17 @@ public class Main {
                                 BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR
                                         : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR : targetType;
                                 world.spawnItem(bx, by, bz, drop, 1, loot);
+                                if (targetType == BlockType.FURNACE) {
+                                    // A broken furnace spills whatever it was smelting or burning.
+                                    Furnace furnace = world.furnaceAt(bx, by, bz);
+                                    if (furnace != null) {
+                                        for (int s = 0; s < Furnace.SLOT_COUNT; s++) {
+                                            if (furnace.typeOf(s) != null) {
+                                                world.spawnItem(bx, by, bz, furnace.typeOf(s), furnace.countOf(s), loot);
+                                            }
+                                        }
+                                    }
+                                }
                                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
                                     world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
                                 }
@@ -872,6 +885,15 @@ public class Main {
                         if (noMob && mode.canPlace()) {
                             Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         }
+                    } else if (noMob && targeted == BlockType.FURNACE) {
+                        // Right-click a furnace to open its smelting gui.
+                        Furnace furnace = world.getOrCreateFurnace(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, furnace);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen);
+                    } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
+                        // Right-click a crafting table to open the 3x3 crafting gui.
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, player.getInventory(), craftingGrid, null);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         if (heldItem.isEdible() && !mode.isCreative()) {
                             player.eat(heldItem);
@@ -1062,7 +1084,7 @@ public class Main {
                 // Scale mouse X back by aspect to match the HUD's logical-square space.
                 float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
-                hud.renderInventory(player.getInventory(), craftingGrid, inventoryController, hoveredSlot[0],
+                hud.renderContainerGui(activeGui[0], inventoryController, hoveredSlot[0],
                         atlas, itemTextures, player.getDurability(), window.getAspectRatio(), logicalX, logicalY);
             }
             if (creativeOpen[0]) {

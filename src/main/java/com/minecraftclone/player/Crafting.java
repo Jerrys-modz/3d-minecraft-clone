@@ -77,6 +77,7 @@ public final class Crafting {
         shaped("PPP", "...", "...", BlockType.PLANKS_SLAB, 6);   // 3 planks -> slabs
         shaped("PP.", "PP.", "PP.", BlockType.DOOR, 1);          // 6 planks -> door
         shaped("PPP", "PPP", "...", BlockType.TRAPDOOR, 2);      // 6 planks -> 2 trapdoors
+        shaped("PP.", "PP.", "...", BlockType.CRAFTING_TABLE, 1); // 4 planks -> crafting table
 
         // Tools (mirrored matching lets an axe be built either way round).
         tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD);

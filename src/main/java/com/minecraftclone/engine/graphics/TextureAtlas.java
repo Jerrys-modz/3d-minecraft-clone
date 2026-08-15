@@ -37,6 +37,8 @@ public class TextureAtlas {
     public static final int LAMP_TILE = 25;
     /** Tile index of the furnace's front/side face. */
     public static final int FURNACE_TILE = 26;
+    /** Tile index of the crafting table's workbench face. */
+    public static final int CRAFTING_TABLE_TILE = 48;
 
     private int textureId;
 
@@ -100,6 +102,7 @@ public class TextureAtlas {
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
+        paintCraftingTable(image, CRAFTING_TABLE_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
 
@@ -540,8 +543,7 @@ public class TextureAtlas {
      * plain stone tile for its top/bottom, so only the (orientation-less) sides
      * get this "furnace" look - see {@link com.minecraftclone.world.BlockType#FURNACE}.
      */
-    private void paintFurnace(BufferedImage img, int index) {
-        int ox = tileX(index);
+    private void paintFurnace(BufferedImage img, int index) {        int ox = tileX(index);
         int oy = tileY(index);
         int stone = 0x8A8A8A;
         int dark = 0x2E2E2E;
@@ -563,9 +565,29 @@ public class TextureAtlas {
         }
     }
 
-    /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background - the torch light source. */
-    private void paintTorch(BufferedImage img, int index) {
+    /** A planks workbench top: light wood with a darker 2x2 grid and corner bolts. */
+    private void paintCraftingTable(BufferedImage img, int index) {
         int ox = tileX(index);
+        int oy = tileY(index);
+        int wood = 0xC69A56;
+        int grain = 0xAF8646;
+        int grid = 0x7A5A2E;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (x % 2 == 0 && y % 3 == 0 ? grain : wood));
+            }
+        }
+        // 2x2 inset panel, slightly darker, like the four planks of the recipe.
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                int dark = (x == 3 || x == 7 || x == 11 || y == 3 || y == 7 || y == 11) ? grid : wood;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
+            }
+        }
+    }
+
+    /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background - the torch light source. */
+    private void paintTorch(BufferedImage img, int index) {        int ox = tileX(index);
         int oy = tileY(index);
         // Stick: a thin vertical shaft in the lower two-thirds of the tile.
         for (int y = 7; y < TILE_PX; y++) {

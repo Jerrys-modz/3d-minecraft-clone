@@ -37,6 +37,8 @@ public class World implements BlockAccessor {
     // low 32) rather than a ChunkPos record, so the hot getBlock/setBlock lookups
     // don't allocate a key object on every call.
     private final Map<Long, Chunk> chunks = new HashMap<>();
+    /** Per-block furnace state for placed furnaces, keyed by {@link #blockKey}. */
+    private final Map<Long, Furnace> furnaces = new HashMap<>();
     private final TerrainGenerator generator;
     private final TextureAtlas atlas;
     private final ChunkStorage storage;
@@ -243,6 +245,48 @@ public class World implements BlockAccessor {
             promoteIfStaticFluid(worldX, worldY - 1, worldZ);
             promoteIfStaticFluid(worldX, worldY, worldZ + 1);
             promoteIfStaticFluid(worldX, worldY, worldZ - 1);
+        }
+    }
+
+    /** Packs block coordinates into a single key (21 bits per axis, so negatives stay unique). */
+    private static long blockKey(int x, int y, int z) {
+        return ((long) x & 0x1FFFFFL) | (((long) y & 0x1FFFFFL) << 21) | (((long) z & 0x1FFFFFL) << 42);
+    }
+
+    /** The furnace at a block position, or null if none (no furnace placed / never opened). */
+    public Furnace furnaceAt(int x, int y, int z) {
+        return furnaces.get(blockKey(x, y, z));
+    }
+
+    /** Returns the furnace at a position, creating (and registering) it on first use. */
+    public Furnace getOrCreateFurnace(int x, int y, int z) {
+        return furnaces.computeIfAbsent(blockKey(x, y, z), k -> new Furnace());
+    }
+
+    /** Forgets a furnace - call when its block is mined or removed. */
+    public void removeFurnace(int x, int y, int z) {
+        furnaces.remove(blockKey(x, y, z));
+    }
+
+    /**
+     * Advances every active furnace by {@code dt} seconds of world time. Furnaces
+     * whose block has since been replaced are pruned (their contents are dropped
+     * by the caller when the block is mined).
+     */
+    public void tickFurnaces(float dt) {
+        if (dt <= 0) return;
+        Iterator<Map.Entry<Long, Furnace>> it = furnaces.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Long, Furnace> entry = it.next();
+            long key = entry.getKey();
+            int x = (int) (key & 0x1FFFFFL) << 21 >> 21;
+            int y = (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
+            int z = (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+            if (getBlock(x, y, z) != BlockType.FURNACE) {
+                it.remove();
+                continue;
+            }
+            entry.getValue().tick(dt);
         }
     }
 

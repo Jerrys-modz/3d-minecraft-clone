@@ -8,16 +8,17 @@ import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.LineMesh;
 import com.minecraftclone.engine.graphics.TextRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.ToolDurability;
-import com.minecraftclone.world.gen.WorldGenSettings;
-import com.minecraftclone.util.FloatArray;
+import com.minecraftclone.world.gen.WorldGenSettings;import com.minecraftclone.util.FloatArray;
 import com.minecraftclone.util.IntArray;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Mining;
 import org.joml.Matrix4f;
 import org.joml.Vector3i;
@@ -63,6 +64,17 @@ public class Hud {
     private static final float CRAFT_TOP_ROW_Y = INV_TOP_ROW_Y;
     private static final float OUTPUT_X = -0.50f;           // crafting result slot
     private static final float OUTPUT_Y = INV_TOP_ROW_Y - INV_STEP;
+
+    // Furnace GUI layout (logical square units). The input/fuel slots sit in a
+    // column to the left of the inventory grid, the output between them and the
+    // grid, with a burn flame and a progress arrow between the two columns.
+    private static final float FURNACE_INPUT_X = -0.75f;   // center x of the input & fuel slots
+    private static final float FURNACE_OUTPUT_X = -0.38f;  // center x of the output slot
+    private static final float FURNACE_FUEL_Y = INV_TOP_ROW_Y - 2f * INV_STEP;
+    private static final float FURNACE_MID_Y = INV_TOP_ROW_Y - INV_STEP; // output row / flame row
+    private static final float FURNACE_FLAME_X = FURNACE_INPUT_X + 0.09f;
+    private static final float FURNACE_ARROW_X0 = FURNACE_FLAME_X + 0.035f;
+    private static final float FURNACE_ARROW_X1 = FURNACE_OUTPUT_X - 0.09f;
 
     // Creative inventory screen layout (logical square units).
     private static final float CAT_SLOT = 0.09f;
@@ -124,6 +136,8 @@ public class Hud {
     private final FloatArray blockVertices = new FloatArray(1024);
     private final IntArray blockIndices = new IntArray(1024);
     private final FloatArray slotBgVerts = new FloatArray(1024);
+    /** Scratch buffer for the furnace flame/arrow decoration quads. */
+    private final FloatArray furnaceDeco = new FloatArray(32);
     private final FloatArray barCx = new FloatArray(64);
     private final FloatArray barCy = new FloatArray(64);
     private final FloatArray barFrac = new FloatArray(64);
@@ -948,32 +962,42 @@ public class Hud {
         return INV_GRID_CENTER_X - invGridWidth() / 2f + INV_SLOT / 2f;
     }
 
-    /** Center (logical x, y) of the given slot id; see {@link InventoryController} for numbering. */
-    private float[] slotCenter(int slotId) {
-        if (slotId == InventoryController.OUTPUT_SLOT) {
+    /** Center (logical x, y) of the given slot id in the open gui; see {@link ContainerGui} for numbering. */
+    private float[] slotCenter(ContainerGui gui, int slotId) {
+        if (gui.isOutputSlot(slotId)) {
             return new float[]{OUTPUT_X, OUTPUT_Y};
         }
-        if (slotId >= Inventory.SIZE) {
-            int g = slotId - Inventory.SIZE;
+        if (gui.isGridSlot(slotId)) {
+            int g = slotId - ContainerGui.GRID_START;
             int r = g / CraftingGrid.WIDTH, c = g % CraftingGrid.WIDTH;
             return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
         }
-        int r, c;
-        if (slotId < Inventory.HOTBAR_SIZE) {
-            r = 3;
-            c = slotId;
-        } else {
-            int s = slotId - Inventory.HOTBAR_SIZE;
-            r = s / 9;
-            c = s % 9;
+        if (gui.isFurnaceSlot(slotId)) {
+            int fs = slotId - ContainerGui.CONTAINER_START;
+            if (fs == Furnace.SLOT_OUTPUT) return new float[]{FURNACE_OUTPUT_X, FURNACE_MID_Y};
+            float y = fs == Furnace.SLOT_INPUT ? INV_TOP_ROW_Y : FURNACE_FUEL_Y;
+            return new float[]{FURNACE_INPUT_X, y};
         }
-        return new float[]{invGridLeft() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP};
+        if (gui.isPlayerSlot(slotId)) {
+            int r, c;
+            if (slotId < Inventory.HOTBAR_SIZE) {
+                r = 3;
+                c = slotId;
+            } else {
+                int s = slotId - Inventory.HOTBAR_SIZE;
+                r = s / 9;
+                c = s % 9;
+            }
+            return new float[]{invGridLeft() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP};
+        }
+        return null;
     }
 
-    /** Resolves a mouse position (in logical-square coords) to a slot id, or -1 if it's over nothing. */
-    public int inventorySlotAt(float logicalX, float logicalY) {
-        for (int id = 0; id <= InventoryController.OUTPUT_SLOT; id++) {
-            float[] c = slotCenter(id);
+    /** Resolves a mouse position (in logical-square coords) to a slot id in the open gui, or -1 if it's over nothing. */
+    public int containerSlotAt(ContainerGui gui, float logicalX, float logicalY) {
+        for (int id = 0; id < gui.slotCount(); id++) {
+            float[] c = slotCenter(gui, id);
+            if (c == null) continue;
             float half = INV_SLOT / 2f;
             if (Math.abs(logicalX - c[0]) <= half && Math.abs(logicalY - c[1]) <= half) {
                 return id;
@@ -1041,19 +1065,21 @@ public class Hud {
     }
 
     /**
-     * Draws the full Minecraft-style inventory screen: the 36-slot inventory
-     * grid (with the hotbar as its bottom row), the 3x3 crafting grid, its
-     * output slot, the cursor stack following the mouse, and hover highlight.
-     * {@code cursorLx}/{@code cursorLy} are the mouse position in logical-square
-     * coordinates, so the cursor stack can track it.
+     * Draws any full-screen container gui: the 36-slot inventory grid (with the
+     * hotbar as its bottom row) plus the open container's slots - the 3x3
+     * crafting grid and its output for the inventory/crafting-table screens, or
+     * the input/fuel/output slots (with a burning flame and progress arrow) for
+     * a furnace. The cursor stack tracks the mouse and the hovered slot is
+     * highlighted. {@code cursorLx}/{@code cursorLy} are the mouse position in
+     * logical-square coordinates.
      */
-    public void renderInventory(Inventory inventory, CraftingGrid grid, InventoryController controller,
-                                int hoveredSlot, TextureAtlas atlas, ItemTextures itemTextures,
-                                ToolDurability durability, float aspectRatio, float cursorLx, float cursorLy) {
+    public void renderContainerGui(ContainerGui gui, InventoryController controller,
+                                   int hoveredSlot, TextureAtlas atlas, ItemTextures itemTextures,
+                                   ToolDurability durability, float aspectRatio, float cursorLx, float cursorLy) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
-        // Panel background spanning the inventory grid and crafting area.
+        // Panel background spanning the container area and the inventory grid.
         float gridW = invGridWidth();
         float panelLeft = CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
         float panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
@@ -1071,11 +1097,16 @@ public class Hud {
         lineShader.setUniform("color", new Vector4f(0.78f, 0.78f, 0.78f, 0.35f));
         inventoryPanel.render();
 
-        // Slot backgrounds (dark squares) for every inventory slot, grid cell and the output slot.
+        // Furnace decorations (flame + arrow) behind the slot icons.
+        if (gui.kind() == ContainerGui.Kind.FURNACE) {
+            renderFurnaceProgress(gui.furnace());
+        }
+
+        // Slot backgrounds (dark squares) for every interactive slot.
         slotBgVerts.clear();
         float half = INV_SLOT / 2f - 0.004f;
-        for (int id = 0; id <= InventoryController.OUTPUT_SLOT; id++) {
-            float[] c = slotCenter(id);
+        for (int id = 0; id < gui.slotCount(); id++) {
+            float[] c = slotCenter(gui, id);
             addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
         }
         inventorySlotBg.upload(slotBgVerts.toArray());
@@ -1084,29 +1115,28 @@ public class Hud {
 
         // Hover highlight.
         if (hoveredSlot >= 0) {
-            float[] c = slotCenter(hoveredSlot);
-            inventoryHover.upload(outlineLines(c[0], c[1], INV_SLOT / 2f + 0.004f));
-            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.9f));
-            glLineWidth(2f);
-            inventoryHover.render();
+            float[] c = slotCenter(gui, hoveredSlot);
+            if (c != null) {
+                inventoryHover.upload(outlineLines(c[0], c[1], INV_SLOT / 2f + 0.004f));
+                lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.9f));
+                glLineWidth(2f);
+                inventoryHover.render();
+            }
         }
         lineShader.unbind();
 
-        // Icons + counts + wear bars for every occupied slot.
+        // Icons + counts + wear bars for every occupied slot (the crafting
+        // output is derived from the recipe rather than stored).
         beginSlotBatch();
         float iconHalf = INV_SLOT / 2f - 0.006f;
-        for (int i = 0; i < Inventory.SIZE; i++) {
-            float[] c = slotCenter(i);
-            addSlotIcon(c[0], c[1], iconHalf, inventory.typeOf(i), inventory.countOf(i), itemTextures, atlas, durability);
+        for (int id = 0; id < gui.slotCount(); id++) {
+            float[] c = slotCenter(gui, id);
+            BlockType t = gui.typeOf(id);
+            if (t != null) addSlotIcon(c[0], c[1], iconHalf, t, gui.countOf(id), itemTextures, atlas, durability);
         }
-        for (int i = 0; i < CraftingGrid.SIZE; i++) {
-            float[] c = slotCenter(Inventory.SIZE + i);
-            BlockType t = grid.get(i);
-            if (t != null) addSlotIcon(c[0], c[1], iconHalf, t, 1, itemTextures, atlas, durability);
-        }
-        Crafting.Recipe recipe = Crafting.match(grid.snapshot());
+        Crafting.Recipe recipe = gui.currentRecipe();
         if (recipe != null) {
-            float[] c = slotCenter(InventoryController.OUTPUT_SLOT);
+            float[] c = slotCenter(gui, ContainerGui.OUTPUT_SLOT);
             addSlotIcon(c[0], c[1], iconHalf, recipe.output(), recipe.outputAmount(), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
@@ -1119,25 +1149,64 @@ public class Hud {
                     cursorLx + 0.02f, cursorLy - 0.02f);
         }
 
-        // Tooltip for the hovered slot (inventory, grid cell or crafting output).
+        // Tooltip for the hovered slot.
         BlockType tip = null;
-        if (hoveredSlot == InventoryController.OUTPUT_SLOT) {
+        if (gui.isOutputSlot(hoveredSlot)) {
             tip = recipe != null ? recipe.output() : null;
-        } else if (hoveredSlot >= Inventory.SIZE) {
-            tip = grid.get(hoveredSlot - Inventory.SIZE);
         } else if (hoveredSlot >= 0) {
-            tip = inventory.typeOf(hoveredSlot);
+            tip = gui.typeOf(hoveredSlot);
         }
         if (tip != null) {
             renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
         }
 
         // Title + hint line.
-        drawCenteredText("Inventory", 0f, panelTop - 0.05f, 0.045f, WHITE);
+        drawCenteredText(gui.title(), 0f, panelTop - 0.05f, 0.045f, WHITE);
         drawCenteredText("Left: take/place stack    Right: one item    Shift-click: move    Drag: spread    Esc: close",
                 0f, panelBottom - 0.04f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Draws the furnace's burn flame and smelting progress arrow (both driven by the furnace state). */
+    private void renderFurnaceProgress(Furnace furnace) {
+        // Flame track behind the flame itself.
+        furnaceDeco.clear();
+        float flameHalf = 0.0225f;
+        float flameTop = FURNACE_MID_Y + 0.045f;
+        float flameBottom = FURNACE_MID_Y - 0.045f;
+        addQuad3(furnaceDeco, FURNACE_FLAME_X - flameHalf, flameBottom, FURNACE_FLAME_X + flameHalf, flameTop);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.15f, 0.15f, 0.15f, 0.9f));
+        inventoryPanel.render();
+
+        // Flame fill rises from the bottom as the fuel burns down.
+        furnaceDeco.clear();
+        float flameHeight = (flameTop - flameBottom) * Math.min(1f, Math.max(0f, furnace.burnFraction()));
+        if (flameHeight > 0f) {
+            addQuad3(furnaceDeco, FURNACE_FLAME_X - flameHalf, flameBottom, FURNACE_FLAME_X + flameHalf, flameBottom + flameHeight);
+            inventoryPanel.upload(furnaceDeco.toArray());
+            lineShader.setUniform("color", new Vector4f(0.98f, 0.55f, 0.12f, 1f));
+            inventoryPanel.render();
+        }
+
+        // Arrow track from the fuel column toward the output slot.
+        float arrowHalf = 0.0225f;
+        furnaceDeco.clear();
+        addQuad3(furnaceDeco, FURNACE_ARROW_X0, FURNACE_MID_Y - arrowHalf, FURNACE_ARROW_X1, FURNACE_MID_Y + arrowHalf);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.3f, 0.3f, 0.3f, 0.9f));
+        inventoryPanel.render();
+
+        // Arrow fill grows left to right with smelting progress.
+        furnaceDeco.clear();
+        float fill = (FURNACE_ARROW_X1 - FURNACE_ARROW_X0) * Math.min(1f, Math.max(0f, furnace.progressFraction()));
+        if (fill > 0f) {
+            addQuad3(furnaceDeco, FURNACE_ARROW_X0, FURNACE_MID_Y - arrowHalf, FURNACE_ARROW_X0 + fill, FURNACE_MID_Y + arrowHalf);
+            inventoryPanel.upload(furnaceDeco.toArray());
+            lineShader.setUniform("color", new Vector4f(0.95f, 0.95f, 0.95f, 1f));
+            inventoryPanel.render();
+        }
     }
 
     /** Draws the cursor stack (icon + count) at the given logical position, above everything else. */

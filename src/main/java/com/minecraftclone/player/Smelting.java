@@ -6,15 +6,15 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * Smelting rules: turn raw ore into a refined ingot/gem using coal as fuel,
- * performed by pressing the craft key while aiming at a placed furnace (see
- * {@code Main}). Kept as a static registry, like {@link Crafting}, rather than
- * a per-furnace inventory - the furnace itself is stateless, so smelting is a
- * simple one-input/one-output conversion gated on fuel.
+ * Smelting recipes: turn raw ore into a refined ingot/gem using coal as fuel.
+ * This is the recipe registry for placed furnaces (see {@code Furnace}), which
+ * smelt over time rather than instantly - the old press-{@code C}-at-a-furnace
+ * mechanic was replaced by the furnace GUI. Kept as a static registry, like
+ * {@link Crafting}, so a furnace just asks "what does this ore become?".
  */
 public final class Smelting {
 
-    /** Fuel consumed per smelt. The game has no separate coal item, so coal ore is the fuel. */
+    /** Fuel for a furnace. The game has no separate coal item, so coal ore is the fuel. */
     public static final BlockType FUEL = BlockType.COAL_ORE;
     public static final int FUEL_PER_SMELT = 1;
 
@@ -43,21 +43,5 @@ public final class Smelting {
     /** The block an ore smelts into, or null if it isn't smeltable. */
     public static BlockType outputFor(BlockType ore) {
         return OUTPUTS.get(ore);
-    }
-
-    /**
-     * Smelts one {@code ore} into its refined form, consuming one fuel. Returns
-     * the output (and adds it to the inventory) on success, or null if there's
-     * no recipe, no ore, or no fuel - in which case nothing is consumed.
-     */
-    public static BlockType smelt(Inventory inventory, BlockType ore) {
-        BlockType output = OUTPUTS.get(ore);
-        if (output == null) return null;
-        if (inventory.getCount(ore) < 1) return null;
-        if (inventory.getCount(FUEL) < FUEL_PER_SMELT) return null;
-        inventory.remove(ore, 1);
-        inventory.remove(FUEL, FUEL_PER_SMELT);
-        inventory.add(output, 1);
-        return output;
     }
 }
