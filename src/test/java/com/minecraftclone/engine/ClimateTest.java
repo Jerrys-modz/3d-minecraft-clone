@@ -74,14 +74,20 @@ class ClimateTest {
     }
 
     @Test
-    void forecastHoldsCurrentPlusTwoUpcomingEvents() {
+    void forecastHoldsCurrentPlusUpcomingEvents() {
         Climate climate = rolledClimate(0);
         Climate.WeatherEvent[] forecast = climate.getForecast();
-        assertEquals(3, forecast.length);
+        assertEquals(5, forecast.length);
         assertEquals(climate.getWeather(), forecast[0].weather());
         assertEquals(climate.getNextWeather(), forecast[1].weather());
-        assertEquals(climate.getNextNextWeather(), forecast[2].weather());
         assertTrue(forecast[0].durationSeconds() > 0);
+
+        // Start times are cumulative: each upcoming event starts after the ones before it.
+        float[] minutes = climate.getForecastStartMinutes();
+        assertEquals(0f, minutes[0], 0.0001f);
+        for (int i = 1; i < minutes.length; i++) {
+            assertTrue(minutes[i] > minutes[i - 1], "event " + i + " starts after the previous one");
+        }
     }
 
     @Test
