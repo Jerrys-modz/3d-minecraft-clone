@@ -1,6 +1,7 @@
 package com.minecraftclone.world;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -23,12 +24,12 @@ import java.util.zip.GZIPOutputStream;
  * <p>
  * Each chunk is stored as a single gzip-compressed file: its raw block-id
  * bytes, followed by its raw overlay-id bytes (see {@link Chunk#getRawOverlays}
- * - e.g. seaweed growing inside a water cell), followed by any {@link Furnace}
- * state sitting in that chunk (see {@link FurnaceSave}). The first two halves
- * are mostly repeated values so the file compresses very well. Files written
- * before a section existed are still readable: a file with no overlay half
- * defaults every cell to no overlay, and a file with no furnace section has
- * no furnaces.
+ * - e.g. seaweed growing inside a water cell), followed by any {@link BlockEntity}
+ * state sitting in that chunk (furnaces today - see {@link BlockEntitySave}).
+ * The first two halves are mostly repeated values so the file compresses very
+ * well. Files written before a section existed are still readable: a file with
+ * no overlay half defaults every cell to no overlay, and a file with no block
+ * entity section has none.
  */
 public class ChunkStorage {
 
@@ -52,8 +53,8 @@ public class ChunkStorage {
         void markGenerated();
     }
 
-    /** A furnace's block position and state, carried alongside the chunk it sits in. */
-    public record FurnaceSave(int x, int y, int z, Furnace furnace) {
+    /** A block entity's block position and state, carried alongside the chunk it sits in. */
+    public record BlockEntitySave(int x, int y, int z, BlockEntity entity) {
     }
 
     private final Path chunksDir;
@@ -76,14 +77,14 @@ public class ChunkStorage {
     }
 
     /**
-     * Loads a previously-saved chunk's block, overlay and furnace data. Caller
-     * must have already checked {@link #hasSavedChunk}. Returns the furnaces
-     * that were saved in the chunk (empty for files from before furnaces
-     * existed); the caller registers them back into the world.
+     * Loads a previously-saved chunk's block, overlay and block-entity data.
+     * Caller must have already checked {@link #hasSavedChunk}. Returns the block
+     * entities that were saved in the chunk (empty for files from before block
+     * entities existed); the caller registers them back into the world.
      */
-    public List<FurnaceSave> load(PersistableChunk chunk) {
+    public List<BlockEntitySave> load(PersistableChunk chunk) {
         Path file = fileFor(chunk.getPos());
-        List<FurnaceSave> furnaces = new ArrayList<>();
+        List<BlockEntitySave> entities = new ArrayList<>();
         try (InputStream in = new GZIPInputStream(Files.newInputStream(file))) {
             byte[] data = in.readAllBytes();
             int blockLen = chunk.getRawBlocks().length;
@@ -96,16 +97,29 @@ public class ChunkStorage {
                 byte[] overlayData = java.util.Arrays.copyOfRange(data, blockLen, blockLen + overlayLen);
                 chunk.setRawOverlays(overlayData);
             }
-            // A file from before furnaces existed has no tail section.
+            // A file from before block entities existed has no tail section.
             int offset = blockLen + overlayLen;
             if (data.length >= offset + 4) {
                 DataInputStream d = new DataInputStream(new ByteArrayInputStream(data, offset, data.length - offset));
                 int count = d.readInt();
                 for (int i = 0; i < count; i++) {
+                    String type = d.readUTF();
                     int x = d.readInt(), y = d.readInt(), z = d.readInt();
-                    Furnace furnace = new Furnace();
-                    furnace.readFrom(d);
-                    furnaces.add(new FurnaceSave(x, y, z, furnace));
+                    int payloadLen = d.readInt();
+                    BlockEntity entity = BlockEntities.create(type);
+                    if (entity != null) {
+                        entity.readFrom(d);
+                        entities.add(new BlockEntitySave(x, y, z, entity));
+                    } else {
+                        // Unknown/removed type: skip its payload so the rest of the
+                        // file stays readable.
+                        long remaining = payloadLen;
+                        while (remaining > 0) {
+                            long skipped = d.skipBytes((int) Math.min(Integer.MAX_VALUE, remaining));
+                            if (skipped <= 0) break;
+                            remaining -= skipped;
+                        }
+                    }
                 }
             }
             chunk.markGenerated();
@@ -115,21 +129,28 @@ public class ChunkStorage {
         } catch (IOException e) {
             System.err.println("Failed to load saved chunk " + chunk.getPos() + ": " + e.getMessage());
         }
-        return furnaces;
+        return entities;
     }
 
-    public void save(PersistableChunk chunk, List<FurnaceSave> furnaces) {
+    public void save(PersistableChunk chunk, List<BlockEntitySave> entities) {
         Path file = fileFor(chunk.getPos());
         try (OutputStream out = new GZIPOutputStream(Files.newOutputStream(file))) {
             out.write(chunk.getRawBlocks());
             out.write(chunk.getRawOverlays());
             DataOutputStream d = new DataOutputStream(out);
-            d.writeInt(furnaces.size());
-            for (FurnaceSave fs : furnaces) {
-                d.writeInt(fs.x());
-                d.writeInt(fs.y());
-                d.writeInt(fs.z());
-                fs.furnace().writeTo(d);
+            d.writeInt(entities.size());
+            for (BlockEntitySave es : entities) {
+                d.writeUTF(es.entity().type());
+                d.writeInt(es.x());
+                d.writeInt(es.y());
+                d.writeInt(es.z());
+                // Length-prefixed payload: lets an unknown type on load skip
+                // exactly its own bytes without breaking the rest of the file.
+                ByteArrayOutputStream payload = new ByteArrayOutputStream();
+                es.entity().writeTo(new DataOutputStream(payload));
+                byte[] bytes = payload.toByteArray();
+                d.writeInt(bytes.length);
+                d.write(bytes);
             }
             d.flush();
         } catch (IOException e) {

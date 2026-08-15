@@ -131,7 +131,7 @@ A **crafting table** (4 planks) is the same idea for crafting: right-click it fo
 
 ## Saving
 
-The world is saved to `saves/world/` next to wherever you run the jar from (override with the `MCCLONE_SAVE_DIR` environment variable). The world seed is written there on first launch and reused on every subsequent launch, so it's the same world each time you start the game. Only chunks you've actually broken/placed blocks in are ever written to disk — untouched terrain is cheap to regenerate deterministically from the seed, which is what keeps disk and memory usage bounded no matter how far you explore. Edits autosave every 60 seconds and on a clean exit. Graphics settings (render distance, VSync, FOV, sensitivity, see-through leaves) are saved to `settings.txt` in the same directory and restored on the next launch.
+The world is saved to `saves/world/` next to wherever you run the jar from (override with the `MCCLONE_SAVE_DIR` environment variable). The world seed is written there on first launch and reused on every subsequent launch, so it's the same world each time you start the game. Only chunks you've actually broken/placed blocks in are ever written to disk — untouched terrain is cheap to regenerate deterministically from the seed, which is what keeps disk and memory usage bounded no matter how far you explore. Each saved chunk also carries its **block entities** (persistent per-block state — a furnace's contents and smelting progress today, and any future machine's inventory), length-prefixed by type so a chunk written by a newer build still loads if an entity type has since been removed. Edits autosave every 60 seconds and on a clean exit. Graphics settings (render distance, VSync, FOV, sensitivity, see-through leaves) are saved to `settings.txt` in the same directory and restored on the next launch.
 
 ## Textures
 
@@ -153,7 +153,7 @@ src/main/java/com/minecraftclone/
 ├── engine/                   # Window, input, camera, shaders, HUD, DayNightCycle
 │   ├── graphics/              # TextureAtlas, ItemTextures, FontAtlas, GLTexture, Mesh, LineMesh, IconMesh, ItemRenderer
 │   └── gui/                   # ContainerGui (shared slot model for the inventory/furnace/crafting-table screens)
-├── world/                    # Chunk, World (streaming/meshing), BlockType, Mining, ItemEntity, FluidSim, Furnace (state + smelting)
+├── world/                    # Chunk, World (streaming/meshing), BlockType, Mining, ItemEntity, FluidSim, BlockEntity/BlockEntities (registry), Furnace
 │   └── gen/                   # TerrainGenerator (noise-based world gen)
 ├── player/                    # Player controller, PlayerStats, Inventory, Crafting, CraftingGrid, Smelting, MiningController
 ├── tools/                     # GenerateItemTextures (offline, not run by the game itself)

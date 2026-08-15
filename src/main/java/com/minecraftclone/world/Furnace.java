@@ -11,7 +11,7 @@ import java.io.IOException;
  * The state of a single placed furnace: three slots (input, fuel, output) and
  * a smelting timer. Unlike the old instant smelt-on-keypress, a furnace works
  * like Minecraft's - load it with ore and coal and it smelts over time, ticking
- * forward with the world (see {@link World#tickFurnaces(float)}).
+ * forward with the world (see {@link World#tickBlockEntities(float)}).
  * <p>
  * Fuel is coal ore ({@link Smelting#FUEL}); each unit burns for {@link
  * #BURN_TIME} seconds, during which a smeltable input advances {@link
@@ -21,11 +21,13 @@ import java.io.IOException;
  * <p>
  * A furnace is intentionally a tiny, self-contained container (no "inventory"
  * bag of its own beyond its three slots), kept in memory per block position by
- * {@link World}. Its contents and smelting progress are saved alongside its
- * chunk (see {@link ChunkStorage}) and restored when the chunk reloads, so a
- * furnace keeps working across a restart.
+ * {@link World} as a {@link BlockEntity}. Its contents and smelting progress
+ * are saved alongside its chunk (see {@link ChunkStorage}) and restored when
+ * the chunk reloads, so a furnace keeps working across a restart.
  */
-public class Furnace {
+public class Furnace implements BlockEntity {
+
+    public static final String TYPE = "furnace";
 
     public static final int SLOT_INPUT = 0;
     public static final int SLOT_FUEL = 1;
@@ -44,6 +46,16 @@ public class Furnace {
     private float burnTime;
     /** Seconds accumulated toward refining the current input item. */
     private float progress;
+
+    @Override
+    public String type() {
+        return TYPE;
+    }
+
+    @Override
+    public BlockType blockType() {
+        return BlockType.FURNACE;
+    }
 
     public BlockType typeOf(int slot) {
         return types[slot];
@@ -146,15 +158,6 @@ public class Furnace {
             }
         }
         burnTime = Math.max(0, burnTime - dt);
-    }
-
-    /** Total number of items in the furnace (used to decide whether to keep it around). */
-    public int totalItems() {
-        int total = 0;
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            total += counts[i];
-        }
-        return total;
     }
 
     /** Writes the furnace's slots and smelting state to {@code out} (see {@link ChunkStorage}). */

@@ -37,8 +37,8 @@ public class World implements BlockAccessor {
     // low 32) rather than a ChunkPos record, so the hot getBlock/setBlock lookups
     // don't allocate a key object on every call.
     private final Map<Long, Chunk> chunks = new HashMap<>();
-    /** Per-block furnace state for placed furnaces, keyed by {@link #blockKey}. */
-    private final Map<Long, Furnace> furnaces = new HashMap<>();
+    /** Per-block block entities (furnaces today, machines/chests tomorrow), keyed by {@link #blockKey}. */
+    private final Map<Long, BlockEntity> blockEntities = new HashMap<>();
     private final TerrainGenerator generator;
     private final TextureAtlas atlas;
     private final ChunkStorage storage;
@@ -265,52 +265,62 @@ public class World implements BlockAccessor {
         return (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
     }
 
+    /** The block entity at a block position, or null if none. */
+    public BlockEntity blockEntityAt(int x, int y, int z) {
+        return blockEntities.get(blockKey(x, y, z));
+    }
+
     /** The furnace at a block position, or null if none (no furnace placed / never opened). */
     public Furnace furnaceAt(int x, int y, int z) {
-        return furnaces.get(blockKey(x, y, z));
+        return blockEntityAt(x, y, z) instanceof Furnace furnace ? furnace : null;
     }
 
     /** Returns the furnace at a position, creating (and registering) it on first use. */
     public Furnace getOrCreateFurnace(int x, int y, int z) {
-        return furnaces.computeIfAbsent(blockKey(x, y, z), k -> new Furnace());
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof Furnace furnace) return furnace;
+        Furnace furnace = new Furnace();
+        blockEntities.put(blockKey(x, y, z), furnace);
+        return furnace;
     }
 
-    /** Forgets a furnace - call when its block is mined or removed. */
-    public void removeFurnace(int x, int y, int z) {
-        furnaces.remove(blockKey(x, y, z));
+    /** Forgets a block entity - call when its block is mined or removed. */
+    public void removeBlockEntity(int x, int y, int z) {
+        blockEntities.remove(blockKey(x, y, z));
     }
 
     /**
-     * Advances every active furnace by {@code dt} seconds of world time. Furnaces
+     * Advances every block entity by {@code dt} seconds of world time. Entities
      * whose block has since been replaced are pruned (their contents are dropped
      * by the caller when the block is mined).
      */
-    public void tickFurnaces(float dt) {
+    public void tickBlockEntities(float dt) {
         if (dt <= 0) return;
-        Iterator<Map.Entry<Long, Furnace>> it = furnaces.entrySet().iterator();
+        Iterator<Map.Entry<Long, BlockEntity>> it = blockEntities.entrySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<Long, Furnace> entry = it.next();
+            Map.Entry<Long, BlockEntity> entry = it.next();
             long key = entry.getKey();
-            if (getBlock(keyX(key), keyY(key), keyZ(key)) != BlockType.FURNACE) {
+            BlockEntity entity = entry.getValue();
+            if (getBlock(keyX(key), keyY(key), keyZ(key)) != entity.blockType()) {
                 it.remove();
                 continue;
             }
-            entry.getValue().tick(dt);
+            entity.tick(dt);
         }
     }
 
-    /** The furnaces living inside chunk {@code c}, excluding any whose block has since been removed. */
-    private List<ChunkStorage.FurnaceSave> furnacesInChunk(Chunk c) {
+    /** The block entities living inside chunk {@code c}, excluding any whose block has since been removed. */
+    private List<ChunkStorage.BlockEntitySave> blockEntitiesInChunk(Chunk c) {
         int minX = c.getOriginX();
         int minZ = c.getOriginZ();
-        List<ChunkStorage.FurnaceSave> out = new ArrayList<>();
-        for (Map.Entry<Long, Furnace> e : furnaces.entrySet()) {
+        List<ChunkStorage.BlockEntitySave> out = new ArrayList<>();
+        for (Map.Entry<Long, BlockEntity> e : blockEntities.entrySet()) {
             int x = keyX(e.getKey());
             int z = keyZ(e.getKey());
             if (x < minX || x >= minX + Chunk.SIZE || z < minZ || z >= minZ + Chunk.SIZE) continue;
             int y = keyY(e.getKey());
-            if (getBlock(x, y, z) != BlockType.FURNACE) continue; // mined/removed - don't resurrect it
-            out.add(new ChunkStorage.FurnaceSave(x, y, z, e.getValue()));
+            if (getBlock(x, y, z) != e.getValue().blockType()) continue; // mined/removed - don't resurrect it
+            out.add(new ChunkStorage.BlockEntitySave(x, y, z, e.getValue()));
         }
         return out;
     }
@@ -475,10 +485,10 @@ public class World implements BlockAccessor {
                     if (storage.hasSavedChunk(chunk.getPos())) {
                         // A previously-edited chunk: restore the player's changes
                         // instead of regenerating pristine terrain, along with any
-                        // furnaces that were smelting in it.
-                        for (ChunkStorage.FurnaceSave fs : storage.load(chunk)) {
-                            if (getBlock(fs.x(), fs.y(), fs.z()) == BlockType.FURNACE) {
-                                furnaces.put(blockKey(fs.x(), fs.y(), fs.z()), fs.furnace());
+                        // block entities that were holding state in it.
+                        for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
+                            if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
+                                blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
                             }
                         }
                     } else {
@@ -507,7 +517,7 @@ public class World implements BlockAccessor {
             for (Chunk c : toRemove) {
                 chunks.remove(key(c.getPos().x(), c.getPos().z()));
                 if (c.isModifiedByPlayer()) {
-                    storage.save(c, furnacesInChunk(c));
+                    storage.save(c, blockEntitiesInChunk(c));
                 }
                 c.destroy();
             }
@@ -845,7 +855,7 @@ public class World implements BlockAccessor {
         int saved = 0;
         for (Chunk c : chunks.values()) {
             if (c.isModifiedByPlayer()) {
-                storage.save(c, furnacesInChunk(c));
+                storage.save(c, blockEntitiesInChunk(c));
                 saved++;
             }
         }

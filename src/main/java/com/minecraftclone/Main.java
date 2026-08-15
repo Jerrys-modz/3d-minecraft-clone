@@ -720,8 +720,9 @@ public class Main {
             // Item-entity physics + pickup.
             world.updateItems(dt, player.getPosition(), player.getInventory());
 
-            // Furnaces smelt in the background, ticking forward with world time.
-            world.tickFurnaces(dt);
+            // Furnaces (and any other block entities) work in the background,
+            // ticking forward with world time.
+            world.tickBlockEntities(dt);
 
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
