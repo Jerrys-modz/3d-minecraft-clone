@@ -368,6 +368,7 @@ public class Main {
         WeatherRenderer weatherRenderer = new WeatherRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
+        boolean[] forecastOpen = {false};
         boolean[] menuOpen = {false};
         int[] menuSelection = {0};
         int[] settingsTab = {Settings.TAB_GRAPHICS}; // active settings tab
@@ -437,6 +438,9 @@ public class Main {
             } catch (IllegalArgumentException ignored) {
                 // Unknown weather override - leave the random forecast alone.
             }
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_FORECAST") != null) {
+            forecastOpen[0] = true;
         }
         if (System.getenv("MCCLONE_AUTOTEST_PITCH") != null) {
             player.getCamera().setPitch(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_PITCH")));
@@ -861,6 +865,9 @@ public class Main {
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.DEBUG))) {
                 showDebug[0] = !showDebug[0];
             }
+            if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.FORECAST))) {
+                forecastOpen[0] = !forecastOpen[0];
+            }
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
@@ -1157,6 +1164,9 @@ public class Main {
                 }
             }
             hud.renderMessages(messages, window.getAspectRatio());
+            if (started[0] && forecastOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+                hud.renderForecast(climate, window.getAspectRatio());
+            }
             if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();
                 float aspect = window.getAspectRatio();

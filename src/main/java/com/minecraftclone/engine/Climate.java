@@ -22,7 +22,7 @@ public class Climate {
     }
 
     /** How many weather events are tracked: the current one plus the rolled-ahead forecast. */
-    private static final int FORECAST_HORIZON = 3;
+    private static final int FORECAST_HORIZON = 5;
 
     /** How strongly rain raises a biome's humidity toward wet. */
     private static final float WETNESS_HUMIDITY_BOOST = 0.4f;
@@ -61,9 +61,9 @@ public class Climate {
         if (dt <= 0) return;
         currentBiome = playerBiome == null ? Biome.PLAINS : playerBiome;
         if (!rolled) {
-            rollWeather(0);
-            rollWeather(1);
-            rollWeather(2);
+            for (int i = 0; i < FORECAST_HORIZON; i++) {
+                rollWeather(i);
+            }
             rolled = true;
         }
         // Consume dt in slices bounded by each event's remaining duration, so a big
@@ -140,13 +140,28 @@ public class Climate {
         return schedule[2].weather;
     }
 
-    /** A copy of the full forecast: current + two upcoming events, in order. */
+    /** A copy of the full forecast: current + upcoming events, in order. */
     public WeatherEvent[] getForecast() {
         WeatherEvent[] copy = new WeatherEvent[FORECAST_HORIZON];
         for (int i = 0; i < FORECAST_HORIZON; i++) {
             copy[i] = schedule[i];
         }
         return copy;
+    }
+
+    /**
+     * Minutes from now until each forecast event begins (index 0 is "now", the
+     * current weather). Later events start when everything before them has
+     * played out, so this is the sum of the preceding events' durations.
+     */
+    public float[] getForecastStartMinutes() {
+        float[] minutes = new float[FORECAST_HORIZON];
+        float accumulatedSeconds = 0f;
+        for (int i = 0; i < FORECAST_HORIZON; i++) {
+            minutes[i] = accumulatedSeconds / 60f;
+            accumulatedSeconds += schedule[i].durationSeconds;
+        }
+        return minutes;
     }
 
     /** 0..1 how "wet" the world is right now - rain pushes it up, dry weather drains it. */

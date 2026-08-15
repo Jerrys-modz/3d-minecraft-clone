@@ -511,6 +511,42 @@ public class Hud {
     }
 
     /**
+     * Draws the weather forecast panel: the current weather with its strength and
+     * the rolled-ahead upcoming events with rough start times, centered near the
+     * top of the screen.
+     */
+    public void renderForecast(Climate climate, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        float y = 0.84f;
+        drawCenteredText("Weather Forecast", 0f, y, 0.042f, WHITE);
+        y -= 0.062f;
+
+        Climate.WeatherEvent[] forecast = climate.getForecast();
+        float[] minutes = climate.getForecastStartMinutes();
+        float size = 0.032f;
+        for (int i = 0; i < forecast.length; i++) {
+            Climate.WeatherEvent event = forecast[i];
+            String when = i == 0 ? "Now" : "In " + (int) Math.ceil(minutes[i]) + "m";
+            drawCenteredText(when + ": " + forecastLabel(event), 0f, y, size, WHITE);
+            y -= 0.05f;
+        }
+        drawCenteredText("Forecast key to close", 0f, y - 0.015f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** A forecast line label: "Rain (heavy)" etc., with no strength for clear skies. */
+    private static String forecastLabel(Climate.WeatherEvent event) {
+        if (!event.weather().isPrecipitation()) {
+            return event.weather().displayName;
+        }
+        String strength = event.strength() < 0.4f ? "light" : event.strength() < 0.75f ? "moderate" : "heavy";
+        return event.weather().displayName + " (" + strength + ")";
+    }
+
+    /**
      * Draws the pause/settings menu: a semi-transparent panel with a title, a
      * tab strip (Graphics / Gameplay / Controls) under it, and the rows of the
      * active tab - setting rows for the first two tabs, the keybind list for
