@@ -1008,6 +1008,18 @@ public class Hud {
         return CHEST_BOTTOM_ROW_Y + (rows - 1) * INV_STEP;
     }
 
+    /**
+     * How far a chest gui shifts <em>down</em> to fit on screen. A tall chest
+     * (e.g. a 2x2 = 108 slots = 12 rows) would otherwise push its top row above
+     * the top edge; shifting the whole screen down keeps every slot the same
+     * size. Zero for chests short enough to fit in the normal position.
+     */
+    private float chestLayoutShift(ContainerGui gui) {
+        if (gui.kind() != ContainerGui.Kind.CHEST) return 0f;
+        float panelTop = chestTopRowY(gui) + INV_SLOT / 2f + 0.055f;
+        return Math.max(0f, panelTop - 1f);
+    }
+
     /** Center (logical x, y) of the given slot id in the open gui; see {@link ContainerGui} for numbering. */
     private float[] slotCenter(ContainerGui gui, int slotId) {
         if (gui.isOutputSlot(slotId)) {
@@ -1023,7 +1035,7 @@ public class Hud {
             if (gui.kind() == ContainerGui.Kind.CHEST) {
                 // A chest is a rows-by-9 grid of slots above the player's inventory.
                 int r = cs / CHEST_COLUMNS, c = cs % CHEST_COLUMNS;
-                return new float[]{invGridLeft() + c * INV_STEP, chestTopRowY(gui) - r * INV_STEP};
+                return new float[]{invGridLeft() + c * INV_STEP, chestTopRowY(gui) - r * INV_STEP - chestLayoutShift(gui)};
             }
             // Furnace: a 3-slot column - input, fuel, output.
             int fs = cs;
@@ -1041,7 +1053,7 @@ public class Hud {
                 r = s / 9;
                 c = s % 9;
             }
-            return new float[]{invGridLeft() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP};
+            return new float[]{invGridLeft() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP - chestLayoutShift(gui)};
         }
         return null;
     }
@@ -1134,19 +1146,22 @@ public class Hud {
 
         // Panel background spanning the container area and the inventory grid.
         // A chest's grid stacks above the player grid, so its panel extends
-        // upward to cover it (higher for a 54-slot double chest); it also hugs
-        // the 9-wide inventory grid rather than reaching out to the crafting
-        // grid's column, since a chest has no crafting grid.
+        // upward to cover it (higher for a 54-slot double chest, taller still
+        // for a 108-slot 2x2); it also hugs the 9-wide inventory grid rather
+        // than reaching out to the crafting grid's column, since a chest has no
+        // crafting grid. Tall chests shift the whole screen down so every slot
+        // stays the same size.
         float gridW = invGridWidth();
         boolean chest = gui.kind() == ContainerGui.Kind.CHEST;
+        float shift = chestLayoutShift(gui);
         float panelLeft = chest
                 ? INV_GRID_CENTER_X - gridW / 2f - 0.03f
                 : CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
         float panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
         float panelTop = chest
-                ? chestTopRowY(gui) + INV_SLOT / 2f + 0.055f
+                ? chestTopRowY(gui) + INV_SLOT / 2f + 0.055f - shift
                 : INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
-        float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f;
+        float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f - shift;
         float[] panel = {
                 panelLeft, panelBottom, 0, panelRight, panelBottom, 0, panelRight, panelTop, 0,
                 panelLeft, panelBottom, 0, panelRight, panelTop, 0, panelLeft, panelTop, 0,
@@ -1204,7 +1219,7 @@ public class Hud {
         // The chest's bottom row sits CHEST_BOTTOM_ROW_Y above the player's top
         // row, leaving a clear gap for it.
         if (chest) {
-            float sepCenter = (CHEST_BOTTOM_ROW_Y + INV_TOP_ROW_Y) / 2f;
+            float sepCenter = (CHEST_BOTTOM_ROW_Y + INV_TOP_ROW_Y) / 2f - shift;
             float sepHalf = 0.016f;
             inventoryPanel.upload(new float[]{
                     panelLeft + 0.02f, sepCenter - sepHalf, 0, panelRight - 0.02f, sepCenter - sepHalf, 0,

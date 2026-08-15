@@ -515,7 +515,8 @@ public class Main {
         }
         // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
         // the container screen can be screenshotted. MCCLONE_AUTOTEST_DOUBLE
-        // merges a second chest beside it to screenshot a 54-slot double chest.
+        // merges a second chest beside it to screenshot a 54-slot double chest;
+        // MCCLONE_AUTOTEST_QUAD merges a 2x2 square into a 108-slot quad chest.
         if (System.getenv("MCCLONE_AUTOTEST_CHEST_GUI") != null && started[0]) {
             Chest west = world.getOrCreateChest(0, 0, 0);
             west.setSlot(0, BlockType.IRON_INGOT, 5);
@@ -527,6 +528,17 @@ public class Main {
                 east.setSlot(3, BlockType.GOLD_INGOT, 4);
                 east.setSlot(4, BlockType.DIAMOND, 2);
                 container = new JoinedStorage(west, east);
+            }
+            if (System.getenv("MCCLONE_AUTOTEST_QUAD") != null) {
+                Chest east = world.getOrCreateChest(1, 0, 0);
+                Chest south = world.getOrCreateChest(0, 0, 1);
+                Chest corner = world.getOrCreateChest(1, 0, 1);
+                east.setSlot(3, BlockType.GOLD_INGOT, 4);
+                south.setSlot(4, BlockType.DIAMOND, 2);
+                corner.setSlot(5, BlockType.COAL, 9);
+                container = new JoinedStorage(
+                        new JoinedStorage(west, east),
+                        new JoinedStorage(south, corner));
             }
             activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, container);
             openGui(inventoryController, activeGui, window, input, inventoryOpen);

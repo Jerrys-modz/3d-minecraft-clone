@@ -248,4 +248,37 @@ class ContainerGuiTest {
         assertEquals(4, west.getCount(BlockType.DIRT));
         assertTrue(inv.isEmpty(1));
     }
+
+    @Test
+    void quadChestGuiPresents108SlotsAcrossFourChests() {
+        Inventory inv = new Inventory();
+        Chest nw = new Chest(), ne = new Chest(), sw = new Chest(), se = new Chest();
+        // A 2x2 chest composes four 27-slot chests, row-major (NW, NE, SW, SE).
+        JoinedStorage quad = new JoinedStorage(
+                new JoinedStorage(nw, ne),
+                new JoinedStorage(sw, se));
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), quad);
+        InventoryController c = new InventoryController(gui);
+
+        assertEquals(Inventory.SIZE + 108, gui.slotCount());
+        assertTrue(gui.isContainerSlot(ContainerGui.CONTAINER_START + 107));
+        assertFalse(gui.isContainerSlot(ContainerGui.CONTAINER_START + 108));
+
+        // Slot 80 lands in the SE chest (row-major: NW 0-26, NE 27-53, SW 54-80... wait
+        // 54-80 is 27 slots so SW=54..80, SE=81..107). Use 100 -> SE.
+        inv.setSlot(0, BlockType.SAND, 3);
+        c.click(0, false, false);
+        c.click(ContainerGui.CONTAINER_START + 100, false, false);
+        assertEquals(BlockType.SAND, se.typeOf(100 - 3 * Chest.SLOT_COUNT));
+        assertEquals(3, se.countOf(100 - 3 * Chest.SLOT_COUNT));
+        assertTrue(inv.isEmpty(0));
+        assertTrue(nw.isEmpty(0) && ne.isEmpty(0) && sw.isEmpty(0), "only SE received the item");
+
+        // Shift-click fills the quad west-first, north row before south.
+        inv.setSlot(2, BlockType.APPLE, 9);
+        c.click(2, false, true);
+        assertEquals(9, nw.getCount(BlockType.APPLE), "NW fills first");
+        assertTrue(ne.isEmpty(0) && sw.isEmpty(0) && se.isEmpty(0));
+        assertTrue(inv.isEmpty(2));
+    }
 }
