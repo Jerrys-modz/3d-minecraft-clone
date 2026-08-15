@@ -118,6 +118,11 @@ public class Player {
         this.invertMouseY = invert;
     }
 
+    /** The walk-bob phase (radians) - drives the held-item sway in first person. */
+    public float getBobPhase() {
+        return bobPhase;
+    }
+
     /** Sets the current game mode (creative/spectator are invulnerable, spectator is no-clip). */
     public void setGameMode(GameMode mode) {
         this.gameMode = mode;

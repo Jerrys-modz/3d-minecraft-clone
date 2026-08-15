@@ -2,6 +2,7 @@ package com.minecraftclone;
 
 import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.HandRenderer;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.MobRenderer;
@@ -278,6 +279,7 @@ public class Main {
 
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
+        HandRenderer handRenderer = new HandRenderer();
         MobRenderer mobRenderer = new MobRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
@@ -382,6 +384,17 @@ public class Main {
             System.out.println("World seed: " + seed);
             started[0] = true;
             mainMenuOpen[0] = false;
+        }
+        // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
+        // the first-person hand can be screenshotted holding something.
+        if (System.getenv("MCCLONE_AUTOTEST_HELD") != null) {
+            try {
+                BlockType held = BlockType.valueOf(System.getenv("MCCLONE_AUTOTEST_HELD"));
+                player.getInventory().setSlot(0, held, 1);
+                selectedSlot[0] = 0;
+            } catch (IllegalArgumentException ignored) {
+                System.err.println("MCCLONE_AUTOTEST_HELD: unknown block " + System.getenv("MCCLONE_AUTOTEST_HELD"));
+            }
         }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
@@ -978,6 +991,16 @@ public class Main {
             chunkShader.unbind();
             }
 
+            // First-person held item (Minecraft-style): drawn after the world so it
+            // always sits on top, hidden while any menu/inventory is up and in
+            // spectator (no hand to look at).
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && !settings.getGameMode().isSpectator()) {
+                handRenderer.render(chunkShader, atlas, itemTextures,
+                        player.getInventory().typeOf(selectedSlot[0]),
+                        player.getBobPhase(), animTime[0], projection);
+            }
+
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 if (hit != null && targetedMobRef[0] == null) {
                     float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
@@ -1112,6 +1135,7 @@ public class Main {
 
         hud.destroy();
         itemRenderer.destroy();
+        handRenderer.destroy();
         mobRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
