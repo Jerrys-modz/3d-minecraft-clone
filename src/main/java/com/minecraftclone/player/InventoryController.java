@@ -269,7 +269,7 @@ public class InventoryController {
             int target = -1;
             if (Smelting.isSmeltable(t)) {
                 target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_INPUT;
-            } else if (t == Smelting.FUEL) {
+            } else if (com.minecraftclone.world.Furnace.isFuel(t)) {
                 target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_FUEL;
             }
             if (target >= 0) {

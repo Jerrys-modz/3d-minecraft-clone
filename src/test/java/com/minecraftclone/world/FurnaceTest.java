@@ -16,12 +16,48 @@ class FurnaceTest {
         Furnace f = new Furnace();
         f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 12);
         f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
-        f.tick(Furnace.BURN_TIME);
+        f.tick(Furnace.COAL_BURN_TIME);
         assertEquals(BlockType.IRON_INGOT, f.typeOf(Furnace.SLOT_OUTPUT));
         assertEquals(12, f.countOf(Furnace.SLOT_OUTPUT));
         assertTrue(f.isEmpty(Furnace.SLOT_INPUT));
         assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
         assertFalse(f.isBurning());
+    }
+
+    @Test
+    void woodLogSmeltsTwoItems() {
+        Furnace f = new Furnace();
+        f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 2);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.WOOD_LOG, 1);
+        f.tick(Furnace.fuelDuration(BlockType.WOOD_LOG));
+        assertEquals(2, f.countOf(Furnace.SLOT_OUTPUT));
+        assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
+        assertFalse(f.isBurning());
+    }
+
+    @Test
+    void stickSmeltsOneItem() {
+        Furnace f = new Furnace();
+        f.setSlot(Furnace.SLOT_INPUT, BlockType.GOLD_ORE, 1);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.STICK, 1);
+        f.tick(Furnace.fuelDuration(BlockType.STICK));
+        assertEquals(BlockType.GOLD_INGOT, f.typeOf(Furnace.SLOT_OUTPUT));
+        assertEquals(1, f.countOf(Furnace.SLOT_OUTPUT));
+        assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
+        assertFalse(f.isBurning());
+    }
+
+    @Test
+    void fuelRegistryKnowsBurnDurations() {
+        assertEquals(Furnace.COAL_BURN_TIME, Furnace.fuelDuration(BlockType.COAL), 0.001f);
+        assertEquals(16f, Furnace.fuelDuration(BlockType.WOOD_LOG), 0.001f);
+        assertEquals(16f, Furnace.fuelDuration(BlockType.PLANKS), 0.001f);
+        assertEquals(Furnace.SMELT_TIME, Furnace.fuelDuration(BlockType.STICK), 0.001f);
+        assertEquals(0f, Furnace.fuelDuration(BlockType.DIRT), 0.001f);
+        assertTrue(Furnace.isFuel(BlockType.COAL));
+        assertTrue(Furnace.isFuel(BlockType.PLANKS));
+        assertFalse(Furnace.isFuel(BlockType.DIRT));
+        assertFalse(Furnace.isFuel(null));
     }
 
     @Test
@@ -40,7 +76,7 @@ class FurnaceTest {
         Furnace f = new Furnace();
         f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 13);
         f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
-        f.tick(Furnace.BURN_TIME);
+        f.tick(Furnace.COAL_BURN_TIME);
         assertEquals(BlockType.IRON_INGOT, f.typeOf(Furnace.SLOT_OUTPUT));
         assertEquals(12, f.countOf(Furnace.SLOT_OUTPUT));
         assertEquals(BlockType.IRON_ORE, f.typeOf(Furnace.SLOT_INPUT), "13th ore waits for more fuel");
@@ -48,7 +84,7 @@ class FurnaceTest {
         assertFalse(f.isBurning());
 
         f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
-        f.tick(Furnace.BURN_TIME);
+        f.tick(Furnace.COAL_BURN_TIME);
         assertEquals(13, f.countOf(Furnace.SLOT_OUTPUT));
         assertTrue(f.isEmpty(Furnace.SLOT_INPUT));
     }
@@ -57,7 +93,7 @@ class FurnaceTest {
     void fuelBurnsDownEvenWithNoInput() {
         Furnace f = new Furnace();
         f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
-        f.tick(Furnace.BURN_TIME);
+        f.tick(Furnace.COAL_BURN_TIME);
         assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
         assertFalse(f.isBurning());
     }
@@ -68,7 +104,7 @@ class FurnaceTest {
         f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 1);
         f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
         f.setSlot(Furnace.SLOT_OUTPUT, BlockType.IRON_INGOT, 64);
-        f.tick(Furnace.BURN_TIME);
+        f.tick(Furnace.COAL_BURN_TIME);
         assertEquals(BlockType.IRON_ORE, f.typeOf(Furnace.SLOT_INPUT), "input untouched when output is full");
         assertEquals(64, f.countOf(Furnace.SLOT_OUTPUT));
     }
@@ -81,7 +117,17 @@ class FurnaceTest {
         f.tick(2f);
         assertTrue(f.isBurning());
         assertEquals(0.25f, f.progressFraction(), 0.001f);
-        assertEquals((Furnace.BURN_TIME - 2f) / Furnace.BURN_TIME, f.burnFraction(), 0.001f);
+        assertEquals((Furnace.COAL_BURN_TIME - 2f) / Furnace.COAL_BURN_TIME, f.burnFraction(), 0.001f);
+    }
+
+    @Test
+    void flameFractionTracksTheCurrentFuelsDuration() {
+        Furnace f = new Furnace();
+        f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.STICK, 1);
+        f.tick(4f);
+        // Half a stick's burn is gone after 4 of its 8 seconds.
+        assertEquals(0.5f, f.burnFraction(), 0.001f);
     }
 
     @Test

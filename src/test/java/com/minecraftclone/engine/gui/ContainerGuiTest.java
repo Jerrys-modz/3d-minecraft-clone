@@ -57,6 +57,27 @@ class ContainerGuiTest {
     }
 
     @Test
+    void shiftClickSendsAnyFuelToFuelSlot() {
+        Inventory inv = new Inventory();
+        Furnace f = new Furnace();
+        InventoryController c = furnaceController(inv, f);
+        inv.setSlot(0, BlockType.WOOD_LOG, 3);
+        c.click(0, false, true);
+        assertEquals(BlockType.WOOD_LOG, f.typeOf(Furnace.SLOT_FUEL), "logs are a fuel");
+        assertEquals(3, f.countOf(Furnace.SLOT_FUEL));
+        assertTrue(inv.isEmpty(0));
+
+        Inventory inv2 = new Inventory();
+        Furnace f2 = new Furnace();
+        InventoryController c2 = furnaceController(inv2, f2);
+        inv2.setSlot(0, BlockType.STICK, 5);
+        c2.click(0, false, true);
+        assertEquals(BlockType.STICK, f2.typeOf(Furnace.SLOT_FUEL), "sticks are a fuel");
+        assertEquals(5, f2.countOf(Furnace.SLOT_FUEL));
+        assertTrue(inv2.isEmpty(0));
+    }
+
+    @Test
     void shiftClickOnUnrelatedItemStaysInInventory() {
         Inventory inv = new Inventory();
         Furnace f = new Furnace();

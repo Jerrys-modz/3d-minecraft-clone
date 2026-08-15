@@ -6,17 +6,20 @@ import com.minecraftclone.player.Smelting;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
  * The state of a single placed furnace: three slots (input, fuel, output) and
  * a smelting timer. Unlike the old instant smelt-on-keypress, a furnace works
- * like Minecraft's - load it with ore and coal and it smelts over time, ticking
+ * like Minecraft's - load it with ore and fuel and it smelts over time, ticking
  * forward with the world (see {@link World#tickBlockEntities(float)}).
  * <p>
- * Fuel is coal ({@link Smelting#FUEL}); one coal burns for {@link
- * #BURN_TIME} seconds ({@link #SMELTS_PER_COAL} items), during which a
- * smeltable input advances {@link #SMELT_TIME} seconds per item. Progress
- * pauses while the furnace is out of
+ * Fuel is anything in {@link #isFuel(BlockType)} - coal is the workhorse (one
+ * coal smelts {@link #COAL_SMELTS} items), with wood logs, planks and sticks
+ * as weaker fallbacks. A unit of fuel burns for {@link #fuelDuration(BlockType)}
+ * seconds, during which a smeltable input advances {@link #SMELT_TIME} seconds
+ * per item. Progress pauses while the furnace is out of
  * fuel (without being lost) and resumes when more fuel is added; once the
  * timer completes, one input is consumed and one output is produced.
  * <p>
@@ -37,16 +40,44 @@ public class Furnace implements BlockEntity {
 
     /** Seconds of smelting needed to refine one item. */
     public static final float SMELT_TIME = 8f;
-    /** How many items a single unit of fuel smelts (1 coal = 12 items, like Minecraft). */
-    public static final int SMELTS_PER_COAL = 12;
-    /** Seconds a single unit of fuel burns for. */
-    public static final float BURN_TIME = SMELTS_PER_COAL * SMELT_TIME;
+    /** How many items a single coal smelts (12, like Minecraft's coal). */
+    public static final int COAL_SMELTS = 12;
+    /** Seconds a single coal burns for. */
+    public static final float COAL_BURN_TIME = COAL_SMELTS * SMELT_TIME;
+
+    /** How many seconds each fuel type burns for, keyed by {@link BlockType}. */
+    private static final Map<BlockType, Float> FUEL_DURATION = new EnumMap<>(BlockType.class);
+
+    static {
+        fuel(BlockType.COAL, COAL_SMELTS);
+        fuel(BlockType.WOOD_LOG, 2);
+        fuel(BlockType.PLANKS, 2);
+        fuel(BlockType.STICK, 1);
+    }
+
+    /** Registers a fuel: {@code smelts} items smelted per unit of that fuel. */
+    private static void fuel(BlockType type, float smelts) {
+        FUEL_DURATION.put(type, smelts * SMELT_TIME);
+    }
+
+    /** True if {@code type} burns in a furnace. */
+    public static boolean isFuel(BlockType type) {
+        return type != null && FUEL_DURATION.containsKey(type);
+    }
+
+    /** How many seconds one unit of {@code type} burns for (0 if it isn't a fuel). */
+    public static float fuelDuration(BlockType type) {
+        Float seconds = FUEL_DURATION.get(type);
+        return seconds == null ? 0f : seconds;
+    }
 
     private final BlockType[] types = new BlockType[SLOT_COUNT];
     private final int[] counts = new int[SLOT_COUNT];
 
     /** Seconds of fuel left in the burn (decrements while burning). */
     private float burnTime;
+    /** Total seconds the current fuel burned for (drives the GUI flame fraction). */
+    private float burnDuration;
     /** Seconds accumulated toward refining the current input item. */
     private float progress;
 
@@ -102,7 +133,7 @@ public class Furnace implements BlockEntity {
 
     /** 0..1 how much of the current fuel's burn is left - drives the GUI flame. */
     public float burnFraction() {
-        return burnTime / BURN_TIME;
+        return burnDuration <= 0 ? 0f : burnTime / burnDuration;
     }
 
     /** 0..1 how far the current item is toward completion - drives the GUI arrow. */
@@ -128,23 +159,25 @@ public class Furnace implements BlockEntity {
 
     /**
      * Advances the furnace by {@code dt} seconds of world time: lights the fire
-     * when coal is present, burns down the fuel, and accumulates smelting
+     * when fuel is present, burns down the fuel, and accumulates smelting
      * progress toward the next item. Does nothing (and loses no progress) while
      * there is no fuel.
      */
     public void tick(float dt) {
         if (dt <= 0) return;
         if (burnTime <= 0) {
-            if (types[SLOT_FUEL] == Smelting.FUEL && counts[SLOT_FUEL] > 0) {
+            if (isFuel(types[SLOT_FUEL]) && counts[SLOT_FUEL] > 0) {
+                BlockType fuel = types[SLOT_FUEL];
                 counts[SLOT_FUEL]--;
                 if (counts[SLOT_FUEL] == 0) types[SLOT_FUEL] = null;
-                burnTime = BURN_TIME;
+                burnDuration = fuelDuration(fuel);
+                burnTime = burnDuration;
             } else {
                 return;
             }
         }
         // Advance progress before burning down the fuel so the tick that exhausts
-        // a coal still finishes the item it paid for (1 fuel = 1 smelt).
+        // a unit of fuel still finishes the item it paid for.
         if (canSmelt()) {
             progress += dt;
             while (progress >= SMELT_TIME && canSmelt()) {
@@ -166,6 +199,7 @@ public class Furnace implements BlockEntity {
     /** Writes the furnace's slots and smelting state to {@code out} (see {@link ChunkStorage}). */
     public void writeTo(DataOutput out) throws IOException {
         out.writeFloat(burnTime);
+        out.writeFloat(burnDuration);
         out.writeFloat(progress);
         for (int i = 0; i < SLOT_COUNT; i++) {
             out.writeByte(types[i] == null ? 0 : types[i].id);
@@ -176,6 +210,7 @@ public class Furnace implements BlockEntity {
     /** Restores the slots and smelting state written by {@link #writeTo}. */
     public void readFrom(DataInput in) throws IOException {
         burnTime = in.readFloat();
+        burnDuration = in.readFloat();
         progress = in.readFloat();
         for (int i = 0; i < SLOT_COUNT; i++) {
             int id = in.readUnsignedByte();

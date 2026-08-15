@@ -6,16 +6,14 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * Smelting recipes: turn raw ore into a refined ingot/gem using coal as fuel.
- * This is the recipe registry for placed furnaces (see {@code Furnace}), which
- * smelt over time rather than instantly - the old press-{@code C}-at-a-furnace
- * mechanic was replaced by the furnace GUI. Kept as a static registry, like
- * {@link Crafting}, so a furnace just asks "what does this ore become?".
+ * Smelting recipes: turn raw ore into a refined ingot/gem in a furnace. This is
+ * the recipe registry for placed furnaces (see {@code Furnace}), which smelt
+ * over time rather than instantly - the old press-{@code C}-at-a-furnace
+ * mechanic was replaced by the furnace GUI. Fuel (coal, wood, sticks - see
+ * {@code Furnace#isFuel}) lives with the furnace itself; this class just
+ * answers "what does this ore become?".
  */
 public final class Smelting {
-
-    /** Fuel for a furnace: coal, mined from coal ore (which drops coal). */
-    public static final BlockType FUEL = BlockType.COAL;
 
     private static final Map<BlockType, BlockType> OUTPUTS = new EnumMap<>(BlockType.class);
 
