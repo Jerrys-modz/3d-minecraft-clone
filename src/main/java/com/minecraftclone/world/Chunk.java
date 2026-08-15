@@ -423,27 +423,27 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.TOP, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.TOP, block, atlas, blockLight);
                     }
                     // -Y bottom
                     if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
                     }
                     // +X east
                     if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.EAST, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.EAST, block, atlas, blockLight);
                     }
                     // -X west
                     if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.WEST, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.WEST, block, atlas, blockLight);
                     }
                     // +Z south
                     if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
                     }
                     // -Z north
                     if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
                     }
                 }
             }
@@ -801,7 +801,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, flow, 0f, flow > 0.5f ? 1f : 0f);
     }
 
-    private void emitFace(FloatArray vertices, IntArray indices, int[] vertexCounter,
+    private void emitFace(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
                            int wx, int wy, int wz, Face face, BlockType block, TextureAtlas atlas, float blockLight) {
         int tile = switch (face) {
             case TOP -> block.topTile;
@@ -809,8 +809,10 @@ public class Chunk implements ChunkStorage.PersistableChunk {
             default -> {
                 // A directional block (e.g. a furnace) shows its front tile on the
                 // face it's oriented toward and its plain side tile on the rest.
+                // While the block is "active" (a burning furnace), the front swaps
+                // to its glowing variant.
                 if (block.isDirectional() && face == frontFaceFor(getOrientation(wx - getOriginX(), wy, wz - getOriginZ()))) {
-                    yield block.frontTile;
+                    yield world.isBlockActive(wx, wy, wz) ? block.litFrontTile : block.frontTile;
                 }
                 yield block.sideTile;
             }

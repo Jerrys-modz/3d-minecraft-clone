@@ -414,6 +414,15 @@ public class Main {
                     facing = (byte) Integer.parseInt(System.getenv("MCCLONE_AUTOTEST_PLACE_FACING"));
                 }
                 world.setBlockOrientation(px, py, pz, facing);
+                // Autotest hook: load the furnace with ore + fuel and tick it until
+                // it's burning, so the lit front tile can be screenshotted.
+                if (placed == BlockType.FURNACE && System.getenv("MCCLONE_AUTOTEST_LIT") != null) {
+                    Furnace furnace = world.getOrCreateFurnace(px, py, pz);
+                    furnace.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 8);
+                    furnace.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 8);
+                    furnace.tick(1f);
+                    System.out.println("Furnace burning: " + furnace.isBurning());
+                }
                 for (int i = 0; i < 5; i++) world.update(player.getPosition().x, player.getPosition().z);
                 System.out.println("Placed " + placed + " at " + px + "," + py + "," + pz + " facing " + facing);
             } catch (IllegalArgumentException ignored) {

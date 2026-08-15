@@ -39,6 +39,8 @@ public class TextureAtlas {
     public static final int FURNACE_TILE = 26;
     /** Tile index of the crafting table's workbench face. */
     public static final int CRAFTING_TABLE_TILE = 48;
+    /** Tile index of the furnace's front face when it's actively burning - the mouth glows orange. */
+    public static final int FURNACE_LIT_TILE = 49;
 
     private int textureId;
 
@@ -102,6 +104,7 @@ public class TextureAtlas {
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
+        paintFurnaceLit(image, FURNACE_LIT_TILE);
         paintCraftingTable(image, CRAFTING_TABLE_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
@@ -561,6 +564,41 @@ public class TextureAtlas {
         for (int y = 6; y < 12; y++) {
             for (int x = 4; x < 12; x++) {
                 img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
+            }
+        }
+    }
+
+    /**
+     * A lit furnace's front face: the same stone body and lintel as
+     * {@link #paintFurnace}, but the mouth glows - warm orange around the rim
+     * with a bright yellow core, the classic "furnace is burning" look. The
+     * front tile is swapped for this one while the furnace is actively
+     * smelting (see {@link com.minecraftclone.world.Chunk#emitFace}).
+     */
+    private void paintFurnaceLit(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int stone = 0x8A8A8A;
+        int lintel = 0x6E6E6E;
+        int ember = 0xFFB040;
+        int glow = 0xFFD060;
+        int core = 0xFFF080;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | stone);
+            }
+        }
+        // Lintel across the top of the opening.
+        for (int x = 3; x < 13; x++) {
+            img.setRGB(ox + x, oy + 5, 0xFF000000 | lintel);
+        }
+        // Glowing mouth: warm rim, brighter toward the center.
+        for (int y = 6; y < 12; y++) {
+            for (int x = 4; x < 12; x++) {
+                boolean corePx = x >= 6 && x < 10 && y >= 7 && y < 11;
+                boolean midPx = x >= 5 && x < 11 && y >= 6 && y < 12;
+                int color = corePx ? core : (midPx ? glow : ember);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }
     }
