@@ -99,13 +99,19 @@ public class Climate {
 
     private void rollWeather(int index) {
         float humidity = humidityFor(currentBiome);
-        float temperature = temperatureFor(currentBiome);
+        // Use ambient temperature (without current weather effect) to classify the
+        // new precipitation, so near-freezing conditions don't flip rain/snow based
+        // on whether schedule[0] happens to be snowing right now.
+        float base = baseTemperature(currentBiome);
+        float seasonal = calendar.temperatureOffset();
+        float nightly = -6f * (1f - dayNightCycle.getDaylightFactor());
+        float ambientTemperature = base + seasonal + nightly;
         float seasonBias = calendar.getSeason().precipitationBias;
         // Wet, humid biomes and wet seasons bring precipitation; it falls as snow
         // in freezing temperatures.
         float precipitationChance = Math.min(0.8f, 0.10f + humidity * 0.35f * (seasonBias * 2f));
         boolean wet = rnd.nextFloat() < precipitationChance;
-        Weather weather = wet ? (temperature <= FREEZING_C ? Weather.SNOW : Weather.RAIN) : Weather.CLEAR;
+        Weather weather = wet ? (ambientTemperature <= FREEZING_C ? Weather.SNOW : Weather.RAIN) : Weather.CLEAR;
         float duration = wet ? 45f + rnd.nextFloat() * 120f : 90f + rnd.nextFloat() * 240f;
         float strength = wet ? 0.3f + rnd.nextFloat() * 0.7f : 0f;
         schedule[index] = new WeatherEvent(weather, duration, strength);
