@@ -2,6 +2,7 @@ package com.minecraftclone;
 
 import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.HandRenderer;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.MobRenderer;
@@ -288,6 +289,7 @@ public class Main {
 
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
+        HandRenderer handRenderer = new HandRenderer();
         MobRenderer mobRenderer = new MobRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
@@ -395,6 +397,22 @@ public class Main {
             System.out.println("World seed: " + seed);
             started[0] = true;
             mainMenuOpen[0] = false;
+        }
+        // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
+        // the first-person hand can be screenshotted holding something.
+        if (System.getenv("MCCLONE_AUTOTEST_HELD") != null) {
+            try {
+                BlockType held = BlockType.valueOf(System.getenv("MCCLONE_AUTOTEST_HELD"));
+                player.getInventory().setSlot(0, held, 1);
+                selectedSlot[0] = 0;
+            } catch (IllegalArgumentException ignored) {
+                System.err.println("MCCLONE_AUTOTEST_HELD: unknown block " + System.getenv("MCCLONE_AUTOTEST_HELD"));
+            }
+        }
+        // Opt-in autotest hook: start the hand swing animation from the first frame
+        // (place/use/break), so a mid-swing screenshot can be captured.
+        if (System.getenv("MCCLONE_AUTOTEST_SWING") != null) {
+            handRenderer.triggerSwing();
         }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
@@ -842,6 +860,7 @@ public class Main {
                     if (breakFraction >= 1f) {
                         mining.reset();
                         breakFraction = 0f;
+                        handRenderer.triggerSwing();
                         int bx = hit.blockPos.x, by = hit.blockPos.y, bz = hit.blockPos.z;
                         if (Door.isDoor(targetType)) {
                             Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
@@ -903,10 +922,12 @@ public class Main {
                     if (Door.isDoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            handRenderer.triggerSwing();
                         }
                     } else if (Door.isTrapdoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            handRenderer.triggerSwing();
                         }
                     } else if (noMob && targeted == BlockType.FURNACE) {
                         // Right-click a furnace to open its smelting gui.
@@ -920,6 +941,7 @@ public class Main {
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         if (heldItem.isEdible() && !mode.isCreative()) {
                             player.eat(heldItem);
+                            handRenderer.triggerSwing();
                         } else if (!heldItem.isItem) {
                             // Pure inventory items (tools, and any future non-edible item)
                             // have no world tile and can never be placed as a block.
@@ -937,6 +959,7 @@ public class Main {
                             if (!blocked && !intersectsPlayer(player, p)) {
                                 boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
                                 if (placed) {
+                                    handRenderer.triggerSwing();
                                     if (intoFluid) {
                                         world.setOverlay(p.x, p.y, p.z, heldItem);
                                     } else {
@@ -1002,6 +1025,16 @@ public class Main {
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
             chunkShader.unbind();
+            }
+
+            // First-person held item (Minecraft-style): drawn after the world so it
+            // always sits on top, hidden while any menu/inventory is up and in
+            // spectator (no hand to look at).
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && !settings.getGameMode().isSpectator()) {
+                handRenderer.render(chunkShader, atlas, itemTextures,
+                        player.getInventory().typeOf(selectedSlot[0]),
+                        player.getBobPhase(), animTime[0], dt, projection);
             }
 
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
@@ -1138,6 +1171,7 @@ public class Main {
 
         hud.destroy();
         itemRenderer.destroy();
+        handRenderer.destroy();
         mobRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
