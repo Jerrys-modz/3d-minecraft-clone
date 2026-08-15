@@ -10,36 +10,56 @@ package com.minecraftclone.engine;
  */
 public class Calendar {
 
-    /** How many in-game days each season lasts. */
+    /** Default days per season, used unless the world's settings say otherwise. */
     public static final int DAYS_PER_SEASON = 10;
     public static final int SEASONS_PER_YEAR = Season.values().length;
-    public static final int DAYS_PER_YEAR = DAYS_PER_SEASON * SEASONS_PER_YEAR;
 
+    private int daysPerSeason = DAYS_PER_SEASON;
     private int totalDay;
 
-    /** The current day of the season, 1-based (1..{@link #DAYS_PER_SEASON}). */
+    /** The current day of the season, 1-based (1..{@link #getDaysPerSeason()}). */
     public int getDay() {
-        return totalDay % DAYS_PER_SEASON + 1;
+        return totalDay % daysPerSeason + 1;
     }
 
     /** The current season. */
     public Season getSeason() {
-        return Season.values()[(totalDay / DAYS_PER_SEASON) % SEASONS_PER_YEAR];
+        return Season.values()[(totalDay / daysPerSeason) % SEASONS_PER_YEAR];
     }
 
     /** The current year, 1-based. */
     public int getYear() {
-        return totalDay / DAYS_PER_YEAR + 1;
+        return totalDay / getDaysPerYear() + 1;
     }
 
     /** 0..1 how far through the season we are - drives the smooth trait blending. */
     public float getSeasonProgress() {
-        return (totalDay % DAYS_PER_SEASON) / (float) DAYS_PER_SEASON;
+        return (totalDay % daysPerSeason) / (float) daysPerSeason;
     }
 
     /** Total days elapsed (the raw counter). */
     public int getTotalDay() {
         return totalDay;
+    }
+
+    /** How many in-game days each season lasts (set from the world's settings). */
+    public int getDaysPerSeason() {
+        return daysPerSeason;
+    }
+
+    /** Days per full year (four seasons). */
+    public int getDaysPerYear() {
+        return daysPerSeason * SEASONS_PER_YEAR;
+    }
+
+    /** Sets the days per season (from the world's creation settings). */
+    public void setDaysPerSeason(int days) {
+        daysPerSeason = Math.max(1, days);
+    }
+
+    /** Resets to day 1 of spring, year 1 - call when a new world starts. */
+    public void reset() {
+        totalDay = 0;
     }
 
     /** Advances the calendar to the given total day count (from the day/night cycle). */

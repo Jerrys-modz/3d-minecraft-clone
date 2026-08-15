@@ -69,6 +69,11 @@ public class DayNightCycle {
         return daysElapsed;
     }
 
+    /** Resets the day counter - call when a new world starts so its calendar begins at day one. */
+    public void resetDays() {
+        daysElapsed = 0;
+    }
+
     /** Sets the daylight fraction of the cycle (seasonal) - drives sunrise/sunset. */
     public void setDaylightFraction(float fraction) {
         daylightFraction = Math.max(0.05f, Math.min(0.95f, fraction));
