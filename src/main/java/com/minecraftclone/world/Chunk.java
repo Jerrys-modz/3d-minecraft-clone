@@ -173,6 +173,15 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         if (!type.isFluid() && overlays[index(x, y, z)] != BlockType.AIR.id) {
             overlays[index(x, y, z)] = BlockType.AIR.id;
         }
+        // A replaced block loses whatever facing it had (a door torn out and
+        // rebuilt, or a furnace mined and re-placed). Directional blocks get a
+        // fresh facing set explicitly by the caller right after this. Doors
+        // keep their facing when toggled open/closed - only a *different* kind
+        // of block replacing them clears it.
+        boolean sameDoorFamily = (old.isDoor() && type.isDoor()) || (old.isTrapdoor() && type.isTrapdoor());
+        if (!sameDoorFamily && old != type && orientations[index(x, y, z)] != 0) {
+            orientations[index(x, y, z)] = 0;
+        }
         dirty = true;
     }
 
@@ -275,6 +284,20 @@ public class Chunk implements ChunkStorage.PersistableChunk {
             throw new IllegalArgumentException("Expected " + overlays.length + " bytes, got " + data.length);
         }
         System.arraycopy(data, 0, overlays, 0, overlays.length);
+        dirty = true;
+    }
+
+    /** Raw orientation-byte array for serialization (see {@link #orientations}). Returns the live backing array - treat as read-only. */
+    public byte[] getRawOrientations() {
+        return orientations;
+    }
+
+    /** Replaces this chunk's orientation data wholesale, e.g. when loading a saved chunk from disk. */
+    public void setRawOrientations(byte[] data) {
+        if (data.length != orientations.length) {
+            throw new IllegalArgumentException("Expected " + orientations.length + " bytes, got " + data.length);
+        }
+        System.arraycopy(data, 0, orientations, 0, orientations.length);
         dirty = true;
     }
 
@@ -500,6 +523,17 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
+
+    /** The world face a block's front texture should be on, for a given orientation byte (0:+Z, 1:-Z, 2:+X, 3:-X). */
+    private static Face frontFaceFor(byte orientation) {
+        return switch (orientation) {
+            case 0 -> Face.SOUTH; // +Z
+            case 1 -> Face.NORTH; // -Z
+            case 2 -> Face.EAST;  // +X
+            case 3 -> Face.WEST;  // -X
+            default -> Face.SOUTH;
+        };
+    }
 
     // Resting-flow surface height range: just under a source at level 0,
     // thinning down to a shallow sheet at the farthest level it can reach -
@@ -772,7 +806,14 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         int tile = switch (face) {
             case TOP -> block.topTile;
             case BOTTOM -> block.bottomTile;
-            default -> block.sideTile;
+            default -> {
+                // A directional block (e.g. a furnace) shows its front tile on the
+                // face it's oriented toward and its plain side tile on the rest.
+                if (block.isDirectional() && face == frontFaceFor(getOrientation(wx - getOriginX(), wy, wz - getOriginZ()))) {
+                    yield block.frontTile;
+                }
+                yield block.sideTile;
+            }
         };
         // See-through leaves use the alpha-cutout variant of the leaves texture
         // (the shader discards its transparent holes) so the canopy is translucent.

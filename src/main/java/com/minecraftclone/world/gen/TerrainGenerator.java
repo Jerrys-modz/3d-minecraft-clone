@@ -895,6 +895,14 @@ public class TerrainGenerator {
         chunk.setLocal(lx, wy, lz, t);
     }
 
+    /** Records a block's facing (0:+Z, 1:-Z, 2:+X, 3:-X) at a world position, ignoring anything outside this chunk. */
+    private void setWorldOrientation(Chunk chunk, int originX, int originZ, int wx, int wy, int wz, byte orientation) {
+        int lx = wx - originX, lz = wz - originZ;
+        if (lx < 0 || lx >= Chunk.SIZE || lz < 0 || lz >= Chunk.SIZE) return;
+        if (wy < 0 || wy >= Chunk.HEIGHT) return;
+        chunk.setOrientation(lx, wy, lz, orientation);
+    }
+
     /**
      * Builds every nearby village's portion of this chunk. Village origins are a
      * deterministic hash of the chunk coords, so all the chunks a village spans
@@ -1000,9 +1008,10 @@ public class TerrainGenerator {
             setWorldBlock(chunk, originX, originZ, wx, baseY + 1, wz + halfZ, BlockType.DOOR);
         }
 
-        // Blacksmith forge against the side wall.
+        // Blacksmith forge against the side wall: its front faces into the room (-X).
         if (t == BuildingType.BLACKSMITH) {
             setWorldBlock(chunk, originX, originZ, wx + 1, baseY, wz, BlockType.FURNACE);
+            setWorldOrientation(chunk, originX, originZ, wx + 1, baseY, wz, (byte) 3);
         }
 
         // Flat roof over the whole footprint.

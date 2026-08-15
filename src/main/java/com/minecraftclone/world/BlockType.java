@@ -46,7 +46,7 @@ public enum BlockType {
     BERRY_BUSH(22, false, true, 37),
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
     LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
-    FURNACE(40, true, false, 4, 26, 4), // smelting station: stone top/bottom, furnace-face sides (tile 26)
+    FURNACE(40, true, false, 4, 4, 4, 26, 0, 0), // smelting station: stone top/bottom/sides, furnace-face front (tile 26)
     STONE_SLAB(44, true, false, true, 4),   // bottom-half slab, stone texture
     PLANKS_SLAB(45, true, false, true, 11), // bottom-half slab, planks texture
     // Fluids: SOURCE variants are placeable and flow (see FluidSim); the WATER/LAVA
@@ -116,6 +116,8 @@ public enum BlockType {
     public final int topTile;
     public final int sideTile;
     public final int bottomTile;
+    /** Atlas tile for the block's front face (the face it "faces" toward via its orientation), when directional. */
+    public final int frontTile;
     public final int foodValue;
     /** True for inventory-only items (food/tools): no atlas tile, own PNG texture, never placeable as a world block. */
     public final boolean isItem;
@@ -128,7 +130,7 @@ public enum BlockType {
 
     /** Full-cube block: distinct top/side/bottom textures, collides with the player. */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile) {
-        this(id, solid, transparent, topTile, sideTile, bottomTile, 0);
+        this(id, solid, transparent, topTile, sideTile, bottomTile, sideTile);
     }
 
     /** Full-cube block with a food value (not currently used - cubes aren't eaten - but kept symmetric). */
@@ -136,8 +138,8 @@ public enum BlockType {
         this(id, solid, transparent, topTile, sideTile, bottomTile, foodValue, 0);
     }
 
-    /** Full-cube block that also emits light (e.g. a lamp), plus an (unused) food value. */
-    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue, int lightLevel) {
+    /** Full-cube block with a distinct front face (the face it faces via orientation), e.g. a furnace. */
+    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int frontTile, int foodValue, int lightLevel) {
         this.id = (byte) id;
         this.solid = solid;
         this.transparent = transparent;
@@ -146,10 +148,16 @@ public enum BlockType {
         this.topTile = topTile;
         this.sideTile = sideTile;
         this.bottomTile = bottomTile;
+        this.frontTile = frontTile;
         this.foodValue = foodValue;
         this.isItem = false;
         this.lightLevel = lightLevel;
         this.collisionHeight = 1.0f;
+    }
+
+    /** Full-cube block that also emits light (e.g. a lamp), plus an (unused) food value. */
+    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue, int lightLevel) {
+        this(id, solid, transparent, topTile, sideTile, bottomTile, sideTile, foodValue, lightLevel);
     }
 
     /** Bottom-half slab: a partial cube, one atlas tile for all faces, colliding only in its lower half. */
@@ -162,6 +170,7 @@ public enum BlockType {
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
+        this.frontTile = tile;
         this.foodValue = 0;
         this.isItem = false;
         this.lightLevel = 0;
@@ -183,6 +192,7 @@ public enum BlockType {
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
+        this.frontTile = tile;
         this.foodValue = 0;
         this.isItem = false;
         this.lightLevel = lightLevel;
@@ -199,6 +209,7 @@ public enum BlockType {
         this.topTile = -1;
         this.sideTile = -1;
         this.bottomTile = -1;
+        this.frontTile = -1;
         this.foodValue = foodValue;
         this.isItem = true;
         this.lightLevel = 0;
@@ -235,6 +246,11 @@ public enum BlockType {
     /** True if this block stops the player / blocks a raycast. */
     public boolean isCollidable() {
         return solid;
+    }
+
+    /** True if this block has a distinct front face that faces its orientation (e.g. a furnace). */
+    public boolean isDirectional() {
+        return frontTile != sideTile;
     }
 
     public boolean isEdible() {
