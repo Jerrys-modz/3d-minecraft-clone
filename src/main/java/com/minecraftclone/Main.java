@@ -841,6 +841,9 @@ public class Main {
                                 // nothing to drop
                             } else if (targetType == BlockType.BERRY_BUSH) {
                                 world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
+                            } else if (targetType == BlockType.COAL_ORE) {
+                                // Coal ore drops coal (the furnace fuel), not the ore itself.
+                                world.spawnItem(bx, by, bz, BlockType.COAL, 1, loot);
                             } else {
                                 // An open door/trapdoor drops the closed item.
                                 BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR

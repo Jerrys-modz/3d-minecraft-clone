@@ -13,9 +13,10 @@ import java.io.IOException;
  * like Minecraft's - load it with ore and coal and it smelts over time, ticking
  * forward with the world (see {@link World#tickBlockEntities(float)}).
  * <p>
- * Fuel is coal ore ({@link Smelting#FUEL}); each unit burns for {@link
- * #BURN_TIME} seconds, during which a smeltable input advances {@link
- * #SMELT_TIME} seconds per item. Progress pauses while the furnace is out of
+ * Fuel is coal ({@link Smelting#FUEL}); one coal burns for {@link
+ * #BURN_TIME} seconds ({@link #SMELTS_PER_COAL} items), during which a
+ * smeltable input advances {@link #SMELT_TIME} seconds per item. Progress
+ * pauses while the furnace is out of
  * fuel (without being lost) and resumes when more fuel is added; once the
  * timer completes, one input is consumed and one output is produced.
  * <p>
@@ -36,8 +37,10 @@ public class Furnace implements BlockEntity {
 
     /** Seconds of smelting needed to refine one item. */
     public static final float SMELT_TIME = 8f;
+    /** How many items a single unit of fuel smelts (1 coal = 12 items, like Minecraft). */
+    public static final int SMELTS_PER_COAL = 12;
     /** Seconds a single unit of fuel burns for. */
-    public static final float BURN_TIME = 8f;
+    public static final float BURN_TIME = SMELTS_PER_COAL * SMELT_TIME;
 
     private final BlockType[] types = new BlockType[SLOT_COUNT];
     private final int[] counts = new int[SLOT_COUNT];

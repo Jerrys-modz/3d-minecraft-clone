@@ -45,12 +45,12 @@ class ContainerGuiTest {
         Furnace f = new Furnace();
         InventoryController c = furnaceController(inv, f);
         inv.setSlot(0, BlockType.GOLD_ORE, 3);
-        inv.setSlot(1, BlockType.COAL_ORE, 2);
+        inv.setSlot(1, BlockType.COAL, 2);
         c.click(0, false, true);
         assertEquals(BlockType.GOLD_ORE, f.typeOf(Furnace.SLOT_INPUT));
         assertEquals(3, f.countOf(Furnace.SLOT_INPUT));
         c.click(1, false, true);
-        assertEquals(BlockType.COAL_ORE, f.typeOf(Furnace.SLOT_FUEL));
+        assertEquals(BlockType.COAL, f.typeOf(Furnace.SLOT_FUEL));
         assertEquals(2, f.countOf(Furnace.SLOT_FUEL));
         assertTrue(inv.isEmpty(0));
         assertTrue(inv.isEmpty(1));
@@ -83,11 +83,11 @@ class ContainerGuiTest {
     void shiftClickFurnaceSlotMovesStackToInventory() {
         Inventory inv = new Inventory();
         Furnace f = new Furnace();
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 7);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 7);
         InventoryController c = furnaceController(inv, f);
         c.click(FUEL, false, true);
         assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
-        assertEquals(7, inv.getCount(BlockType.COAL_ORE));
+        assertEquals(7, inv.getCount(BlockType.COAL));
     }
 
     @Test

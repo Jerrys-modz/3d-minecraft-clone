@@ -100,6 +100,7 @@ public enum BlockType {
     IRON_INGOT(41, 0), // smelted from iron ore (see Smelting)
     GOLD_INGOT(42, 0), // smelted from gold ore
     DIAMOND(43, 0),    // smelted from diamond ore
+    COAL(74, 0),       // mined from coal ore, the furnace fuel (see Smelting)
     // Raw meat - dropped by passive mobs when killed (see World.damageMob), edible.
     RAW_PORKCHOP(65, 16),
     RAW_BEEF(66, 16),

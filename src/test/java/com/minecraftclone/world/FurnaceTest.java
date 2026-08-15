@@ -12,13 +12,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class FurnaceTest {
 
     @Test
-    void oneCoalSmeltsOneOre() {
+    void oneCoalSmeltsTwelveItems() {
         Furnace f = new Furnace();
-        f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 1);
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 1);
-        f.tick(Furnace.SMELT_TIME);
+        f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 12);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
+        f.tick(Furnace.BURN_TIME);
         assertEquals(BlockType.IRON_INGOT, f.typeOf(Furnace.SLOT_OUTPUT));
-        assertEquals(1, f.countOf(Furnace.SLOT_OUTPUT));
+        assertEquals(12, f.countOf(Furnace.SLOT_OUTPUT));
         assertTrue(f.isEmpty(Furnace.SLOT_INPUT));
         assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
         assertFalse(f.isBurning());
@@ -36,27 +36,28 @@ class FurnaceTest {
     }
 
     @Test
-    void runsOutOfFuelAfterOneItemAndResumesWhenRefuelled() {
+    void runsOutOfFuelAfterTwelveItemsAndResumesWhenRefuelled() {
         Furnace f = new Furnace();
-        f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 2);
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 1);
-        f.tick(Furnace.SMELT_TIME);
+        f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 13);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
+        f.tick(Furnace.BURN_TIME);
         assertEquals(BlockType.IRON_INGOT, f.typeOf(Furnace.SLOT_OUTPUT));
-        assertEquals(1, f.countOf(Furnace.SLOT_OUTPUT));
-        assertEquals(BlockType.IRON_ORE, f.typeOf(Furnace.SLOT_INPUT), "second ore waits for more fuel");
+        assertEquals(12, f.countOf(Furnace.SLOT_OUTPUT));
+        assertEquals(BlockType.IRON_ORE, f.typeOf(Furnace.SLOT_INPUT), "13th ore waits for more fuel");
+        assertEquals(1, f.countOf(Furnace.SLOT_INPUT));
         assertFalse(f.isBurning());
 
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 1);
-        f.tick(Furnace.SMELT_TIME);
-        assertEquals(2, f.countOf(Furnace.SLOT_OUTPUT));
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
+        f.tick(Furnace.BURN_TIME);
+        assertEquals(13, f.countOf(Furnace.SLOT_OUTPUT));
         assertTrue(f.isEmpty(Furnace.SLOT_INPUT));
     }
 
     @Test
     void fuelBurnsDownEvenWithNoInput() {
         Furnace f = new Furnace();
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 1);
-        f.tick(Furnace.SMELT_TIME);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
+        f.tick(Furnace.BURN_TIME);
         assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
         assertFalse(f.isBurning());
     }
@@ -65,9 +66,9 @@ class FurnaceTest {
     void stopsWhenOutputIsFull() {
         Furnace f = new Furnace();
         f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 1);
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 1);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
         f.setSlot(Furnace.SLOT_OUTPUT, BlockType.IRON_INGOT, 64);
-        f.tick(Furnace.SMELT_TIME);
+        f.tick(Furnace.BURN_TIME);
         assertEquals(BlockType.IRON_ORE, f.typeOf(Furnace.SLOT_INPUT), "input untouched when output is full");
         assertEquals(64, f.countOf(Furnace.SLOT_OUTPUT));
     }
@@ -76,18 +77,18 @@ class FurnaceTest {
     void progressAndFlameTrackTheBurn() {
         Furnace f = new Furnace();
         f.setSlot(Furnace.SLOT_INPUT, BlockType.GOLD_ORE, 1);
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 1);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
         f.tick(2f);
         assertTrue(f.isBurning());
         assertEquals(0.25f, f.progressFraction(), 0.001f);
-        assertEquals(0.75f, f.burnFraction(), 0.001f);
+        assertEquals((Furnace.BURN_TIME - 2f) / Furnace.BURN_TIME, f.burnFraction(), 0.001f);
     }
 
     @Test
     void nonSmeltableInputNeverAdvances() {
         Furnace f = new Furnace();
         f.setSlot(Furnace.SLOT_INPUT, BlockType.DIRT, 1);
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 1);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
         f.tick(Furnace.SMELT_TIME);
         assertEquals(0f, f.progressFraction(), 0.001f);
         assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
@@ -97,7 +98,7 @@ class FurnaceTest {
     void serializationRoundTripPreservesSlotsAndProgress() throws Exception {
         Furnace f = new Furnace();
         f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 3);
-        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 2);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 2);
         f.setSlot(Furnace.SLOT_OUTPUT, BlockType.IRON_INGOT, 1);
         f.tick(2f); // consumes one coal and starts smelting
 
@@ -108,7 +109,7 @@ class FurnaceTest {
 
         assertEquals(BlockType.IRON_ORE, g.typeOf(Furnace.SLOT_INPUT));
         assertEquals(3, g.countOf(Furnace.SLOT_INPUT));
-        assertEquals(BlockType.COAL_ORE, g.typeOf(Furnace.SLOT_FUEL));
+        assertEquals(BlockType.COAL, g.typeOf(Furnace.SLOT_FUEL));
         assertEquals(1, g.countOf(Furnace.SLOT_FUEL), "tick(2) burned one coal");
         assertEquals(BlockType.IRON_INGOT, g.typeOf(Furnace.SLOT_OUTPUT));
         assertEquals(1, g.countOf(Furnace.SLOT_OUTPUT));

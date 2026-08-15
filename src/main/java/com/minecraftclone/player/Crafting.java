@@ -59,7 +59,7 @@ public final class Crafting {
         CHARS.put('W', BlockType.WOOD_LOG);
         CHARS.put('P', BlockType.PLANKS);
         CHARS.put('S', BlockType.STICK);
-        CHARS.put('C', BlockType.COAL_ORE);
+        CHARS.put('C', BlockType.COAL);
         CHARS.put('G', BlockType.GLASS);
         CHARS.put('T', BlockType.TORCH);
         CHARS.put('K', BlockType.STONE);

@@ -14,9 +14,8 @@ import java.util.Map;
  */
 public final class Smelting {
 
-    /** Fuel for a furnace. The game has no separate coal item, so coal ore is the fuel. */
-    public static final BlockType FUEL = BlockType.COAL_ORE;
-    public static final int FUEL_PER_SMELT = 1;
+    /** Fuel for a furnace: coal, mined from coal ore (which drops coal). */
+    public static final BlockType FUEL = BlockType.COAL;
 
     private static final Map<BlockType, BlockType> OUTPUTS = new EnumMap<>(BlockType.class);
 
@@ -25,6 +24,7 @@ public final class Smelting {
         smelt(BlockType.IRON_ORE, BlockType.IRON_INGOT);
         smelt(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);
         smelt(BlockType.DIAMOND_ORE, BlockType.DIAMOND);
+        smelt(BlockType.COAL_ORE, BlockType.COAL);
     }
 
     private Smelting() {

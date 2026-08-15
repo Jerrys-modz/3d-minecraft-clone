@@ -144,7 +144,7 @@ class ChunkStorageTest {
 
             Furnace f = new Furnace();
             f.setSlot(Furnace.SLOT_INPUT, BlockType.GOLD_ORE, 4);
-            f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 2);
+            f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 2);
             f.tick(3f);
 
             storage.save(a, List.of(new ChunkStorage.BlockEntitySave(48, 40, -25, f)));
@@ -164,7 +164,7 @@ class ChunkStorageTest {
             Furnace g = (Furnace) es.entity();
             assertEquals(BlockType.GOLD_ORE, g.typeOf(Furnace.SLOT_INPUT));
             assertEquals(4, g.countOf(Furnace.SLOT_INPUT));
-            assertEquals(BlockType.COAL_ORE, g.typeOf(Furnace.SLOT_FUEL));
+            assertEquals(BlockType.COAL, g.typeOf(Furnace.SLOT_FUEL));
             assertEquals(1, g.countOf(Furnace.SLOT_FUEL), "one of two coals burned during tick(3)");
             assertEquals(f.progressFraction(), g.progressFraction(), 0.001f);
         } finally {
