@@ -398,6 +398,39 @@ public class Main {
             started[0] = true;
             mainMenuOpen[0] = false;
         }
+        // Opt-in autotest hook: place a directional block (e.g. a furnace) in front
+        // of the camera so its front-vs-side faces can be screenshotted. Yaw sets
+        // the furnace's facing via the same code path a player's placement uses.
+        if (System.getenv("MCCLONE_AUTOTEST_PLACE") != null && started[0]) {
+            try {
+                BlockType placed = BlockType.valueOf(System.getenv("MCCLONE_AUTOTEST_PLACE"));
+                Vector3f front = player.getCamera().getFront();
+                int px = (int) Math.floor(player.getPosition().x + front.x * 2f);
+                int py = (int) Math.floor(player.getPosition().y);
+                int pz = (int) Math.floor(player.getPosition().z + front.z * 2f);
+                world.setBlock(px, py, pz, placed);
+                byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
+                        ? (front.x >= 0 ? 3 : 2)
+                        : (front.z >= 0 ? 1 : 0));
+                if (System.getenv("MCCLONE_AUTOTEST_PLACE_FACING") != null) {
+                    facing = (byte) Integer.parseInt(System.getenv("MCCLONE_AUTOTEST_PLACE_FACING"));
+                }
+                world.setBlockOrientation(px, py, pz, facing);
+                // Autotest hook: load the furnace with ore + fuel and tick it until
+                // it's burning, so the lit front tile can be screenshotted.
+                if (placed == BlockType.FURNACE && System.getenv("MCCLONE_AUTOTEST_LIT") != null) {
+                    Furnace furnace = world.getOrCreateFurnace(px, py, pz);
+                    furnace.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 8);
+                    furnace.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 8);
+                    furnace.tick(1f);
+                    System.out.println("Furnace burning: " + furnace.isBurning());
+                }
+                for (int i = 0; i < 5; i++) world.update(player.getPosition().x, player.getPosition().z);
+                System.out.println("Placed " + placed + " at " + px + "," + py + "," + pz + " facing " + facing);
+            } catch (IllegalArgumentException ignored) {
+                System.err.println("MCCLONE_AUTOTEST_PLACE: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE"));
+            }
+        }
         // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
         // the first-person hand can be screenshotted holding something.
         if (System.getenv("MCCLONE_AUTOTEST_HELD") != null) {
@@ -965,10 +998,11 @@ public class Main {
                                     } else {
                                         world.setBlock(p.x, p.y, p.z, heldItem);
                                     }
-                                    // Doors and trapdoors face the player: the panel sits
+                                    // Doors, trapdoors, and other directional blocks
+                                    // (e.g. a furnace) face the player: the front sits
                                     // on the side of the block nearest to them (opposite
                                     // the look direction).
-                                    if (heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
+                                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
                                         Vector3f front = player.getCamera().getFront();
                                         byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
                                                 ? (front.x >= 0 ? 3 : 2)

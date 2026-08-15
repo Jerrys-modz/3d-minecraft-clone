@@ -21,6 +21,7 @@ class ChunkStorageTest {
         private final ChunkPos pos;
         private final byte[] blocks = new byte[Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE];
         private final byte[] overlays = new byte[blocks.length];
+        private final byte[] orientations = new byte[blocks.length];
 
         StubChunk(ChunkPos pos) {
             this.pos = pos;
@@ -49,6 +50,16 @@ class ChunkStorageTest {
         @Override
         public void setRawOverlays(byte[] data) {
             System.arraycopy(data, 0, overlays, 0, Math.min(data.length, overlays.length));
+        }
+
+        @Override
+        public byte[] getRawOrientations() {
+            return orientations;
+        }
+
+        @Override
+        public void setRawOrientations(byte[] data) {
+            System.arraycopy(data, 0, orientations, 0, Math.min(data.length, orientations.length));
         }
 
         @Override
@@ -239,6 +250,62 @@ class ChunkStorageTest {
             storage.save(new StubChunk(pos), List.of());
             StubChunk b = new StubChunk(pos);
             assertTrue(storage.load(b).isEmpty());
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    @Test
+    void savesAndRestoresBlockOrientations() throws IOException {
+        Path dir = Files.createTempDirectory("mcclone-save-test");
+        try {
+            ChunkStorage storage = new ChunkStorage(dir);
+            ChunkPos pos = new ChunkPos(5, 5);
+
+            StubChunk a = new StubChunk(pos);
+            a.getRawBlocks()[0] = BlockType.FURNACE.id;
+            a.getRawBlocks()[10] = BlockType.DOOR.id;
+            a.getRawOrientations()[0] = 2; // +X
+            a.getRawOrientations()[10] = 3; // -X
+            storage.save(a, List.of());
+
+            StubChunk b = new StubChunk(pos);
+            storage.load(b);
+            assertEquals(BlockType.FURNACE.id, b.getRawBlocks()[0]);
+            assertEquals(2, b.getRawOrientations()[0]);
+            assertEquals(BlockType.DOOR.id, b.getRawBlocks()[10]);
+            assertEquals(3, b.getRawOrientations()[10]);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    @Test
+    void oldFormatFileWithNoOrientationHalfDefaultsOrientationsToEmpty() throws IOException {
+        Path dir = Files.createTempDirectory("mcclone-save-test");
+        try {
+            ChunkStorage storage = new ChunkStorage(dir);
+            ChunkPos pos = new ChunkPos(2, 2);
+            StubChunk a = new StubChunk(pos);
+            byte[] blocks = a.getRawBlocks();
+            blocks[0] = BlockType.FURNACE.id;
+            blocks[1] = BlockType.STONE.id;
+            byte[] overlays = a.getRawOverlays();
+            overlays[0] = BlockType.SEAWEED.id;
+            // Write blocks + overlays only (no orientation half, no entities) - the
+            // shape of a file saved before orientations existed.
+            Path file = dir.resolve("chunks").resolve("c_2_2.chunk");
+            try (java.util.zip.GZIPOutputStream gz = new java.util.zip.GZIPOutputStream(Files.newOutputStream(file))) {
+                gz.write(blocks);
+                gz.write(overlays);
+            }
+            StubChunk b = new StubChunk(pos);
+            assertTrue(storage.load(b).isEmpty());
+            assertEquals(BlockType.FURNACE.id, b.getRawBlocks()[0]);
+            assertEquals(BlockType.SEAWEED.id, b.getRawOverlays()[0]);
+            for (byte o : b.getRawOrientations()) {
+                assertEquals(0, o, "orientations default to empty");
+            }
         } finally {
             deleteRecursively(dir);
         }

@@ -27,4 +27,14 @@ public interface BlockAccessor {
     default BlockType getOverlay(int worldX, int worldY, int worldZ) {
         return BlockType.AIR;
     }
+
+    /**
+     * Whether the block at this position is currently "active" - e.g. a
+     * furnace that's burning, which switches its front face to the glowing
+     * variant. Defaulted to false so existing BlockAccessor implementations
+     * (like tests) don't need to know about it.
+     */
+    default boolean isBlockActive(int worldX, int worldY, int worldZ) {
+        return false;
+    }
 }

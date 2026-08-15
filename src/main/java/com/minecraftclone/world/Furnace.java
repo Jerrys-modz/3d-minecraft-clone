@@ -131,6 +131,18 @@ public class Furnace implements BlockEntity {
         return burnTime > 0;
     }
 
+    /** The furnace is "active" (glowing front, emitting light) while it's burning. */
+    @Override
+    public boolean isActive() {
+        return isBurning();
+    }
+
+    /** A burning furnace lights its surroundings like a torch (Minecraft's lit furnace is level 13). */
+    @Override
+    public int activeLightLevel() {
+        return isBurning() ? 13 : 0;
+    }
+
     /** 0..1 how much of the current fuel's burn is left - drives the GUI flame. */
     public float burnFraction() {
         return burnDuration <= 0 ? 0f : burnTime / burnDuration;
