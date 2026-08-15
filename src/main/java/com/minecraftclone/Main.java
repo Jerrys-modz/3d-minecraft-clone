@@ -447,7 +447,16 @@ public class Main {
                         if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
                             genSettings.adjust(worldGenSelection[0], +1);
                         }
-                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                        // Mouse: hover to select a row, click to edit/adjust/Done (same as Enter).
+                        boolean clickedGen = false;
+                        float genLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                        float genLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                        int hoverGen = hud.worldGenRowAt(genLx, genLy);
+                        if (hoverGen >= 0) {
+                            worldGenSelection[0] = hoverGen;
+                            clickedGen = input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE) || clickedGen) {
                             if (worldGenSelection[0] == WorldGenSettings.ROW_NAME || worldGenSelection[0] == WorldGenSettings.ROW_SEED) {
                                 editingRow[0] = worldGenSelection[0];
                                 input.consumeTypedChars();
@@ -492,7 +501,17 @@ public class Main {
                     if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
                         worldSelectSelection[0] = Math.floorMod(worldSelectSelection[0] + 1, totalWorlds);
                     }
-                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
+                    // Mouse: hover to select a world / the Create New World button,
+                    // click to play it (or open the world-gen page), same as Enter.
+                    boolean clickedWorld = false;
+                    float wsLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                    float wsLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                    int hoverWorld = hud.worldSelectItemAt(wsLx, wsLy, worldNames.size());
+                    if (hoverWorld >= 0) {
+                        worldSelectSelection[0] = hoverWorld;
+                        clickedWorld = input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE) || clickedWorld) {
                         if (worldSelectSelection[0] < worldNames.size()) {
                             genSettings = loadWorldGenSettings(saveRoot.resolve(worldNames.get(worldSelectSelection[0])));
                             Path worldDir = saveRoot.resolve(genSettings.getName());

@@ -723,6 +723,22 @@ public class Hud {
         }
         glEnable(GL_DEPTH_TEST);
     }
+
+    /**
+     * The world-select entry under the mouse: the index of a saved world, or
+     * {@code worldCount} for the Create New World button; -1 if over nothing.
+     * Rows start at y=0.3 and step 0.07 downward, matching the renderer.
+     */
+    public int worldSelectItemAt(float logicalX, float logicalY, int worldCount) {
+        int total = worldCount + 1;
+        for (int i = 0; i < total; i++) {
+            float y = 0.3f - i * 0.07f;
+            if (Math.abs(logicalY - y) <= 0.05f && Math.abs(logicalX) <= 0.45f) {
+                return i;
+            }
+        }
+        return -1;
+    }
     /** The world-generation settings page (Minecraft-style "More World Options"). */
     public void renderWorldGenMenu(WorldGenSettings wgs, int selectedIndex, int editingRow, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
@@ -844,6 +860,21 @@ public class Hud {
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - i * SETTINGS_ROW_H;
+    }
+
+    /** The world-gen row (0..ROW_COUNT, with ROW_COUNT being the Done button) under the mouse, or -1. */
+    public int worldGenRowAt(float logicalX, float logicalY) {
+        int rows = WorldGenSettings.ROW_COUNT + 1;
+        float panelW = 0.95f;
+        float left = -panelW / 2f;
+        for (int i = 0; i < rows; i++) {
+            float rowTop = worldGenRowTop(i);
+            if (logicalX >= left && logicalX <= left + panelW
+                    && logicalY <= rowTop && logicalY >= rowTop - SETTINGS_ROW_H) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** Slider control x-range {left, right} for the settings rows. */
