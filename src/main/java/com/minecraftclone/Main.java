@@ -1137,7 +1137,7 @@ public class Main {
                 }
             }
             hud.renderMessages(messages, window.getAspectRatio());
-            if (showDebug[0]) {
+            if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();
                 float aspect = window.getAspectRatio();
                 float textSize = 0.035f;

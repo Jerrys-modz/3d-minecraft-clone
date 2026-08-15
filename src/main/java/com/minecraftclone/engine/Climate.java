@@ -38,6 +38,8 @@ public class Climate {
     private final WeatherEvent[] schedule = new WeatherEvent[FORECAST_HORIZON];
     private Biome currentBiome = Biome.PLAINS;
     private float wetness = 0f;
+    /** True once the schedule has been rolled from a real player biome (see {@link #update}). */
+    private boolean rolled = false;
 
     public Climate(Calendar calendar, DayNightCycle dayNightCycle) {
         this(calendar, dayNightCycle, new Random());
@@ -50,27 +52,48 @@ public class Climate {
         for (int i = 0; i < FORECAST_HORIZON; i++) {
             schedule[i] = new WeatherEvent(Weather.CLEAR, 0f, 0f);
         }
-        rollWeather(0);
-        rollWeather(1);
-        rollWeather(2);
+        // The schedule is deliberately not rolled here: the first update brings the
+        // player's actual spawn biome, which is what the weather should reflect.
     }
 
     /** Advances the model: drifts wetness, counts down the weather, rolls ahead when it changes. */
     public void update(float dt, Biome playerBiome) {
         if (dt <= 0) return;
         currentBiome = playerBiome == null ? Biome.PLAINS : playerBiome;
-        if (current().weather.isPrecipitation()) {
+        if (!rolled) {
+            rollWeather(0);
+            rollWeather(1);
+            rollWeather(2);
+            rolled = true;
+        }
+        // Consume dt in slices bounded by each event's remaining duration, so a big
+        // frame delta rolls through every expired event (and applies wetness with
+        // each slice's own weather) instead of discarding the overflow.
+        while (dt > 0) {
+            WeatherEvent current = schedule[0];
+            if (current.durationSeconds <= 0) {
+                shiftAndRoll();
+                continue;
+            }
+            float slice = Math.min(dt, current.durationSeconds);
+            applyWetness(slice, current.weather);
+            schedule[0] = new WeatherEvent(current.weather, current.durationSeconds - slice, current.strength);
+            dt -= slice;
+        }
+    }
+
+    private void shiftAndRoll() {
+        for (int i = 0; i < FORECAST_HORIZON - 1; i++) {
+            schedule[i] = schedule[i + 1];
+        }
+        rollWeather(FORECAST_HORIZON - 1);
+    }
+
+    private void applyWetness(float dt, Weather weather) {
+        if (weather.isPrecipitation()) {
             wetness = Math.min(1f, wetness + dt * WETNESS_RISE_PER_SECOND);
         } else {
             wetness = Math.max(0f, wetness - dt * WETNESS_DRAIN_PER_SECOND);
-        }
-        WeatherEvent current = schedule[0];
-        schedule[0] = new WeatherEvent(current.weather, current.durationSeconds - dt, current.strength);
-        if (schedule[0].durationSeconds <= 0) {
-            for (int i = 0; i < FORECAST_HORIZON - 1; i++) {
-                schedule[i] = schedule[i + 1];
-            }
-            rollWeather(FORECAST_HORIZON - 1);
         }
     }
 

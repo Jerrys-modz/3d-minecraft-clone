@@ -154,7 +154,7 @@ src/main/java/com/minecraftclone/
 ├── Main.java                 # Entry point & game loop
 ├── Settings.java             # In-game settings menu rows & values (see Settings menu)
 ├── GameMode.java             # Survival/Creative/Adventure/Spectator behaviour
-├── engine/                   # Window, input, camera, shaders, HUD, DayNightCycle, Calendar, Season
+├── engine/                   # Window, input, camera, shaders, HUD, DayNightCycle, Calendar, Season, Climate, Weather
 │   ├── graphics/              # TextureAtlas, ItemTextures, FontAtlas, GLTexture, Mesh, LineMesh, IconMesh, ItemRenderer
 │   └── gui/                   # ContainerGui (shared slot model for the inventory/furnace/crafting-table screens)
 ├── world/                    # Chunk, World (streaming/meshing), BlockType, Mining, ItemEntity, FluidSim, BlockEntity/BlockEntities (registry), Furnace
