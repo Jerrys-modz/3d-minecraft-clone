@@ -396,6 +396,11 @@ public class Main {
                 System.err.println("MCCLONE_AUTOTEST_HELD: unknown block " + System.getenv("MCCLONE_AUTOTEST_HELD"));
             }
         }
+        // Opt-in autotest hook: start the hand swing animation from the first frame
+        // (place/use/break), so a mid-swing screenshot can be captured.
+        if (System.getenv("MCCLONE_AUTOTEST_SWING") != null) {
+            handRenderer.triggerSwing();
+        }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
 
@@ -852,6 +857,7 @@ public class Main {
                     if (breakFraction >= 1f) {
                         mining.reset();
                         breakFraction = 0f;
+                        handRenderer.triggerSwing();
                         int bx = hit.blockPos.x, by = hit.blockPos.y, bz = hit.blockPos.z;
                         if (Door.isDoor(targetType)) {
                             Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
@@ -899,14 +905,17 @@ public class Main {
                     if (Door.isDoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            handRenderer.triggerSwing();
                         }
                     } else if (Door.isTrapdoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            handRenderer.triggerSwing();
                         }
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         if (heldItem.isEdible() && !mode.isCreative()) {
                             player.eat(heldItem);
+                            handRenderer.triggerSwing();
                         } else if (!heldItem.isItem) {
                             // Pure inventory items (tools, and any future non-edible item)
                             // have no world tile and can never be placed as a block.
@@ -924,6 +933,7 @@ public class Main {
                             if (!blocked && !intersectsPlayer(player, p)) {
                                 boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
                                 if (placed) {
+                                    handRenderer.triggerSwing();
                                     if (intoFluid) {
                                         world.setOverlay(p.x, p.y, p.z, heldItem);
                                     } else {
@@ -998,7 +1008,7 @@ public class Main {
                     && !settings.getGameMode().isSpectator()) {
                 handRenderer.render(chunkShader, atlas, itemTextures,
                         player.getInventory().typeOf(selectedSlot[0]),
-                        player.getBobPhase(), animTime[0], projection);
+                        player.getBobPhase(), animTime[0], dt, projection);
             }
 
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
