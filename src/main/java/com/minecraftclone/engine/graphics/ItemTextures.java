@@ -81,41 +81,105 @@ public class ItemTextures {
         return img;
     }
 
-    /** A vertical handle with a wide two-pronged head near the top, tinted by material. */
+    /** A Minecraft-style pickaxe: a claw head (center point + two down-curving prongs) on a diagonal handle. */
     private static BufferedImage paintPickaxe(int headColor) {
         BufferedImage img = blank();
-        drawThickLine(img, 8, 15, 7, 5, 0x6E4A2A); // handle
-        drawThickLine(img, 3, 7, 13, 4, headColor);  // head, left prong to right prong
-        drawThickLine(img, 3, 7, 8, 3, headColor);
-        drawThickLine(img, 13, 4, 8, 3, headColor);
+        int handle = 0x6E4A2A, handleDark = 0x543A20;
+        // Head bar (lit top, body, shaded bottom).
+        for (int x = 2; x <= 13; x++) {
+            img.setRGB(x, 2, 0xFF000000 | lighten(headColor));
+            img.setRGB(x, 3, 0xFF000000 | headColor);
+            img.setRGB(x, 4, 0xFF000000 | headColor);
+            img.setRGB(x, 5, 0xFF000000 | shade(headColor, 0.8f));
+        }
+        // Center point (the claw's beak).
+        for (int y = 6; y <= 8; y++) {
+            img.setRGB(7, y, 0xFF000000 | shade(headColor, 1f - 0.07f * (y - 6)));
+            img.setRGB(8, y, 0xFF000000 | shade(headColor, 1f - 0.07f * (y - 6)));
+        }
+        // Side prongs curving down and outward.
+        for (int[] p : new int[][]{{3, 6}, {2, 7}, {1, 8}, {2, 8}, {12, 6}, {13, 7}, {14, 8}, {13, 8}}) {
+            img.setRGB(p[0], p[1], 0xFF000000 | shade(headColor, 0.85f));
+        }
+        // Diagonal handle from the bottom-right up under the head.
+        drawThickLine(img, 11, 15, 9, 9, handleDark);
+        drawThickLine(img, 10, 15, 8, 9, handle);
         return img;
     }
 
-    /** A vertical handle with a triangular blade near the top, tinted by material. */
+    /** A Minecraft-style axe: a broad rounded blade with a curved cutting edge on a diagonal handle. */
     private static BufferedImage paintAxe(int headColor) {
         BufferedImage img = blank();
-        drawThickLine(img, 6, 15, 7, 6, 0x6E4A2A); // handle
-        for (int y = 2; y <= 8; y++) {
-            int width = 6 - Math.abs(y - 5);
-            for (int x = 0; x < width; x++) {
-                int px = 7 + x, py = y;
-                if (px >= 0 && px < SIZE && py >= 0 && py < SIZE) {
-                    img.setRGB(px, py, 0xFF000000 | headColor);
+        int handle = 0x6E4A2A, handleDark = 0x543A20;
+        // Blade: flat-ish back on the right, cutting edge bulging left.
+        int[] edge = {6, 5, 4, 3, 2, 3, 4, 5, 6};
+        for (int y = 1; y <= 9; y++) {
+            int e = edge[y - 1];
+            for (int x = e; x <= 10; x++) {
+                int c = headColor;
+                if (y == 1) {
+                    c = lighten(headColor);
+                } else if (y == 9) {
+                    c = shade(headColor, 0.7f);
                 }
+                if (x == e) {
+                    c = lighten(headColor);                    // bright cutting edge
+                } else if (x == e + 1) {
+                    c = shade(headColor, 0.9f);                // bevel shadow just inside
+                }
+                img.setRGB(x, y, 0xFF000000 | c);
             }
         }
+        // Back edge highlight (right side).
+        for (int y = 2; y <= 8; y++) {
+            img.setRGB(10, y, 0xFF000000 | shade(headColor, 0.85f));
+        }
+        // Diagonal handle from the bottom-right up into the head.
+        drawThickLine(img, 10, 15, 9, 7, handleDark);
+        drawThickLine(img, 9, 15, 8, 7, handle);
         return img;
     }
 
-    /** A pointed vertical blade over a dark crossguard and a short handle, tinted by material. */
+    /** A Minecraft-style sword: a long blade with a fuller groove, a broad crossguard, and a gripped handle. */
     private static BufferedImage paintSword(int bladeColor) {
         BufferedImage img = blank();
-        drawThickLine(img, 8, 2, 8, 10, bladeColor); // blade
-        img.setRGB(8, 2, 0xFF000000 | bladeColor); // sharpen the tip to a single pixel
-        for (int x = 4; x <= 11; x++) {
-            img.setRGB(x, 11, 0xFF000000 | 0x4A4A4A); // crossguard
+        // Blade: 1px point, then a 3px body with a darker fuller down the middle.
+        int[][] rows = {{8}, {7, 8}, {7, 8, 9}, {7, 8, 9}, {7, 8, 9}, {7, 8, 9}, {7, 8, 9}, {7, 8, 9}, {7, 8}};
+        for (int y = 0; y < rows.length; y++) {
+            int[] xs = rows[y];
+            for (int x : xs) {
+                int c;
+                if (x == xs[0]) {
+                    c = lighten(bladeColor);                    // lit edge
+                } else if (x == xs[xs.length - 1]) {
+                    c = shade(bladeColor, 0.85f);               // shaded edge
+                } else {
+                    c = shade(bladeColor, 0.92f);               // fuller groove
+                }
+                img.setRGB(x, y + 1, 0xFF000000 | c);
+            }
         }
-        drawThickLine(img, 8, 12, 8, 15, 0x6E4A2A); // handle
+        // Crossguard: a broad dark bar with a lit band and an ornate center.
+        for (int x = 3; x <= 12; x++) {
+            img.setRGB(x, 10, 0xFF000000 | 0x4A4A4A);
+            img.setRGB(x, 11, 0xFF000000 | 0x3A3A3A);
+        }
+        for (int x = 5; x <= 10; x++) {
+            img.setRGB(x, 10, 0xFF000000 | 0x8A8A8A);
+        }
+        img.setRGB(8, 10, 0xFF000000 | 0xB0B0B0);
+        img.setRGB(7, 11, 0xFF000000 | 0x2E2E2E);
+        img.setRGB(8, 11, 0xFF000000 | 0x2E2E2E);
+        img.setRGB(9, 11, 0xFF000000 | 0x2E2E2E);
+        // Handle with a pommel.
+        for (int y = 12; y <= 14; y++) {
+            img.setRGB(7, y, 0xFF000000 | 0x6E4A2A);
+            img.setRGB(8, y, 0xFF000000 | 0x8B5A2B);
+        }
+        img.setRGB(6, 12, 0xFF000000 | 0x4A3018);
+        img.setRGB(9, 12, 0xFF000000 | 0x4A3018);
+        img.setRGB(8, 15, 0xFF000000 | 0x4A3018);
+        img.setRGB(7, 15, 0xFF000000 | 0x3A2613);
         return img;
     }
 
@@ -254,6 +318,14 @@ public class ItemTextures {
         int r = Math.min(255, ((color >> 16) & 0xFF) + 40);
         int g = Math.min(255, ((color >> 8) & 0xFF) + 40);
         int b = Math.min(255, (color & 0xFF) + 40);
+        return (r << 16) | (g << 8) | b;
+    }
+
+    /** Multiplies a 0xRRGGBB color's brightness by {@code f}. */
+    private static int shade(int color, float f) {
+        int r = Math.min(255, Math.max(0, Math.round(((color >> 16) & 0xFF) * f)));
+        int g = Math.min(255, Math.max(0, Math.round(((color >> 8) & 0xFF) * f)));
+        int b = Math.min(255, Math.max(0, Math.round((color & 0xFF) * f)));
         return (r << 16) | (g << 8) | b;
     }
 
