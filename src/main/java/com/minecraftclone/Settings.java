@@ -34,22 +34,25 @@ public class Settings {
     public static final int SENSITIVITY = 9;        // Gameplay
     public static final int INVERT_MOUSE_Y = 10;    // toggle (Gameplay)
     public static final int VIEW_BOBBING = 11;      // toggle (Gameplay)
-    public static final int ROW_COUNT = 12;
+    public static final int SOUND_VOLUME = 12;      // Audio
+    public static final int ROW_COUNT = 13;
 
     // Settings tabs: each owns a contiguous slice of the rows above. The
     // Controls tab has no Settings rows - it shows the keybind list instead.
     public static final int TAB_GRAPHICS = 0;
     public static final int TAB_GAMEPLAY = 1;
-    public static final int TAB_CONTROLS = 2;
-    public static final int TAB_COUNT = 3;
-    private static final int[] TAB_ROW_START = {LEAVES_TRANSPARENT, GAME_MODE, ROW_COUNT};
-    private static final int[] TAB_ROW_END = {GAME_MODE, ROW_COUNT, ROW_COUNT};
+    public static final int TAB_AUDIO = 2;
+    public static final int TAB_CONTROLS = 3;
+    public static final int TAB_COUNT = 4;
+    private static final int[] TAB_ROW_START = {LEAVES_TRANSPARENT, GAME_MODE, SOUND_VOLUME, ROW_COUNT};
+    private static final int[] TAB_ROW_END = {GAME_MODE, SOUND_VOLUME, ROW_COUNT, ROW_COUNT};
 
     /** Display name of a settings tab, for the tab bar. */
     public static String tabLabel(int tab) {
         return switch (tab) {
             case TAB_GRAPHICS -> "Graphics";
             case TAB_GAMEPLAY -> "Gameplay";
+            case TAB_AUDIO -> "Audio";
             case TAB_CONTROLS -> "Controls";
             default -> "?";
         };
@@ -80,6 +83,7 @@ public class Settings {
         ranges[CLOUD_SPEED] = 1f; // normal
         toggles[STARS] = true;
         toggles[VIEW_BOBBING] = true;
+        ranges[SOUND_VOLUME] = 1f;
     }
 
     /** True if the given row is a boolean toggle; false for a numeric range. */
@@ -102,6 +106,7 @@ public class Settings {
             case STARS -> "Stars";
             case INVERT_MOUSE_Y -> "Invert mouse Y";
             case VIEW_BOBBING -> "View bobbing";
+            case SOUND_VOLUME -> "Sound volume";
             default -> "?";
         };
     }
@@ -116,6 +121,7 @@ public class Settings {
             case GAME_MODE -> 1f;
             case CLOUDS -> 1f;
             case CLOUD_SPEED -> 1f;
+            case SOUND_VOLUME -> 0.05f;
             default -> 0f;
         };
     }
@@ -129,6 +135,7 @@ public class Settings {
             case GAME_MODE -> 0f;
             case CLOUDS -> 0f;
             case CLOUD_SPEED -> 0f;
+            case SOUND_VOLUME -> 0f;
             default -> 0f;
         };
     }
@@ -142,6 +149,7 @@ public class Settings {
             case GAME_MODE -> GameMode.values().length - 1f;
             case CLOUDS -> 3f;
             case CLOUD_SPEED -> 2f;
+            case SOUND_VOLUME -> 1f;
             default -> 0f;
         };
     }
@@ -154,7 +162,7 @@ public class Settings {
         if (row == SENSITIVITY) {
             return String.format("%.2f", ranges[row]);
         }
-        if (row == BRIGHTNESS) {
+        if (row == BRIGHTNESS || row == SOUND_VOLUME) {
             return Math.round(ranges[row] * 100f) + "%";
         }
         if (row == GAME_MODE) {
@@ -231,6 +239,7 @@ public class Settings {
         lines.add("stars=" + (toggles[STARS] ? 1 : 0));
         lines.add("invert_mouse_y=" + (toggles[INVERT_MOUSE_Y] ? 1 : 0));
         lines.add("view_bobbing=" + (toggles[VIEW_BOBBING] ? 1 : 0));
+        lines.add("sound_volume=" + ranges[SOUND_VOLUME]);
         keyBinds.saveLines(lines);
         worldGen.saveLines(lines);
         try {
@@ -271,6 +280,7 @@ public class Settings {
                         case "stars" -> s.toggles[STARS] = parseBool(value);
                         case "invert_mouse_y" -> s.toggles[INVERT_MOUSE_Y] = parseBool(value);
                         case "view_bobbing" -> s.toggles[VIEW_BOBBING] = parseBool(value);
+                        case "sound_volume" -> s.ranges[SOUND_VOLUME] = clamp(SOUND_VOLUME, Float.parseFloat(value));
                         default -> {
                             s.keyBinds.loadEntry(key, value);
                             s.worldGen.loadEntry(key, value);
@@ -341,6 +351,11 @@ public class Settings {
 
     public boolean isViewBobbing() {
         return toggles[VIEW_BOBBING];
+    }
+
+    /** Master sound effect volume (0..1), applied to every sound the game plays. */
+    public float getSoundVolume() {
+        return ranges[SOUND_VOLUME];
     }
 
     /** World-generation settings for new worlds (see {@link WorldGenSettings}). */

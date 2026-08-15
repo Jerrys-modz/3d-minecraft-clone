@@ -132,6 +132,28 @@ class SettingsTest {
     }
 
     @Test
+    void soundVolumeAdjustsClampsAndPersists() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Settings s = new Settings();
+            assertEquals(1f, s.getSoundVolume(), 1e-6f); // full volume by default
+            assertEquals("100%", s.valueText(Settings.SOUND_VOLUME));
+            s.adjust(Settings.SOUND_VOLUME, -1);
+            assertEquals(0.95f, s.getSoundVolume(), 1e-6f);
+            s.setFromFraction(Settings.SOUND_VOLUME, -1f);
+            assertEquals(0f, s.getSoundVolume(), 1e-6f); // clamped at min - silent, not negative
+            s.setFromFraction(Settings.SOUND_VOLUME, 2f);
+            assertEquals(1f, s.getSoundVolume(), 1e-6f); // clamped at max
+            s.setFromFraction(Settings.SOUND_VOLUME, 0.5f);
+            s.save(file);
+            Settings loaded = Settings.load(file);
+            assertEquals(0.5f, loaded.getSoundVolume(), 1e-6f);
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
     void tabsCoverAllRowsWithoutOverlap() {
         int seen = 0;
         for (int tab = 0; tab < Settings.TAB_COUNT; tab++) {

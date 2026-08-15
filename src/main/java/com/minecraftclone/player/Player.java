@@ -60,6 +60,20 @@ public class Player {
     private final DoubleTapDetector wTapDetector = new DoubleTapDetector(DOUBLE_TAP_WINDOW);
     private boolean sprintLatched = false; // sprint started by a double-tap, held until W is released
 
+    // Transient one-frame flags recomputed fresh every update() - not "consumed",
+    // just true exactly on the frame the event happened, false otherwise. Exist
+    // purely so the caller (Main) can trigger a sound effect without duplicating
+    // any of this class's physics/collision logic to detect the same moments.
+    private boolean justJumped = false;
+    private boolean justLanded = false;
+    private boolean wasOnGround = true; // starts true: spawning in doesn't count as "landing"
+    // Head-underwater state, recomputed every update() (also drives the breath/
+    // drowning mechanic in PlayerStats) - exposed read-only so Main can trigger
+    // a splash sound on the frame it changes, without recomputing the same
+    // world lookup a second time itself.
+    private boolean submerged = false;
+    private static final float LANDING_SOUND_MIN_SPEED = 4f; // ignore trivial dips, only a real fall
+
     public void spawn(World world, float x, float z) {
         int surfaceY = world.getSurfaceHeight((int) Math.floor(x), (int) Math.floor(z));
         position.set(x, surfaceY + 2, z);
@@ -152,16 +166,49 @@ public class Player {
         boolean sprintingAndMoving = updateMovement(dt, input, world);
         updateBobbing(dt, sprintingAndMoving);
 
+        // A "just landed" thump: onGround flipping on this frame specifically
+        // (not "is currently resting on the ground", which is true every frame
+        // afterward too) with enough fall speed that it wasn't just a trivial
+        // step-down. Checked here, before lastFallImpactSpeed resets below.
+        justLanded = onGround && !wasOnGround && lastFallImpactSpeed >= LANDING_SOUND_MIN_SPEED;
+        wasOnGround = onGround;
+
+        submerged = world.getBlock(
+                (int) Math.floor(position.x), (int) Math.floor(position.y + EYE_HEIGHT), (int) Math.floor(position.z))
+                .isWater();
+
         if (gameMode.isInvulnerable()) {
             stats.forceFull();
         } else {
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
-            boolean submerged = world.getBlock(
-                    (int) Math.floor(position.x), (int) Math.floor(position.y + EYE_HEIGHT), (int) Math.floor(position.z))
-                    .isWater();
             stats.update(dt, inLava, submerged, sprintingAndMoving, lastFallImpactSpeed);
         }
         lastFallImpactSpeed = 0f;
+    }
+
+    /** True on exactly the frame the player left the ground under their own jump (not falling off a ledge). */
+    public boolean hasJustJumped() {
+        return justJumped;
+    }
+
+    /** True on exactly the frame the player lands hard enough for it to be worth a sound (not a trivial step-down). */
+    public boolean hasJustLanded() {
+        return justLanded;
+    }
+
+    /** Whether the player's head (eye position) is currently inside a water block. */
+    public boolean isSubmerged() {
+        return submerged;
+    }
+
+    /** Whether the player is currently walking/sprinting on solid ground (not flying, not airborne) - drives footstep sounds. */
+    public boolean isMovingOnGround() {
+        return movingOnGround;
+    }
+
+    /** The block directly under the player's feet - what a footstep sound should sound like. */
+    public BlockType blockUnderfoot(World world) {
+        return world.getBlock((int) Math.floor(position.x), (int) Math.floor(position.y) - 1, (int) Math.floor(position.z));
     }
 
     private void updateLook(Input input) {
@@ -219,6 +266,7 @@ public class Player {
 
     /** Returns true if the player is sprinting and actually moving this frame (for stamina/hunger drain). */
     private boolean updateMovement(float dt, Input input, World world) {
+        justJumped = false;
         Vector3f front = camera.getFrontFlat();
         Vector3f right = new Vector3f(-front.z, 0, front.x); // matches Camera.getRight()'s front-cross-up convention
 
@@ -257,6 +305,7 @@ public class Player {
             if (onGround && input.isKeyDown(keyBinds.get(KeyBindings.JUMP))) {
                 velocity.y = JUMP_VELOCITY;
                 onGround = false;
+                justJumped = true;
             }
         }
 

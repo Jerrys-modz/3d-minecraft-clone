@@ -599,9 +599,11 @@ public class World implements BlockAccessor {
     /**
      * Advances item physics (gravity, resting on blocks) and collects any item
      * the player is close enough to pick up into {@code inventory}. Call once
-     * per frame from the main thread.
+     * per frame from the main thread. Returns true if at least one item was
+     * picked up this frame (for a pickup sound - see Main).
      */
-    public void updateItems(float dt, Vector3f playerPos, Inventory inventory) {
+    public boolean updateItems(float dt, Vector3f playerPos, Inventory inventory) {
+        boolean pickedUp = false;
         for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
             ItemEntity e = it.next();
             e.age += dt;
@@ -637,9 +639,11 @@ public class World implements BlockAccessor {
                 if (dx * dx + dy * dy + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
                     inventory.add(e.type, e.count);
                     it.remove();
+                    pickedUp = true;
                 }
             }
         }
+        return pickedUp;
     }
 
     public int getLoadedChunkCount() {
