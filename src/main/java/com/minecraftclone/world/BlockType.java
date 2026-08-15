@@ -78,6 +78,7 @@ public enum BlockType {
     TRAPDOOR(71, true, false, 47, 47, 47),
     TRAPDOOR_OPEN(72, false, true, 47),
     CRAFTING_TABLE(73, true, false, 48, 48, 48), // workbench: right-click opens the 3x3 crafting GUI
+    CHEST(75, true, false, 50, 50, 50),          // storage: right-click opens a 27-slot container GUI
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,

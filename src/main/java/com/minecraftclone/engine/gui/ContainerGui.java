@@ -3,32 +3,35 @@ package com.minecraftclone.engine.gui;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Inventory;
+import com.minecraftclone.player.StorageContainer;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Furnace;
 
 /**
  * The model behind every full-screen container GUI: the plain inventory screen,
- * a placed furnace, or a placed crafting table. A gui is a fixed slot space
- * built from the player's inventory plus, depending on {@link Kind}, a 3x3
- * crafting grid with its output slot and/or a placed block's container (a
- * furnace).
+ * a placed furnace, a placed crafting table, or a placed chest. A gui is a
+ * fixed slot space built from the player's inventory plus, depending on {@link
+ * Kind}, a 3x3 crafting grid with its output slot and/or a placed block's
+ * container.
  * <p>
  * Slot numbering is one contiguous space so the mouse/controller logic never
  * has to branch on where an item lives. Which ranges exist depends on the kind
- * (a furnace has no crafting grid, so its slots take the grid's numbers):
+ * (a furnace/chest has no crafting grid, so its slots take the grid's numbers):
  * <pre>
  *   0 .. 35                player inventory (0-8 hotbar, 9-35 main)
  *   36 .. 44               crafting grid cells   (INVENTORY / CRAFTING_TABLE)
  *   45                     crafting output slot  (INVENTORY / CRAFTING_TABLE)
  *   36 .. 38               furnace slots         (FURNACE: input, fuel, output)
+ *   36 .. 62               chest slots           (CHEST: 27 slots)
  * </pre>
  * The crafting output is derived (it holds the current recipe's result) rather
  * than stored, exactly like Minecraft - {@link #currentRecipe} reports what
  * would come out of the grid right now.
  * <p>
- * This is the extension point for future GUIs: a new {@link Kind} adds its
- * container's slots to the space and the renderer/interaction code pick them
- * up automatically via {@link #typeOf}/{@link #setSlot}.
+ * The placed container is a {@link StorageContainer}, so any future block that
+ * implements that interface (a new machine, a barrel, an AE2-style network
+ * terminal exposing virtual storage) plugs into the GUI, mouse interaction and
+ * quick-move logic with no further code here.
  */
 public class ContainerGui {
 
@@ -36,7 +39,8 @@ public class ContainerGui {
     public enum Kind {
         INVENTORY("Inventory"),
         FURNACE("Furnace"),
-        CRAFTING_TABLE("Crafting Table");
+        CRAFTING_TABLE("Crafting Table"),
+        CHEST("Chest");
 
         private final String title;
 
@@ -50,29 +54,32 @@ public class ContainerGui {
     /** Slot id of the crafting result. */
     public static final int OUTPUT_SLOT = GRID_START + CraftingGrid.SIZE;
     /**
-     * First slot id of a placed container's slots (furnace). A furnace has no
-     * crafting grid, so it reuses the grid's slot numbers: {@code 36..38}.
+     * First slot id of a placed container's slots (furnace/chest). A container
+     * has no crafting grid, so it reuses the grid's slot numbers: {@code 36..}.
      */
     public static final int CONTAINER_START = Inventory.SIZE;
     /** Number of slots a furnace contributes. */
     public static final int FURNACE_SLOT_COUNT = Furnace.SLOT_COUNT;
+    /** Number of slots a chest contributes. */
+    public static final int CHEST_SLOT_COUNT = com.minecraftclone.world.Chest.SLOT_COUNT;
 
     private final Kind kind;
     private final Inventory inventory;
     private final CraftingGrid grid;
-    private final Furnace furnace;
+    private final StorageContainer container;
 
     /**
-     * @param kind     which container this gui shows
-     * @param inventory the player's inventory (shared, always present)
-     * @param grid     the shared crafting grid (used when the kind has one)
-     * @param furnace  the placed furnace (FURNACE kind only; may be null otherwise)
+     * @param kind       which container this gui shows
+     * @param inventory  the player's inventory (shared, always present)
+     * @param grid       the shared crafting grid (used when the kind has one)
+     * @param container  the placed block's container (FURNACE/CHEST kinds only;
+     *                   may be null otherwise)
      */
-    public ContainerGui(Kind kind, Inventory inventory, CraftingGrid grid, Furnace furnace) {
+    public ContainerGui(Kind kind, Inventory inventory, CraftingGrid grid, StorageContainer container) {
         this.kind = kind;
         this.inventory = inventory;
         this.grid = grid;
-        this.furnace = kind == Kind.FURNACE ? furnace : null;
+        this.container = (kind == Kind.FURNACE || kind == Kind.CHEST) ? container : null;
     }
 
     public Kind kind() {
@@ -87,6 +94,10 @@ public class ContainerGui {
         return kind == Kind.INVENTORY || kind == Kind.CRAFTING_TABLE;
     }
 
+    public boolean hasContainer() {
+        return kind == Kind.FURNACE || kind == Kind.CHEST;
+    }
+
     public Inventory inventory() {
         return inventory;
     }
@@ -95,15 +106,21 @@ public class ContainerGui {
         return grid;
     }
 
+    /** The placed block's container (furnace or chest); null when no container is open. */
+    public StorageContainer container() {
+        return container;
+    }
+
+    /** The placed furnace, if this is a furnace gui (for the flame/arrow rendering); null otherwise. */
     public Furnace furnace() {
-        return furnace;
+        return container instanceof Furnace furnace ? furnace : null;
     }
 
     /** Total number of interactive slots in the gui. */
     public int slotCount() {
         int count = Inventory.SIZE;
         if (hasGrid()) count += CraftingGrid.SIZE + 1;
-        if (kind == Kind.FURNACE) count += FURNACE_SLOT_COUNT;
+        if (hasContainer()) count += container.size();
         return count;
     }
 
@@ -119,6 +136,12 @@ public class ContainerGui {
         return hasGrid() && slotId == OUTPUT_SLOT;
     }
 
+    /** True if {@code slotId} is one of the placed container's slots (furnace or chest). */
+    public boolean isContainerSlot(int slotId) {
+        return hasContainer() && slotId >= CONTAINER_START && slotId < CONTAINER_START + container.size();
+    }
+
+    /** True if {@code slotId} is a furnace slot (subset of {@link #isContainerSlot}). */
     public boolean isFurnaceSlot(int slotId) {
         return kind == Kind.FURNACE && slotId >= CONTAINER_START && slotId < CONTAINER_START + FURNACE_SLOT_COUNT;
     }
@@ -127,7 +150,7 @@ public class ContainerGui {
     public BlockType typeOf(int slotId) {
         if (isPlayerSlot(slotId)) return inventory.typeOf(slotId);
         if (isGridSlot(slotId)) return grid.get(slotId - GRID_START);
-        if (isFurnaceSlot(slotId)) return furnace.typeOf(slotId - CONTAINER_START);
+        if (isContainerSlot(slotId)) return container.typeOf(slotId - CONTAINER_START);
         return null;
     }
 
@@ -135,7 +158,7 @@ public class ContainerGui {
     public int countOf(int slotId) {
         if (isPlayerSlot(slotId)) return inventory.countOf(slotId);
         if (isGridSlot(slotId)) return grid.get(slotId - GRID_START) == null ? 0 : 1;
-        if (isFurnaceSlot(slotId)) return furnace.countOf(slotId - CONTAINER_START);
+        if (isContainerSlot(slotId)) return container.countOf(slotId - CONTAINER_START);
         return 0;
     }
 
@@ -145,8 +168,8 @@ public class ContainerGui {
             inventory.setSlot(slotId, type, count);
         } else if (isGridSlot(slotId)) {
             grid.set(slotId - GRID_START, type);
-        } else if (isFurnaceSlot(slotId)) {
-            furnace.setSlot(slotId - CONTAINER_START, type, count);
+        } else if (isContainerSlot(slotId)) {
+            container.setSlot(slotId - CONTAINER_START, type, count);
         }
     }
 

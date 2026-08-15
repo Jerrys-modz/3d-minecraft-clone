@@ -41,6 +41,8 @@ public class TextureAtlas {
     public static final int CRAFTING_TABLE_TILE = 48;
     /** Tile index of the furnace's front face when it's actively burning - the mouth glows orange. */
     public static final int FURNACE_LIT_TILE = 49;
+    /** Tile index of the chest's lid/front face. */
+    public static final int CHEST_TILE = 50;
 
     private int textureId;
 
@@ -106,6 +108,7 @@ public class TextureAtlas {
         paintFurnace(image, FURNACE_TILE);
         paintFurnaceLit(image, FURNACE_LIT_TILE);
         paintCraftingTable(image, CRAFTING_TABLE_TILE);
+        paintChest(image, CHEST_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
 
@@ -622,6 +625,36 @@ public class TextureAtlas {
                 img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
             }
         }
+    }
+
+    /** A wooden chest front: plank fill with a curved lid seam, a brass lock plate and a latch. */
+    private void paintChest(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int plank = 0xB8863F;
+        int grain = 0x9A6F2F;
+        int seam = 0x7A5A2E;
+        int metal = 0xC9B458;
+        int lock = 0x8A6E2E;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (x % 2 == 0 && y % 4 == 1 ? grain : plank));
+            }
+        }
+        // Curved lid seam near the top (a shallow arc), splitting lid from body.
+        for (int x = 1; x < TILE_PX - 1; x++) {
+            int y = 4 + Math.round(2f * (float) Math.sin(x * (Math.PI / (TILE_PX - 2))));
+            img.setRGB(ox + x, oy + y, 0xFF000000 | seam);
+        }
+        // Brass lock plate at the front-center, with a darker keyhole.
+        for (int dy = -2; dy <= 2; dy++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                int x = 8 + dx, y = 8 + dy;
+                if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | metal);
+            }
+        }
+        img.setRGB(ox + 8, oy + 8, 0xFF000000 | lock);
     }
 
     /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background - the torch light source. */

@@ -76,6 +76,10 @@ public class Hud {
     private static final float FURNACE_ARROW_X0 = FURNACE_FLAME_X + 0.035f;
     private static final float FURNACE_ARROW_X1 = FURNACE_OUTPUT_X - 0.09f;
 
+    // Chest GUI layout: a 3x9 grid of the chest's slots, stacked directly above
+    // the player's 3x9 main grid (the hotbar sits below that as row 3).
+    private static final float CHEST_TOP_ROW_Y = INV_TOP_ROW_Y + 3f * INV_STEP; // center y of the chest's top row
+
     // Creative inventory screen layout (logical square units).
     private static final float CAT_SLOT = 0.09f;
     private static final float CAT_GAP = 0.014f;
@@ -1003,8 +1007,15 @@ public class Hud {
             int r = g / CraftingGrid.WIDTH, c = g % CraftingGrid.WIDTH;
             return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
         }
-        if (gui.isFurnaceSlot(slotId)) {
-            int fs = slotId - ContainerGui.CONTAINER_START;
+        if (gui.isContainerSlot(slotId)) {
+            int cs = slotId - ContainerGui.CONTAINER_START;
+            if (gui.kind() == ContainerGui.Kind.CHEST) {
+                // A chest is a 3x9 grid of slots above the player's inventory.
+                int r = cs / 9, c = cs % 9;
+                return new float[]{invGridLeft() + c * INV_STEP, CHEST_TOP_ROW_Y - r * INV_STEP};
+            }
+            // Furnace: a 3-slot column - input, fuel, output.
+            int fs = cs;
             if (fs == Furnace.SLOT_OUTPUT) return new float[]{FURNACE_OUTPUT_X, FURNACE_MID_Y};
             float y = fs == Furnace.SLOT_INPUT ? INV_TOP_ROW_Y : FURNACE_FUEL_Y;
             return new float[]{FURNACE_INPUT_X, y};
@@ -1111,10 +1122,15 @@ public class Hud {
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         // Panel background spanning the container area and the inventory grid.
+        // A chest's 3x9 grid stacks above the player grid, so its panel extends
+        // upward to cover it.
         float gridW = invGridWidth();
         float panelLeft = CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
         float panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
-        float panelTop = INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
+        boolean chest = gui.kind() == ContainerGui.Kind.CHEST;
+        float panelTop = chest
+                ? CHEST_TOP_ROW_Y + INV_SLOT / 2f + 0.055f
+                : INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
         float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f;
         float[] panel = {
                 panelLeft, panelBottom, 0, panelRight, panelBottom, 0, panelRight, panelTop, 0,

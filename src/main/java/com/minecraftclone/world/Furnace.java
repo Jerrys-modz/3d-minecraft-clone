@@ -2,6 +2,7 @@ package com.minecraftclone.world;
 
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.Smelting;
+import com.minecraftclone.player.StorageContainer;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -29,7 +30,7 @@ import java.util.Map;
  * are saved alongside its chunk (see {@link ChunkStorage}) and restored when
  * the chunk reloads, so a furnace keeps working across a restart.
  */
-public class Furnace implements BlockEntity {
+public class Furnace implements BlockEntity, StorageContainer {
 
     public static final String TYPE = "furnace";
 
@@ -108,6 +109,35 @@ public class Furnace implements BlockEntity {
             if (types[i] != null) return false;
         }
         return true;
+    }
+
+    @Override
+    public int size() {
+        return SLOT_COUNT;
+    }
+
+    /** Adds {@code amount} of {@code type}: ore goes to input, fuel to the fuel slot, anything else is left over. */
+    @Override
+    public int add(BlockType type, int amount) {
+        if (type == null || amount <= 0) return amount;
+        int slot = isFuel(type) ? SLOT_FUEL : SLOT_INPUT;
+        int max = StorageContainer.maxStack(type);
+        int current = counts[slot];
+        if (types[slot] != null && types[slot] != type) return amount;
+        int space = max - current;
+        if (space <= 0) return amount;
+        int take = Math.min(space, amount);
+        setSlot(slot, type, current + take);
+        return amount - take;
+    }
+
+    @Override
+    public int getCount(BlockType type) {
+        int total = 0;
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            if (types[i] == type) total += counts[i];
+        }
+        return total;
     }
 
     /** Replaces slot {@code slot}'s stack; a null type or non-positive count clears it. */

@@ -20,6 +20,7 @@ import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
+import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Door;
@@ -430,6 +431,16 @@ public class Main {
             } catch (IllegalArgumentException ignored) {
                 System.err.println("MCCLONE_AUTOTEST_PLACE: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE"));
             }
+        }
+        // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
+        // the container screen can be screenshotted.
+        if (System.getenv("MCCLONE_AUTOTEST_CHEST_GUI") != null && started[0]) {
+            Chest chest = world.getOrCreateChest(0, 0, 0);
+            chest.setSlot(0, BlockType.IRON_INGOT, 5);
+            chest.setSlot(1, BlockType.APPLE, 12);
+            chest.setSlot(2, BlockType.WOOD_LOG, 64);
+            activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, chest);
+            openGui(inventoryController, activeGui, window, input, inventoryOpen);
         }
         // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
         // the first-person hand can be screenshotted holding something.
@@ -931,6 +942,18 @@ public class Main {
                                         }
                                     }
                                 }
+                                if (targetType == BlockType.CHEST) {
+                                    // A broken chest spills its contents.
+                                    Chest chest = world.chestAt(bx, by, bz);
+                                    if (chest != null) {
+                                        for (int s = 0; s < Chest.SLOT_COUNT; s++) {
+                                            if (chest.typeOf(s) != null) {
+                                                world.spawnItem(bx, by, bz, chest.typeOf(s), chest.countOf(s), loot);
+                                            }
+                                        }
+                                        world.removeBlockEntity(bx, by, bz);
+                                    }
+                                }
                                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
                                     world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
                                 }
@@ -970,6 +993,11 @@ public class Main {
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, player.getInventory(), craftingGrid, null);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen);
+                    } else if (noMob && targeted == BlockType.CHEST) {
+                        // Right-click a chest to open its storage gui.
+                        Chest chest = world.getOrCreateChest(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, chest);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         if (heldItem.isEdible() && !mode.isCreative()) {

@@ -98,6 +98,8 @@ public final class Mining {
         put(BlockType.WOOD_LOG, 1.5f, ToolKind.AXE, TIER_HAND);
         put(BlockType.PLANKS, 1.0f, ToolKind.AXE, TIER_HAND);
         put(BlockType.PLANKS_SLAB, 1.0f, ToolKind.AXE, TIER_HAND);
+        put(BlockType.CRAFTING_TABLE, 1.5f, ToolKind.AXE, TIER_HAND);
+        put(BlockType.CHEST, 1.5f, ToolKind.AXE, TIER_HAND);
 
         // Stone family - pickaxe helps but bare hands still work (just slow).
         put(BlockType.STONE, 2.5f, ToolKind.PICKAXE, TIER_HAND);

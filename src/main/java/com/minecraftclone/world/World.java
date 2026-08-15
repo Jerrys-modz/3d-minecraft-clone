@@ -275,6 +275,20 @@ public class World implements BlockAccessor {
         return blockEntityAt(x, y, z) instanceof Furnace furnace ? furnace : null;
     }
 
+    /** The chest at a block position, or null if none (no chest placed / never opened). */
+    public Chest chestAt(int x, int y, int z) {
+        return blockEntityAt(x, y, z) instanceof Chest chest ? chest : null;
+    }
+
+    /** Returns the chest at a position, creating (and registering) it on first use. */
+    public Chest getOrCreateChest(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof Chest chest) return chest;
+        Chest chest = new Chest();
+        blockEntities.put(blockKey(x, y, z), chest);
+        return chest;
+    }
+
     /** True if the block at this position is currently active - for a furnace, that it's burning (its front glows). */
     @Override
     public boolean isBlockActive(int x, int y, int z) {

@@ -21,7 +21,7 @@ public final class CreativeCatalog {
                     BlockType.STONE, BlockType.DIRT, BlockType.GRASS, BlockType.SAND,
                     BlockType.WOOD_LOG, BlockType.PLANKS, BlockType.LEAVES, BlockType.GRAVEL, BlockType.SNOW,
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
-                    BlockType.CRAFTING_TABLE,
+                    BlockType.CRAFTING_TABLE, BlockType.CHEST,
                     BlockType.CACTUS, BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE,
                     BlockType.SWAMP_GRASS, BlockType.RED_CLAY, BlockType.MYCELIUM, BlockType.ICE, BlockType.PACKED_ICE,
                     BlockType.PUMPKIN,

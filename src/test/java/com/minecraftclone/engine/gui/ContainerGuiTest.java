@@ -4,6 +4,7 @@ import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.Furnace;
 import org.junit.jupiter.api.Test;
 
@@ -166,5 +167,55 @@ class ContainerGuiTest {
         c.click(INPUT, false, false);
         assertEquals(BlockType.SAND, f.typeOf(Furnace.SLOT_INPUT));
         assertTrue(inv.isEmpty(0));
+    }
+
+    @Test
+    void chestGuiRoutesClicksToTheChest() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+
+        assertEquals(Inventory.SIZE + Chest.SLOT_COUNT, gui.slotCount());
+        assertTrue(gui.isContainerSlot(ContainerGui.CONTAINER_START));
+        assertTrue(gui.isContainerSlot(ContainerGui.CONTAINER_START + Chest.SLOT_COUNT - 1));
+        assertFalse(gui.isPlayerSlot(ContainerGui.CONTAINER_START));
+        assertNull(gui.currentRecipe(), "chest has no crafting grid");
+
+        inv.setSlot(0, BlockType.DIAMOND, 3);
+        c.click(0, false, false);
+        c.click(ContainerGui.CONTAINER_START + 5, false, false);
+        assertEquals(BlockType.DIAMOND, chest.typeOf(5));
+        assertEquals(3, chest.countOf(5));
+        assertTrue(inv.isEmpty(0));
+    }
+
+    @Test
+    void shiftClickSendsAnythingIntoAChest() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+
+        inv.setSlot(0, BlockType.DIRT, 10);
+        inv.setSlot(1, BlockType.IRON_INGOT, 4);
+        c.click(0, false, true);
+        c.click(1, false, true);
+        assertEquals(10, chest.getCount(BlockType.DIRT));
+        assertEquals(4, chest.getCount(BlockType.IRON_INGOT));
+        assertTrue(inv.isEmpty(0));
+        assertTrue(inv.isEmpty(1));
+    }
+
+    @Test
+    void shiftClickMovesChestStackToInventory() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        chest.setSlot(2, BlockType.APPLE, 7);
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+        c.click(ContainerGui.CONTAINER_START + 2, false, true);
+        assertEquals(7, inv.getCount(BlockType.APPLE));
+        assertTrue(chest.isEmpty(2));
     }
 }

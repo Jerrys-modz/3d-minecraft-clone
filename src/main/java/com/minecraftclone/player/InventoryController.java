@@ -215,7 +215,7 @@ public class InventoryController {
         if (st == null) {
             setSlot(slotId, cursorType, 1);
             cursorCount--;
-        } else if (st == cursorType && (gui.isPlayerSlot(slotId) || gui.isFurnaceSlot(slotId))) {
+        } else if (st == cursorType && (gui.isPlayerSlot(slotId) || gui.isContainerSlot(slotId))) {
             int max = Inventory.maxStack(st);
             if (slotCount(slotId) < max) {
                 setSlot(slotId, st, slotCount(slotId) + 1);
@@ -227,10 +227,11 @@ public class InventoryController {
     }
 
     /**
-     * Shift-click: quick-move a stack. Furnace slots and grid cells move to the
-     * inventory; a player inventory slot moves into the open container when it
-     * belongs there (smeltable ore/fuel into a furnace, anything into an empty
-     * crafting-table cell), otherwise it hops between hotbar and main inventory.
+     * Shift-click: quick-move a stack. Container slots and grid cells move to
+     * the inventory; a player inventory slot moves into the open container when
+     * it belongs there (smeltable ore/fuel into a furnace, anything into a
+     * chest or an empty crafting-table cell), otherwise it hops between hotbar
+     * and main inventory.
      */
     private void quickMove(int slotId) {
         if (gui.isOutputSlot(slotId)) {
@@ -248,13 +249,13 @@ public class InventoryController {
             if (t != null && inventory.add(t, 1) == 0) gui.grid().set(slotId - ContainerGui.GRID_START, null);
             return;
         }
-        if (gui.isFurnaceSlot(slotId)) {
-            int fs = slotId - ContainerGui.CONTAINER_START;
-            BlockType t = gui.furnace().typeOf(fs);
-            int count = gui.furnace().countOf(fs);
+        if (gui.isContainerSlot(slotId)) {
+            int cs = slotId - ContainerGui.CONTAINER_START;
+            BlockType t = gui.container().typeOf(cs);
+            int count = gui.container().countOf(cs);
             if (t == null) return;
             int leftover = inventory.add(t, count);
-            gui.furnace().setSlot(fs, leftover > 0 ? t : null, leftover);
+            gui.container().setSlot(cs, leftover > 0 ? t : null, leftover);
             return;
         }
 
@@ -263,8 +264,8 @@ public class InventoryController {
         int count = inventory.countOf(slotId);
         int original = count;
 
-        // Prefer the open container: ore/fuel into a furnace, items into empty
-        // crafting-table cells.
+        // Prefer the open container: ore/fuel into a furnace, anything into a
+        // chest, items into empty crafting-table cells.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
             int target = -1;
             if (Smelting.isSmeltable(t)) {
@@ -279,6 +280,14 @@ public class InventoryController {
                     inventory.setSlot(slotId, null, 0);
                     return;
                 }
+            }
+        } else if (gui.kind() == ContainerGui.Kind.CHEST) {
+            // A chest accepts anything; fill its stacks first, then empty slots.
+            int moved = count - gui.container().add(t, count);
+            count -= moved;
+            if (count == 0) {
+                inventory.setSlot(slotId, null, 0);
+                return;
             }
         } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE) {
             for (int i = 0; i < CraftingGrid.SIZE && count > 0; i++) {
