@@ -6,8 +6,11 @@ import com.minecraftclone.util.FloatArray;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 
+import static org.lwjgl.opengl.GL11.GL_CULL_FACE;
 import static org.lwjgl.opengl.GL11.GL_LINES;
 import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
+import static org.lwjgl.opengl.GL11.glDisable;
+import static org.lwjgl.opengl.GL11.glEnable;
 import static org.lwjgl.opengl.GL11.glLineWidth;
 
 /**
@@ -30,6 +33,7 @@ public class WeatherRenderer {
         lineShader.setUniform("view", view);
         lineShader.setUniform("model", identity.identity());
 
+        verts.clear();
         int rain = particles.writeRain(verts);
         if (rain > 0) {
             lineShader.setUniform("color", new Vector4f(0.72f, 0.82f, 1f, 0.45f));
@@ -43,7 +47,9 @@ public class WeatherRenderer {
         if (snow > 0) {
             lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.85f));
             snowMesh.upload(verts.toArray());
+            glDisable(GL_CULL_FACE);
             snowMesh.render();
+            glEnable(GL_CULL_FACE);
         }
 
         lineShader.unbind();
