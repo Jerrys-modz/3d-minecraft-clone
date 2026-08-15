@@ -39,21 +39,21 @@ public final class JoinedStorage implements StorageContainer {
     @Override
     public BlockType typeOf(int slot) {
         int f = first.size();
-        if (slot < 0) return null;
+        if (slot < 0 || slot >= size()) return null;
         return slot < f ? first.typeOf(slot) : second.typeOf(slot - f);
     }
 
     @Override
     public int countOf(int slot) {
         int f = first.size();
-        if (slot < 0) return 0;
+        if (slot < 0 || slot >= size()) return 0;
         return slot < f ? first.countOf(slot) : second.countOf(slot - f);
     }
 
     @Override
     public void setSlot(int slot, BlockType type, int count) {
         int f = first.size();
-        if (slot < 0) return;
+        if (slot < 0 || slot >= size()) return;
         if (slot < f) {
             first.setSlot(slot, type, count);
         } else {

@@ -277,7 +277,9 @@ public class World implements BlockAccessor {
 
     /** The chest at a block position, or null if none (no chest placed / never opened). */
     public Chest chestAt(int x, int y, int z) {
-        return blockEntityAt(x, y, z) instanceof Chest chest ? chest : null;
+        BlockEntity entity = blockEntityAt(x, y, z);
+        if (entity instanceof Barrel) return null;
+        return entity instanceof Chest chest ? chest : null;
     }
 
     /** The barrel at a block position, or null if none (no barrel placed / never opened). */
@@ -297,6 +299,7 @@ public class World implements BlockAccessor {
     /** Returns the chest at a position, creating (and registering) it on first use. */
     public Chest getOrCreateChest(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof Barrel) return null;
         if (existing instanceof Chest chest) return chest;
         Chest chest = new Chest();
         blockEntities.put(blockKey(x, y, z), chest);

@@ -34,7 +34,7 @@ public class InventoryController {
     private int dragStart = -1;
     private boolean dragRight;
     private int dragDistinct;
-    private final boolean[] dragVisited = new boolean[ContainerGui.OUTPUT_SLOT + 1];
+    private boolean[] dragVisited = new boolean[ContainerGui.OUTPUT_SLOT + 1];
 
     /** Wraps the plain inventory screen (player inventory + crafting grid). */
     public InventoryController(Inventory inventory, CraftingGrid grid) {
@@ -49,6 +49,10 @@ public class InventoryController {
     /** Rebinds the controller to a different open container (inventory/furnace/crafting table). */
     public void setGui(ContainerGui gui) {
         this.gui = gui;
+        // Resize dragVisited to accommodate all slots in the new GUI
+        if (dragVisited.length < gui.slotCount()) {
+            dragVisited = new boolean[gui.slotCount()];
+        }
     }
 
     public ContainerGui gui() {
@@ -162,13 +166,18 @@ public class InventoryController {
         dragStart = slotId;
         dragRight = right;
         dragDistinct = 1;
-        for (int i = 0; i < dragVisited.length; i++) dragVisited[i] = false;
+        // Ensure dragVisited is large enough for all GUI slots
+        if (dragVisited.length < gui.slotCount()) {
+            dragVisited = new boolean[gui.slotCount()];
+        } else {
+            for (int i = 0; i < dragVisited.length; i++) dragVisited[i] = false;
+        }
         dragVisited[slotId] = true;
     }
 
     /** Mouse move over a slot while the button is held: record it for the drag resolution. */
     public void continueDrag(int slotId) {
-        if (!dragging || slotId < 0 || gui.isOutputSlot(slotId)) return;
+        if (!dragging || slotId < 0 || slotId >= gui.slotCount() || gui.isOutputSlot(slotId)) return;
         if (dragVisited[slotId]) return;
         dragVisited[slotId] = true;
         dragDistinct++;
@@ -177,7 +186,7 @@ public class InventoryController {
     /** Mouse release: resolve the session as a click (one slot) or a drag (several). */
     public void endDrag(int releaseSlot) {
         if (!dragging) return;
-        if (releaseSlot >= 0 && !gui.isOutputSlot(releaseSlot) && !dragVisited[releaseSlot]) {
+        if (releaseSlot >= 0 && releaseSlot < gui.slotCount() && !gui.isOutputSlot(releaseSlot) && !dragVisited[releaseSlot]) {
             dragVisited[releaseSlot] = true;
             dragDistinct++;
         }
