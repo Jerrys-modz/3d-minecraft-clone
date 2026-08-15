@@ -275,6 +275,13 @@ public class World implements BlockAccessor {
         return blockEntityAt(x, y, z) instanceof Furnace furnace ? furnace : null;
     }
 
+    /** True if the block at this position is currently active - for a furnace, that it's burning (its front glows). */
+    @Override
+    public boolean isBlockActive(int x, int y, int z) {
+        BlockEntity entity = blockEntityAt(x, y, z);
+        return entity != null && entity.isActive();
+    }
+
     /** Returns the furnace at a position, creating (and registering) it on first use. */
     public Furnace getOrCreateFurnace(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
@@ -292,7 +299,9 @@ public class World implements BlockAccessor {
     /**
      * Advances every block entity by {@code dt} seconds of world time. Entities
      * whose block has since been replaced are pruned (their contents are dropped
-     * by the caller when the block is mined).
+     * by the caller when the block is mined). When an entity's active state
+     * changes (a furnace lighting up or going out), its chunks are marked dirty
+     * so the mesh re-bakes the glowing front tile and the light it emits.
      */
     public void tickBlockEntities(float dt) {
         if (dt <= 0) return;
@@ -305,7 +314,21 @@ public class World implements BlockAccessor {
                 it.remove();
                 continue;
             }
+            boolean wasActive = entity.isActive();
             entity.tick(dt);
+            boolean nowActive = entity.isActive();
+            if (wasActive != nowActive) {
+                // The lit/unlit front tile and the light it casts both changed -
+                // remesh this chunk and its neighbors (the light radius can reach
+                // across a chunk boundary).
+                int cx = worldToChunk(keyX(key));
+                int cz = worldToChunk(keyZ(key));
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        markNeighborDirty(cx + dx, cz + dz);
+                    }
+                }
+            }
         }
     }
 
@@ -419,7 +442,9 @@ public class World implements BlockAccessor {
      * Every light-emitting block within reach of chunk {@code center}, as world-space
      * {wx, wy, wz, lightLevel} - gathered from the chunk itself plus its 8 immediate
      * neighbors (the light falloff radius is well under a chunk's width, so nothing
-     * farther away can reach in). Passed to {@link Chunk#rebuildMesh} to bake local glow.
+     * farther away can reach in), plus any actively-burning furnaces in that area
+     * (their glowing mouths light the room the way a torch does). Passed to
+     * {@link Chunk#rebuildMesh} to bake local glow.
      */
     private List<int[]> collectNearbyLights(ChunkPos center) {
         List<int[]> result = new ArrayList<>();
@@ -432,6 +457,18 @@ public class World implements BlockAccessor {
                 for (int[] local : c.getLocalLightSources()) {
                     result.add(new int[]{ox + local[0], local[1], oz + local[2], local[3]});
                 }
+            }
+        }
+        // Active block entities (a burning furnace) emit light. Iterating the flat
+        // entity map is fine - machines are rare, and this only runs when a chunk
+        // remeshes.
+        for (Map.Entry<Long, BlockEntity> e : blockEntities.entrySet()) {
+            BlockEntity entity = e.getValue();
+            if (!entity.isActive() || entity.activeLightLevel() <= 0) continue;
+            int x = keyX(e.getKey()), y = keyY(e.getKey()), z = keyZ(e.getKey());
+            int cx = worldToChunk(x), cz = worldToChunk(z);
+            if (Math.abs(cx - center.x()) <= 1 && Math.abs(cz - center.z()) <= 1) {
+                result.add(new int[]{x, y, z, entity.activeLightLevel()});
             }
         }
         return result;

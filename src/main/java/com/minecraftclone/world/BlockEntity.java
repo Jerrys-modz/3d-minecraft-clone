@@ -37,4 +37,24 @@ public interface BlockEntity {
     /** Advances the entity's behaviour by {@code dt} seconds of world time; passive entities leave it as a no-op. */
     default void tick(float dt) {
     }
+
+    /**
+     * Whether this block entity is currently "active" - e.g. a furnace that's
+     * burning, which switches its block's front face to the glowing variant
+     * (see {@link BlockAccessor#isBlockActive}). Defaults to false; machines
+     * override it based on their own state.
+     */
+    default boolean isActive() {
+        return false;
+    }
+
+    /**
+     * How much light an active entity emits (0 = none), Minecraft-style 0-15.
+     * A burning furnace glows like a torch (13); future machines can use any
+     * level. Only consulted when {@link #isActive()} is true - see
+     * {@code World.collectNearbyLights}.
+     */
+    default int activeLightLevel() {
+        return 0;
+    }
 }

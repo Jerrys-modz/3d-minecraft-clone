@@ -23,4 +23,15 @@ class BlockTypeTest {
         assertTrue(BlockType.ICE.isTranslucent());
         assertFalse(BlockType.STONE.isTranslucent());
     }
+
+    @Test
+    void furnaceIsDirectionalWithDistinctFrontTile() {
+        assertTrue(BlockType.FURNACE.isDirectional());
+        // The furnace's front (mouth) tile differs from its plain stone sides.
+        assertTrue(BlockType.FURNACE.frontTile != BlockType.FURNACE.sideTile);
+        assertEquals(BlockType.FURNACE.sideTile, BlockType.STONE.topTile, "sides use plain stone");
+        // Ordinary cubes aren't directional.
+        assertFalse(BlockType.STONE.isDirectional());
+        assertFalse(BlockType.DIRT.isDirectional());
+    }
 }

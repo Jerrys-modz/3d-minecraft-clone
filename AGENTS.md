@@ -18,6 +18,6 @@ Project: 3D Minecraft Clone — a Java 17 + LWJGL 3 voxel game built with Maven.
 ## Code conventions
 
 - No external text/font/JSON/image-loading libraries — the game is self-contained.
-- Block textures are generated procedurally into a shared atlas at startup; inventory items are committed PNGs; HUD text uses a procedural ASCII pixel font.
+- Block textures are generated procedurally into a shared atlas at startup; inventory items are also generated procedurally at startup (each into its own small GL texture); HUD text uses a procedural ASCII pixel font.
 - HUD geometry uses a "logical square" (-1..1) space scaled by 1/aspect at draw time.
 - Meshing/batching uses primitive growable buffers (`util.FloatArray` / `util.IntArray`) rather than boxed `ArrayList<Float>`.

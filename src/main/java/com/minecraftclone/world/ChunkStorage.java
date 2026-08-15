@@ -50,6 +50,10 @@ public class ChunkStorage {
 
         void setRawOverlays(byte[] data);
 
+        byte[] getRawOrientations();
+
+        void setRawOrientations(byte[] data);
+
         void markGenerated();
     }
 
@@ -97,8 +101,13 @@ public class ChunkStorage {
                 byte[] overlayData = java.util.Arrays.copyOfRange(data, blockLen, blockLen + overlayLen);
                 chunk.setRawOverlays(overlayData);
             }
+            int orientLen = chunk.getRawOrientations().length;
+            if (data.length >= blockLen + overlayLen + orientLen) {
+                byte[] orientData = java.util.Arrays.copyOfRange(data, blockLen + overlayLen, blockLen + overlayLen + orientLen);
+                chunk.setRawOrientations(orientData);
+            }
             // A file from before block entities existed has no tail section.
-            int offset = blockLen + overlayLen;
+            int offset = blockLen + overlayLen + orientLen;
             if (data.length >= offset + 4) {
                 DataInputStream d = new DataInputStream(new ByteArrayInputStream(data, offset, data.length - offset));
                 int count = d.readInt();
@@ -137,6 +146,7 @@ public class ChunkStorage {
         try (OutputStream out = new GZIPOutputStream(Files.newOutputStream(file))) {
             out.write(chunk.getRawBlocks());
             out.write(chunk.getRawOverlays());
+            out.write(chunk.getRawOrientations());
             DataOutputStream d = new DataOutputStream(out);
             d.writeInt(entities.size());
             for (BlockEntitySave es : entities) {

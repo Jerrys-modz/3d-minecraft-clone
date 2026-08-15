@@ -173,6 +173,15 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         if (!type.isFluid() && overlays[index(x, y, z)] != BlockType.AIR.id) {
             overlays[index(x, y, z)] = BlockType.AIR.id;
         }
+        // A replaced block loses whatever facing it had (a door torn out and
+        // rebuilt, or a furnace mined and re-placed). Directional blocks get a
+        // fresh facing set explicitly by the caller right after this. Doors
+        // keep their facing when toggled open/closed - only a *different* kind
+        // of block replacing them clears it.
+        boolean sameDoorFamily = (old.isDoor() && type.isDoor()) || (old.isTrapdoor() && type.isTrapdoor());
+        if (!sameDoorFamily && old != type && orientations[index(x, y, z)] != 0) {
+            orientations[index(x, y, z)] = 0;
+        }
         dirty = true;
     }
 
@@ -275,6 +284,20 @@ public class Chunk implements ChunkStorage.PersistableChunk {
             throw new IllegalArgumentException("Expected " + overlays.length + " bytes, got " + data.length);
         }
         System.arraycopy(data, 0, overlays, 0, overlays.length);
+        dirty = true;
+    }
+
+    /** Raw orientation-byte array for serialization (see {@link #orientations}). Returns the live backing array - treat as read-only. */
+    public byte[] getRawOrientations() {
+        return orientations;
+    }
+
+    /** Replaces this chunk's orientation data wholesale, e.g. when loading a saved chunk from disk. */
+    public void setRawOrientations(byte[] data) {
+        if (data.length != orientations.length) {
+            throw new IllegalArgumentException("Expected " + orientations.length + " bytes, got " + data.length);
+        }
+        System.arraycopy(data, 0, orientations, 0, orientations.length);
         dirty = true;
     }
 
@@ -400,27 +423,27 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.TOP, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.TOP, block, atlas, blockLight);
                     }
                     // -Y bottom
                     if (isFaceVisible(world, x, y - 1, z, wx, wy - 1, wz, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.BOTTOM, block, atlas, blockLight);
                     }
                     // +X east
                     if (isFaceVisible(world, x + 1, y, z, wx + 1, wy, wz, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.EAST, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.EAST, block, atlas, blockLight);
                     }
                     // -X west
                     if (isFaceVisible(world, x - 1, y, z, wx - 1, wy, wz, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.WEST, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.WEST, block, atlas, blockLight);
                     }
                     // +Z south
                     if (isFaceVisible(world, x, y, z + 1, wx, wy, wz + 1, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.SOUTH, block, atlas, blockLight);
                     }
                     // -Z north
                     if (isFaceVisible(world, x, y, z - 1, wx, wy, wz - 1, block)) {
-                        emitFace(bv, bi, bc, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
+                        emitFace(world, bv, bi, bc, wx, wy, wz, Face.NORTH, block, atlas, blockLight);
                     }
                 }
             }
@@ -500,6 +523,17 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     private enum Face {TOP, BOTTOM, NORTH, SOUTH, EAST, WEST}
+
+    /** The world face a block's front texture should be on, for a given orientation byte (0:+Z, 1:-Z, 2:+X, 3:-X). */
+    private static Face frontFaceFor(byte orientation) {
+        return switch (orientation) {
+            case 0 -> Face.SOUTH; // +Z
+            case 1 -> Face.NORTH; // -Z
+            case 2 -> Face.EAST;  // +X
+            case 3 -> Face.WEST;  // -X
+            default -> Face.SOUTH;
+        };
+    }
 
     // Resting-flow surface height range: just under a source at level 0,
     // thinning down to a shallow sheet at the farthest level it can reach -
@@ -767,12 +801,21 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, flow, 0f, flow > 0.5f ? 1f : 0f);
     }
 
-    private void emitFace(FloatArray vertices, IntArray indices, int[] vertexCounter,
+    private void emitFace(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
                            int wx, int wy, int wz, Face face, BlockType block, TextureAtlas atlas, float blockLight) {
         int tile = switch (face) {
             case TOP -> block.topTile;
             case BOTTOM -> block.bottomTile;
-            default -> block.sideTile;
+            default -> {
+                // A directional block (e.g. a furnace) shows its front tile on the
+                // face it's oriented toward and its plain side tile on the rest.
+                // While the block is "active" (a burning furnace), the front swaps
+                // to its glowing variant.
+                if (block.isDirectional() && face == frontFaceFor(getOrientation(wx - getOriginX(), wy, wz - getOriginZ()))) {
+                    yield world.isBlockActive(wx, wy, wz) ? block.litFrontTile : block.frontTile;
+                }
+                yield block.sideTile;
+            }
         };
         // See-through leaves use the alpha-cutout variant of the leaves texture
         // (the shader discards its transparent holes) so the canopy is translucent.

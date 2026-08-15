@@ -141,6 +141,21 @@ class FurnaceTest {
     }
 
     @Test
+    void activeStateTracksBurningAndEmitsLight() {
+        Furnace f = new Furnace();
+        assertFalse(f.isActive(), "idle furnace is not active");
+        assertEquals(0, f.activeLightLevel());
+        f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 1);
+        f.tick(1f);
+        assertTrue(f.isActive(), "burning furnace is active (glowing front, emits light)");
+        assertEquals(13, f.activeLightLevel(), "lit furnace glows like Minecraft's (level 13)");
+        // Burn all fuel: it goes inactive again.
+        f.tick(Furnace.COAL_BURN_TIME);
+        assertFalse(f.isActive());
+    }
+
+    @Test
     void serializationRoundTripPreservesSlotsAndProgress() throws Exception {
         Furnace f = new Furnace();
         f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 3);

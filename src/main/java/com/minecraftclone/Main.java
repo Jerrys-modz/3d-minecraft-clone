@@ -6,6 +6,7 @@ import com.minecraftclone.engine.audio.BlockAction;
 import com.minecraftclone.engine.audio.SoundEvent;
 import com.minecraftclone.engine.audio.SoundMaterial;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.HandRenderer;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.MobRenderer;
@@ -250,6 +251,74 @@ public class Main {
         audio.play(gui != null && gui.isOutputSlot(slotId) ? SoundEvent.CRAFT : SoundEvent.UI_CLICK);
     }
 
+    /**
+     * Breaks one block cell (whatever it is: a door, an overlay decoration, or a
+     * solid block), dropping its loot and wearing the tool in survival. Shared by
+     * the normal break and the hammer's 3x3 area mine.
+     */
+    private void breakBlockAt(World world, Player player, GameMode mode, BlockType heldItem, Random loot,
+                              List<Hud.Message> messages, AudioEngine audio, int bx, int by, int bz) {
+        BlockType overlay = world.getOverlay(bx, by, bz);
+        boolean targetingOverlay = overlay != BlockType.AIR;
+        BlockType targetType = targetingOverlay ? overlay : world.getBlock(bx, by, bz);
+        if (targetType == BlockType.AIR || targetType == BlockType.BEDROCK) return;
+        if (!Mining.canBreak(targetType, heldItem)) return; // e.g. an ore the hammer can't mine
+
+        audio.playBlockSound(SoundMaterial.of(targetType), BlockAction.BREAK, bx + 0.5f, by + 0.5f, bz + 0.5f, 1f);
+
+        if (Door.isDoor(targetType)) {
+            Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
+        } else if (targetingOverlay) {
+            // Clear just the decoration - the water (or whatever else) it was
+            // sitting inside is untouched.
+            world.setOverlay(bx, by, bz, BlockType.AIR);
+        } else {
+            world.setBlock(bx, by, bz, BlockType.AIR);
+        }
+
+        if (!mode.isCreative()) {
+            // Drop the item into the world (to be picked up) rather than adding it
+            // straight to the inventory. Transient fluid flow drops nothing - only
+            // a fluid source drops itself.
+            if (targetType.isFluidFlow()) {
+                // nothing to drop
+            } else if (targetType == BlockType.BERRY_BUSH) {
+                world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
+            } else if (targetType == BlockType.COAL_ORE) {
+                // Coal ore drops coal (the furnace fuel), not the ore itself.
+                world.spawnItem(bx, by, bz, BlockType.COAL, 1, loot);
+            } else {
+                // An open door/trapdoor drops the closed item.
+                BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR
+                        : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR : targetType;
+                world.spawnItem(bx, by, bz, drop, 1, loot);
+                if (targetType == BlockType.FURNACE) {
+                    // A broken furnace spills whatever it was smelting or burning.
+                    Furnace furnace = world.furnaceAt(bx, by, bz);
+                    if (furnace != null) {
+                        for (int s = 0; s < Furnace.SLOT_COUNT; s++) {
+                            if (furnace.typeOf(s) != null) {
+                                world.spawnItem(bx, by, bz, furnace.typeOf(s), furnace.countOf(s), loot);
+                            }
+                        }
+                    }
+                }
+                if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
+                    world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
+                }
+            }
+
+            // Wear down the tool that did the breaking; once its uses run out, it's gone.
+            if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
+                player.getInventory().remove(heldItem, 1);
+                System.out.println("Your " + heldItem + " broke!");
+                showMessage(messages, "Your " + heldItem + " broke!",
+                        new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+                audio.play(SoundEvent.TOOL_BREAK);
+            }
+        }
+    }
+
     /** Closes the creative screen, returning any cursor item to the inventory. */
     private void closeCreative(InventoryController controller, boolean[] creativeOpen, AudioEngine audio) {
         controller.returnCursorToInventory();
@@ -312,6 +381,7 @@ public class Main {
 
         Hud hud = new Hud(lineShader, hudShader, font);
         ItemRenderer itemRenderer = new ItemRenderer();
+        HandRenderer handRenderer = new HandRenderer();
         MobRenderer mobRenderer = new MobRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
@@ -421,6 +491,55 @@ public class Main {
             System.out.println("World seed: " + seed);
             started[0] = true;
             mainMenuOpen[0] = false;
+        }
+        // Opt-in autotest hook: place a directional block (e.g. a furnace) in front
+        // of the camera so its front-vs-side faces can be screenshotted. Yaw sets
+        // the furnace's facing via the same code path a player's placement uses.
+        if (System.getenv("MCCLONE_AUTOTEST_PLACE") != null && started[0]) {
+            try {
+                BlockType placed = BlockType.valueOf(System.getenv("MCCLONE_AUTOTEST_PLACE"));
+                Vector3f front = player.getCamera().getFront();
+                int px = (int) Math.floor(player.getPosition().x + front.x * 2f);
+                int py = (int) Math.floor(player.getPosition().y);
+                int pz = (int) Math.floor(player.getPosition().z + front.z * 2f);
+                world.setBlock(px, py, pz, placed);
+                byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
+                        ? (front.x >= 0 ? 3 : 2)
+                        : (front.z >= 0 ? 1 : 0));
+                if (System.getenv("MCCLONE_AUTOTEST_PLACE_FACING") != null) {
+                    facing = (byte) Integer.parseInt(System.getenv("MCCLONE_AUTOTEST_PLACE_FACING"));
+                }
+                world.setBlockOrientation(px, py, pz, facing);
+                // Autotest hook: load the furnace with ore + fuel and tick it until
+                // it's burning, so the lit front tile can be screenshotted.
+                if (placed == BlockType.FURNACE && System.getenv("MCCLONE_AUTOTEST_LIT") != null) {
+                    Furnace furnace = world.getOrCreateFurnace(px, py, pz);
+                    furnace.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 8);
+                    furnace.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 8);
+                    furnace.tick(1f);
+                    System.out.println("Furnace burning: " + furnace.isBurning());
+                }
+                for (int i = 0; i < 5; i++) world.update(player.getPosition().x, player.getPosition().z);
+                System.out.println("Placed " + placed + " at " + px + "," + py + "," + pz + " facing " + facing);
+            } catch (IllegalArgumentException ignored) {
+                System.err.println("MCCLONE_AUTOTEST_PLACE: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE"));
+            }
+        }
+        // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
+        // the first-person hand can be screenshotted holding something.
+        if (System.getenv("MCCLONE_AUTOTEST_HELD") != null) {
+            try {
+                BlockType held = BlockType.valueOf(System.getenv("MCCLONE_AUTOTEST_HELD"));
+                player.getInventory().setSlot(0, held, 1);
+                selectedSlot[0] = 0;
+            } catch (IllegalArgumentException ignored) {
+                System.err.println("MCCLONE_AUTOTEST_HELD: unknown block " + System.getenv("MCCLONE_AUTOTEST_HELD"));
+            }
+        }
+        // Opt-in autotest hook: start the hand swing animation from the first frame
+        // (place/use/break), so a mid-swing screenshot can be captured.
+        if (System.getenv("MCCLONE_AUTOTEST_SWING") != null) {
+            handRenderer.triggerSwing();
         }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
@@ -916,57 +1035,18 @@ public class Main {
                     if (breakFraction >= 1f) {
                         mining.reset();
                         breakFraction = 0f;
+                        handRenderer.triggerSwing();
                         int bx = hit.blockPos.x, by = hit.blockPos.y, bz = hit.blockPos.z;
-                        audio.playBlockSound(SoundMaterial.of(targetType), BlockAction.BREAK, bx + 0.5f, by + 0.5f, bz + 0.5f, 1f);
-                        if (Door.isDoor(targetType)) {
-                            Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
-                        } else if (targetingOverlay) {
-                            // Clear just the decoration - the water (or whatever else)
-                            // it was sitting inside is untouched.
-                            world.setOverlay(bx, by, bz, BlockType.AIR);
+                        if (Mining.isHammer(heldItem)) {
+                            // A hammer mines a 3x3 area: the target block plus its
+                            // eight horizontal neighbours, all in one swing.
+                            for (int dx = -1; dx <= 1; dx++) {
+                                for (int dz = -1; dz <= 1; dz++) {
+                                    breakBlockAt(world, player, mode, heldItem, loot, messages, audio, bx + dx, by, bz + dz);
+                                }
+                            }
                         } else {
-                            world.setBlock(bx, by, bz, BlockType.AIR);
-                        }
-                        if (!mode.isCreative()) {
-                            // Drop the item into the world (to be picked up) rather than
-                            // adding it straight to the inventory. Transient fluid flow drops
-                            // nothing - only a fluid source drops itself.
-                            if (targetType.isFluidFlow()) {
-                                // nothing to drop
-                            } else if (targetType == BlockType.BERRY_BUSH) {
-                                world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
-                            } else if (targetType == BlockType.COAL_ORE) {
-                                // Coal ore drops coal (the furnace fuel), not the ore itself.
-                                world.spawnItem(bx, by, bz, BlockType.COAL, 1, loot);
-                            } else {
-                                // An open door/trapdoor drops the closed item.
-                                BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR
-                                        : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR : targetType;
-                                world.spawnItem(bx, by, bz, drop, 1, loot);
-                                if (targetType == BlockType.FURNACE) {
-                                    // A broken furnace spills whatever it was smelting or burning.
-                                    Furnace furnace = world.furnaceAt(bx, by, bz);
-                                    if (furnace != null) {
-                                        for (int s = 0; s < Furnace.SLOT_COUNT; s++) {
-                                            if (furnace.typeOf(s) != null) {
-                                                world.spawnItem(bx, by, bz, furnace.typeOf(s), furnace.countOf(s), loot);
-                                            }
-                                        }
-                                    }
-                                }
-                                if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
-                                    world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
-                                }
-                            }
-
-                            // Wear down the tool that did the breaking; once its uses run out, it's gone.
-                            if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
-                                player.getInventory().remove(heldItem, 1);
-                                System.out.println("Your " + heldItem + " broke!");
-                                showMessage(messages, "Your " + heldItem + " broke!",
-                                        new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
-                                audio.play(SoundEvent.TOOL_BREAK);
-                            }
+                            breakBlockAt(world, player, mode, heldItem, loot, messages, audio, bx, by, bz);
                         }
                     }
                 }
@@ -980,11 +1060,13 @@ public class Main {
                         if (noMob && mode.canPlace()) {
                             Door.toggle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                             audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                            handRenderer.triggerSwing();
                         }
                     } else if (Door.isTrapdoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                             audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                            handRenderer.triggerSwing();
                         }
                     } else if (noMob && targeted == BlockType.FURNACE) {
                         // Right-click a furnace to open its smelting gui.
@@ -997,7 +1079,10 @@ public class Main {
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         if (heldItem.isEdible() && !mode.isCreative()) {
-                            if (player.eat(heldItem)) audio.play(SoundEvent.EAT);
+                            if (player.eat(heldItem)) {
+                                audio.play(SoundEvent.EAT);
+                                handRenderer.triggerSwing();
+                            }
                         } else if (!heldItem.isItem) {
                             // Pure inventory items (tools, and any future non-edible item)
                             // have no world tile and can never be placed as a block.
@@ -1015,16 +1100,18 @@ public class Main {
                             if (!blocked && !intersectsPlayer(player, p)) {
                                 boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
                                 if (placed) {
+                                    handRenderer.triggerSwing();
                                     if (intoFluid) {
                                         world.setOverlay(p.x, p.y, p.z, heldItem);
                                     } else {
                                         world.setBlock(p.x, p.y, p.z, heldItem);
                                     }
                                     audio.playBlockSound(SoundMaterial.of(heldItem), BlockAction.PLACE, p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
-                                    // Doors and trapdoors face the player: the panel sits
+                                    // Doors, trapdoors, and other directional blocks
+                                    // (e.g. a furnace) face the player: the front sits
                                     // on the side of the block nearest to them (opposite
                                     // the look direction).
-                                    if (heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
+                                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
                                         Vector3f front = player.getCamera().getFront();
                                         byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
                                                 ? (front.x >= 0 ? 3 : 2)
@@ -1081,6 +1168,16 @@ public class Main {
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
             chunkShader.unbind();
+            }
+
+            // First-person held item (Minecraft-style): drawn after the world so it
+            // always sits on top, hidden while any menu/inventory is up and in
+            // spectator (no hand to look at).
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && !settings.getGameMode().isSpectator()) {
+                handRenderer.render(chunkShader, atlas, itemTextures,
+                        player.getInventory().typeOf(selectedSlot[0]),
+                        player.getBobPhase(), animTime[0], dt, projection);
             }
 
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
@@ -1217,6 +1314,7 @@ public class Main {
 
         hud.destroy();
         itemRenderer.destroy();
+        handRenderer.destroy();
         mobRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
