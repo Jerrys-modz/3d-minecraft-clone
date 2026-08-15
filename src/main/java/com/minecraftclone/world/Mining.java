@@ -183,6 +183,12 @@ public final class Mining {
         return stats != null && stats.kind() == ToolKind.SWORD;
     }
 
+    /** True if {@code item} is a hammer (the 3x3 area-mining tool). */
+    public static boolean isHammer(BlockType item) {
+        ToolStats stats = TOOLS.get(item);
+        return stats != null && stats.kind() == ToolKind.HAMMER;
+    }
+
     /**
      * Hit damage dealt when attacking a mob with {@code heldItem}: swords hit
      * harder than bare hands (punch = 1, wood/stone/iron/diamond sword = 4/5/6/7).

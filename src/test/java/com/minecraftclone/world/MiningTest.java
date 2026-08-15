@@ -63,4 +63,13 @@ class MiningTest {
             assertNotNull(Mining.toolStats(t), t + " has stats");
         }
     }
+
+    @Test
+    void hammerIsTheAreaMiningTool() {
+        assertTrue(Mining.isHammer(BlockType.WOOD_HAMMER));
+        assertTrue(Mining.isHammer(BlockType.DIAMOND_HAMMER));
+        assertFalse(Mining.isHammer(BlockType.WOOD_PICKAXE));
+        assertFalse(Mining.isHammer(BlockType.WOOD_SHOVEL));
+        assertFalse(Mining.isHammer(null));
+    }
 }
