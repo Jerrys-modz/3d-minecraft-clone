@@ -80,8 +80,9 @@ public enum BlockType {
     CRAFTING_TABLE(73, true, false, 48, 48, 48), // workbench: right-click opens the 3x3 crafting GUI
 
     // Inventory-only items: food and tools. Never placed as a world block,
-    // so they have no atlas tile - each gets its own PNG texture instead,
-    // see com.minecraftclone.engine.graphics.ItemTextures. Mining stats for
+    // so they have no atlas tile - each gets its own procedurally generated
+    // texture instead, see com.minecraftclone.engine.graphics.ItemTextures.
+    // Mining stats for
     // tools (kind/tier/durability) live in Mining.java, not here, to keep
     // this enum focused on rendering/collision.
     APPLE(23, 20),   // food: restores 20 hunger
@@ -99,6 +100,20 @@ public enum BlockType {
     STONE_SWORD(35, 0),
     IRON_SWORD(36, 0),
     DIAMOND_SWORD(37, 0),
+    // Shovels, hammers and broadaxes - the rest of the tool set (see Mining):
+    // shovel = soft ground, hammer = stone/building, broadaxe = wood (faster than an axe).
+    WOOD_SHOVEL(75, 0),
+    STONE_SHOVEL(76, 0),
+    IRON_SHOVEL(77, 0),
+    DIAMOND_SHOVEL(78, 0),
+    WOOD_HAMMER(79, 0),
+    STONE_HAMMER(80, 0),
+    IRON_HAMMER(81, 0),
+    DIAMOND_HAMMER(82, 0),
+    WOOD_BROADAXE(83, 0),
+    STONE_BROADAXE(84, 0),
+    IRON_BROADAXE(85, 0),
+    DIAMOND_BROADAXE(86, 0),
     IRON_INGOT(41, 0), // smelted from iron ore (see Smelting)
     GOLD_INGOT(42, 0), // smelted from gold ore
     DIAMOND(43, 0),    // smelted from diamond ore
@@ -123,7 +138,7 @@ public enum BlockType {
     /** Atlas tile used for the front face while the block is "active" (e.g. a burning furnace's glowing mouth); equals {@link #frontTile} for blocks that don't change. */
     public final int litFrontTile;
     public final int foodValue;
-    /** True for inventory-only items (food/tools): no atlas tile, own PNG texture, never placeable as a world block. */
+    /** True for inventory-only items (food/tools): no atlas tile, own procedurally generated texture, never placeable as a world block. */
     public final boolean isItem;
     /** 0-15, Minecraft-style: how brightly this block glows (0 = not a light source). See torch handling in {@link Chunk}. */
     public final int lightLevel;
@@ -211,7 +226,7 @@ public enum BlockType {
         this.collisionHeight = 1.0f;
     }
 
-    /** Inventory-only item (tool, or foraged food like apple/berries): no atlas tile, has its own PNG texture, never placeable as a world block. */
+    /** Inventory-only item (tool, or foraged food like apple/berries): no atlas tile, has its own procedurally generated texture, never placeable as a world block. */
     BlockType(int id, int foodValue) {
         this.id = (byte) id;
         this.solid = false;

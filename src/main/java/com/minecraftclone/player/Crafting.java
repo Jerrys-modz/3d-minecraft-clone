@@ -80,10 +80,14 @@ public final class Crafting {
         shaped("PP.", "PP.", "...", BlockType.CRAFTING_TABLE, 1); // 4 planks -> crafting table
 
         // Tools (mirrored matching lets an axe be built either way round).
-        tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD);
-        tools('K', BlockType.STONE_PICKAXE, BlockType.STONE_AXE, BlockType.STONE_SWORD);
-        tools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD);
-        tools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD);
+        tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD,
+                BlockType.WOOD_SHOVEL, BlockType.WOOD_HAMMER, BlockType.WOOD_BROADAXE);
+        tools('K', BlockType.STONE_PICKAXE, BlockType.STONE_AXE, BlockType.STONE_SWORD,
+                BlockType.STONE_SHOVEL, BlockType.STONE_HAMMER, BlockType.STONE_BROADAXE);
+        tools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD,
+                BlockType.IRON_SHOVEL, BlockType.IRON_HAMMER, BlockType.IRON_BROADAXE);
+        tools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD,
+                BlockType.DIAMOND_SHOVEL, BlockType.DIAMOND_HAMMER, BlockType.DIAMOND_BROADAXE);
 
         // --- Shapeless recipes: any arrangement of the given ingredients. ---
         shapeless(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
@@ -102,11 +106,15 @@ public final class Crafting {
         RECIPES.add(new ShapelessRecipe(ingredients, output, amount));
     }
 
-    /** Registers the three tool recipes for one material character (pickaxe/axe/sword). */
-    private static void tools(char m, BlockType pickaxe, BlockType axe, BlockType sword) {
+    /** Registers the six tool recipes for one material character (pickaxe/axe/sword/shovel/hammer/broadaxe). */
+    private static void tools(char m, BlockType pickaxe, BlockType axe, BlockType sword,
+                              BlockType shovel, BlockType hammer, BlockType broadaxe) {
         shaped("" + m + m + m, ".S.", ".S.", pickaxe, 1);
         shaped("" + m + m + ".", "" + m + "S.", ".S.", axe, 1);
         shaped("." + m + ".", "." + m + ".", ".S.", sword, 1);
+        shaped("." + m + ".", ".S.", ".S.", shovel, 1);
+        shaped("" + m + m + ".", "" + m + m + ".", ".S.", hammer, 1);
+        shaped("" + m + m + m, "" + m + "S.", ".S.", broadaxe, 1);
     }
 
     private static BlockType[] cells(String r0, String r1, String r2) {

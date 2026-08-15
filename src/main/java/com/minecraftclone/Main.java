@@ -233,6 +233,71 @@ public class Main {
         input.resetMouseDelta();
     }
 
+    /**
+     * Breaks one block cell (whatever it is: a door, an overlay decoration, or a
+     * solid block), dropping its loot and wearing the tool in survival. Shared by
+     * the normal break and the hammer's 3x3 area mine.
+     */
+    private void breakBlockAt(World world, Player player, GameMode mode, BlockType heldItem, Random loot,
+                              List<Hud.Message> messages, int bx, int by, int bz) {
+        BlockType overlay = world.getOverlay(bx, by, bz);
+        boolean targetingOverlay = overlay != BlockType.AIR;
+        BlockType targetType = targetingOverlay ? overlay : world.getBlock(bx, by, bz);
+        if (targetType == BlockType.AIR || targetType == BlockType.BEDROCK) return;
+        if (!Mining.canBreak(targetType, heldItem)) return; // e.g. an ore the hammer can't mine
+
+        if (Door.isDoor(targetType)) {
+            Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
+        } else if (targetingOverlay) {
+            // Clear just the decoration - the water (or whatever else) it was
+            // sitting inside is untouched.
+            world.setOverlay(bx, by, bz, BlockType.AIR);
+        } else {
+            world.setBlock(bx, by, bz, BlockType.AIR);
+        }
+
+        if (!mode.isCreative()) {
+            // Drop the item into the world (to be picked up) rather than adding it
+            // straight to the inventory. Transient fluid flow drops nothing - only
+            // a fluid source drops itself.
+            if (targetType.isFluidFlow()) {
+                // nothing to drop
+            } else if (targetType == BlockType.BERRY_BUSH) {
+                world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
+            } else if (targetType == BlockType.COAL_ORE) {
+                // Coal ore drops coal (the furnace fuel), not the ore itself.
+                world.spawnItem(bx, by, bz, BlockType.COAL, 1, loot);
+            } else {
+                // An open door/trapdoor drops the closed item.
+                BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR
+                        : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR : targetType;
+                world.spawnItem(bx, by, bz, drop, 1, loot);
+                if (targetType == BlockType.FURNACE) {
+                    // A broken furnace spills whatever it was smelting or burning.
+                    Furnace furnace = world.furnaceAt(bx, by, bz);
+                    if (furnace != null) {
+                        for (int s = 0; s < Furnace.SLOT_COUNT; s++) {
+                            if (furnace.typeOf(s) != null) {
+                                world.spawnItem(bx, by, bz, furnace.typeOf(s), furnace.countOf(s), loot);
+                            }
+                        }
+                    }
+                }
+                if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
+                    world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
+                }
+            }
+
+            // Wear down the tool that did the breaking; once its uses run out, it's gone.
+            if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
+                player.getInventory().remove(heldItem, 1);
+                System.out.println("Your " + heldItem + " broke!");
+                showMessage(messages, "Your " + heldItem + " broke!",
+                        new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+            }
+        }
+    }
+
     /** Closes the creative screen, returning any cursor item to the inventory. */
     private void closeCreative(InventoryController controller, boolean[] creativeOpen) {
         controller.returnCursorToInventory();
@@ -895,54 +960,16 @@ public class Main {
                         breakFraction = 0f;
                         handRenderer.triggerSwing();
                         int bx = hit.blockPos.x, by = hit.blockPos.y, bz = hit.blockPos.z;
-                        if (Door.isDoor(targetType)) {
-                            Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
-                        } else if (targetingOverlay) {
-                            // Clear just the decoration - the water (or whatever else)
-                            // it was sitting inside is untouched.
-                            world.setOverlay(bx, by, bz, BlockType.AIR);
+                        if (Mining.isHammer(heldItem)) {
+                            // A hammer mines a 3x3 area: the target block plus its
+                            // eight horizontal neighbours, all in one swing.
+                            for (int dx = -1; dx <= 1; dx++) {
+                                for (int dz = -1; dz <= 1; dz++) {
+                                    breakBlockAt(world, player, mode, heldItem, loot, messages, bx + dx, by, bz + dz);
+                                }
+                            }
                         } else {
-                            world.setBlock(bx, by, bz, BlockType.AIR);
-                        }
-                        if (!mode.isCreative()) {
-                            // Drop the item into the world (to be picked up) rather than
-                            // adding it straight to the inventory. Transient fluid flow drops
-                            // nothing - only a fluid source drops itself.
-                            if (targetType.isFluidFlow()) {
-                                // nothing to drop
-                            } else if (targetType == BlockType.BERRY_BUSH) {
-                                world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
-                            } else if (targetType == BlockType.COAL_ORE) {
-                                // Coal ore drops coal (the furnace fuel), not the ore itself.
-                                world.spawnItem(bx, by, bz, BlockType.COAL, 1, loot);
-                            } else {
-                                // An open door/trapdoor drops the closed item.
-                                BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR
-                                        : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR : targetType;
-                                world.spawnItem(bx, by, bz, drop, 1, loot);
-                                if (targetType == BlockType.FURNACE) {
-                                    // A broken furnace spills whatever it was smelting or burning.
-                                    Furnace furnace = world.furnaceAt(bx, by, bz);
-                                    if (furnace != null) {
-                                        for (int s = 0; s < Furnace.SLOT_COUNT; s++) {
-                                            if (furnace.typeOf(s) != null) {
-                                                world.spawnItem(bx, by, bz, furnace.typeOf(s), furnace.countOf(s), loot);
-                                            }
-                                        }
-                                    }
-                                }
-                                if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
-                                    world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
-                                }
-                            }
-
-                            // Wear down the tool that did the breaking; once its uses run out, it's gone.
-                            if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
-                                player.getInventory().remove(heldItem, 1);
-                                System.out.println("Your " + heldItem + " broke!");
-                                showMessage(messages, "Your " + heldItem + " broke!",
-                                        new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
-                            }
+                            breakBlockAt(world, player, mode, heldItem, loot, messages, bx, by, bz);
                         }
                     }
                 }

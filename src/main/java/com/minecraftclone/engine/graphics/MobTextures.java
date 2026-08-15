@@ -14,8 +14,13 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
 /**
  * Procedurally paints each {@link Mob.Type}'s skin - a single 16x16 texture per
  * kind, laid out in fixed horizontal regions so the 3D voxel body parts
- * (see {@link MobRenderer}) can map their faces onto it: body side, body top
- * (lighter), head side, head front (with the face: eyes/snout), and legs.
+ * (see {@link MobRenderer}) can map their faces onto it. The face gets four
+ * whole rows (brow, eyes, nose, mouth) so it reads clearly once stretched
+ * onto the 3D head cube, and the head side carries a profile detail too since
+ * mobs are seen from every angle in-game.
+ * <p>
+ * Region layout (rows, top to bottom): body side (0-5), body top (6), head
+ * side (7-9), head front / face (10-13), legs (14-15).
  * Following the project's "self-contained" rule, mob art is generated at
  * startup (like block textures) rather than shipped as image files.
  */
@@ -25,10 +30,10 @@ public class MobTextures {
     private static final int H = 16;
 
     // Texture regions (u0, v0, u1, v1) - v increases downward, one row = 1/16.
-    public static final float[] BODY = {0f, 0f, 1f, 8f / 16f};
-    public static final float[] BODY_TOP = {0f, 8f / 16f, 1f, 10f / 16f};
-    public static final float[] HEAD_SIDE = {0f, 10f / 16f, 1f, 12f / 16f};
-    public static final float[] HEAD_FRONT = {0f, 12f / 16f, 1f, 14f / 16f};
+    public static final float[] BODY = {0f, 0f, 1f, 6f / 16f};
+    public static final float[] BODY_TOP = {0f, 6f / 16f, 1f, 7f / 16f};
+    public static final float[] HEAD_SIDE = {0f, 7f / 16f, 1f, 10f / 16f};
+    public static final float[] HEAD_FRONT = {0f, 10f / 16f, 1f, 14f / 16f};
     public static final float[] LEG = {0f, 14f / 16f, 1f, 1f};
 
     private static final int PIG_BODY = 0xF2A9B8;
@@ -106,63 +111,160 @@ public class MobTextures {
     }
 
     private void paintPig(BufferedImage img, Random rnd) {
-        fill(img, 0, 15, 0, 7, PIG_BODY);          // body
-        fill(img, 0, 15, 4, 7, PIG_BELLY);         // lighter belly
-        speckle(img, rnd, 0, 15, 0, 7, PIG_DARK, 0.10f);
-        fill(img, 0, 15, 8, 9, PIG_BELLY);         // body top
-        fill(img, 0, 15, 10, 11, PIG_BODY);        // head side
-        fill(img, 0, 15, 12, 13, PIG_BODY);        // head front
-        set(img, 3, 12, EYE); set(img, 4, 12, EYE);          // eyes
-        set(img, 11, 12, EYE); set(img, 12, 12, EYE);
-        fill(img, 5, 10, 13, 13, PIG_SNOUT);       // snout
+        fill(img, 0, 15, 0, 5, PIG_BODY);          // body
+        fill(img, 0, 15, 3, 5, PIG_BELLY);         // lighter belly
+        speckle(img, rnd, 0, 15, 0, 5, PIG_DARK, 0.10f);
+        fill(img, 0, 15, 6, 6, PIG_BELLY);         // body top
+        // Head side: shaded pink with an eye in profile.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(PIG_BODY, 1f - 0.03f * (y - 7)));
+        }
+        set(img, 13, 8, EYE); set(img, 14, 8, EYE);
+        // Head front: eyes, then a big snout with nostrils.
+        for (int y = 10; y <= 13; y++) for (int x = 0; x <= 15; x++) set(img, x, y, PIG_BODY);
+        set(img, 3, 11, EYE); set(img, 4, 11, EYE);
+        set(img, 11, 11, EYE); set(img, 12, 11, EYE);
+        fill(img, 5, 10, 12, 13, PIG_SNOUT);
+        set(img, 7, 12, PIG_DARK); set(img, 8, 12, PIG_DARK);
         fill(img, 0, 15, 14, 15, PIG_DARK);        // legs
     }
 
     private void paintCow(BufferedImage img, Random rnd) {
-        fill(img, 0, 15, 0, 7, COW_BODY);          // body
-        speckle(img, rnd, 0, 15, 0, 7, COW_DARK, 0.12f);
-        fill(img, 0, 15, 6, 7, COW_WHITE);         // white belly stripe
+        fill(img, 0, 15, 0, 5, COW_BODY);          // body
+        speckle(img, rnd, 0, 15, 0, 5, COW_DARK, 0.12f);
+        fill(img, 0, 15, 4, 5, COW_WHITE);         // white belly stripe
         fill(img, 4, 11, 0, 1, COW_WHITE);         // white patch on the side
-        fill(img, 0, 15, 8, 9, COW_LIGHT);         // body top
-        fill(img, 0, 15, 10, 11, COW_BODY);        // head side
-        fill(img, 0, 15, 12, 13, COW_WHITE);       // head front: white face
-        set(img, 3, 12, EYE); set(img, 4, 12, EYE);          // eyes
-        set(img, 11, 12, EYE); set(img, 12, 12, EYE);
-        fill(img, 6, 9, 13, 13, COW_MUZZLE);       // muzzle
+        fill(img, 0, 15, 6, 6, COW_LIGHT);         // body top
+        // Head side: brown with an eye in profile.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(COW_BODY, 1f - 0.03f * (y - 7)));
+        }
+        set(img, 13, 8, EYE); set(img, 14, 8, EYE);
+        // Head front: white face, eyes, muzzle.
+        for (int y = 10; y <= 13; y++) for (int x = 0; x <= 15; x++) set(img, x, y, COW_WHITE);
+        set(img, 3, 11, EYE); set(img, 4, 11, EYE);
+        set(img, 11, 11, EYE); set(img, 12, 11, EYE);
+        fill(img, 6, 9, 12, 13, COW_MUZZLE);
+        set(img, 7, 13, COW_DARK); set(img, 8, 13, COW_DARK); // nostrils
         fill(img, 0, 15, 14, 15, COW_HOOF);        // legs
     }
 
     private void paintSheep(BufferedImage img, Random rnd) {
-        fill(img, 0, 15, 0, 7, WOOL);              // woolly body
-        speckle(img, rnd, 0, 15, 0, 7, WOOL_SHADE, 0.25f);
-        fill(img, 0, 15, 8, 9, WOOL_LIGHT);        // body top
-        fill(img, 0, 15, 10, 11, FACE_DARK);       // head side
-        fill(img, 0, 15, 12, 13, FACE_DARK);       // head front
-        set(img, 4, 12, EYE); set(img, 11, 12, EYE);          // eyes
+        fill(img, 0, 15, 0, 5, WOOL);              // woolly body
+        speckle(img, rnd, 0, 15, 0, 5, WOOL_SHADE, 0.25f);
+        fill(img, 0, 15, 6, 6, WOOL_LIGHT);        // body top
+        // Head side: dark face shading.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(FACE_DARK, 1f - 0.04f * (y - 7)));
+        }
+        set(img, 13, 8, EYE); set(img, 14, 8, EYE);
+        // Head front: dark face with eyes.
+        for (int y = 10; y <= 13; y++) for (int x = 0; x <= 15; x++) set(img, x, y, FACE_DARK);
+        set(img, 4, 11, EYE); set(img, 11, 11, EYE);
         fill(img, 0, 15, 14, 15, FACE_DARK);       // legs
     }
 
+    /** A moldy zombie: a torn shirt over rotting flesh, with a proper 4-row face. */
     private void paintZombie(BufferedImage img, Random rnd) {
-        fill(img, 0, 15, 0, 7, 0x6FA34E);          // moldy green body
-        speckle(img, rnd, 0, 15, 0, 7, 0x54803C, 0.15f);
-        fill(img, 0, 15, 8, 9, 0x7FB85E);          // body top
-        fill(img, 0, 15, 10, 11, 0x6FA34E);        // head side
-        fill(img, 0, 15, 12, 13, 0x6FA34E);        // head front
-        set(img, 3, 12, EYE); set(img, 4, 12, EYE);          // eyes
-        set(img, 11, 12, EYE); set(img, 12, 12, EYE);
-        fill(img, 5, 10, 13, 13, 0x4A6636);        // gaping mouth
-        fill(img, 0, 15, 14, 15, 0x4E7337);        // legs
+        int shirt = 0x4A6A5E, shirtDark = 0x395447;
+        int skin = 0x6FA34E, skinDark = 0x3F5A2C, skinLight = 0x8CC270;
+        int pants = 0x3E4E3E;
+        // Body: a torn shirt over the shoulders, rotting skin below.
+        for (int x = 0; x <= 15; x++) {
+            set(img, x, 0, shade(shirt, 1f));
+            set(img, x, 1, shade(shirt, 0.94f));
+            set(img, x, 2, rnd.nextFloat() < 0.35f ? shade(skin, 0.9f) : shade(shirt, 0.88f));
+        }
+        for (int y = 3; y <= 5; y++) {
+            float f = 1.05f - 0.06f * (y - 3);
+            for (int x = 0; x <= 15; x++) {
+                float roll = rnd.nextFloat();
+                int c = shade(skin, f);
+                if (roll < 0.12f) c = shade(skinDark, f);
+                else if (roll < 0.20f) c = shade(skinLight, f);
+                set(img, x, y, c);
+            }
+        }
+        set(img, 7, 4, 0xFF7E3A3A); set(img, 8, 4, 0xFF7E3A3A);
+        fill(img, 0, 15, 6, 6, shade(shirt, 1.06f)); // body top (shoulders)
+        // Head side: shaded green with an eye in profile.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) {
+                float f = 1.04f - 0.05f * (x / 15f) - 0.04f * (y - 7);
+                set(img, x, y, shade(skin, f));
+            }
+        }
+        set(img, 13, 8, 0x1E2620); set(img, 14, 8, 0x24301C);
+        // Head front (4 rows): brow, sunken eyes, nose, gaping mouth.
+        for (int y = 10; y <= 13; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(skin, y == 10 ? 0.95f : y == 13 ? 0.9f : 1f));
+        }
+        set(img, 7, 10, shade(skinDark, 1f)); set(img, 8, 10, shade(skinDark, 1f)); // brow
+        fill(img, 2, 4, 11, 11, 0x1E2620);          // left eye socket
+        fill(img, 11, 13, 11, 11, 0x1E2620);        // right eye socket
+        set(img, 2, 12, 0x9FB87E); set(img, 13, 12, 0x9FB87E); // dull glint
+        set(img, 7, 12, shade(skinDark, 1f)); set(img, 8, 12, shade(skinDark, 1f)); // nose
+        fill(img, 5, 10, 13, 13, 0x24301C);         // gaping mouth
+        set(img, 6, 13, 0xE8E0D0); set(img, 9, 13, 0xE8E0D0); // a couple of teeth
+        // Legs: tattered pants.
+        for (int y = 14; y <= 15; y++) {
+            for (int x = 0; x <= 15; x++) {
+                int c = shade(pants, 1f - 0.05f * (y - 14));
+                if (rnd.nextFloat() < 0.12f) c = shade(skinDark, 1f);
+                set(img, x, y, c);
+            }
+        }
     }
 
+    /** A skeleton: bone-white torso with a ribcage, and a full skull face. */
     private void paintSkeleton(BufferedImage img, Random rnd) {
-        fill(img, 0, 15, 0, 7, 0xE8E0D0);          // bone-white body
-        speckle(img, rnd, 0, 15, 0, 7, 0xD8D0BE, 0.15f);
-        fill(img, 0, 15, 8, 9, 0xF2ECE0);          // body top
-        fill(img, 0, 15, 10, 11, 0xE8E0D0);        // head side
-        fill(img, 0, 15, 12, 13, 0xE8E0D0);        // head front
-        set(img, 3, 12, EYE); set(img, 4, 12, EYE);          // empty eye sockets
-        set(img, 11, 12, EYE); set(img, 12, 12, EYE);
-        fill(img, 0, 15, 14, 15, 0xD8D0BE);        // legs
+        int bone = 0xE8E0D0, boneDark = 0xB0A68F, boneLight = 0xF6F0E4;
+        // Body: bone shading with a dark spine running down the middle.
+        for (int y = 0; y <= 5; y++) {
+            float f = 1.05f - 0.05f * y;
+            for (int x = 0; x <= 15; x++) {
+                int c = shade(bone, f);
+                if (x == 7 || x == 8) c = shade(boneDark, f * 0.9f);
+                set(img, x, y, c);
+            }
+        }
+        for (int ry = 2; ry <= 4; ry += 2) {
+            for (int x = 3; x <= 12; x++) {
+                if (x >= 6 && x <= 9) continue;
+                set(img, x, ry, shade(boneDark, 1f));
+                if (ry == 2) set(img, x, 1, shade(boneDark, 0.85f));
+            }
+        }
+        for (int x = 4; x <= 11; x++) {
+            if (x >= 7 && x <= 8) continue;
+            set(img, x, 4, shade(boneDark, 1f)); // pelvis
+        }
+        fill(img, 0, 15, 6, 6, shade(boneLight, 1f)); // body top
+        // Head side: skull profile with an eye socket near the front.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) {
+                float f = 1f - 0.04f * (y - 7) - 0.05f * (x / 15f);
+                set(img, x, y, shade(bone, f));
+            }
+        }
+        set(img, 13, 8, 0x1C1C22); set(img, 14, 8, 0x1C1C22);
+        set(img, 12, 9, 0xC8C0AC);
+        // Head front (4 rows): brow, deep sockets, nasal cavity, teeth.
+        for (int y = 10; y <= 13; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(bone, y == 10 ? 0.98f : 1f));
+        }
+        set(img, 6, 10, 0xC8C0AC); set(img, 7, 10, 0xC8C0AC);
+        set(img, 8, 10, 0xC8C0AC); set(img, 9, 10, 0xC8C0AC); // brow highlight
+        fill(img, 2, 4, 11, 12, 0x1C1C22);          // left eye socket
+        fill(img, 11, 13, 11, 12, 0x1C1C22);        // right eye socket
+        set(img, 7, 12, 0x1C1C22); set(img, 8, 12, 0x1C1C22); // nasal cavity
+        for (int x = 4; x <= 11; x++) {
+            set(img, x, 13, (x % 2 == 0) ? 0x1C1C22 : bone); // teeth row
+        }
+        // Legs: bone with joint shading.
+        for (int y = 14; y <= 15; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(boneDark, 1f - 0.06f * (y - 14)));
+        }
     }
 
     /** Sprinkles a few {@code color} pixels through a region for a speckled, textured look. */
@@ -174,6 +276,14 @@ public class MobTextures {
                 }
             }
         }
+    }
+
+    /** Multiplies a 0xRRGGBB color's brightness by {@code f}. */
+    private static int shade(int color, float f) {
+        int r = Math.min(255, Math.max(0, Math.round(((color >> 16) & 0xFF) * f)));
+        int g = Math.min(255, Math.max(0, Math.round(((color >> 8) & 0xFF) * f)));
+        int b = Math.min(255, Math.max(0, Math.round((color & 0xFF) * f)));
+        return (r << 16) | (g << 8) | b;
     }
 
     private static void set(BufferedImage img, int x, int y, int rgb) {
