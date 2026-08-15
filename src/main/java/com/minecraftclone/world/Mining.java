@@ -12,13 +12,15 @@ import java.util.Map;
  * minimum tool tier required to break it at all (e.g. you can't punch out a
  * diamond - you need at least an iron pickaxe).
  * <p>
- * Swords exist as a tool kind (faster than bare hands on plant/fibrous
- * material like leaves and cacti) but there's no combat yet - no mobs to
- * swing them at - so for now that speed bonus is their only effect.
+ * The tool set is a full survival-craft spread, each kind with its own
+ * material: the pickaxe (ores - tier-gated), the shovel (soft earth), the
+ * hammer (stone and masonry), the broadaxe (the heavy wood-cutter, twice as
+ * fast as any other tool at wood), the axe (plant/fibrous material like
+ * leaves and cacti), and the sword (combat - no mining speed bonus).
  */
 public final class Mining {
 
-    public enum ToolKind {NONE, PICKAXE, AXE, SWORD}
+    public enum ToolKind {NONE, PICKAXE, AXE, SWORD, SHOVEL, HAMMER, BROADAXE}
 
     /** Higher is better. 0 = bare hands. */
     public static final int TIER_HAND = 0;
@@ -50,19 +52,31 @@ public final class Mining {
         TOOLS.put(BlockType.STONE_SWORD, new ToolStats(ToolKind.SWORD, TIER_STONE, 132));
         TOOLS.put(BlockType.IRON_SWORD, new ToolStats(ToolKind.SWORD, TIER_IRON, 251));
         TOOLS.put(BlockType.DIAMOND_SWORD, new ToolStats(ToolKind.SWORD, TIER_DIAMOND, 1562));
+        TOOLS.put(BlockType.WOOD_SHOVEL, new ToolStats(ToolKind.SHOVEL, TIER_WOOD, 60));
+        TOOLS.put(BlockType.STONE_SHOVEL, new ToolStats(ToolKind.SHOVEL, TIER_STONE, 132));
+        TOOLS.put(BlockType.IRON_SHOVEL, new ToolStats(ToolKind.SHOVEL, TIER_IRON, 251));
+        TOOLS.put(BlockType.DIAMOND_SHOVEL, new ToolStats(ToolKind.SHOVEL, TIER_DIAMOND, 1562));
+        TOOLS.put(BlockType.WOOD_HAMMER, new ToolStats(ToolKind.HAMMER, TIER_WOOD, 60));
+        TOOLS.put(BlockType.STONE_HAMMER, new ToolStats(ToolKind.HAMMER, TIER_STONE, 132));
+        TOOLS.put(BlockType.IRON_HAMMER, new ToolStats(ToolKind.HAMMER, TIER_IRON, 251));
+        TOOLS.put(BlockType.DIAMOND_HAMMER, new ToolStats(ToolKind.HAMMER, TIER_DIAMOND, 1562));
+        TOOLS.put(BlockType.WOOD_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_WOOD, 60));
+        TOOLS.put(BlockType.STONE_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_STONE, 132));
+        TOOLS.put(BlockType.IRON_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_IRON, 251));
+        TOOLS.put(BlockType.DIAMOND_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_DIAMOND, 1562));
 
-        // Soft, no tool required - fast either way.
-        put(BlockType.DIRT, 0.5f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.GRASS, 0.6f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.SAND, 0.5f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.GRAVEL, 0.6f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.SNOW, 0.2f, ToolKind.NONE, TIER_HAND);
-        // Swords are quicker through plant/fibrous material - no requirement, just a bonus.
-        put(BlockType.CACTUS, 0.4f, ToolKind.SWORD, TIER_HAND);
+        // Soft earth - a shovel makes it quick (no tier requirement, just speed).
+        put(BlockType.DIRT, 0.5f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.GRASS, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.SAND, 0.5f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.GRAVEL, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.SNOW, 0.2f, ToolKind.SHOVEL, TIER_HAND);
+        // Plant/fibrous material - an axe is quickest (the sword's combat-only now).
+        put(BlockType.CACTUS, 0.4f, ToolKind.AXE, TIER_HAND);
 
         // Instant, no tool - decoration.
-        put(BlockType.LEAVES, 0.2f, ToolKind.SWORD, TIER_HAND);
-        put(BlockType.CHERRY_LEAVES, 0.2f, ToolKind.SWORD, TIER_HAND);
+        put(BlockType.LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
+        put(BlockType.CHERRY_LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
         put(BlockType.TALL_GRASS, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_RED, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_YELLOW, 0f, ToolKind.NONE, TIER_HAND);
@@ -80,12 +94,12 @@ public final class Mining {
         put(BlockType.TRAPDOOR, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.TRAPDOOR_OPEN, 0f, ToolKind.NONE, TIER_HAND);
 
-        // Biome surface blocks - soft, no tool required.
-        put(BlockType.SWAMP_GRASS, 0.6f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.RED_CLAY, 0.6f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.MYCELIUM, 0.6f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.ICE, 0.5f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.PACKED_ICE, 0.5f, ToolKind.NONE, TIER_HAND);
+        // Biome surface blocks - a shovel helps, nothing required.
+        put(BlockType.SWAMP_GRASS, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.RED_CLAY, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.MYCELIUM, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.ICE, 0.5f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.PACKED_ICE, 0.5f, ToolKind.SHOVEL, TIER_HAND);
         put(BlockType.PUMPKIN, 0.5f, ToolKind.NONE, TIER_HAND);
 
         // Fluids - sources are quick to pick back up; flow is transient and instant.
@@ -94,17 +108,17 @@ public final class Mining {
         put(BlockType.WATER_FLOW, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.LAVA_FLOW, 0f, ToolKind.NONE, TIER_HAND);
 
-        // Wood - axe helps but isn't required.
-        put(BlockType.WOOD_LOG, 1.5f, ToolKind.AXE, TIER_HAND);
-        put(BlockType.PLANKS, 1.0f, ToolKind.AXE, TIER_HAND);
-        put(BlockType.PLANKS_SLAB, 1.0f, ToolKind.AXE, TIER_HAND);
+        // Wood - a broadaxe is the heavy wood-cutter (twice as fast as an axe would be).
+        put(BlockType.WOOD_LOG, 1.5f, ToolKind.BROADAXE, TIER_HAND);
+        put(BlockType.PLANKS, 1.0f, ToolKind.BROADAXE, TIER_HAND);
+        put(BlockType.PLANKS_SLAB, 1.0f, ToolKind.BROADAXE, TIER_HAND);
 
-        // Stone family - pickaxe helps but bare hands still work (just slow).
-        put(BlockType.STONE, 2.5f, ToolKind.PICKAXE, TIER_HAND);
-        put(BlockType.STONE_SLAB, 2.5f, ToolKind.PICKAXE, TIER_HAND);
+        // Stone and masonry - a hammer is the builder's tool (bare hands still work, just slow).
+        put(BlockType.STONE, 2.5f, ToolKind.HAMMER, TIER_HAND);
+        put(BlockType.STONE_SLAB, 2.5f, ToolKind.HAMMER, TIER_HAND);
         put(BlockType.GLASS, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.LAMP, 0.5f, ToolKind.NONE, TIER_HAND);
-        put(BlockType.FURNACE, 3.5f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.FURNACE, 3.5f, ToolKind.HAMMER, TIER_HAND);
 
         // Ores - a pickaxe of at least the given tier is required, not just faster.
         put(BlockType.COAL_ORE, 2.5f, ToolKind.PICKAXE, TIER_WOOD);
@@ -155,8 +169,10 @@ public final class Mining {
         ToolStats held = TOOLS.get(heldItem);
         float speedMultiplier = 1f;
         if (held != null && held.kind() == info.effectiveTool()) {
-            // Each tier above hand roughly doubles speed for its effective tool.
-            speedMultiplier = 1 << held.tier(); // wood=2x, stone=4x, iron=8x, diamond=16x
+            // Each tier above hand roughly doubles speed for its effective tool;
+            // a broadaxe is the heavy wood-cutter, one tier of speed stronger.
+            int power = held.tier() + (held.kind() == ToolKind.BROADAXE ? 1 : 0);
+            speedMultiplier = 1 << power; // wood=2x, stone=4x, iron=8x, diamond=16x (broadaxe: double)
         }
         return info.hardnessSeconds() / speedMultiplier;
     }

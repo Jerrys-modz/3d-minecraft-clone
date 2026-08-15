@@ -55,6 +55,21 @@ public class ItemTextures {
             case IRON_SWORD -> paintSword(0xE8E8E8);
             case DIAMOND_SWORD -> paintSword(0x5FE0E0);
 
+            case WOOD_SHOVEL -> paintShovel(0xA9814F);
+            case STONE_SHOVEL -> paintShovel(0x9E9E9E);
+            case IRON_SHOVEL -> paintShovel(0xE8E8E8);
+            case DIAMOND_SHOVEL -> paintShovel(0x5FE0E0);
+
+            case WOOD_HAMMER -> paintHammer(0xA9814F);
+            case STONE_HAMMER -> paintHammer(0x9E9E9E);
+            case IRON_HAMMER -> paintHammer(0xE8E8E8);
+            case DIAMOND_HAMMER -> paintHammer(0x5FE0E0);
+
+            case WOOD_BROADAXE -> paintBroadaxe(0xA9814F);
+            case STONE_BROADAXE -> paintBroadaxe(0x9E9E9E);
+            case IRON_BROADAXE -> paintBroadaxe(0xE8E8E8);
+            case DIAMOND_BROADAXE -> paintBroadaxe(0x5FE0E0);
+
             case IRON_INGOT -> paintIngot(0xE8E8E8);
             case GOLD_INGOT -> paintIngot(0xE8C93A);
             case DIAMOND -> paintGem(0x5FE0E0);
@@ -311,6 +326,89 @@ public class ItemTextures {
         img.setRGB(11, 2, 0xFF000000 | 0xE8E0D0);
         img.setRGB(12, 3, 0xFF000000 | 0xE8E0D0);
         img.setRGB(13, 4, 0xFF000000 | 0xE8E0D0);
+        return img;
+    }
+
+    /** A shovel: a pointed spade head with a lit edge over a diagonal wood handle. */
+    private static BufferedImage paintShovel(int headColor) {
+        BufferedImage img = blank();
+        int handle = 0x6E4A2A, handleDark = 0x543A20;
+        // Diagonal handle from the bottom-right up to the head socket.
+        drawThickLine(img, 10, 15, 9, 7, handleDark);
+        drawThickLine(img, 9, 15, 8, 7, handle);
+        // Spade head: a broad flat blade tapering to a point at the socket.
+        int[] edge = {6, 5, 4, 4, 5};
+        for (int y = 1; y <= 5; y++) {
+            int e = edge[y - 1];
+            for (int x = e; x <= 9; x++) {
+                int c = y == 1 ? lighten(headColor) : (y == 5 ? shade(headColor, 0.8f) : headColor);
+                if (x == e) c = lighten(headColor);        // lit cutting edge
+                img.setRGB(x, y, 0xFF000000 | c);
+            }
+        }
+        // Socket band where the head meets the handle.
+        img.setRGB(8, 6, 0xFF000000 | shade(headColor, 0.9f));
+        img.setRGB(9, 6, 0xFF000000 | shade(headColor, 0.9f));
+        return img;
+    }
+
+    /** A hammer: a wide two-face striking head on a vertical wood handle. */
+    private static BufferedImage paintHammer(int headColor) {
+        BufferedImage img = blank();
+        int handle = 0x6E4A2A, handleDark = 0x543A20;
+        // Striking head: broad bar, lit top and end, shaded bottom.
+        for (int x = 3; x <= 12; x++) {
+            img.setRGB(x, 2, 0xFF000000 | lighten(headColor));
+            img.setRGB(x, 3, 0xFF000000 | headColor);
+            img.setRGB(x, 4, 0xFF000000 | headColor);
+            img.setRGB(x, 5, 0xFF000000 | shade(headColor, 0.8f));
+        }
+        for (int y = 2; y <= 5; y++) {
+            img.setRGB(3, y, 0xFF000000 | lighten(headColor));
+            img.setRGB(12, y, 0xFF000000 | shade(headColor, 0.85f));
+        }
+        img.setRGB(4, 6, 0xFF000000 | headColor);
+        img.setRGB(11, 6, 0xFF000000 | headColor);
+        // Vertical handle with a grip.
+        drawThickLine(img, 8, 6, 8, 13, handleDark);
+        drawThickLine(img, 7, 6, 7, 13, handle);
+        img.setRGB(7, 14, 0xFF000000 | 0x4A3018);
+        img.setRGB(8, 14, 0xFF000000 | 0x4A3018);
+        img.setRGB(7, 15, 0xFF000000 | 0x3A2613);
+        img.setRGB(8, 15, 0xFF000000 | 0x3A2613);
+        return img;
+    }
+
+    /** A broadaxe: a big, wide wedge blade (much broader than an axe) on a diagonal handle. */
+    private static BufferedImage paintBroadaxe(int headColor) {
+        BufferedImage img = blank();
+        int handle = 0x6E4A2A, handleDark = 0x543A20;
+        // Blade: a tall, wide wedge - flat back on the right, curved edge bulging left.
+        int[] edge = {7, 5, 4, 2, 2, 3, 4, 6, 7};
+        for (int y = 1; y <= 9; y++) {
+            int e = edge[y - 1];
+            for (int x = e; x <= 12; x++) {
+                int c = headColor;
+                if (y == 1) {
+                    c = lighten(headColor);
+                } else if (y == 9) {
+                    c = shade(headColor, 0.7f);
+                }
+                if (x == e) {
+                    c = lighten(headColor);                    // bright cutting edge
+                } else if (x == e + 1) {
+                    c = shade(headColor, 0.9f);                // bevel shadow
+                }
+                img.setRGB(x, y, 0xFF000000 | c);
+            }
+        }
+        // Back edge highlight.
+        for (int y = 2; y <= 8; y++) {
+            img.setRGB(12, y, 0xFF000000 | shade(headColor, 0.85f));
+        }
+        // Long diagonal handle from the bottom-right into the head.
+        drawThickLine(img, 10, 15, 8, 5, handleDark);
+        drawThickLine(img, 9, 15, 7, 5, handle);
         return img;
     }
 

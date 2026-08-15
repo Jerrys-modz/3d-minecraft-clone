@@ -100,6 +100,20 @@ public enum BlockType {
     STONE_SWORD(35, 0),
     IRON_SWORD(36, 0),
     DIAMOND_SWORD(37, 0),
+    // Shovels, hammers and broadaxes - the rest of the tool set (see Mining):
+    // shovel = soft ground, hammer = stone/building, broadaxe = wood (faster than an axe).
+    WOOD_SHOVEL(75, 0),
+    STONE_SHOVEL(76, 0),
+    IRON_SHOVEL(77, 0),
+    DIAMOND_SHOVEL(78, 0),
+    WOOD_HAMMER(79, 0),
+    STONE_HAMMER(80, 0),
+    IRON_HAMMER(81, 0),
+    DIAMOND_HAMMER(82, 0),
+    WOOD_BROADAXE(83, 0),
+    STONE_BROADAXE(84, 0),
+    IRON_BROADAXE(85, 0),
+    DIAMOND_BROADAXE(86, 0),
     IRON_INGOT(41, 0), // smelted from iron ore (see Smelting)
     GOLD_INGOT(42, 0), // smelted from gold ore
     DIAMOND(43, 0),    // smelted from diamond ore
