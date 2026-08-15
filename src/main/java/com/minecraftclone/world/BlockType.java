@@ -16,7 +16,7 @@ package com.minecraftclone.world;
  *       existing tile index).</li>
  *   <li>Give it break times in {@link com.minecraftclone.world.Mining}: {@code put(type, hardness, tool, tier)}.</li>
  *   <li>Add a {@link com.minecraftclone.player.Crafting#shaped} / {@code #shapeless}
- *       or {@code Smelting#smelt} recipe if it's made from ingredients.</li>
+ *       recipe, or a {@code Smelting#outputFor} smelting entry, if it's made from ingredients.</li>
  *   <li>Add it to a tab in {@link com.minecraftclone.player.CreativeCatalog} so creative mode offers it.</li>
  * </ol>
  */
@@ -75,6 +75,7 @@ public enum BlockType {
     DOOR_OPEN(70, false, true, 46),
     TRAPDOOR(71, true, false, 47, 47, 47),
     TRAPDOOR_OPEN(72, false, true, 47),
+    CRAFTING_TABLE(73, true, false, 48, 48, 48), // workbench: right-click opens the 3x3 crafting GUI
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own PNG texture instead,
@@ -99,6 +100,7 @@ public enum BlockType {
     IRON_INGOT(41, 0), // smelted from iron ore (see Smelting)
     GOLD_INGOT(42, 0), // smelted from gold ore
     DIAMOND(43, 0),    // smelted from diamond ore
+    COAL(74, 0),       // mined from coal ore, the furnace fuel (see Smelting)
     // Raw meat - dropped by passive mobs when killed (see World.damageMob), edible.
     RAW_PORKCHOP(65, 16),
     RAW_BEEF(66, 16),

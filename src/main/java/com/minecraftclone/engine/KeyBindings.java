@@ -20,15 +20,14 @@ public class KeyBindings {
     public static final int FLY_DOWN = 6;
     public static final int FLY_TOGGLE = 7;
     public static final int INVENTORY = 8;
-    public static final int SMELT = 9;
-    public static final int DEBUG = 10;
-    public static final int SCREENSHOT = 11;
-    public static final int COUNT = 12;
+    public static final int DEBUG = 9;
+    public static final int SCREENSHOT = 10;
+    public static final int COUNT = 11;
 
     private static final int[] DEFAULT_KEYS = {
             GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_A, GLFW_KEY_D,
             GLFW_KEY_SPACE, GLFW_KEY_LEFT_CONTROL, GLFW_KEY_LEFT_SHIFT, GLFW_KEY_F,
-            GLFW_KEY_E, GLFW_KEY_C, GLFW_KEY_F3, GLFW_KEY_F2,
+            GLFW_KEY_E, GLFW_KEY_F3, GLFW_KEY_F2,
     };
 
     private final int[] keys = new int[COUNT];
@@ -61,7 +60,6 @@ public class KeyBindings {
             case FLY_DOWN -> "Fly down";
             case FLY_TOGGLE -> "Fly toggle";
             case INVENTORY -> "Inventory";
-            case SMELT -> "Smelt (furnace)";
             case DEBUG -> "Debug";
             case SCREENSHOT -> "Screenshot";
             default -> "?";
@@ -119,7 +117,7 @@ public class KeyBindings {
     /** Settings-file key names, one per action, in {@link #COUNT} order. */
     private static final String[] FILE_KEYS = {
             "key_forward", "key_back", "key_left", "key_right", "key_jump", "key_sprint",
-            "key_fly_down", "key_fly_toggle", "key_inventory", "key_smelt", "key_debug", "key_screenshot",
+            "key_fly_down", "key_fly_toggle", "key_inventory", "key_debug", "key_screenshot",
     };
 
     /** Appends {@code key_xxx=code} lines for persistence (see Settings.save). */

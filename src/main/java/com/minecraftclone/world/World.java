@@ -37,6 +37,8 @@ public class World implements BlockAccessor {
     // low 32) rather than a ChunkPos record, so the hot getBlock/setBlock lookups
     // don't allocate a key object on every call.
     private final Map<Long, Chunk> chunks = new HashMap<>();
+    /** Per-block block entities (furnaces today, machines/chests tomorrow), keyed by {@link #blockKey}. */
+    private final Map<Long, BlockEntity> blockEntities = new HashMap<>();
     private final TerrainGenerator generator;
     private final TextureAtlas atlas;
     private final ChunkStorage storage;
@@ -246,6 +248,83 @@ public class World implements BlockAccessor {
         }
     }
 
+    /** Packs block coordinates into a single key (21 bits per axis, so negatives stay unique). */
+    private static long blockKey(int x, int y, int z) {
+        return ((long) x & 0x1FFFFFL) | (((long) y & 0x1FFFFFL) << 21) | (((long) z & 0x1FFFFFL) << 42);
+    }
+
+    private static int keyX(long key) {
+        return (int) (key & 0x1FFFFFL) << 21 >> 21;
+    }
+
+    private static int keyY(long key) {
+        return (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
+    }
+
+    private static int keyZ(long key) {
+        return (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+    }
+
+    /** The block entity at a block position, or null if none. */
+    public BlockEntity blockEntityAt(int x, int y, int z) {
+        return blockEntities.get(blockKey(x, y, z));
+    }
+
+    /** The furnace at a block position, or null if none (no furnace placed / never opened). */
+    public Furnace furnaceAt(int x, int y, int z) {
+        return blockEntityAt(x, y, z) instanceof Furnace furnace ? furnace : null;
+    }
+
+    /** Returns the furnace at a position, creating (and registering) it on first use. */
+    public Furnace getOrCreateFurnace(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof Furnace furnace) return furnace;
+        Furnace furnace = new Furnace();
+        blockEntities.put(blockKey(x, y, z), furnace);
+        return furnace;
+    }
+
+    /** Forgets a block entity - call when its block is mined or removed. */
+    public void removeBlockEntity(int x, int y, int z) {
+        blockEntities.remove(blockKey(x, y, z));
+    }
+
+    /**
+     * Advances every block entity by {@code dt} seconds of world time. Entities
+     * whose block has since been replaced are pruned (their contents are dropped
+     * by the caller when the block is mined).
+     */
+    public void tickBlockEntities(float dt) {
+        if (dt <= 0) return;
+        Iterator<Map.Entry<Long, BlockEntity>> it = blockEntities.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Long, BlockEntity> entry = it.next();
+            long key = entry.getKey();
+            BlockEntity entity = entry.getValue();
+            if (getBlock(keyX(key), keyY(key), keyZ(key)) != entity.blockType()) {
+                it.remove();
+                continue;
+            }
+            entity.tick(dt);
+        }
+    }
+
+    /** The block entities living inside chunk {@code c}, excluding any whose block has since been removed. */
+    private List<ChunkStorage.BlockEntitySave> blockEntitiesInChunk(Chunk c) {
+        int minX = c.getOriginX();
+        int minZ = c.getOriginZ();
+        List<ChunkStorage.BlockEntitySave> out = new ArrayList<>();
+        for (Map.Entry<Long, BlockEntity> e : blockEntities.entrySet()) {
+            int x = keyX(e.getKey());
+            int z = keyZ(e.getKey());
+            if (x < minX || x >= minX + Chunk.SIZE || z < minZ || z >= minZ + Chunk.SIZE) continue;
+            int y = keyY(e.getKey());
+            if (getBlock(x, y, z) != e.getValue().blockType()) continue; // mined/removed - don't resurrect it
+            out.add(new ChunkStorage.BlockEntitySave(x, y, z, e.getValue()));
+        }
+        return out;
+    }
+
     /** If the block at this position is static WATER/LAVA, promotes it to the matching tracked source. See setBlock. */
     private void promoteIfStaticFluid(int x, int y, int z) {
         BlockType promoted = getBlock(x, y, z).promotedFluidSource();
@@ -405,8 +484,13 @@ public class World implements BlockAccessor {
                     chunks.put(key(cx, cz), chunk);
                     if (storage.hasSavedChunk(chunk.getPos())) {
                         // A previously-edited chunk: restore the player's changes
-                        // instead of regenerating pristine terrain.
-                        storage.load(chunk);
+                        // instead of regenerating pristine terrain, along with any
+                        // block entities that were holding state in it.
+                        for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
+                            if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
+                                blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                            }
+                        }
                     } else {
                         generator.generate(chunk);
                     }
@@ -433,7 +517,7 @@ public class World implements BlockAccessor {
             for (Chunk c : toRemove) {
                 chunks.remove(key(c.getPos().x(), c.getPos().z()));
                 if (c.isModifiedByPlayer()) {
-                    storage.save(c);
+                    storage.save(c, blockEntitiesInChunk(c));
                 }
                 c.destroy();
             }
@@ -771,7 +855,7 @@ public class World implements BlockAccessor {
         int saved = 0;
         for (Chunk c : chunks.values()) {
             if (c.isModifiedByPlayer()) {
-                storage.save(c);
+                storage.save(c, blockEntitiesInChunk(c));
                 saved++;
             }
         }

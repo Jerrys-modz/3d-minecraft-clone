@@ -63,8 +63,9 @@ public final class GenerateItemTextures {
         write(outDir, "mutton", paintMeat(0xD87870, 0xB04848));
         write(outDir, "rotten_flesh", paintMeat(0x9A8A6A, 0x7A6A50));
         write(outDir, "bones", paintBones());
+        write(outDir, "coal", paintCoal());
 
-        System.out.println("Wrote 23 item textures to " + outDir.getAbsolutePath());
+        System.out.println("Wrote 24 item textures to " + outDir.getAbsolutePath());
     }
 
     private static void write(File outDir, String name, BufferedImage image) throws IOException {
@@ -212,6 +213,31 @@ public final class GenerateItemTextures {
             img.setRGB(x + 1, 8, 0xFF000000 | marbledColor);
             img.setRGB(x, 4, 0xFF000000 | lighten(meatColor));
         }
+        return img;
+    }
+
+    /** A dark, slightly irregular lump of coal with a couple of flat facets catching the light - the furnace fuel. */
+    private static BufferedImage paintCoal() {
+        BufferedImage img = blank();
+        int cx = 8, cy = 8;
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                // An irregular lump (taller than wide, like a chunk of coal).
+                double d = Math.hypot((x - cx) * 1.1, (y - cy) * 1.3);
+                if (d <= 5.4) {
+                    img.setRGB(x, y, 0xFF000000 | 0x2B2B2B);
+                }
+            }
+        }
+        // A few flat facets catching light, darkest at the bottom edge.
+        for (int i = 0; i < 4; i++) {
+            img.setRGB(cx - 1 + i, cy - 2, 0xFF000000 | 0x5A5A5A);
+        }
+        for (int i = 0; i < 3; i++) {
+            img.setRGB(cx - 1 + i, cy - 1, 0xFF000000 | 0x4A4A4A);
+        }
+        img.setRGB(cx, cy, 0xFF000000 | 0x8A8A8A);
+        img.setRGB(cx + 2, cy + 2, 0xFF000000 | 0x3A3A3A);
         return img;
     }
 
