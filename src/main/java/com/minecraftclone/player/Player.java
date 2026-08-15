@@ -67,6 +67,7 @@ public class Player {
     private boolean justJumped = false;
     private boolean justLanded = false;
     private boolean wasOnGround = true; // starts true: spawning in doesn't count as "landing"
+    private boolean landingArmed = false; // landing detection is disarmed until the first real ground contact
     // Head-underwater state, recomputed every update() (also drives the breath/
     // drowning mechanic in PlayerStats) - exposed read-only so Main can trigger
     // a splash sound on the frame it changes, without recomputing the same
@@ -79,6 +80,7 @@ public class Player {
         position.set(x, surfaceY + 2, z);
         velocity.set(0, 0, 0);
         camera.setPosition(x, position.y + EYE_HEIGHT, z);
+        landingArmed = false; // disarm landing detection until the first real ground contact
     }
 
     /** Full respawn: stats and position reset, as if starting over (used after death). */
@@ -175,7 +177,11 @@ public class Player {
         // (not "is currently resting on the ground", which is true every frame
         // afterward too) with enough fall speed that it wasn't just a trivial
         // step-down. Checked here, before lastFallImpactSpeed resets below.
-        justLanded = onGround && !wasOnGround && lastFallImpactSpeed >= LANDING_SOUND_MIN_SPEED;
+        // Landing detection is gated: disarmed at spawn, armed on first ground contact.
+        if (onGround && !landingArmed) {
+            landingArmed = true;
+        }
+        justLanded = landingArmed && onGround && !wasOnGround && lastFallImpactSpeed >= LANDING_SOUND_MIN_SPEED;
         wasOnGround = onGround;
 
         submerged = world.getBlock(

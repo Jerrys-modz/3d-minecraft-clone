@@ -280,7 +280,12 @@ public class Settings {
                         case "stars" -> s.toggles[STARS] = parseBool(value);
                         case "invert_mouse_y" -> s.toggles[INVERT_MOUSE_Y] = parseBool(value);
                         case "view_bobbing" -> s.toggles[VIEW_BOBBING] = parseBool(value);
-                        case "sound_volume" -> s.ranges[SOUND_VOLUME] = clamp(SOUND_VOLUME, Float.parseFloat(value));
+                        case "sound_volume" -> {
+                            float parsed = Float.parseFloat(value);
+                            if (Float.isFinite(parsed)) {
+                                s.ranges[SOUND_VOLUME] = clamp(SOUND_VOLUME, parsed);
+                            }
+                        }
                         default -> {
                             s.keyBinds.loadEntry(key, value);
                             s.worldGen.loadEntry(key, value);

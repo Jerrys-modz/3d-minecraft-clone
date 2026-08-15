@@ -74,14 +74,28 @@ class SoundSynthTest {
 
     @Test
     void mixAddsLayersAndClampsToTheValidSampleRange() {
-        // Two loud in-phase tones summed should clip at the max sample value,
+        // Two loud in-phase tones summed should saturate at Short.MAX_VALUE,
         // not overflow/wrap around into negative territory.
         short[] loud1 = SoundSynth.tone(1000, 1000, 0.01f, 1f, 1f);
         short[] loud2 = SoundSynth.tone(1000, 1000, 0.01f, 1f, 1f);
-        short[] mixed = SoundSynth.mix(loud1, loud2);
-        for (short v : mixed) {
-            assertTrue(v >= Short.MIN_VALUE && v <= Short.MAX_VALUE);
+        short[] mixedMax = SoundSynth.mix(loud1, loud2);
+
+        short maxFound = Short.MIN_VALUE;
+        for (short v : mixedMax) {
+            if (v > maxFound) maxFound = v;
         }
+        assertEquals(Short.MAX_VALUE, maxFound, "mixing should saturate at Short.MAX_VALUE");
+
+        // Create inverted tones to produce negative saturation.
+        short[] inverted1 = SoundSynth.scale(loud1, -1f);
+        short[] inverted2 = SoundSynth.scale(loud2, -1f);
+        short[] mixedMin = SoundSynth.mix(inverted1, inverted2);
+
+        short minFound = Short.MAX_VALUE;
+        for (short v : mixedMin) {
+            if (v < minFound) minFound = v;
+        }
+        assertEquals(Short.MIN_VALUE, minFound, "mixing should saturate at Short.MIN_VALUE");
     }
 
     @Test

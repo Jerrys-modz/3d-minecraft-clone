@@ -166,4 +166,24 @@ class SettingsTest {
         }
         assertEquals(Settings.ROW_COUNT, seen, "every settings row should live on exactly one tab");
     }
+
+    @Test
+    void soundVolumeIgnoresNaNAndInfinities() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Files.writeString(file, "sound_volume=NaN\n");
+            Settings loaded = Settings.load(file);
+            assertEquals(1f, loaded.getSoundVolume(), 1e-6f); // default unchanged
+
+            Files.writeString(file, "sound_volume=Infinity\n");
+            loaded = Settings.load(file);
+            assertEquals(1f, loaded.getSoundVolume(), 1e-6f); // default unchanged
+
+            Files.writeString(file, "sound_volume=-Infinity\n");
+            loaded = Settings.load(file);
+            assertEquals(1f, loaded.getSoundVolume(), 1e-6f); // default unchanged
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
 }

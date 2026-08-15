@@ -674,9 +674,15 @@ public class World implements BlockAccessor {
                 float dy = e.position.y - (playerPos.y + 0.9f);
                 float dz = e.position.z - playerPos.z;
                 if (dx * dx + dy * dy + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
-                    inventory.add(e.type, e.count);
-                    it.remove();
-                    pickedUp = true;
+                    int remaining = inventory.add(e.type, e.count);
+                    if (remaining < e.count) {
+                        pickedUp = true;
+                        if (remaining > 0) {
+                            e.count = remaining;
+                        } else {
+                            it.remove();
+                        }
+                    }
                 }
             }
         }

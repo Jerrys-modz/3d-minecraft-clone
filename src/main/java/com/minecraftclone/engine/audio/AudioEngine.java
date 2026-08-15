@@ -63,8 +63,7 @@ public class AudioEngine {
             context = ALC10.alcCreateContext(device, (java.nio.IntBuffer) null);
             if (context == 0L) {
                 System.err.println("Audio: could not create an OpenAL context - sound disabled.");
-                ALC10.alcCloseDevice(device);
-                device = 0L;
+                cleanup();
                 return;
             }
             ALC10.alcMakeContextCurrent(context);
@@ -87,7 +86,7 @@ public class AudioEngine {
             enabled = true;
         } catch (Throwable t) {
             System.err.println("Audio: failed to initialize OpenAL (" + t + ") - sound disabled.");
-            enabled = false;
+            cleanup();
         }
     }
 
@@ -165,6 +164,7 @@ public class AudioEngine {
     private int nextSource() {
         int source = sources[nextSource];
         nextSource = (nextSource + 1) % sources.length;
+        AL10.alSourceStop(source);
         return source;
     }
 
@@ -175,25 +175,48 @@ public class AudioEngine {
     private int upload(short[] pcm) {
         int buffer = AL10.alGenBuffers();
         ShortBuffer data = memAllocShort(pcm.length);
-        data.put(pcm).flip();
-        AL10.alBufferData(buffer, AL10.AL_FORMAT_MONO16, data, SoundSynth.SAMPLE_RATE);
-        memFree(data);
-        allBuffers.add(buffer);
-        return buffer;
+        try {
+            data.put(pcm).flip();
+            AL10.alBufferData(buffer, AL10.AL_FORMAT_MONO16, data, SoundSynth.SAMPLE_RATE);
+            allBuffers.add(buffer);
+            return buffer;
+        } finally {
+            memFree(data);
+        }
     }
 
-    /** Releases every OpenAL resource. Call once on shutdown. */
-    public void destroy() {
-        if (!enabled) return;
-        for (int source : sources) {
-            AL10.alDeleteSources(source);
+    /** Idempotent cleanup: releases all OpenAL resources and resets state. Safe to call even if init failed partway. */
+    private void cleanup() {
+        if (sources.length > 0) {
+            for (int source : sources) {
+                if (source != 0) AL10.alDeleteSources(source);
+            }
         }
         for (int buffer : allBuffers) {
             AL10.alDeleteBuffers(buffer);
         }
+        allBuffers.clear();
+        fixedBuffers.clear();
+        breakBuffers.clear();
+        placeBuffers.clear();
+        stepBuffers.clear();
+        sources = new int[0];
+        nextSource = 0;
+
         ALC10.alcMakeContextCurrent(0L);
-        if (context != 0L) ALC10.alcDestroyContext(context);
-        if (device != 0L) ALC10.alcCloseDevice(device);
+        if (context != 0L) {
+            ALC10.alcDestroyContext(context);
+            context = 0L;
+        }
+        if (device != 0L) {
+            ALC10.alcCloseDevice(device);
+            device = 0L;
+        }
         enabled = false;
+    }
+
+    /** Releases every OpenAL resource. Call once on shutdown. */
+    public void destroy() {
+        cleanup();
     }
 }
