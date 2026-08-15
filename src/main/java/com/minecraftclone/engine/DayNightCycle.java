@@ -50,9 +50,12 @@ public class DayNightCycle {
     private float daylightFraction = 0.5f;
 
     public void update(float dt) {
-        float previous = time;
-        time = (time + dt / DAY_LENGTH_SECONDS) % 1f;
-        if (time < previous) daysElapsed++; // wrapped past midnight
+        // Count every whole cycle completed (so a long frame delta can span
+        // several days) and keep only the fractional remainder as the time of day.
+        float nextTime = time + dt / DAY_LENGTH_SECONDS;
+        int completedDays = (int) Math.floor(nextTime);
+        time = nextTime - completedDays;
+        daysElapsed += completedDays;
         cloudPhase += dt * CLOUD_DRIFT_RATE;
     }
 
@@ -116,11 +119,26 @@ public class DayNightCycle {
     /**
      * World-space direction toward the sun: it rises in the +X direction at the
      * seasonal sunrise, is straight up at noon, and sets at the seasonal sunset.
+     * A separate night arc carries it below the horizon back to the next
+     * sunrise, so the direction stays continuous across the midnight wrap.
      * Returns a reused vector.
      */
     public Vector3f getSunDirection() {
-        float t = (time - getSunriseTime()) / (getSunsetTime() - getSunriseTime());
-        float angle = (float) (Math.PI * t);
+        float sunrise = getSunriseTime();
+        float sunset = getSunsetTime();
+        float angle;
+        if (time >= sunrise && time <= sunset) {
+            // Daylight arc: horizon (east) at sunrise, overhead at noon, horizon (west) at sunset.
+            float daylightProgress = (time - sunrise) / daylightFraction;
+            angle = (float) (Math.PI * daylightProgress);
+        } else {
+            // Night arc below the horizon, continuous across the midnight boundary.
+            float nightLength = 1f - daylightFraction;
+            float nightProgress = time >= sunset
+                    ? (time - sunset) / nightLength
+                    : (time + 1f - sunset) / nightLength;
+            angle = (float) (Math.PI * (1f + nightProgress));
+        }
         return sunDir.set((float) Math.cos(angle), (float) Math.sin(angle), 0f);
     }
 
