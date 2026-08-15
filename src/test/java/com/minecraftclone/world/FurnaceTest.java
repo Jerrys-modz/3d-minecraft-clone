@@ -2,6 +2,11 @@ package com.minecraftclone.world;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class FurnaceTest {
@@ -86,5 +91,28 @@ class FurnaceTest {
         f.tick(Furnace.SMELT_TIME);
         assertEquals(0f, f.progressFraction(), 0.001f);
         assertTrue(f.isEmpty(Furnace.SLOT_FUEL));
+    }
+
+    @Test
+    void serializationRoundTripPreservesSlotsAndProgress() throws Exception {
+        Furnace f = new Furnace();
+        f.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 3);
+        f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL_ORE, 2);
+        f.setSlot(Furnace.SLOT_OUTPUT, BlockType.IRON_INGOT, 1);
+        f.tick(2f); // consumes one coal and starts smelting
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        f.writeTo(new DataOutputStream(bos));
+        Furnace g = new Furnace();
+        g.readFrom(new DataInputStream(new ByteArrayInputStream(bos.toByteArray())));
+
+        assertEquals(BlockType.IRON_ORE, g.typeOf(Furnace.SLOT_INPUT));
+        assertEquals(3, g.countOf(Furnace.SLOT_INPUT));
+        assertEquals(BlockType.COAL_ORE, g.typeOf(Furnace.SLOT_FUEL));
+        assertEquals(1, g.countOf(Furnace.SLOT_FUEL), "tick(2) burned one coal");
+        assertEquals(BlockType.IRON_INGOT, g.typeOf(Furnace.SLOT_OUTPUT));
+        assertEquals(1, g.countOf(Furnace.SLOT_OUTPUT));
+        assertEquals(f.burnFraction(), g.burnFraction(), 0.001f);
+        assertEquals(f.progressFraction(), g.progressFraction(), 0.001f);
     }
 }

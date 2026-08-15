@@ -253,6 +253,18 @@ public class World implements BlockAccessor {
         return ((long) x & 0x1FFFFFL) | (((long) y & 0x1FFFFFL) << 21) | (((long) z & 0x1FFFFFL) << 42);
     }
 
+    private static int keyX(long key) {
+        return (int) (key & 0x1FFFFFL) << 21 >> 21;
+    }
+
+    private static int keyY(long key) {
+        return (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
+    }
+
+    private static int keyZ(long key) {
+        return (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+    }
+
     /** The furnace at a block position, or null if none (no furnace placed / never opened). */
     public Furnace furnaceAt(int x, int y, int z) {
         return furnaces.get(blockKey(x, y, z));
@@ -279,15 +291,28 @@ public class World implements BlockAccessor {
         while (it.hasNext()) {
             Map.Entry<Long, Furnace> entry = it.next();
             long key = entry.getKey();
-            int x = (int) (key & 0x1FFFFFL) << 21 >> 21;
-            int y = (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
-            int z = (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
-            if (getBlock(x, y, z) != BlockType.FURNACE) {
+            if (getBlock(keyX(key), keyY(key), keyZ(key)) != BlockType.FURNACE) {
                 it.remove();
                 continue;
             }
             entry.getValue().tick(dt);
         }
+    }
+
+    /** The furnaces living inside chunk {@code c}, excluding any whose block has since been removed. */
+    private List<ChunkStorage.FurnaceSave> furnacesInChunk(Chunk c) {
+        int minX = c.getOriginX();
+        int minZ = c.getOriginZ();
+        List<ChunkStorage.FurnaceSave> out = new ArrayList<>();
+        for (Map.Entry<Long, Furnace> e : furnaces.entrySet()) {
+            int x = keyX(e.getKey());
+            int z = keyZ(e.getKey());
+            if (x < minX || x >= minX + Chunk.SIZE || z < minZ || z >= minZ + Chunk.SIZE) continue;
+            int y = keyY(e.getKey());
+            if (getBlock(x, y, z) != BlockType.FURNACE) continue; // mined/removed - don't resurrect it
+            out.add(new ChunkStorage.FurnaceSave(x, y, z, e.getValue()));
+        }
+        return out;
     }
 
     /** If the block at this position is static WATER/LAVA, promotes it to the matching tracked source. See setBlock. */
@@ -449,8 +474,13 @@ public class World implements BlockAccessor {
                     chunks.put(key(cx, cz), chunk);
                     if (storage.hasSavedChunk(chunk.getPos())) {
                         // A previously-edited chunk: restore the player's changes
-                        // instead of regenerating pristine terrain.
-                        storage.load(chunk);
+                        // instead of regenerating pristine terrain, along with any
+                        // furnaces that were smelting in it.
+                        for (ChunkStorage.FurnaceSave fs : storage.load(chunk)) {
+                            if (getBlock(fs.x(), fs.y(), fs.z()) == BlockType.FURNACE) {
+                                furnaces.put(blockKey(fs.x(), fs.y(), fs.z()), fs.furnace());
+                            }
+                        }
                     } else {
                         generator.generate(chunk);
                     }
@@ -477,7 +507,7 @@ public class World implements BlockAccessor {
             for (Chunk c : toRemove) {
                 chunks.remove(key(c.getPos().x(), c.getPos().z()));
                 if (c.isModifiedByPlayer()) {
-                    storage.save(c);
+                    storage.save(c, furnacesInChunk(c));
                 }
                 c.destroy();
             }
@@ -815,7 +845,7 @@ public class World implements BlockAccessor {
         int saved = 0;
         for (Chunk c : chunks.values()) {
             if (c.isModifiedByPlayer()) {
-                storage.save(c);
+                storage.save(c, furnacesInChunk(c));
                 saved++;
             }
         }

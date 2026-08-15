@@ -13,7 +13,7 @@ import java.util.List;
  * currently-visible faces. Vertex positions are baked in absolute world
  * coordinates so chunks can be rendered with no per-chunk model matrix.
  */
-public class Chunk {
+public class Chunk implements ChunkStorage.PersistableChunk {
 
     public static final int SIZE = 16;
     public static final int HEIGHT = 128;

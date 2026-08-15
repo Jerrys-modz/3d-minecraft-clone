@@ -125,7 +125,7 @@ A **furnace** (craft in the crafting grid: a ring of 8 stone → 1 furnace, then
 - gold ore → gold ingot (no tools yet, but it's there for later)
 - diamond ore → diamond (diamond tools)
 
-The furnace works in the background - load it, close the GUI, and come back later. A broken furnace drops itself and whatever it was smelting or burning. (One simplification: a furnace's contents live in memory while the world is loaded and aren't saved to disk yet, and the old instant smelt-on-`C` was replaced by this GUI.)
+The furnace works in the background - load it, close the GUI, and come back later. Its contents and smelting progress are saved with its chunk, so a furnace keeps cooking across a restart (the old instant smelt-on-`C` was replaced by this GUI). A broken furnace drops itself and whatever it was smelting or burning.
 
 A **crafting table** (4 planks) is the same idea for crafting: right-click it for a dedicated 3×3 crafting station with its own GUI.
 

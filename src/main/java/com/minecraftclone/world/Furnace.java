@@ -3,6 +3,10 @@ package com.minecraftclone.world;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.Smelting;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
 /**
  * The state of a single placed furnace: three slots (input, fuel, output) and
  * a smelting timer. Unlike the old instant smelt-on-keypress, a furnace works
@@ -17,8 +21,9 @@ import com.minecraftclone.player.Smelting;
  * <p>
  * A furnace is intentionally a tiny, self-contained container (no "inventory"
  * bag of its own beyond its three slots), kept in memory per block position by
- * {@link World}; its contents survive while the world is loaded but are not
- * yet written to the save file.
+ * {@link World}. Its contents and smelting progress are saved alongside its
+ * chunk (see {@link ChunkStorage}) and restored when the chunk reloads, so a
+ * furnace keeps working across a restart.
  */
 public class Furnace {
 
@@ -150,5 +155,32 @@ public class Furnace {
             total += counts[i];
         }
         return total;
+    }
+
+    /** Writes the furnace's slots and smelting state to {@code out} (see {@link ChunkStorage}). */
+    public void writeTo(DataOutput out) throws IOException {
+        out.writeFloat(burnTime);
+        out.writeFloat(progress);
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            out.writeByte(types[i] == null ? 0 : types[i].id);
+            out.writeByte(counts[i]);
+        }
+    }
+
+    /** Restores the slots and smelting state written by {@link #writeTo}. */
+    public void readFrom(DataInput in) throws IOException {
+        burnTime = in.readFloat();
+        progress = in.readFloat();
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            int id = in.readUnsignedByte();
+            int count = in.readUnsignedByte();
+            if (id == 0 || count <= 0) {
+                types[i] = null;
+                counts[i] = 0;
+            } else {
+                types[i] = BlockType.byId((byte) id);
+                counts[i] = count;
+            }
+        }
     }
 }
