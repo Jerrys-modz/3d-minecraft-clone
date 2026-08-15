@@ -396,6 +396,7 @@ public class Main {
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
         Calendar calendar = new Calendar(); // in-game calendar: days, seasons, years
+        Climate climate = new Climate(calendar, dayNightCycle); // weather + biome temperature/humidity
         MiningController mining = new MiningController();
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
         float[] attackCooldown = {0f}; // time until the next mob hit can land
@@ -542,6 +543,11 @@ public class Main {
             // through the year (long summer days, short winter days).
             calendar.update(dayNightCycle.getDayIndex());
             dayNightCycle.setDaylightFraction(calendar.daylightFraction());
+            if (world != null) {
+                TerrainGenerator.Biome playerBiome = world.getBiome(
+                        (int) Math.floor(player.getPosition().x), (int) Math.floor(player.getPosition().z));
+                climate.update(dt, playerBiome);
+            }
             animTime[0] += dt;
             attackCooldown[0] -= dt;
             Raycaster.Hit hit = null;
@@ -1157,10 +1163,18 @@ public class Main {
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft("Biome: " + world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z)),
+                TerrainGenerator.Biome biome = world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z));
+                hud.drawTextLeft("Biome: " + biome,
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft("Season: " + calendar.getSeason().displayName + " - Day " + calendar.getDay()
                                 + "/" + calendar.getDaysPerSeason() + ", Year " + calendar.getYear(),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in %.0fm",
+                                climate.getWeather().displayName, climate.getWeatherStrength() * 100f,
+                                climate.getNextWeather().displayName, climate.getWeatherTimeLeft() / 60f),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C, %.0f%% humidity",
+                                climate.temperatureFor(biome), climate.humidityFor(biome) * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),
