@@ -183,6 +183,12 @@ public class Climate {
         schedule[0] = new WeatherEvent(weather, durationSeconds, strength);
     }
 
+    /** Forces a weather state with sensible duration/strength - used by the autotest/screenshots. */
+    public void forceWeather(Weather weather) {
+        if (weather == null) return;
+        setWeather(weather, weather.isPrecipitation() ? 120f : 300f, weather.isPrecipitation() ? 0.8f : 0f);
+    }
+
     /** A biome's baseline temperature in °C. */
     private static float baseTemperature(Biome b) {
         return switch (b) {
