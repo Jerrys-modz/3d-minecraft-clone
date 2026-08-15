@@ -388,6 +388,7 @@ public class Main {
         int[] selectedSlot = {0};
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
+        Calendar calendar = new Calendar(); // in-game calendar: days, seasons, years
         MiningController mining = new MiningController();
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
         float[] attackCooldown = {0f}; // time until the next mob hit can land
@@ -528,6 +529,11 @@ public class Main {
             float dt = timer.getDeltaTime();
             timer.updateFps(dt);
             dayNightCycle.update(dt);
+            // The calendar advances with the day/night cycle, and its season
+            // feeds the cycle's daylight length back - so days grow and shrink
+            // through the year (long summer days, short winter days).
+            calendar.update(dayNightCycle.getDayIndex());
+            dayNightCycle.setDaylightFraction(calendar.daylightFraction());
             animTime[0] += dt;
             attackCooldown[0] -= dt;
             Raycaster.Hit hit = null;
@@ -1142,6 +1148,9 @@ public class Main {
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft("Biome: " + world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z)),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft("Season: " + calendar.getSeason().displayName + " - Day " + calendar.getDay()
+                                + "/" + Calendar.DAYS_PER_SEASON + ", Year " + calendar.getYear(),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),

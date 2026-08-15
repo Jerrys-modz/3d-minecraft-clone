@@ -39,8 +39,20 @@ public class DayNightCycle {
     /** Continuous cloud-drift phase (noise units), always advancing so the sky keeps changing. */
     private float cloudPhase = 0f;
 
+    /** Whole day/night cycles completed; drives the {@link Calendar} and seasons. */
+    private int daysElapsed = 0;
+
+    /**
+     * Fraction of the cycle that is daylight. {@link Calendar} feeds the
+     * season's value here so sunrise/sunset shift with the time of year - long
+     * days in summer, short days in winter. Default 0.5 (a balanced day).
+     */
+    private float daylightFraction = 0.5f;
+
     public void update(float dt) {
+        float previous = time;
         time = (time + dt / DAY_LENGTH_SECONDS) % 1f;
+        if (time < previous) daysElapsed++; // wrapped past midnight
         cloudPhase += dt * CLOUD_DRIFT_RATE;
     }
 
@@ -50,6 +62,26 @@ public class DayNightCycle {
 
     public float getTime() {
         return time;
+    }
+
+    /** Whole day/night cycles completed since the world started (see {@link Calendar}). */
+    public int getDayIndex() {
+        return daysElapsed;
+    }
+
+    /** Sets the daylight fraction of the cycle (seasonal) - drives sunrise/sunset. */
+    public void setDaylightFraction(float fraction) {
+        daylightFraction = Math.max(0.05f, Math.min(0.95f, fraction));
+    }
+
+    /** Time of day (0..1) when the sun rises. */
+    public float getSunriseTime() {
+        return 0.5f - daylightFraction / 2f;
+    }
+
+    /** Time of day (0..1) when the sun sets. */
+    public float getSunsetTime() {
+        return 0.5f + daylightFraction / 2f;
     }
 
     /** Monotonic cloud-drift phase for the sky shader; see {@link #update}. */
@@ -62,9 +94,13 @@ public class DayNightCycle {
         cloudPhase = phase;
     }
 
-    /** 0 at midnight, 1 at noon, smoothly interpolated in between. */
+    /** 0 at night, 1 at noon, smoothly rising through the seasonal daylight window. */
     public float getDaylightFactor() {
-        return (float) ((Math.cos(2 * Math.PI * (time - 0.5)) + 1.0) / 2.0);
+        float sunrise = getSunriseTime();
+        float sunset = getSunsetTime();
+        float t = (time - sunrise) / (sunset - sunrise);
+        if (t <= 0f || t >= 1f) return 0f;
+        return (float) ((1 - Math.cos(2 * Math.PI * t)) / 2);
     }
 
     public float getAmbientBrightness() {
@@ -73,11 +109,13 @@ public class DayNightCycle {
     }
 
     /**
-     * World-space direction toward the sun: it orbits in the X-Z plane, at the
-     * horizon on sunrise/sunset and straight up at noon. Returns a reused vector.
+     * World-space direction toward the sun: it rises in the +X direction at the
+     * seasonal sunrise, is straight up at noon, and sets at the seasonal sunset.
+     * Returns a reused vector.
      */
     public Vector3f getSunDirection() {
-        float angle = (float) (2 * Math.PI * (time - 0.25));
+        float t = (time - getSunriseTime()) / (getSunsetTime() - getSunriseTime());
+        float angle = (float) (Math.PI * t);
         return sunDir.set((float) Math.cos(angle), (float) Math.sin(angle), 0f);
     }
 
