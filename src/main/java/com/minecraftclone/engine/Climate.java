@@ -387,6 +387,8 @@ public class Climate {
             case CHERRY_GROVE -> 15f;
             case FLOWER_MEADOW -> 18f;
             case MOUNTAIN -> 4f;
+            case NETHER -> 36f; // hot, hellish underworld
+            case END -> 8f;     // cool, airy void
         };
     }
 
@@ -410,6 +412,8 @@ public class Climate {
             case CHERRY_GROVE -> 0.60f;
             case FLOWER_MEADOW -> 0.50f;
             case MOUNTAIN -> 0.50f;
+            case NETHER -> 0.05f; // arid, scorched underworld
+            case END -> 0.40f;    // sparse, dry void
         };
     }
 
