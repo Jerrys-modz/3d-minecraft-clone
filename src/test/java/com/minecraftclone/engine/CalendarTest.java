@@ -6,10 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CalendarTest {
 
-    private static int seasonDays() {
-        return new Calendar().getDaysPerSeason(); // default 1 month per season = 28 days
-    }
-
     @Test
     void weeksAdvanceEverySevenDays() {
         Calendar cal = new Calendar();
@@ -27,25 +23,25 @@ class CalendarTest {
     }
 
     @Test
-    void monthsAdvanceEveryFourWeeks() {
-        Calendar cal = new Calendar();
+    void monthsAdvanceAfterTheConfiguredNumberOfWeeks() {
+        Calendar cal = new Calendar(); // 4 weeks per month by default
         cal.update(0);
         assertEquals(1, cal.getDayOfMonth());
         assertEquals(1, cal.getWeekOfMonth());
 
-        cal.update(Calendar.DAYS_PER_MONTH - 1); // last day of the month
-        assertEquals(Calendar.DAYS_PER_MONTH, cal.getDayOfMonth());
-        assertEquals(Calendar.WEEKS_PER_MONTH, cal.getWeekOfMonth());
+        cal.update(cal.getDaysPerMonth() - 1); // last day of the month
+        assertEquals(cal.getDaysPerMonth(), cal.getDayOfMonth());
+        assertEquals(cal.getWeeksPerMonth(), cal.getWeekOfMonth());
 
-        cal.update(Calendar.DAYS_PER_MONTH); // first day of next month
+        cal.update(cal.getDaysPerMonth()); // first day of next month
         assertEquals(1, cal.getDayOfMonth());
         assertEquals(1, cal.getWeekOfMonth());
     }
 
     @Test
-    void seasonsAdvanceAfterTheConfiguredMonths() {
-        Calendar cal = new Calendar(); // 1 month per season
-        int season = seasonDays();
+    void seasonsAdvanceAfterThreeMonths() {
+        Calendar cal = new Calendar();
+        int season = cal.getDaysPerSeason(); // 3 months per season
         cal.update(0);
         assertEquals(Season.SPRING, cal.getSeason());
         assertEquals(1, cal.getDay());
@@ -66,29 +62,31 @@ class CalendarTest {
     @Test
     void monthNamesFollowTheSeasons() {
         Calendar cal = new Calendar();
+        int month = cal.getDaysPerMonth();
         cal.update(0);
-        assertEquals("March", cal.getMonthName());     // Spring
-        cal.update(Calendar.DAYS_PER_MONTH);
-        assertEquals("June", cal.getMonthName());      // Summer
-        cal.update(3 * Calendar.DAYS_PER_MONTH);
-        assertEquals("December", cal.getMonthName());  // Winter
+        assertEquals("March", cal.getMonthName());      // Spring month 1
+        cal.update(month);
+        assertEquals("April", cal.getMonthName());      // Spring month 2
+        cal.update(3 * month);
+        assertEquals("June", cal.getMonthName());       // Summer month 1
+        cal.update(9 * month);
+        assertEquals("December", cal.getMonthName());   // Winter month 1
     }
 
     @Test
-    void customMonthsPerSeasonLengthensSeasons() {
+    void customWeeksPerMonthLengthensMonthsAndSeasons() {
         Calendar cal = new Calendar();
-        cal.setMonthsPerSeason(2);
-        assertEquals(2, cal.getMonthsPerSeason());
-        assertEquals(2 * Calendar.DAYS_PER_MONTH, cal.getDaysPerSeason());
+        cal.setWeeksPerMonth(2);
+        assertEquals(2, cal.getWeeksPerMonth());
+        assertEquals(14, cal.getDaysPerMonth());
+        assertEquals(42, cal.getDaysPerSeason());
 
         cal.update(0);
         assertEquals("March", cal.getMonthName());      // Spring month 1
-        cal.update(Calendar.DAYS_PER_MONTH);
+        cal.update(14);
         assertEquals("April", cal.getMonthName());      // Spring month 2
-        cal.update(2 * Calendar.DAYS_PER_MONTH);        // two months of Spring done
-        assertEquals(Season.SUMMER, cal.getSeason());
-        cal.update(6 * Calendar.DAYS_PER_MONTH);        // six months: three seasons done
-        assertEquals(Season.WINTER, cal.getSeason());
+        cal.update(42);
+        assertEquals(Season.SUMMER, cal.getSeason());   // three Spring months done
     }
 
     @Test
@@ -106,7 +104,8 @@ class CalendarTest {
         cal.update(0);
         assertEquals(0f, cal.getSeasonProgress(), 0.0001f);
         cal.update(cal.getDaysPerSeason() - 1);
-        assertEquals(0.964f, cal.getSeasonProgress(), 0.001f);
+        assertEquals((cal.getDaysPerSeason() - 1) / (float) cal.getDaysPerSeason(),
+                cal.getSeasonProgress(), 0.0001f);
         cal.update(cal.getDaysPerSeason());
         assertEquals(0f, cal.getSeasonProgress(), 0.0001f);
     }
@@ -129,7 +128,7 @@ class CalendarTest {
     @Test
     void resetReturnsToDayOneOfSpring() {
         Calendar cal = new Calendar();
-        cal.update(37);
+        cal.update(cal.getDaysPerSeason() + 10); // well into summer
         assertEquals(Season.SUMMER, cal.getSeason());
         cal.reset();
         assertEquals(0, cal.getTotalDay());

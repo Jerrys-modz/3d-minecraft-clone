@@ -238,11 +238,11 @@ public class Main {
         input.resetMouseDelta();
     }
 
-    /** Resets the calendar for a freshly started world and applies its months-per-season setting. */
+    /** Resets the calendar for a freshly started world and applies its weeks-per-month setting. */
     private void startCalendar(DayNightCycle dayNightCycle, Calendar calendar, WorldGenSettings genSettings) {
         dayNightCycle.resetDays();
         calendar.reset();
-        calendar.setMonthsPerSeason(genSettings.getMonthsPerSeason());
+        calendar.setWeeksPerMonth(genSettings.getWeeksPerMonth());
     }
 
     /**

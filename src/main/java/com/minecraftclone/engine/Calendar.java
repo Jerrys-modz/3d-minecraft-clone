@@ -3,10 +3,11 @@ package com.minecraftclone.engine;
 /**
  * The in-game calendar: a running day counter (fed by the day/night cycle's
  * day index, see {@link DayNightCycle#getDayIndex()}) folded into a full
- * day / week / month / season / year structure. A week is 7 days, a month is
- * 4 weeks (28 days), and a season spans a configurable number of months (1-3,
- * set from the world's creation settings). The day-of-week repeats every 7
- * days with a name; months carry real-world-style names.
+ * day / week / month / season / year structure. A week is 7 days, a month
+ * spans a configurable number of weeks (set from the world's creation
+ * settings), a season is always 3 months, and a year is 4 seasons. The
+ * day-of-week repeats every 7 days with a name; months carry
+ * real-world-style names.
  * <p>
  * Daylight fraction and temperature blend from the current season toward the
  * next across the season, so the world's days lengthen and warm gradually
@@ -15,11 +16,10 @@ package com.minecraftclone.engine;
 public class Calendar {
 
     public static final int DAYS_PER_WEEK = 7;
-    public static final int WEEKS_PER_MONTH = 4;
-    public static final int DAYS_PER_MONTH = DAYS_PER_WEEK * WEEKS_PER_MONTH; // 28
+    public static final int MONTHS_PER_SEASON = 3;
     public static final int SEASONS_PER_YEAR = Season.values().length;
-    /** Default months per season, used unless the world's settings say otherwise. */
-    public static final int DEFAULT_MONTHS_PER_SEASON = 1;
+    /** Default weeks per month, used unless the world's settings say otherwise. */
+    public static final int DEFAULT_WEEKS_PER_MONTH = 4;
 
     private static final String[] DAY_NAMES = {
             "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
@@ -32,7 +32,7 @@ public class Calendar {
             "December", "January", "February",
     };
 
-    private int monthsPerSeason = DEFAULT_MONTHS_PER_SEASON;
+    private int weeksPerMonth = DEFAULT_WEEKS_PER_MONTH;
     private int totalDay;
 
     /** The day of the week, 1-based (1 = Monday, 7 = Sunday). */
@@ -45,14 +45,14 @@ public class Calendar {
         return DAY_NAMES[totalDay % DAYS_PER_WEEK];
     }
 
-    /** The day of the month, 1-based (1..{@link #DAYS_PER_MONTH}). */
+    /** The day of the month, 1-based (1..{@link #getDaysPerMonth()}). */
     public int getDayOfMonth() {
-        return totalDay % DAYS_PER_MONTH + 1;
+        return totalDay % getDaysPerMonth() + 1;
     }
 
-    /** The week of the month, 1-based (1..{@link #WEEKS_PER_MONTH}). */
+    /** The week of the month, 1-based (1..{@link #getWeeksPerMonth()}). */
     public int getWeekOfMonth() {
-        return (totalDay % DAYS_PER_MONTH) / DAYS_PER_WEEK + 1;
+        return (totalDay % getDaysPerMonth()) / DAYS_PER_WEEK + 1;
     }
 
     /** The day of the month, 1-based - a convenient alias for {@link #getDayOfMonth()}. */
@@ -60,14 +60,14 @@ public class Calendar {
         return getDayOfMonth();
     }
 
-    /** The month within the current season, 0-based (0..months-per-season-1). */
+    /** The month within the current season, 0-based (0..{@link #MONTHS_PER_SEASON}-1). */
     public int getMonthOfSeason() {
-        return (totalDay % getDaysPerSeason()) / DAYS_PER_MONTH;
+        return (totalDay % getDaysPerSeason()) / getDaysPerMonth();
     }
 
     /** The current month's name, e.g. "March". */
     public String getMonthName() {
-        int monthOfYear = getSeason().ordinal() * 3 + getMonthOfSeason();
+        int monthOfYear = getSeason().ordinal() * MONTHS_PER_SEASON + getMonthOfSeason();
         return MONTH_NAMES[monthOfYear];
     }
 
@@ -91,29 +91,29 @@ public class Calendar {
         return totalDay;
     }
 
-    /** How many months each season lasts (set from the world's settings). */
-    public int getMonthsPerSeason() {
-        return monthsPerSeason;
+    /** How many weeks each month lasts (set from the world's settings). */
+    public int getWeeksPerMonth() {
+        return weeksPerMonth;
     }
 
-    /** Sets the months per season (from the world's creation settings). */
-    public void setMonthsPerSeason(int months) {
-        monthsPerSeason = Math.max(1, Math.min(3, months));
+    /** Sets the weeks per month (from the world's creation settings). */
+    public void setWeeksPerMonth(int weeks) {
+        weeksPerMonth = Math.max(1, Math.min(8, weeks));
     }
 
-    /** How many days each season lasts. */
+    /** Days per month ({@code weeks-per-month} x 7). */
+    public int getDaysPerMonth() {
+        return weeksPerMonth * DAYS_PER_WEEK;
+    }
+
+    /** How many days each season lasts (3 months). */
     public int getDaysPerSeason() {
-        return monthsPerSeason * DAYS_PER_MONTH;
+        return MONTHS_PER_SEASON * getDaysPerMonth();
     }
 
     /** Days per full year (four seasons). */
     public int getDaysPerYear() {
         return getDaysPerSeason() * SEASONS_PER_YEAR;
-    }
-
-    /** Days per month ({@link #DAYS_PER_MONTH}). */
-    public int getDaysPerMonth() {
-        return DAYS_PER_MONTH;
     }
 
     /** Resets to day 1 of the week/month, spring, year 1 - call when a new world starts. */
@@ -142,3 +142,4 @@ public class Calendar {
         return a + (b - a) * t;
     }
 }
+
