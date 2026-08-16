@@ -684,7 +684,10 @@ public class Main {
                 if (flash > 0f && prevFlash <= 0f) {
                     audio.play(SoundEvent.THUNDER, 0.8f);
                     if (world != null) {
-                        lightningStrike(world, player, bolts, lightningRnd);
+                        float lightningDamage = lightningStrike(world, player, bolts, lightningRnd);
+                        if (lightningDamage > 0f) {
+                            player.getStats().damage(lightningDamage);
+                        }
                     }
                 }
                 prevFlash = flash;
@@ -701,10 +704,13 @@ public class Main {
                 if (forceLightning && frameCount == autoTestFrames - 1) {
                     Vector3f front = player.getCamera().getFront();
                     Vector3f pos = player.getPosition();
-                    LightningBolt bolt = world.strikeLightning(lightningRnd, pos.x + front.x * 14f, pos.z + front.z * 14f);
-                    if (bolt != null) {
-                        bolts.add(bolt);
+                    World.LightningStrikeResult result = world.strikeLightning(lightningRnd, pos.x + front.x * 14f, pos.z + front.z * 14f, pos);
+                    if (result.bolt() != null) {
+                        bolts.add(result.bolt());
                         audio.play(SoundEvent.THUNDER, 0.8f);
+                        if (result.playerDamage() > 0f) {
+                            player.getStats().damage(result.playerDamage());
+                        }
                         System.out.println("Autotest lightning strike at frame " + frameCount);
                     } else {
                         System.out.println("Autotest lightning: no surface at strike target");
@@ -1601,16 +1607,18 @@ public class Main {
     /**
      * Picks a strike target near the player (a random distance, biased toward
      * where the camera is looking so the bolt usually lands in view) and spawns
-     * the cosmetic bolt; the strike's fire and mob blast happen in World.
+     * the cosmetic bolt; the strike's fire and mob/player blast happen in World.
+     * Returns player damage from the strike.
      */
-    private static void lightningStrike(World world, Player player, List<LightningBolt> bolts, Random rnd) {
+    private static float lightningStrike(World world, Player player, List<LightningBolt> bolts, Random rnd) {
         Vector3f front = player.getCamera().getFront();
         Vector3f pos = player.getPosition();
         float angle = player.getCamera().getYaw() + (rnd.nextFloat() - 0.5f) * 2.2f;
         float dist = 12f + rnd.nextFloat() * 30f;
-        LightningBolt bolt = world.strikeLightning(rnd, pos.x + (float) Math.cos(angle) * dist,
-                pos.z + (float) Math.sin(angle) * dist);
-        if (bolt != null) bolts.add(bolt);
+        World.LightningStrikeResult result = world.strikeLightning(rnd, pos.x + (float) Math.cos(angle) * dist,
+                pos.z + (float) Math.sin(angle) * dist, pos);
+        if (result.bolt() != null) bolts.add(result.bolt());
+        return result.playerDamage();
     }
 
     /** Finds a dry, non-mountain spawn near the origin by scanning outward in square rings. */

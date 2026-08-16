@@ -17,7 +17,7 @@ class LightningBoltTest {
         FloatArray out = new FloatArray(16);
         bolt.write(out);
         assertTrue(out.size() >= 6, "a bolt has at least one segment (two endpoints)");
-        assertEquals(0, out.size() % 3, "every vertex is an x,y,z triple");
+        assertEquals(0, out.size() % 6, "GL_LINES requires vertex pairs (each segment = 2 vertices = 6 floats)");
         assertTrue(bolt.isAlive());
         bolt.update(10f);
         assertFalse(bolt.isAlive(), "a bolt flares out after its short lifetime");

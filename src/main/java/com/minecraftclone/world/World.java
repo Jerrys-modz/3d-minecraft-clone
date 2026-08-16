@@ -825,18 +825,22 @@ public class World implements BlockAccessor {
         return capped == BlockType.SNOWY_STONE_SLAB ? BlockType.STONE_SLAB : BlockType.PLANKS_SLAB;
     }
 
+    /** Result of a lightning strike: the cosmetic bolt (or null) plus player damage. */
+    public record LightningStrikeResult(LightningBolt bolt, float playerDamage) {
+    }
+
     /**
      * A lightning strike landing at {@code targetX/targetZ}: lights a fire at
-     * the surface (and sets any nearby flammable blocks alight), blasts mobs in
-     * the immediate area, and returns the cosmetic bolt for the renderer (or
-     * null if there's nowhere to strike). The player-facing flash and rumble are
-     * driven separately by the climate's thunderstorm.
+     * the surface (and sets any nearby flammable blocks alight), blasts mobs and
+     * the player in the immediate area, and returns the cosmetic bolt for the
+     * renderer (or null if there's nowhere to strike). The player-facing flash
+     * and rumble are driven separately by the climate's thunderstorm.
      */
-    public LightningBolt strikeLightning(Random rnd, float targetX, float targetZ) {
+    public LightningStrikeResult strikeLightning(Random rnd, float targetX, float targetZ, Vector3f playerPos) {
         int x = (int) Math.floor(targetX);
         int z = (int) Math.floor(targetZ);
         int surfaceY = findSurfaceY(x, z);
-        if (surfaceY < 0) return null;
+        if (surfaceY < 0) return new LightningStrikeResult(null, 0f);
 
         // Light the ground on fire at the strike point, plus flammable neighbors
         // (a struck tree actually catches).
@@ -846,7 +850,7 @@ public class World implements BlockAccessor {
                 if (rnd.nextFloat() < 0.5f) {
                     int fy = findSurfaceY(x + dx, z + dz);
                     if (fy >= 0 && isFlammable(getBlock(x + dx, fy, z + dz))) {
-                        igniteCell(x + dx, fy, z + dz);
+                        igniteCell(x + dx, fy + 1, z + dz);
                     }
                 }
             }
@@ -855,16 +859,32 @@ public class World implements BlockAccessor {
         // Blast anything living within a few blocks of the strike point.
         float strikeX = x + 0.5f;
         float strikeZ = z + 0.5f;
+        List<Mob> nearbyMobs = new ArrayList<>();
         for (Mob mob : mobs) {
             float dx = mob.position.x - strikeX;
             float dz = mob.position.z - strikeZ;
             if (dx * dx + dz * dz <= 16f) { // ~4-block radius
-                damageMob(mob, 10f, strikeX, strikeZ, rnd);
+                nearbyMobs.add(mob);
+            }
+        }
+        for (Mob mob : nearbyMobs) {
+            damageMob(mob, 10f, strikeX, strikeZ, rnd);
+        }
+
+        // Damage player within the same radius.
+        float playerDamage = 0f;
+        if (playerPos != null) {
+            float dx = playerPos.x - strikeX;
+            float dz = playerPos.z - strikeZ;
+            if (dx * dx + dz * dz <= 16f) {
+                playerDamage = 10f;
             }
         }
 
-        return new LightningBolt(strikeX, surfaceY + 46f, strikeZ,
-                strikeX, surfaceY + 1f, strikeZ, rnd);
+        return new LightningStrikeResult(
+                new LightningBolt(strikeX, surfaceY + 46f, strikeZ,
+                        strikeX, surfaceY + 1f, strikeZ, rnd),
+                playerDamage);
     }
 
     /**
@@ -878,6 +898,12 @@ public class World implements BlockAccessor {
         for (Map.Entry<Long, Float> e : fires.entrySet()) {
             long key = e.getKey();
             int x = keyX(key), y = keyY(key), z = keyZ(key);
+            // Validate the block is still fire; remove timer if not.
+            if (getBlock(x, y, z) != BlockType.FIRE) {
+                if (gone == null) gone = new ArrayList<>();
+                gone.add(key);
+                continue;
+            }
             // Doused by water?
             boolean wet = isWet(x + 1, y, z) || isWet(x - 1, y, z)
                     || isWet(x, y, z + 1) || isWet(x, y, z - 1) || isWet(x, y + 1, z);
