@@ -533,6 +533,13 @@ public class Player {
         }
 
         moveAndCollide(world, velocity.x * dt, velocity.y * dt, velocity.z * dt);
+        // Refresh against the post-move position/onGround: moveAndCollide can
+        // surface the player onto solid ground (or carry them out of the water
+        // entirely) this same frame, and the pre-move swimming computed above is
+        // stale by then - isSwimming()/isSwimmingAndMoving() (debug overlay,
+        // stroke sound) would otherwise report swimming for one extra frame.
+        swimming = computeSwimming(flying, gameMode.isSpectator(), onGround,
+                overlapsAny(world, aabbAt(position), BlockType::isWater));
         movingOnGround = onGround && moving && !flying;
         swimmingAndMoving = swimming && moving;
         return sprinting && moving;
