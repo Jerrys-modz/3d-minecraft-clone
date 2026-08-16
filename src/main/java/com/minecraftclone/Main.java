@@ -96,6 +96,7 @@ public class Main {
     private static final int BERRIES_PER_BUSH = 2;
 
     private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
+    private static final float SWIM_STROKE_INTERVAL = 0.55f; // seconds between stroke sounds while swimming and moving
 
     /** Procedurally-generated GUI art (light/dark panels and slots), shared by every screen. */
     private GuiTextures guiTextures;
@@ -495,6 +496,7 @@ public class Main {
         float[] attackCooldown = {0f}; // time until the next mob hit can land
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
         float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
+        float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
         boolean[] wasSubmerged = {false}; // last frame's Player#isSubmerged(), to fire a splash sound only on the change
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
@@ -654,6 +656,27 @@ public class Main {
             }
             activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, container);
             openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+        }
+        // Opt-in autotest hook: carve a deep pool of water around the player and
+        // drop them in the middle of it, so swim physics (buoyancy, no onGround)
+        // can be screenshotted with the F3 "Swimming" debug line on.
+        if (System.getenv("MCCLONE_AUTOTEST_SWIM") != null && started[0]) {
+            Vector3f p = player.getPosition();
+            int cx = (int) Math.floor(p.x);
+            int cz = (int) Math.floor(p.z);
+            int surfaceY = world.getSurfaceHeight(cx, cz);
+            int poolTop = surfaceY + 3;
+            int poolBottom = surfaceY - 4;
+            for (int x = cx - 2; x <= cx + 2; x++) {
+                for (int z = cz - 2; z <= cz + 2; z++) {
+                    for (int y = poolBottom; y <= poolTop; y++) {
+                        world.setBlock(x, y, z, BlockType.WATER_SOURCE);
+                    }
+                }
+            }
+            for (int i = 0; i < 5; i++) world.update(p.x, p.z);
+            player.teleportTo(cx + 0.5f, poolTop - 2f, cz + 0.5f);
+            System.out.println("Autotest swim pool: y " + poolBottom + " to " + poolTop + ", player at y " + (poolTop - 2));
         }
         // Opt-in autotest hook: open the player's own inventory screen, equipping a
         // full iron set (plus a couple of bag items) so the armor column renders.
@@ -1135,6 +1158,19 @@ public class Main {
                 } else {
                     footstepTimer[0] = 0f;
                 }
+                // A stroke sound every SWIM_STROKE_INTERVAL seconds while actively
+                // swimming - same countdown pattern as footsteps above, just reusing
+                // the splash sound (quieter, since it repeats) rather than a
+                // dedicated stroke effect.
+                if (player.isSwimmingAndMoving()) {
+                    swimStrokeTimer[0] -= dt;
+                    if (swimStrokeTimer[0] <= 0f) {
+                        swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
+                        audio.play(SoundEvent.SPLASH, 0.5f);
+                    }
+                } else {
+                    swimStrokeTimer[0] = 0f;
+                }
             }
 
             // Keep streaming/remeshing even with the menu open, so toggling a
@@ -1571,6 +1607,10 @@ public class Main {
                 hud.drawTextLeft(String.format(Locale.ROOT, "Facing: %s (yaw %.1f, pitch %.1f)",
                                 facing, player.getCamera().getYaw(), player.getCamera().getPitch()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                if (player.isSwimming()) {
+                    hud.drawTextLeft("Swimming" + (player.isSubmerged() ? " (submerged)" : ""),
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);

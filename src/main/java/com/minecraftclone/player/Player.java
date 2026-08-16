@@ -33,6 +33,18 @@ public class Player {
     private static final float GRAVITY = 24.0f;
     private static final float TERMINAL_VELOCITY = -50f;
 
+    // Swimming: water is buoyant rather than a floor, so it gets its own,
+    // much gentler vertical model instead of gravity/jump-impulse. A held
+    // direction (jump = up, fly-down's key = down) swims at SWIM_SPEED;
+    // released, the player sinks slowly under WATER_GRAVITY rather than
+    // free-falling - which also happens to cancel most fall damage on its
+    // own, since diving in decelerates you to WATER_SINK_SPEED well before
+    // you'd reach a real lakebed, instead of hitting it at terminal velocity.
+    private static final float SWIM_SPEED = 3.6f;
+    private static final float SWIM_SPRINT_SPEED = 5.4f;
+    private static final float WATER_GRAVITY = 5.0f;
+    private static final float WATER_SINK_SPEED = -1.3f;
+
     private static final float DEFAULT_MOUSE_SENSITIVITY = 0.12f;
     /** Max gap between two W presses for it to count as a double-tap (sprint, or fly-toggle in creative). */
     private static final float DOUBLE_TAP_WINDOW = 0.3f;
@@ -60,6 +72,7 @@ public class Player {
     private boolean onGround = false;
     private boolean flying = false;
     private boolean movingOnGround = false; // moving horizontally while grounded (drives view bob)
+    private boolean swimmingAndMoving = false; // moving horizontally while swimming (drives the stroke sound)
     private float lastFallImpactSpeed = 0f;
     private final DoubleTapDetector wTapDetector = new DoubleTapDetector(DOUBLE_TAP_WINDOW);
     private boolean sprintLatched = false; // sprint started by a double-tap, held until W is released
@@ -77,6 +90,12 @@ public class Player {
     // a splash sound on the frame it changes, without recomputing the same
     // world lookup a second time itself.
     private boolean submerged = false;
+    // Body-in-water-and-not-standing-on-anything state, recomputed every
+    // updateMovement() call - distinct from submerged (which only checks the
+    // eye/camera point): this drives swim physics and is true well before the
+    // head goes under, e.g. wading chest-deep. Exposed so Main can play a
+    // stroke sound while actively swimming.
+    private boolean swimming = false;
     private static final float LANDING_SOUND_MIN_SPEED = 4f; // ignore trivial dips, only a real fall
 
     public void spawn(World world, float x, float z) {
@@ -320,9 +339,19 @@ public class Player {
         return submerged;
     }
 
+    /** Whether the player is currently swimming: in water and not standing on anything (see swim physics in updateMovement). */
+    public boolean isSwimming() {
+        return swimming;
+    }
+
     /** Whether the player is currently walking/sprinting on solid ground (not flying, not airborne) - drives footstep sounds. */
     public boolean isMovingOnGround() {
         return movingOnGround;
+    }
+
+    /** Whether the player is currently swimming *and* moving horizontally - drives the stroke sound. */
+    public boolean isSwimmingAndMoving() {
+        return swimmingAndMoving;
     }
 
     /** The block directly under the player's feet - what a footstep sound should sound like. */
@@ -389,6 +418,33 @@ public class Player {
         return armed && onGround && !wasOnGround && fallImpactSpeed >= LANDING_SOUND_MIN_SPEED;
     }
 
+    /**
+     * Whether the player should use swim physics this frame: their body overlaps
+     * water and they aren't resting on anything solid underneath it (that's just
+     * wading, handled by normal ground movement) - and flying/no-clip always wins,
+     * exactly like it already overrides gravity. No World/GL dependency, so this
+     * is directly unit testable.
+     */
+    static boolean computeSwimming(boolean flying, boolean spectator, boolean onGround, boolean inWater) {
+        return !flying && !spectator && !onGround && inWater;
+    }
+
+    /**
+     * One frame of swim vertical physics: a held stroke (up or down) moves at a
+     * flat {@link #SWIM_SPEED} in that direction; released, buoyancy takes over -
+     * {@code currentVy} decays toward {@link #WATER_SINK_SPEED} under
+     * {@link #WATER_GRAVITY} rather than free-falling under full gravity, which
+     * is also what keeps diving into water from dealing fall damage: by the time
+     * a dive reaches a real lakebed its vertical speed has already been capped
+     * here, well below what it entered the water at. No World/GL dependency, so
+     * this is directly unit testable.
+     */
+    static float swimVerticalVelocity(boolean strokeUp, boolean strokeDown, float currentVy, float dt) {
+        if (strokeUp) return SWIM_SPEED;
+        if (strokeDown) return -SWIM_SPEED;
+        return Math.max(currentVy - WATER_GRAVITY * dt, WATER_SINK_SPEED);
+    }
+
     private void updateDoubleTapW(Input input, float dt) {
         boolean doubleTapped = wTapDetector.tick(dt, input.isKeyJustPressed(keyBinds.get(KeyBindings.FORWARD)));
         switch (decideDoubleTapWAction(doubleTapped, flying, gameMode.isCreative())) {
@@ -423,10 +479,19 @@ public class Player {
             moveZ /= len;
         }
 
+        // Swimming: in water and not standing on anything solid - a diver mid-water
+        // column, not someone wading in the shallows with their feet on the bottom
+        // (that's onGround, and just walks slower through the water like normal
+        // ground movement). Flying overrides it entirely, same as it overrides gravity.
+        swimming = computeSwimming(flying, gameMode.isSpectator(), onGround,
+                overlapsAny(world, aabbAt(position), BlockType::isWater));
+
         boolean sprinting = (input.isKeyDown(keyBinds.get(KeyBindings.SPRINT)) || sprintLatched) && stats.canSprint();
         float speed;
         if (flying) {
             speed = sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
+        } else if (swimming) {
+            speed = sprinting ? SWIM_SPRINT_SPEED : SWIM_SPEED;
         } else {
             speed = sprinting ? SPRINT_SPEED : WALK_SPEED;
         }
@@ -439,6 +504,10 @@ public class Player {
             if (input.isKeyDown(keyBinds.get(KeyBindings.JUMP))) vy += speed;
             if (input.isKeyDown(keyBinds.get(KeyBindings.FLY_DOWN))) vy -= speed;
             velocity.y = vy;
+        } else if (swimming) {
+            boolean strokeUp = input.isKeyDown(keyBinds.get(KeyBindings.JUMP));
+            boolean strokeDown = input.isKeyDown(keyBinds.get(KeyBindings.FLY_DOWN));
+            velocity.y = swimVerticalVelocity(strokeUp, strokeDown, velocity.y, dt);
         } else {
             velocity.y -= GRAVITY * dt;
             velocity.y = Math.max(velocity.y, TERMINAL_VELOCITY);
@@ -451,6 +520,7 @@ public class Player {
 
         moveAndCollide(world, velocity.x * dt, velocity.y * dt, velocity.z * dt);
         movingOnGround = onGround && moving && !flying;
+        swimmingAndMoving = swimming && moving;
         return sprinting && moving;
     }
 
