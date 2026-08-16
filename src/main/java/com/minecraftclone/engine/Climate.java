@@ -336,7 +336,8 @@ public class Climate {
         float base = baseTemperature(biome);
         float seasonal = calendar.temperatureOffset();
         float nightly = -6f * (1f - dayNightCycle.getDaylightFactor());
-        float weather = getWeather() == Weather.SNOW ? -7f : getWeather() == Weather.RAIN ? -5f : 0f;
+        Weather w = getWeather();
+        float weather = (w == Weather.SNOW || w == Weather.BLIZZARD) ? -7f : (w == Weather.RAIN || w == Weather.THUNDERSTORM) ? -5f : 0f;
         return base + seasonal + nightly + weather;
     }
 

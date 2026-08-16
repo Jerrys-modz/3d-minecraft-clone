@@ -106,7 +106,7 @@ public final class Sounds {
         short[] samples = SoundSynth.noise(seed, durationSeconds, amp, amp, brightness);
         int fade = Math.max(1, (int) (0.05f * SoundSynth.SAMPLE_RATE));
         for (int i = 0; i < fade && i < samples.length / 2; i++) {
-            float t = (float) i / fade;
+            float t = (float) (i + 1) / fade;
             samples[samples.length - fade + i] = (short) (samples[samples.length - fade + i] * (1f - t) + samples[i] * t);
         }
         return samples;
