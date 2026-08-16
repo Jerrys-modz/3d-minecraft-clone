@@ -1853,5 +1853,6 @@ public class Hud {
         settingsTrack.destroy();
         settingsFill.destroy();
         guiQuadMesh.destroy();
+        frostOverlay.destroy();
     }
 }

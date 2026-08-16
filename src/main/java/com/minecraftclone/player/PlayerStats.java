@@ -64,6 +64,7 @@ public class PlayerStats {
         hunger = MAX_HUNGER;
         stamina = MAX_STAMINA;
         submergedTime = 0f;
+        coldness = 0f;
         staminaExhausted = false;
         dead = false;
     }
@@ -74,6 +75,7 @@ public class PlayerStats {
         hunger = MAX_HUNGER;
         stamina = MAX_STAMINA;
         submergedTime = 0f;
+        coldness = 0f;
         staminaExhausted = false;
         dead = false;
     }
