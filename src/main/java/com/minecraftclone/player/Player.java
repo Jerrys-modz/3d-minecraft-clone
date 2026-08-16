@@ -177,11 +177,13 @@ public class Player {
         // (not "is currently resting on the ground", which is true every frame
         // afterward too) with enough fall speed that it wasn't just a trivial
         // step-down. Checked here, before lastFallImpactSpeed resets below.
-        // Landing detection is gated: disarmed at spawn, armed on first ground contact.
-        if (onGround && !landingArmed) {
-            landingArmed = true;
-        }
-        justLanded = landingArmed && onGround && !wasOnGround && lastFallImpactSpeed >= LANDING_SOUND_MIN_SPEED;
+        // Landing detection is gated: disarmed at spawn, armed on first ground
+        // contact - checked with the *previous* frame's armed state (not
+        // updated in place first) specifically so the very landing that arms
+        // it - the initial touchdown after spawning in mid-air - doesn't also
+        // count as a "just landed" thump on that same frame.
+        justLanded = computeJustLanded(landingArmed, onGround, wasOnGround, lastFallImpactSpeed);
+        if (onGround) landingArmed = true;
         wasOnGround = onGround;
 
         submerged = world.getBlock(
@@ -258,6 +260,27 @@ public class Player {
         if (!doubleTapped) return WTapAction.NONE;
         if (alreadyFlying) return WTapAction.SPRINT;
         return creative ? WTapAction.START_FLYING : WTapAction.SPRINT;
+    }
+
+    /**
+     * Pure decision for whether this frame's ground contact is a real "just
+     * landed" thump worth a sound - true only once landing detection is
+     * {@code armed} (see {@link #landingArmed}), {@code onGround} just
+     * flipped true this frame ({@code wasOnGround} is still false, last
+     * frame's value), and the fall was hard enough to matter.
+     * <p>
+     * Takes {@code armed} as a plain boolean (the caller's *current* value,
+     * from before it arms for next frame) rather than re-deriving it here,
+     * specifically so the touchdown that arms it - landing for the very
+     * first time after spawning in mid-air - doesn't also satisfy this same
+     * check on that same frame: arming and checking against the same
+     * already-updated flag would let that first landing slip through as a
+     * "just landed" event too, which is exactly the spurious spawn-landing
+     * sound this gate exists to suppress. No World/GL dependency, so this is
+     * directly unit testable.
+     */
+    static boolean computeJustLanded(boolean armed, boolean onGround, boolean wasOnGround, float fallImpactSpeed) {
+        return armed && onGround && !wasOnGround && fallImpactSpeed >= LANDING_SOUND_MIN_SPEED;
     }
 
     private void updateDoubleTapW(Input input, float dt) {
