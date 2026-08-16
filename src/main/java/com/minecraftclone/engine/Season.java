@@ -8,14 +8,14 @@ package com.minecraftclone.engine;
  */
 public enum Season {
 
-    SPRING("Spring", -0.05f, 0.50f, 0.55f),
-    SUMMER("Summer", 0.22f, 0.62f, 0.40f),
-    AUTUMN("Autumn", 0.02f, 0.50f, 0.45f),
-    WINTER("Winter", -0.28f, 0.38f, 0.35f);
+    SPRING("Spring", -4f, 0.50f, 0.55f),
+    SUMMER("Summer", 10f, 0.62f, 0.40f),
+    AUTUMN("Autumn", 0f, 0.50f, 0.45f),
+    WINTER("Winter", -14f, 0.38f, 0.35f);
 
     /** Human-readable name for the HUD / debug overlay. */
     public final String displayName;
-    /** Seasonal temperature shift on a -1..1 scale (blended between seasons by {@link Calendar}). */
+    /** Seasonal temperature shift in °C (blended between seasons by {@link Calendar}). */
     public final float temperatureOffset;
     /** Fraction of the 24h day/night cycle that is daylight - drives sunrise/sunset. */
     public final float daylightFraction;

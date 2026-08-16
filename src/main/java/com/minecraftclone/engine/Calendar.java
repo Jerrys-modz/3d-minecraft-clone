@@ -73,7 +73,7 @@ public class Calendar {
         return lerp(season.daylightFraction, season.next().daylightFraction, getSeasonProgress());
     }
 
-    /** Seasonal temperature offset on a -1..1 scale, blended toward the next season. */
+    /** Seasonal temperature offset in degrees Celsius, blended toward the next season. */
     public float temperatureOffset() {
         Season season = getSeason();
         return lerp(season.temperatureOffset, season.next().temperatureOffset, getSeasonProgress());
