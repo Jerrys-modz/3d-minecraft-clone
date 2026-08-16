@@ -82,10 +82,35 @@ class ClimateTest {
         Climate climate = rolledClimate(0);
         Weather live = climate.getWeather();
         assertNotNull(live);
-        assertTrue(live == Weather.CLEAR || live == Weather.RAIN || live == Weather.SNOW);
         // The current hour's forecast is exact (now is known) - the climate runs at
         // noon in the tests, so today's hour 12 matches the live weather.
         assertEquals(live, climate.getHourlyForecast()[12].weather());
+    }
+
+    @Test
+    void overcastReflectsTheWeather() {
+        Climate climate = rolledClimate(0);
+        climate.forceWeather(Weather.CLEAR);
+        assertEquals(0f, climate.getOvercast(), 0.0001f);
+        climate.forceWeather(Weather.FOG);
+        assertTrue(climate.getOvercast() > 0f, "fog dims the sky");
+        climate.forceWeather(Weather.RAIN);
+        float rain = climate.getOvercast();
+        assertTrue(rain > 0f);
+        climate.forceWeather(Weather.THUNDERSTORM);
+        assertTrue(climate.getOvercast() > rain, "thunderstorm is darker than plain rain");
+        climate.forceWeather(Weather.BLIZZARD);
+        assertTrue(climate.getOvercast() >= 0.8f, "blizzard nearly blacks out the sky");
+    }
+
+    @Test
+    void severeWeatherIsHeavy() {
+        Climate climate = rolledClimate(0);
+        climate.forceWeather(Weather.THUNDERSTORM);
+        assertEquals(Weather.THUNDERSTORM, climate.getWeather());
+        assertTrue(climate.isPrecipitation());
+        assertTrue(climate.getWeatherStrength() >= 0.75f);
+        assertEquals(0f, climate.getFlashIntensity(), "no flash before any time passes");
     }
 
     @Test

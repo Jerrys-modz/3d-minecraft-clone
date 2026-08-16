@@ -41,9 +41,14 @@ public class Climate {
     private static final float FREEZING_C = 0f;
     /** The most unreliable the forecast gets (the far end of the 7-day range). */
     private static final float MAX_FORECAST_ERROR = 0.45f;
+    /** Chance per second that a thunderstorm throws a lightning flash. */
+    private static final float FLASH_CHANCE_PER_SECOND = 0.06f;
+    /** How long a lightning flash brightens the sky (seconds). */
+    private static final float FLASH_DURATION = 0.3f;
 
     private final Calendar calendar;
     private final DayNightCycle dayNightCycle;
+    private final Random rnd = new Random();
 
     /** The actual (live) weather, hour by hour, anchored at the current day's midnight. */
     private final Weather[] hourly = new Weather[FORECAST_HOURS];
@@ -53,6 +58,8 @@ public class Climate {
     private Weather forcedWeather; // autotest override (null = schedule-driven)
     /** The absolute in-game hour that {@code hourly[0]} represents (always a day's midnight). */
     private int startHour = -1;
+    /** Counts down a lightning flash during a thunderstorm; 0 = no flash. */
+    private float flashTimer;
 
     public Climate(Calendar calendar, DayNightCycle dayNightCycle) {
         this.calendar = calendar;
@@ -88,6 +95,16 @@ public class Climate {
         } else {
             wetness = Math.max(0f, wetness - dt * WETNESS_DRAIN_PER_SECOND);
         }
+        // Lightning flashes during thunderstorms.
+        if (live == Weather.THUNDERSTORM) {
+            if (flashTimer > 0f) {
+                flashTimer = Math.max(0f, flashTimer - dt);
+            } else if (rnd.nextFloat() < dt * FLASH_CHANCE_PER_SECOND) {
+                flashTimer = FLASH_DURATION;
+            }
+        } else {
+            flashTimer = 0f;
+        }
     }
 
     /** Rolls the live weather for the given absolute in-game hour, from the local climate. */
@@ -99,9 +116,27 @@ public class Climate {
         float humidity = baseHumidity(currentBiome);
         float seasonBias = calendar.seasonAt(dayIndex).precipitationBias;
         float precipitationChance = Math.min(0.85f, 0.10f + humidity * 0.35f * (seasonBias * 2f));
-        boolean wet = r.nextFloat() < precipitationChance;
-        hourly[index] = wet ? (temperature <= FREEZING_C ? Weather.SNOW : Weather.RAIN) : Weather.CLEAR;
-        strength[index] = wet ? 0.3f + r.nextFloat() * 0.7f : 0f;
+        if (r.nextFloat() < precipitationChance) {
+            // Precipitation: snow below freezing, otherwise rain - with a chance
+            // of upgrading to the severe storm (blizzard / thunderstorm) form.
+            boolean freezing = temperature <= FREEZING_C;
+            if (freezing) {
+                boolean blizzard = r.nextFloat() < 0.25f;
+                hourly[index] = blizzard ? Weather.BLIZZARD : Weather.SNOW;
+            } else {
+                boolean thunder = r.nextFloat() < 0.25f;
+                hourly[index] = thunder ? Weather.THUNDERSTORM : Weather.RAIN;
+            }
+            strength[index] = 0.3f + r.nextFloat() * 0.7f;
+            if (hourly[index].isSevere()) {
+                strength[index] = Math.max(strength[index], 0.75f); // storms are always heavy
+            }
+        } else {
+            // Dry: fog can roll in, more likely in humid biomes.
+            boolean fog = r.nextFloat() < 0.05f + humidity * 0.08f;
+            hourly[index] = fog ? Weather.FOG : Weather.CLEAR;
+            strength[index] = 0f;
+        }
     }
 
     /** The temperature a future hour would see (base + season + nightly dip, before weather). */
@@ -138,6 +173,27 @@ public class Climate {
     /** 0..1 how "wet" the world is right now - rain pushes it up, dry weather drains it. */
     public float getWetness() {
         return wetness;
+    }
+
+    /**
+     * 0..1 how overcast the sky is right now - clear is 0, fog is a dim haze,
+     * rain/snow are heavy and the severe storms (thunderstorm, blizzard) nearly
+     * black out the sky. Drives the sky darkening and the ambient light.
+     */
+    public float getOvercast() {
+        return switch (getWeather()) {
+            case CLEAR -> 0f;
+            case FOG -> 0.5f;
+            case RAIN -> 0.35f + 0.45f * getWeatherStrength();
+            case SNOW -> 0.45f + 0.45f * getWeatherStrength();
+            case THUNDERSTORM -> 0.7f + 0.25f * getWeatherStrength();
+            case BLIZZARD -> 0.8f + 0.2f * getWeatherStrength();
+        };
+    }
+
+    /** 0..1 how bright a lightning flash is right now (0 except during a thunderstorm). */
+    public float getFlashIntensity() {
+        return flashTimer > 0f ? flashTimer / FLASH_DURATION : 0f;
     }
 
     /** The next weather the live schedule brings, and how many in-game hours away. */
@@ -222,10 +278,9 @@ public class Climate {
     private ForecastSlot predict(Weather actual, float actualStrength, long seed, float error) {
         Random r = new Random(seed);
         if (error > 0f && r.nextFloat() < error) {
-            Weather[] others = {Weather.CLEAR, Weather.RAIN, Weather.SNOW};
             Weather chosen = actual;
             while (chosen == actual) {
-                chosen = others[r.nextInt(others.length)];
+                chosen = Weather.values()[r.nextInt(Weather.values().length)];
             }
             return new ForecastSlot(chosen, chosen.isPrecipitation() ? 0.3f + r.nextFloat() * 0.7f : 0f);
         }
@@ -243,17 +298,15 @@ public class Climate {
     }
 
     private Weather dominantWeather(int start, int end) {
-        int clear = 0, rain = 0, snow = 0;
+        int[] counts = new int[Weather.values().length];
         for (int i = start; i < end; i++) {
-            switch (hourly[i]) {
-                case CLEAR -> clear++;
-                case RAIN -> rain++;
-                case SNOW -> snow++;
-            }
+            counts[hourly[i].ordinal()]++;
         }
-        if (rain > clear && rain > snow) return Weather.RAIN;
-        if (snow > clear && snow > rain) return Weather.SNOW;
-        return Weather.CLEAR;
+        int best = Weather.CLEAR.ordinal();
+        for (int i = 0; i < counts.length; i++) {
+            if (counts[i] > counts[best]) best = i;
+        }
+        return Weather.values()[best];
     }
 
     private float peakStrength(int start, int end) {
@@ -283,7 +336,8 @@ public class Climate {
         float base = baseTemperature(biome);
         float seasonal = calendar.temperatureOffset();
         float nightly = -6f * (1f - dayNightCycle.getDaylightFactor());
-        float weather = getWeather() == Weather.SNOW ? -7f : getWeather() == Weather.RAIN ? -5f : 0f;
+        Weather w = getWeather();
+        float weather = (w == Weather.SNOW || w == Weather.BLIZZARD) ? -7f : (w == Weather.RAIN || w == Weather.THUNDERSTORM) ? -5f : 0f;
         return base + seasonal + nightly + weather;
     }
 

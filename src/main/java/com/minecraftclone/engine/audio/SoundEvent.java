@@ -23,7 +23,9 @@ public enum SoundEvent {
     TOOL_BREAK(SoundCategory.MACHINES), // a tool/sword wears out and breaks
     ITEM_PICKUP(SoundCategory.PLAYER),
     DOOR(SoundCategory.MACHINES),    // a door/trapdoor opens or closes
-    CRAFT(SoundCategory.MACHINES);   // a crafting/smelting output is taken
+    CRAFT(SoundCategory.MACHINES),   // a crafting/smelting output is taken
+    RAIN(SoundCategory.AMBIENT),     // a looping precipitation hiss, loudness follows the weather
+    THUNDER(SoundCategory.AMBIENT);  // a lightning flash in a thunderstorm
 
     private final SoundCategory category;
 
