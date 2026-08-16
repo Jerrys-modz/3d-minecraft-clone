@@ -15,7 +15,7 @@ import com.minecraftclone.world.Mining;
  * aren't stackable). {@link #add} tops up existing stacks before opening new
  * slots, and returns anything that didn't fit.
  */
-public class Inventory {
+public class Inventory implements StorageContainer {
 
     public static final int HOTBAR_SIZE = 9;
     public static final int ROWS = 3;
@@ -28,18 +28,22 @@ public class Inventory {
     private final BlockType[] types = new BlockType[SIZE];
     private final int[] counts = new int[SIZE];
 
+    @Override
     public int size() {
         return SIZE;
     }
 
+    @Override
     public BlockType typeOf(int slot) {
         return types[slot];
     }
 
+    @Override
     public int countOf(int slot) {
         return counts[slot];
     }
 
+    @Override
     public boolean isEmpty(int slot) {
         return types[slot] == null;
     }
@@ -57,7 +61,7 @@ public class Inventory {
         return Mining.isTool(type) ? 1 : STACK_MAX;
     }
 
-    /** Replaces slot {@code slot}'s stack; a null type or non-positive count clears it. */
+    @Override
     public void setSlot(int slot, BlockType type, int count) {
         if (type == null || count <= 0) {
             types[slot] = null;
@@ -73,11 +77,7 @@ public class Inventory {
         counts[slot] = 0;
     }
 
-    /**
-     * Adds {@code amount} of {@code type}, topping up existing stacks first and
-     * then filling empty slots. Returns the amount that couldn't fit (0 = all
-     * placed), which is the caller's signal that the inventory is full.
-     */
+    @Override
     public int add(BlockType type, int amount) {
         if (type == null || amount <= 0) return amount;
         int max = maxStack(type);
@@ -101,6 +101,16 @@ public class Inventory {
         return remaining;
     }
 
+    @Override
+    public int getCount(BlockType type) {
+        if (type == null) return 0;
+        int total = 0;
+        for (int i = 0; i < SIZE; i++) {
+            if (types[i] == type) total += counts[i];
+        }
+        return total;
+    }
+
     /** Removes {@code amount} of {@code type} across whatever slots hold it; false if there isn't enough. */
     public boolean remove(BlockType type, int amount) {
         if (type == null || amount <= 0) return false;
@@ -115,16 +125,6 @@ public class Inventory {
             }
         }
         return true;
-    }
-
-    /** Total count of {@code type} across all slots. */
-    public int getCount(BlockType type) {
-        if (type == null) return 0;
-        int total = 0;
-        for (int i = 0; i < SIZE; i++) {
-            if (types[i] == type) total += counts[i];
-        }
-        return total;
     }
 
     /** Empties every slot - the death penalty, applied on respawn. */

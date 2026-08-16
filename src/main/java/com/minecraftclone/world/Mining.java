@@ -112,6 +112,9 @@ public final class Mining {
         put(BlockType.WOOD_LOG, 1.5f, ToolKind.BROADAXE, TIER_HAND);
         put(BlockType.PLANKS, 1.0f, ToolKind.BROADAXE, TIER_HAND);
         put(BlockType.PLANKS_SLAB, 1.0f, ToolKind.BROADAXE, TIER_HAND);
+        put(BlockType.CRAFTING_TABLE, 1.5f, ToolKind.BROADAXE, TIER_HAND);
+        put(BlockType.CHEST, 1.5f, ToolKind.BROADAXE, TIER_HAND);
+        put(BlockType.BARREL, 1.2f, ToolKind.BROADAXE, TIER_HAND);
 
         // Stone and masonry - a hammer is the builder's tool (bare hands still work, just slow).
         put(BlockType.STONE, 2.5f, ToolKind.HAMMER, TIER_HAND);

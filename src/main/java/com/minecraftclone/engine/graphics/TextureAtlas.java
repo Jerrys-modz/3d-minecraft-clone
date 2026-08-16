@@ -47,6 +47,10 @@ public class TextureAtlas {
     public static final int CRAFTING_TABLE_TILE = 48;
     /** Tile index of the furnace's front face when it's actively burning - the mouth glows orange. */
     public static final int FURNACE_LIT_TILE = 49;
+    /** Tile index of the chest's lid/front face. */
+    public static final int CHEST_TILE = 50;
+    /** Tile index of the barrel's face. */
+    public static final int BARREL_TILE = 51;
 
     private int textureId;
 
@@ -113,6 +117,8 @@ public class TextureAtlas {
         paintFurnace(image, FURNACE_TILE);
         paintFurnaceLit(image, FURNACE_LIT_TILE);
         paintCraftingTable(image, CRAFTING_TABLE_TILE);
+        paintChest(image, CHEST_TILE);
+        paintBarrel(image, BARREL_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
 
@@ -915,9 +921,67 @@ public class TextureAtlas {
         }
     }
 
-    /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background. */
-    private void paintTorch(BufferedImage img, int index) {
+    /** A wooden chest front: plank fill with a curved lid seam, a brass lock plate and a latch. */
+    private void paintChest(BufferedImage img, int index) {
         int ox = tileX(index);
+        int oy = tileY(index);
+        int plank = 0xB8863F;
+        int grain = 0x9A6F2F;
+        int seam = 0x7A5A2E;
+        int metal = 0xC9B458;
+        int lock = 0x8A6E2E;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (x % 2 == 0 && y % 4 == 1 ? grain : plank));
+            }
+        }
+        // Curved lid seam near the top (a shallow arc), splitting lid from body.
+        for (int x = 1; x < TILE_PX - 1; x++) {
+            int y = 4 + Math.round(2f * (float) Math.sin(x * (Math.PI / (TILE_PX - 2))));
+            img.setRGB(ox + x, oy + y, 0xFF000000 | seam);
+        }
+        // Brass lock plate at the front-center, with a darker keyhole.
+        for (int dy = -2; dy <= 2; dy++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                int x = 8 + dx, y = 8 + dy;
+                if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | metal);
+            }
+        }
+        img.setRGB(ox + 8, oy + 8, 0xFF000000 | lock);
+    }
+
+    /** A wooden barrel: vertical stave planks with a metal band across the middle and a bung. */
+    private void paintBarrel(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int stave = 0xA8763A;
+        int grain = 0x8F5F2A;
+        int band = 0x8A8A8A;
+        int bung = 0x5A3D1D;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (y % 3 == 0 ? grain : stave));
+            }
+        }
+        // Metal band across the middle.
+        for (int y = 7; y < 10; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | band);
+            }
+        }
+        // A dark bung (the stopper hole) just above the band, off-center.
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int x = 11 + dx, y = 5 + dy;
+                if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | bung);
+            }
+        }
+    }
+
+    /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background - the torch light source. */
+    private void paintTorch(BufferedImage img, int index) {        int ox = tileX(index);
         int oy = tileY(index);
         for (int y = 7; y < TILE_PX; y++) {
             img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x6E4A2A);
