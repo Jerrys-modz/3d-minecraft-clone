@@ -44,6 +44,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
     - **Clouds** (Off / Light / Normal / Heavy): how much cloud cover the procedural skybox has (Off skips clouds entirely).
     - **Cloud speed** (Slow / Normal / Fast): how quickly the skybox's drifting clouds slide across the sky.
     - **Stars** (ON/OFF): whether the procedural night sky draws its star field (the moon still appears).
+    - **Dark GUI** (OFF/ON): the Minecraft-style light or dark theme for the game's menus - the container screens (inventory, crafting table, furnace, chests), the creative catalog, the settings page and the world-selection/world-gen pages all share one procedurally-generated panel + slot art, so the toggle restyles every screen at once. Applies live while the menu is open.
   - **Gameplay**:
     - **Game mode** (Survival / Creative / Adventure / Spectator): the four Minecraft modes - see Game modes below.
     - **Mouse sensitivity** (0.03-0.40): mouse-look speed.
@@ -154,8 +155,9 @@ Two different asset strategies, chosen per what actually benefits from each:
 - **Blocks** (`TextureAtlas`): generated procedurally into one shared 8×8 tile sheet at startup. Chunk meshing batches many blocks into a single draw call, so sharing one sheet (and one texture bind) across all of them matters for performance.
 - **Items** (`ItemTextures`): food, tools, and smelted ingots/gems are inventory-only and never batch together the way block faces do, so each is generated procedurally at startup into its own small GL texture instead of a shared sheet - the same self-contained, no-assets approach as blocks, just without the batching that a shared sheet exists for.
 - **HUD font** (`FontAtlas` + `TextRenderer`): a full printable-ASCII (32-126) 5x7 pixel font, procedurally generated into its own sheet, is used for every piece of on-screen text: inventory counts, transient messages (death/craft/tool-break), and the `F3` debug overlay. Like the block atlas, it has its own tiny atlas separate from blocks and items since it's neither.
+- **GUI art** (`GuiTextures`): the Minecraft-style menus - every container screen (inventory, crafting table, furnace, chests/barrels), the creative catalog, the settings page and the world-selection/world-gen pages - are drawn as a procedurally generated 9-slice panel with recessed slot cells, in a light and a dark theme (see the **Dark GUI** setting). Panels stretch their edges to any screen size while keeping a crisp border; slot cells, counts and tooltips share the same pixel-art look as the rest of the HUD.
 
-All three share one GL upload helper (`GLTexture`) and the same nearest-neighbor filtering, so the blocky pixel-art look is consistent everywhere.
+All four share one GL upload helper (`GLTexture`) and the same nearest-neighbor filtering, so the blocky pixel-art look is consistent everywhere.
 
 ## Project Layout
 
@@ -165,7 +167,7 @@ src/main/java/com/minecraftclone/
 ├── Settings.java             # In-game settings menu rows & values (see Settings menu)
 ├── GameMode.java             # Survival/Creative/Adventure/Spectator behaviour
 ├── engine/                   # Window, input, camera, shaders, HUD, DayNightCycle, Calendar, Season, Climate, Weather
-│   ├── graphics/              # TextureAtlas, ItemTextures, FontAtlas, GLTexture, Mesh, LineMesh, IconMesh, ItemRenderer
+│   ├── graphics/              # TextureAtlas, ItemTextures, FontAtlas, GuiTextures, GLTexture, Mesh, LineMesh, IconMesh, ItemRenderer
 │   └── gui/                   # ContainerGui (shared slot model for the inventory/furnace/crafting-table screens)
 ├── world/                    # Chunk, World (streaming/meshing), BlockType, Mining, ItemEntity, FluidSim, BlockEntity/BlockEntities (registry), Furnace
 │   └── gen/                   # TerrainGenerator (noise-based world gen)
