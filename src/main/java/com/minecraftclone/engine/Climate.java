@@ -7,16 +7,16 @@ import java.util.Random;
 /**
  * The world's climate model. It drives two things:
  * <ul>
- *   <li><b>The actual weather</b> - a rolling per-hour schedule rolled ahead 7
- *       days, what actually happens. It drives the rain/snow particles and the
- *       wetness that feeds humidity.</li>
+ *   <li><b>The actual weather</b> - a per-hour schedule covering the current day
+ *       plus the next 7, rolled hour by hour as the calendar advances. It drives
+ *       the rain/snow particles and the wetness that feeds humidity.</li>
  *   <li><b>The forecast</b> - a <i>prediction</i> shown to the player, derived
- *       from that schedule but deliberately imperfect: each predicted day or
- *       hour can be flipped to a different kind of weather, and the chance of
- *       that grows the further out it is (a day-7 forecast is much more likely
- *       to be wrong than today's). The prediction for a given hour/day is
- *       seeded by that absolute hour/day, so the forecast is stable within a
- *       day and only refreshes as real time passes.</li>
+ *       from that schedule but deliberately imperfect: each predicted hour or day
+ *       can be flipped to a different kind of weather, and the chance of that
+ *       grows the further out it is (today is nearly exact, day 7 is a coin
+ *       flip - like a real forecast). Predictions are seeded by absolute
+ *       hour/day, so the forecast is stable within a day and refreshes as real
+ *       time passes.</li>
  * </ul>
  * Per-biome base temperature and humidity vary with the season, the time of day
  * and the weather; precipitation falls as snow once the temperature is at or
@@ -26,7 +26,9 @@ public class Climate {
 
     public static final int HOURS_PER_DAY = 24;
     public static final int FORECAST_DAYS = 7;
-    public static final int FORECAST_HOURS = FORECAST_DAYS * HOURS_PER_DAY;
+    /** Hours kept in the schedule: the current day plus the 7 future days. */
+    public static final int BUFFER_DAYS = FORECAST_DAYS + 1;
+    public static final int FORECAST_HOURS = BUFFER_DAYS * HOURS_PER_DAY;
 
     /** A single forecast slot: the predicted weather and its strength (0..1). */
     public record ForecastSlot(Weather weather, float strength) {
@@ -42,12 +44,13 @@ public class Climate {
     private final Calendar calendar;
     private final DayNightCycle dayNightCycle;
 
-    /** The actual (live) weather, hour by hour - {@code hourly[0]} is the current hour. */
+    /** The actual (live) weather, hour by hour, anchored at the current day's midnight. */
     private final Weather[] hourly = new Weather[FORECAST_HOURS];
     private final float[] strength = new float[FORECAST_HOURS];
     private Biome currentBiome = Biome.PLAINS;
     private float wetness = 0f;
     private Weather forcedWeather; // autotest override (null = schedule-driven)
+    /** The absolute in-game hour that {@code hourly[0]} represents (always a day's midnight). */
     private int startHour = -1;
 
     public Climate(Calendar calendar, DayNightCycle dayNightCycle) {
@@ -55,20 +58,27 @@ public class Climate {
         this.dayNightCycle = dayNightCycle;
     }
 
-    /** Advances the model: rolls the live schedule forward as hours pass and drifts wetness. */
+    /** Advances the model: rolls the schedule forward as days pass and drifts wetness. */
     public void update(float dt, Biome playerBiome) {
         if (dt <= 0) return;
         currentBiome = playerBiome == null ? Biome.PLAINS : playerBiome;
-        int hour = currentHour();
+        int dayStart = calendar.getTotalDay() * HOURS_PER_DAY;
         if (startHour < 0) {
-            startHour = hour;
+            startHour = dayStart;
             for (int i = 0; i < FORECAST_HOURS; i++) {
                 rollHour(i, startHour + i);
             }
-        } else {
-            int advanced = Math.max(0, hour - startHour);
-            for (int a = 0; a < advanced; a++) {
-                advanceOneHour();
+        } else if (dayStart != startHour) {
+            // The calendar advanced to a new day: shift the anchor forward (rolling
+            // fresh hours at the far end) so the schedule stays a day-plus-7-days ahead.
+            int shift = Math.min(FORECAST_HOURS, dayStart - startHour);
+            for (int s = 0; s < shift; s++) {
+                for (int i = 0; i < FORECAST_HOURS - 1; i++) {
+                    hourly[i] = hourly[i + 1];
+                    strength[i] = strength[i + 1];
+                }
+                startHour++;
+                rollHour(FORECAST_HOURS - 1, startHour + FORECAST_HOURS - 1);
             }
         }
         Weather live = getWeather();
@@ -77,15 +87,6 @@ public class Climate {
         } else {
             wetness = Math.max(0f, wetness - dt * WETNESS_DRAIN_PER_SECOND);
         }
-    }
-
-    private void advanceOneHour() {
-        for (int i = 0; i < FORECAST_HOURS - 1; i++) {
-            hourly[i] = hourly[i + 1];
-            strength[i] = strength[i + 1];
-        }
-        startHour++;
-        rollHour(FORECAST_HOURS - 1, startHour + FORECAST_HOURS - 1);
     }
 
     /** Rolls the live weather for the given absolute in-game hour, from the local climate. */
@@ -113,16 +114,20 @@ public class Climate {
     // Live weather
     // ------------------------------------------------------------------
 
+    private int currentHourOfDay() {
+        return (int) (dayNightCycle.getTime() * HOURS_PER_DAY);
+    }
+
     /** The weather right now (what is actually happening). */
     public Weather getWeather() {
         if (forcedWeather != null) return forcedWeather;
-        return startHour < 0 ? Weather.CLEAR : hourly[0];
+        return startHour < 0 ? Weather.CLEAR : hourly[currentHourOfDay()];
     }
 
     /** How heavy the current weather is, 0..1 (0 for clear). */
     public float getWeatherStrength() {
         if (forcedWeather != null) return forcedWeather.isPrecipitation() ? 0.8f : 0f;
-        return startHour < 0 ? 0f : strength[0];
+        return startHour < 0 ? 0f : strength[currentHourOfDay()];
     }
 
     public boolean isPrecipitation() {
@@ -137,7 +142,7 @@ public class Climate {
     /** The next weather the live schedule brings, and how many in-game hours away. */
     public Weather nextWeatherChange() {
         Weather current = getWeather();
-        for (int i = 1; i < FORECAST_HOURS; i++) {
+        for (int i = currentHourOfDay() + 1; i < FORECAST_HOURS; i++) {
             if (hourly[i] != current) return hourly[i];
         }
         return current;
@@ -145,24 +150,38 @@ public class Climate {
 
     public int hoursUntilChange() {
         Weather current = getWeather();
-        for (int i = 1; i < FORECAST_HOURS; i++) {
-            if (hourly[i] != current) return i;
+        for (int i = currentHourOfDay() + 1; i < FORECAST_HOURS; i++) {
+            if (hourly[i] != current) return i - currentHourOfDay();
         }
-        return FORECAST_HOURS;
+        return FORECAST_HOURS - currentHourOfDay();
     }
 
     // ------------------------------------------------------------------
     // Forecast (predictions, imperfect further out)
     // ------------------------------------------------------------------
 
-    /** The predicted weather for each of the next {@link #HOURS_PER_DAY} hours (index 0 = now). */
+    /** The predicted weather for each hour (0-23) of the current day. */
     public ForecastSlot[] getHourlyForecast() {
+        return getHourlyForecastForDay(0);
+    }
+
+    /**
+     * The predicted weather for each hour (0-23) of the calendar day {@code
+     * calendar.getTotalDay() + dayOffset} (0 = today). Past hours of today are
+     * exact; the error grows the further ahead an hour lies.
+     */
+    public ForecastSlot[] getHourlyForecastForDay(int dayOffset) {
         if (startHour < 0) return new ForecastSlot[0];
         ForecastSlot[] out = new ForecastSlot[HOURS_PER_DAY];
-        for (int i = 0; i < HOURS_PER_DAY; i++) {
-            out[i] = predict(hourly[i], strength[i],
-                    hash(calendar.getTotalDay() * 1000003L + (currentHour() + i) * 31L + 7L),
-                    hourlyForecastError(i));
+        int now = calendar.getTotalDay() * HOURS_PER_DAY + currentHourOfDay();
+        for (int h = 0; h < HOURS_PER_DAY; h++) {
+            int absoluteHour = (calendar.getTotalDay() + dayOffset) * HOURS_PER_DAY + h;
+            int index = absoluteHour - startHour;
+            Weather actual = index >= 0 && index < FORECAST_HOURS ? hourly[index] : Weather.CLEAR;
+            float actualStrength = index >= 0 && index < FORECAST_HOURS ? strength[index] : 0f;
+            out[h] = predict(actual, actualStrength,
+                    hash(calendar.getTotalDay() * 1000003L + absoluteHour * 31L + 7L),
+                    hourlyForecastError(Math.max(0, absoluteHour - now)));
         }
         return out;
     }
@@ -172,13 +191,12 @@ public class Climate {
         if (startHour < 0) return new ForecastSlot[0];
         ForecastSlot[] out = new ForecastSlot[FORECAST_DAYS];
         for (int d = 0; d < FORECAST_DAYS; d++) {
-            int start = d * HOURS_PER_DAY;
-            int end = Math.min(start + HOURS_PER_DAY, FORECAST_HOURS);
-            Weather dominant = dominantWeather(start, end);
-            float peak = 0f;
-            for (int i = start; i < end; i++) peak = Math.max(peak, strength[i]);
+            int dayStart = (calendar.getTotalDay() + d) * HOURS_PER_DAY;
+            int start = Math.max(startHour, dayStart);
+            int end = Math.min(start + HOURS_PER_DAY, FORECAST_HOURS + startHour);
             int absoluteDay = calendar.getTotalDay() + d;
-            out[d] = predict(dominant, peak,
+            out[d] = predict(dominantWeather(start - startHour, end - startHour),
+                    peakStrength(start - startHour, end - startHour),
                     hash(calendar.getTotalDay() * 1000003L + absoluteDay * 31L + 11L),
                     dailyForecastError(d));
         }
@@ -188,9 +206,8 @@ public class Climate {
     /** The in-game clock hour (0-23) that each hourly forecast slot corresponds to. */
     public int[] getHourlyClockHours() {
         int[] hours = new int[HOURS_PER_DAY];
-        int base = currentHour();
         for (int i = 0; i < HOURS_PER_DAY; i++) {
-            hours[i] = Math.floorMod(base + i, HOURS_PER_DAY);
+            hours[i] = i;
         }
         return hours;
     }
@@ -242,8 +259,12 @@ public class Climate {
         return Weather.CLEAR;
     }
 
-    private int currentHour() {
-        return calendar.getTotalDay() * HOURS_PER_DAY + (int) (dayNightCycle.getTime() * HOURS_PER_DAY);
+    private float peakStrength(int start, int end) {
+        float peak = 0f;
+        for (int i = start; i < end; i++) {
+            peak = Math.max(peak, strength[i]);
+        }
+        return peak;
     }
 
     private static long hash(long base) {

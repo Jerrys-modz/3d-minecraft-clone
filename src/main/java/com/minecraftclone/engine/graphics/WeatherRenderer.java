@@ -11,6 +11,7 @@ import static org.lwjgl.opengl.GL11.GL_LINES;
 import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
 import static org.lwjgl.opengl.GL11.glDisable;
 import static org.lwjgl.opengl.GL11.glEnable;
+import static org.lwjgl.opengl.GL11.glIsEnabled;
 import static org.lwjgl.opengl.GL11.glLineWidth;
 
 /**
@@ -47,9 +48,12 @@ public class WeatherRenderer {
         if (snow > 0) {
             lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.85f));
             snowMesh.upload(verts.toArray());
-            glDisable(GL_CULL_FACE);
+            // The crossed snow planes are single-sided; turn culling off so a flake
+            // stays visible from any angle (restore the prior state after).
+            boolean cull = glIsEnabled(GL_CULL_FACE);
+            if (cull) glDisable(GL_CULL_FACE);
             snowMesh.render();
-            glEnable(GL_CULL_FACE);
+            if (cull) glEnable(GL_CULL_FACE);
         }
 
         lineShader.unbind();

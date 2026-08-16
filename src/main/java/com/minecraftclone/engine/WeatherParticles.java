@@ -87,7 +87,9 @@ public class WeatherParticles {
         int w = 0;
         for (int i = 0; i < rainCount; i++) {
             rainY[i] -= rainSpeed[i] * dt;
-            if (rainY[i] >= eyeY - KILL_BELOW) {
+            if (rainY[i] >= eyeY - KILL_BELOW
+                    && Math.abs(rainX[i] - eyeX) <= BOX_RADIUS
+                    && Math.abs(rainZ[i] - eyeZ) <= BOX_RADIUS) {
                 rainX[w] = rainX[i];
                 rainY[w] = rainY[i];
                 rainZ[w] = rainZ[i];
@@ -114,7 +116,9 @@ public class WeatherParticles {
             snowY[i] -= snowSpeed[i] * dt;
             snowX[i] += (float) Math.sin(snowPhase[i]) * SNOW_SWAY * dt;
             snowZ[i] += (float) Math.cos(snowPhase[i] * 1.3f) * SNOW_SWAY * dt;
-            if (snowY[i] >= eyeY - KILL_BELOW && snowAge[i] < SNOW_LIFE) {
+            if (snowY[i] >= eyeY - KILL_BELOW && snowAge[i] < SNOW_LIFE
+                    && Math.abs(snowX[i] - eyeX) <= BOX_RADIUS
+                    && Math.abs(snowZ[i] - eyeZ) <= BOX_RADIUS) {
                 snowX[w] = snowX[i];
                 snowY[w] = snowY[i];
                 snowZ[w] = snowZ[i];

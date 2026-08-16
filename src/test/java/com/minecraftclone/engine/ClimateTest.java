@@ -83,15 +83,17 @@ class ClimateTest {
         Weather live = climate.getWeather();
         assertNotNull(live);
         assertTrue(live == Weather.CLEAR || live == Weather.RAIN || live == Weather.SNOW);
-        // The current hour's forecast is exact (now is known), so it matches the live weather.
-        assertEquals(live, climate.getHourlyForecast()[0].weather());
+        // The current hour's forecast is exact (now is known) - the climate runs at
+        // noon in the tests, so today's hour 12 matches the live weather.
+        assertEquals(live, climate.getHourlyForecast()[12].weather());
     }
 
     @Test
     void hourlyAndDailyForecastsArePopulated() {
         Climate climate = rolledClimate(0);
         assertEquals(24, climate.getHourlyForecast().length);
-        assertEquals(24, climate.getHourlyClockHours().length);
+        assertEquals(24, climate.getHourlyForecastForDay(0).length);
+        assertEquals(24, climate.getHourlyForecastForDay(6).length);
         assertEquals(7, climate.getDailyForecast().length);
         for (Climate.ForecastSlot slot : climate.getDailyForecast()) {
             assertNotNull(slot.weather());
