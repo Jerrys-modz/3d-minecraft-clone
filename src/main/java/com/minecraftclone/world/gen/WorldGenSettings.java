@@ -19,15 +19,15 @@ public class WorldGenSettings {
     public static final int ROW_STRUCTURES = 3;
     public static final int ROW_SEA_LEVEL = 4;
     public static final int ROW_TERRAIN_SIZE = 5;
-    public static final int ROW_DAYS_PER_SEASON = 6;
+    public static final int ROW_MONTHS_PER_SEASON = 6;
     public static final int ROW_COUNT = 7;
 
     private static final int[] SEA_LEVELS = {34, 42, 50};
     private static final float[] TERRAIN_SIZES = {1f, 1.7f};
-    private static final int[] DAYS_PER_SEASON = {3, 5, 10, 20, 40};
+    private static final int[] MONTHS_PER_SEASON = {1, 2, 3};
     private static final String[] SEA_LEVEL_NAMES = {"Low", "Normal", "High"};
     private static final String[] TERRAIN_SIZE_NAMES = {"Normal", "Large"};
-    private static final String[] DAYS_PER_SEASON_NAMES = {"3 days", "5 days", "10 days", "20 days", "40 days"};
+    private static final String[] MONTHS_PER_SEASON_NAMES = {"1 month", "2 months", "3 months"};
 
     private String name = "New World";
     private String seed = ""; // empty means a fresh random seed
@@ -35,7 +35,7 @@ public class WorldGenSettings {
     private boolean structures = true;
     private int seaLevelIndex = 1; // Normal
     private int terrainSizeIndex = 0; // Normal
-    private int daysPerSeasonIndex = 2; // 10 days
+    private int monthsPerSeasonIndex = 0; // 1 month
 
     public WorldGenSettings() {
     }
@@ -97,9 +97,9 @@ public class WorldGenSettings {
         return TERRAIN_SIZES[terrainSizeIndex];
     }
 
-    /** How many in-game days each season lasts (drives the calendar; see {@code engine.Calendar}). */
-    public int getDaysPerSeason() {
-        return DAYS_PER_SEASON[daysPerSeasonIndex];
+    /** How many months each season lasts (each month is 28 in-game days; see {@code engine.Calendar}). */
+    public int getMonthsPerSeason() {
+        return MONTHS_PER_SEASON[monthsPerSeasonIndex];
     }
 
     public static String label(int row) {
@@ -110,7 +110,7 @@ public class WorldGenSettings {
             case ROW_STRUCTURES -> "Structures";
             case ROW_SEA_LEVEL -> "Sea level";
             case ROW_TERRAIN_SIZE -> "Terrain size";
-            case ROW_DAYS_PER_SEASON -> "Days per season";
+            case ROW_MONTHS_PER_SEASON -> "Months per season";
             default -> "?";
         };
     }
@@ -126,7 +126,7 @@ public class WorldGenSettings {
             case ROW_STRUCTURES -> structures ? "ON" : "OFF";
             case ROW_SEA_LEVEL -> SEA_LEVEL_NAMES[seaLevelIndex];
             case ROW_TERRAIN_SIZE -> TERRAIN_SIZE_NAMES[terrainSizeIndex];
-            case ROW_DAYS_PER_SEASON -> DAYS_PER_SEASON_NAMES[daysPerSeasonIndex];
+            case ROW_MONTHS_PER_SEASON -> MONTHS_PER_SEASON_NAMES[monthsPerSeasonIndex];
             default -> "?";
         };
     }
@@ -138,7 +138,7 @@ public class WorldGenSettings {
             case ROW_STRUCTURES -> structures = !structures;
             case ROW_SEA_LEVEL -> seaLevelIndex = Math.floorMod(seaLevelIndex + Integer.signum(direction), SEA_LEVELS.length);
             case ROW_TERRAIN_SIZE -> terrainSizeIndex = Math.floorMod(terrainSizeIndex + Integer.signum(direction), TERRAIN_SIZES.length);
-            case ROW_DAYS_PER_SEASON -> daysPerSeasonIndex = Math.floorMod(daysPerSeasonIndex + Integer.signum(direction), DAYS_PER_SEASON.length);
+            case ROW_MONTHS_PER_SEASON -> monthsPerSeasonIndex = Math.floorMod(monthsPerSeasonIndex + Integer.signum(direction), MONTHS_PER_SEASON.length);
             default -> { /* seed is typed, not cycled */ }
         }
     }
@@ -151,7 +151,7 @@ public class WorldGenSettings {
         lines.add("worldgen_structures=" + (structures ? 1 : 0));
         lines.add("worldgen_sea_level=" + seaLevelIndex);
         lines.add("worldgen_terrain_size=" + terrainSizeIndex);
-        lines.add("worldgen_days_per_season=" + daysPerSeasonIndex);
+        lines.add("worldgen_months_per_season=" + monthsPerSeasonIndex);
     }
 
     /** Applies a persisted {@code worldgen_*} entry; unknown keys are ignored. */
@@ -163,8 +163,8 @@ public class WorldGenSettings {
             case "worldgen_structures" -> structures = value.equals("1") || value.equalsIgnoreCase("true");
             case "worldgen_sea_level" -> seaLevelIndex = parseClamped(value, SEA_LEVELS.length - 1);
             case "worldgen_terrain_size" -> terrainSizeIndex = parseClamped(value, TERRAIN_SIZES.length - 1);
-            case "worldgen_days_per_season" -> daysPerSeasonIndex = parseClamped(value, DAYS_PER_SEASON.length - 1);
-            default -> { /* ignore unknown keys */ }
+            case "worldgen_months_per_season" -> monthsPerSeasonIndex = parseClamped(value, MONTHS_PER_SEASON.length - 1);
+            default -> { /* ignore unknown keys (e.g. the old days-per-season key) */ }
         }
     }
 

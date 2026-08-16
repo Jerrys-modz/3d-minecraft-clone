@@ -2,29 +2,78 @@ package com.minecraftclone.engine;
 
 /**
  * The in-game calendar: a running day counter (fed by the day/night cycle's
- * day index, see {@link DayNightCycle#getDayIndex()}) folded into seasons and
- * years, plus smooth per-season trait curves. Daylight fraction and temperature
- * blend from the current season toward the next across the season, so the
- * world's days lengthen and warm gradually instead of jumping on the first day
- * of a season.
+ * day index, see {@link DayNightCycle#getDayIndex()}) folded into a full
+ * day / week / month / season / year structure. A week is 7 days, a month is
+ * 4 weeks (28 days), and a season spans a configurable number of months (1-3,
+ * set from the world's creation settings). The day-of-week repeats every 7
+ * days with a name; months carry real-world-style names.
+ * <p>
+ * Daylight fraction and temperature blend from the current season toward the
+ * next across the season, so the world's days lengthen and warm gradually
+ * instead of jumping on the first day of a season.
  */
 public class Calendar {
 
-    /** Default days per season, used unless the world's settings say otherwise. */
-    public static final int DAYS_PER_SEASON = 10;
+    public static final int DAYS_PER_WEEK = 7;
+    public static final int WEEKS_PER_MONTH = 4;
+    public static final int DAYS_PER_MONTH = DAYS_PER_WEEK * WEEKS_PER_MONTH; // 28
     public static final int SEASONS_PER_YEAR = Season.values().length;
+    /** Default months per season, used unless the world's settings say otherwise. */
+    public static final int DEFAULT_MONTHS_PER_SEASON = 1;
 
-    private int daysPerSeason = DAYS_PER_SEASON;
+    private static final String[] DAY_NAMES = {
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    };
+    /** Three named months per season, in season order (Spring first). */
+    private static final String[] MONTH_NAMES = {
+            "March", "April", "May",
+            "June", "July", "August",
+            "September", "October", "November",
+            "December", "January", "February",
+    };
+
+    private int monthsPerSeason = DEFAULT_MONTHS_PER_SEASON;
     private int totalDay;
 
-    /** The current day of the season, 1-based (1..{@link #getDaysPerSeason()}). */
+    /** The day of the week, 1-based (1 = Monday, 7 = Sunday). */
+    public int getDayOfWeek() {
+        return totalDay % DAYS_PER_WEEK + 1;
+    }
+
+    /** The day of the week's name, e.g. "Monday". */
+    public String getDayOfWeekName() {
+        return DAY_NAMES[totalDay % DAYS_PER_WEEK];
+    }
+
+    /** The day of the month, 1-based (1..{@link #DAYS_PER_MONTH}). */
+    public int getDayOfMonth() {
+        return totalDay % DAYS_PER_MONTH + 1;
+    }
+
+    /** The week of the month, 1-based (1..{@link #WEEKS_PER_MONTH}). */
+    public int getWeekOfMonth() {
+        return (totalDay % DAYS_PER_MONTH) / DAYS_PER_WEEK + 1;
+    }
+
+    /** The day of the month, 1-based - a convenient alias for {@link #getDayOfMonth()}. */
     public int getDay() {
-        return totalDay % daysPerSeason + 1;
+        return getDayOfMonth();
+    }
+
+    /** The month within the current season, 0-based (0..months-per-season-1). */
+    public int getMonthOfSeason() {
+        return (totalDay % getDaysPerSeason()) / DAYS_PER_MONTH;
+    }
+
+    /** The current month's name, e.g. "March". */
+    public String getMonthName() {
+        int monthOfYear = getSeason().ordinal() * 3 + getMonthOfSeason();
+        return MONTH_NAMES[monthOfYear];
     }
 
     /** The current season. */
     public Season getSeason() {
-        return Season.values()[(totalDay / daysPerSeason) % SEASONS_PER_YEAR];
+        return Season.values()[(totalDay / getDaysPerSeason()) % SEASONS_PER_YEAR];
     }
 
     /** The current year, 1-based. */
@@ -34,7 +83,7 @@ public class Calendar {
 
     /** 0..1 how far through the season we are - drives the smooth trait blending. */
     public float getSeasonProgress() {
-        return (totalDay % daysPerSeason) / (float) daysPerSeason;
+        return (totalDay % getDaysPerSeason()) / (float) getDaysPerSeason();
     }
 
     /** Total days elapsed (the raw counter). */
@@ -42,22 +91,32 @@ public class Calendar {
         return totalDay;
     }
 
-    /** How many in-game days each season lasts (set from the world's settings). */
+    /** How many months each season lasts (set from the world's settings). */
+    public int getMonthsPerSeason() {
+        return monthsPerSeason;
+    }
+
+    /** Sets the months per season (from the world's creation settings). */
+    public void setMonthsPerSeason(int months) {
+        monthsPerSeason = Math.max(1, Math.min(3, months));
+    }
+
+    /** How many days each season lasts. */
     public int getDaysPerSeason() {
-        return daysPerSeason;
+        return monthsPerSeason * DAYS_PER_MONTH;
     }
 
     /** Days per full year (four seasons). */
     public int getDaysPerYear() {
-        return daysPerSeason * SEASONS_PER_YEAR;
+        return getDaysPerSeason() * SEASONS_PER_YEAR;
     }
 
-    /** Sets the days per season (from the world's creation settings). */
-    public void setDaysPerSeason(int days) {
-        daysPerSeason = Math.max(1, days);
+    /** Days per month ({@link #DAYS_PER_MONTH}). */
+    public int getDaysPerMonth() {
+        return DAYS_PER_MONTH;
     }
 
-    /** Resets to day 1 of spring, year 1 - call when a new world starts. */
+    /** Resets to day 1 of the week/month, spring, year 1 - call when a new world starts. */
     public void reset() {
         totalDay = 0;
     }

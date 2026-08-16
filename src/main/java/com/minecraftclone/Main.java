@@ -238,11 +238,11 @@ public class Main {
         input.resetMouseDelta();
     }
 
-    /** Resets the calendar for a freshly started world and applies its days-per-season setting. */
+    /** Resets the calendar for a freshly started world and applies its months-per-season setting. */
     private void startCalendar(DayNightCycle dayNightCycle, Calendar calendar, WorldGenSettings genSettings) {
         dayNightCycle.resetDays();
         calendar.reset();
-        calendar.setDaysPerSeason(genSettings.getDaysPerSeason());
+        calendar.setMonthsPerSeason(genSettings.getMonthsPerSeason());
     }
 
     /**
@@ -1256,8 +1256,9 @@ public class Main {
                 TerrainGenerator.Biome biome = world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z));
                 hud.drawTextLeft("Biome: " + biome,
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft("Season: " + calendar.getSeason().displayName + " - Day " + calendar.getDay()
-                                + "/" + calendar.getDaysPerSeason() + ", Year " + calendar.getYear(),
+                hud.drawTextLeft("Calendar: " + calendar.getDayOfWeekName() + " - Week " + calendar.getWeekOfMonth()
+                                + " of " + calendar.getMonthName() + " (" + calendar.getSeason().displayName
+                                + "), Year " + calendar.getYear(),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in %.0fm",
                                 climate.getWeather().displayName, climate.getWeatherStrength() * 100f,

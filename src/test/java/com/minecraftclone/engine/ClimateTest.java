@@ -8,6 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClimateTest {
 
+    private static int seasonDays() {
+        return new Calendar().getDaysPerSeason();
+    }
+
     private static Climate climateAtDay(int totalDay) {
         Calendar calendar = new Calendar();
         calendar.update(totalDay);
@@ -47,8 +51,8 @@ class ClimateTest {
 
     @Test
     void winterIsMuchColderThanSummerInTheSameBiome() {
-        Climate summer = climateAtDay(Calendar.DAYS_PER_SEASON);     // first day of summer
-        Climate winter = climateAtDay(3 * Calendar.DAYS_PER_SEASON); // first day of winter
+        Climate summer = climateAtDay(seasonDays());     // first day of summer
+        Climate winter = climateAtDay(3 * seasonDays()); // first day of winter
         float summerTemp = summer.temperatureFor(Biome.PLAINS);
         float winterTemp = winter.temperatureFor(Biome.PLAINS);
         assertTrue(summerTemp > winterTemp + 15f, "winter should be far colder, got " + summerTemp + " vs " + winterTemp);
@@ -56,10 +60,10 @@ class ClimateTest {
 
     @Test
     void desertStaysHotAndSnowyFreezesInWinter() {
-        Climate summer = climateAtDay(Calendar.DAYS_PER_SEASON);
+        Climate summer = climateAtDay(seasonDays());
         assertTrue(summer.temperatureFor(Biome.DESERT) > 30f, "summer desert is hot");
 
-        Climate winter = climateAtDay(3 * Calendar.DAYS_PER_SEASON);
+        Climate winter = climateAtDay(3 * seasonDays());
         assertTrue(winter.temperatureFor(Biome.SNOWY) < 0f, "winter snowfield is below freezing");
     }
 
