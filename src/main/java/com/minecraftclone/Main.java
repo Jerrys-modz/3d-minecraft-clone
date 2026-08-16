@@ -1225,7 +1225,7 @@ public class Main {
             }
             hud.renderMessages(messages, window.getAspectRatio());
             if (started[0] && forecastOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                hud.renderForecast(climate, window.getAspectRatio());
+                hud.renderForecast(climate, calendar, window.getAspectRatio());
             }
             if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();
@@ -1260,9 +1260,9 @@ public class Main {
                                 + " of " + calendar.getMonthName() + " (" + calendar.getSeason().displayName
                                 + "), Year " + calendar.getYear(),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in %.0fm",
+                hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in ~%dh",
                                 climate.getWeather().displayName, climate.getWeatherStrength() * 100f,
-                                climate.getNextWeather().displayName, climate.getWeatherTimeLeft() / 60f),
+                                climate.nextWeatherChange().displayName, climate.hoursUntilChange()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C, %.0f%% humidity",
                                 climate.temperatureFor(biome), climate.humidityFor(biome) * 100f),

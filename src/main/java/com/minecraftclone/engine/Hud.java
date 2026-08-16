@@ -517,39 +517,70 @@ public class Hud {
     }
 
     /**
-     * Draws the weather forecast panel: the current weather with its strength and
-     * the rolled-ahead upcoming events with rough start times, centered near the
-     * top of the screen.
+     * Draws the weather forecast panel: the current weather, an hourly strip for
+     * the next 24 hours (with clock labels), and a rolling 7-day forecast. The
+     * prediction is less reliable the further out it is - like a real forecast.
      */
-    public void renderForecast(Climate climate, float aspectRatio) {
+    public void renderForecast(Climate climate, Calendar calendar, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
-        float y = 0.84f;
-        drawCenteredText("Weather Forecast", 0f, y, 0.042f, WHITE);
-        y -= 0.062f;
-
-        Climate.WeatherEvent[] forecast = climate.getForecast();
-        float[] minutes = climate.getForecastStartMinutes();
+        float x = -0.8f;
+        float y = 0.86f;
         float size = 0.032f;
-        for (int i = 0; i < forecast.length; i++) {
-            Climate.WeatherEvent event = forecast[i];
-            String when = i == 0 ? "Now" : "In " + (int) Math.ceil(minutes[i]) + "m";
-            drawCenteredText(when + ": " + forecastLabel(event), 0f, y, size, WHITE);
-            y -= 0.05f;
+        Vector4f dim = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
+
+        drawTextAt("Weather Forecast", x, y, 0.04f, WHITE);
+        y -= 0.058f;
+        drawTextAt("Now: " + forecastLabel(climate.getWeather(), climate.getWeatherStrength()), x, y, size, WHITE);
+        y -= 0.048f;
+
+        // Hourly strip: one symbol per hour, with clock labels every three hours.
+        Climate.ForecastSlot[] hours = climate.getHourlyForecast();
+        int[] clock = climate.getHourlyClockHours();
+        StringBuilder symbols = new StringBuilder();
+        StringBuilder labels = new StringBuilder();
+        for (int i = 0; i < hours.length; i++) {
+            symbols.append(weatherSymbol(hours[i].weather())).append("   ");
+            String h = Integer.toString(clock[i]);
+            if (i % 3 == 0) {
+                labels.append(h).append(h.length() == 1 ? "   " : "  ");
+            } else {
+                labels.append("    ");
+            }
         }
-        drawCenteredText("Forecast key to close", 0f, y - 0.015f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+        drawTextAt(symbols.toString(), x, y, size * 0.9f, WHITE);
+        y -= 0.048f;
+        drawTextAt(labels.toString(), x, y, size * 0.9f, dim);
+        y -= 0.058f;
+
+        // Rolling 7-day forecast.
+        Climate.ForecastSlot[] days = climate.getDailyForecast();
+        for (int d = 0; d < days.length; d++) {
+            String day = calendar.dayOfWeekNameAt(climate.getDailyDayIndex(d));
+            drawTextAt(day + ": " + forecastLabel(days[d].weather(), days[d].strength()), x, y, size, WHITE);
+            y -= 0.042f;
+        }
+        drawTextAt("C=Clear  R=Rain  S=Snow  (less reliable further out)", x, y - 0.012f, 0.02f, dim);
 
         glEnable(GL_DEPTH_TEST);
     }
 
-    /** A forecast line label: "Rain (heavy)" etc., with no strength for clear skies. */
-    private static String forecastLabel(Climate.WeatherEvent event) {
-        if (!event.weather().isPrecipitation()) {
-            return event.weather().displayName;
+    /** A forecast label: "Rain (heavy)" etc., with no strength for clear skies. */
+    private static String forecastLabel(Weather weather, float strength) {
+        if (!weather.isPrecipitation()) {
+            return weather.displayName;
         }
-        String strength = event.strength() < 0.4f ? "light" : event.strength() < 0.75f ? "moderate" : "heavy";
-        return event.weather().displayName + " (" + strength + ")";
+        String s = strength < 0.4f ? "light" : strength < 0.75f ? "moderate" : "heavy";
+        return weather.displayName + " (" + s + ")";
+    }
+
+    private static char weatherSymbol(Weather weather) {
+        return switch (weather) {
+            case CLEAR -> 'C';
+            case RAIN -> 'R';
+            case SNOW -> 'S';
+        };
     }
 
     /**

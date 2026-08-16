@@ -5,169 +5,257 @@ import com.minecraftclone.world.gen.TerrainGenerator.Biome;
 import java.util.Random;
 
 /**
- * The world's climate model: per-biome base temperature and humidity that vary
- * with the season, the time of day and the weather; a weather state machine
- * (clear / rain / snow) driven by the local climate and the time of year; and a
- * short rolled-ahead forecast so the game knows what weather is coming.
- * <p>
- * Rain pushes a global "wetness" up (which raises humidity everywhere and makes
- * further rain more likely - rainy spells feed themselves), dry weather lets it
- * drain. Precipitation falls as snow once the current temperature is at or
+ * The world's climate model. It drives two things:
+ * <ul>
+ *   <li><b>The actual weather</b> - a rolling per-hour schedule rolled ahead 7
+ *       days, what actually happens. It drives the rain/snow particles and the
+ *       wetness that feeds humidity.</li>
+ *   <li><b>The forecast</b> - a <i>prediction</i> shown to the player, derived
+ *       from that schedule but deliberately imperfect: each predicted day or
+ *       hour can be flipped to a different kind of weather, and the chance of
+ *       that grows the further out it is (a day-7 forecast is much more likely
+ *       to be wrong than today's). The prediction for a given hour/day is
+ *       seeded by that absolute hour/day, so the forecast is stable within a
+ *       day and only refreshes as real time passes.</li>
+ * </ul>
+ * Per-biome base temperature and humidity vary with the season, the time of day
+ * and the weather; precipitation falls as snow once the temperature is at or
  * below freezing.
  */
 public class Climate {
 
-    /** A stretch of weather with its remaining duration (seconds) and intensity (0..1). */
-    public record WeatherEvent(Weather weather, float durationSeconds, float strength) {
+    public static final int HOURS_PER_DAY = 24;
+    public static final int FORECAST_DAYS = 7;
+    public static final int FORECAST_HOURS = FORECAST_DAYS * HOURS_PER_DAY;
+
+    /** A single forecast slot: the predicted weather and its strength (0..1). */
+    public record ForecastSlot(Weather weather, float strength) {
     }
 
-    /** How many weather events are tracked: the current one plus the rolled-ahead forecast. */
-    private static final int FORECAST_HORIZON = 5;
-
-    /** How strongly rain raises a biome's humidity toward wet. */
     private static final float WETNESS_HUMIDITY_BOOST = 0.4f;
     private static final float WETNESS_RISE_PER_SECOND = 0.006f;
     private static final float WETNESS_DRAIN_PER_SECOND = 0.005f;
-    /** Below this temperature (after season/day/weather) precipitation falls as snow. */
     private static final float FREEZING_C = 0f;
+    /** The most unreliable the forecast gets (the far end of the 7-day range). */
+    private static final float MAX_FORECAST_ERROR = 0.45f;
 
     private final Calendar calendar;
     private final DayNightCycle dayNightCycle;
-    private final Random rnd;
 
-    private final WeatherEvent[] schedule = new WeatherEvent[FORECAST_HORIZON];
+    /** The actual (live) weather, hour by hour - {@code hourly[0]} is the current hour. */
+    private final Weather[] hourly = new Weather[FORECAST_HOURS];
+    private final float[] strength = new float[FORECAST_HOURS];
     private Biome currentBiome = Biome.PLAINS;
     private float wetness = 0f;
-    /** True once the schedule has been rolled from a real player biome (see {@link #update}). */
-    private boolean rolled = false;
+    private Weather forcedWeather; // autotest override (null = schedule-driven)
+    private int startHour = -1;
 
     public Climate(Calendar calendar, DayNightCycle dayNightCycle) {
-        this(calendar, dayNightCycle, new Random());
-    }
-
-    public Climate(Calendar calendar, DayNightCycle dayNightCycle, Random rnd) {
         this.calendar = calendar;
         this.dayNightCycle = dayNightCycle;
-        this.rnd = rnd;
-        for (int i = 0; i < FORECAST_HORIZON; i++) {
-            schedule[i] = new WeatherEvent(Weather.CLEAR, 0f, 0f);
-        }
-        // The schedule is deliberately not rolled here: the first update brings the
-        // player's actual spawn biome, which is what the weather should reflect.
     }
 
-    /** Advances the model: drifts wetness, counts down the weather, rolls ahead when it changes. */
+    /** Advances the model: rolls the live schedule forward as hours pass and drifts wetness. */
     public void update(float dt, Biome playerBiome) {
         if (dt <= 0) return;
         currentBiome = playerBiome == null ? Biome.PLAINS : playerBiome;
-        if (!rolled) {
-            for (int i = 0; i < FORECAST_HORIZON; i++) {
-                rollWeather(i);
+        int hour = currentHour();
+        if (startHour < 0) {
+            startHour = hour;
+            for (int i = 0; i < FORECAST_HOURS; i++) {
+                rollHour(i, startHour + i);
             }
-            rolled = true;
-        }
-        // Consume dt in slices bounded by each event's remaining duration, so a big
-        // frame delta rolls through every expired event (and applies wetness with
-        // each slice's own weather) instead of discarding the overflow.
-        while (dt > 0) {
-            WeatherEvent current = schedule[0];
-            if (current.durationSeconds <= 0) {
-                shiftAndRoll();
-                continue;
+        } else {
+            int advanced = Math.max(0, hour - startHour);
+            for (int a = 0; a < advanced; a++) {
+                advanceOneHour();
             }
-            float slice = Math.min(dt, current.durationSeconds);
-            applyWetness(slice, current.weather);
-            schedule[0] = new WeatherEvent(current.weather, current.durationSeconds - slice, current.strength);
-            dt -= slice;
         }
-    }
-
-    private void shiftAndRoll() {
-        for (int i = 0; i < FORECAST_HORIZON - 1; i++) {
-            schedule[i] = schedule[i + 1];
-        }
-        rollWeather(FORECAST_HORIZON - 1);
-    }
-
-    private void applyWetness(float dt, Weather weather) {
-        if (weather.isPrecipitation()) {
+        Weather live = getWeather();
+        if (live.isPrecipitation()) {
             wetness = Math.min(1f, wetness + dt * WETNESS_RISE_PER_SECOND);
         } else {
             wetness = Math.max(0f, wetness - dt * WETNESS_DRAIN_PER_SECOND);
         }
     }
 
-    private void rollWeather(int index) {
-        float humidity = humidityFor(currentBiome);
-        float temperature = temperatureFor(currentBiome);
-        float seasonBias = calendar.getSeason().precipitationBias;
-        // Wet, humid biomes and wet seasons bring precipitation; it falls as snow
-        // in freezing temperatures.
-        float precipitationChance = Math.min(0.8f, 0.10f + humidity * 0.35f * (seasonBias * 2f));
-        boolean wet = rnd.nextFloat() < precipitationChance;
-        Weather weather = wet ? (temperature <= FREEZING_C ? Weather.SNOW : Weather.RAIN) : Weather.CLEAR;
-        float duration = wet ? 45f + rnd.nextFloat() * 120f : 90f + rnd.nextFloat() * 240f;
-        float strength = wet ? 0.3f + rnd.nextFloat() * 0.7f : 0f;
-        schedule[index] = new WeatherEvent(weather, duration, strength);
+    private void advanceOneHour() {
+        for (int i = 0; i < FORECAST_HOURS - 1; i++) {
+            hourly[i] = hourly[i + 1];
+            strength[i] = strength[i + 1];
+        }
+        startHour++;
+        rollHour(FORECAST_HOURS - 1, startHour + FORECAST_HOURS - 1);
     }
 
-    /** The weather right now. */
+    /** Rolls the live weather for the given absolute in-game hour, from the local climate. */
+    private void rollHour(int index, int absoluteHour) {
+        int dayIndex = Math.floorDiv(absoluteHour, HOURS_PER_DAY);
+        int hourOfDay = Math.floorMod(absoluteHour, HOURS_PER_DAY);
+        Random r = new Random(hash(absoluteHour * 1000003L + 7919L));
+        float temperature = forecastTemperature(dayIndex, hourOfDay);
+        float humidity = baseHumidity(currentBiome);
+        float seasonBias = calendar.seasonAt(dayIndex).precipitationBias;
+        float precipitationChance = Math.min(0.85f, 0.10f + humidity * 0.35f * (seasonBias * 2f));
+        boolean wet = r.nextFloat() < precipitationChance;
+        hourly[index] = wet ? (temperature <= FREEZING_C ? Weather.SNOW : Weather.RAIN) : Weather.CLEAR;
+        strength[index] = wet ? 0.3f + r.nextFloat() * 0.7f : 0f;
+    }
+
+    /** The temperature a future hour would see (base + season + nightly dip, before weather). */
+    private float forecastTemperature(int dayIndex, int hourOfDay) {
+        return baseTemperature(currentBiome)
+                + calendar.temperatureOffsetAt(dayIndex)
+                - 6f * (1f - dayNightCycle.getDaylightFactorAt(hourOfDay / (float) HOURS_PER_DAY));
+    }
+
+    // ------------------------------------------------------------------
+    // Live weather
+    // ------------------------------------------------------------------
+
+    /** The weather right now (what is actually happening). */
     public Weather getWeather() {
-        return current().weather;
-    }
-
-    /** Seconds until the current weather gives way to the next. */
-    public float getWeatherTimeLeft() {
-        return Math.max(0f, current().durationSeconds);
+        if (forcedWeather != null) return forcedWeather;
+        return startHour < 0 ? Weather.CLEAR : hourly[0];
     }
 
     /** How heavy the current weather is, 0..1 (0 for clear). */
     public float getWeatherStrength() {
-        return current().strength;
+        if (forcedWeather != null) return forcedWeather.isPrecipitation() ? 0.8f : 0f;
+        return startHour < 0 ? 0f : strength[0];
     }
 
     public boolean isPrecipitation() {
         return getWeather().isPrecipitation();
     }
 
-    /** The next weather in the forecast (what arrives when the current one ends). */
-    public Weather getNextWeather() {
-        return schedule[1].weather;
-    }
-
-    /** The weather after next - the far end of the forecast. */
-    public Weather getNextNextWeather() {
-        return schedule[2].weather;
-    }
-
-    /** A copy of the full forecast: current + upcoming events, in order. */
-    public WeatherEvent[] getForecast() {
-        WeatherEvent[] copy = new WeatherEvent[FORECAST_HORIZON];
-        for (int i = 0; i < FORECAST_HORIZON; i++) {
-            copy[i] = schedule[i];
-        }
-        return copy;
-    }
-
-    /**
-     * Minutes from now until each forecast event begins (index 0 is "now", the
-     * current weather). Later events start when everything before them has
-     * played out, so this is the sum of the preceding events' durations.
-     */
-    public float[] getForecastStartMinutes() {
-        float[] minutes = new float[FORECAST_HORIZON];
-        float accumulatedSeconds = 0f;
-        for (int i = 0; i < FORECAST_HORIZON; i++) {
-            minutes[i] = accumulatedSeconds / 60f;
-            accumulatedSeconds += schedule[i].durationSeconds;
-        }
-        return minutes;
-    }
-
     /** 0..1 how "wet" the world is right now - rain pushes it up, dry weather drains it. */
     public float getWetness() {
         return wetness;
     }
+
+    /** The next weather the live schedule brings, and how many in-game hours away. */
+    public Weather nextWeatherChange() {
+        Weather current = getWeather();
+        for (int i = 1; i < FORECAST_HOURS; i++) {
+            if (hourly[i] != current) return hourly[i];
+        }
+        return current;
+    }
+
+    public int hoursUntilChange() {
+        Weather current = getWeather();
+        for (int i = 1; i < FORECAST_HOURS; i++) {
+            if (hourly[i] != current) return i;
+        }
+        return FORECAST_HOURS;
+    }
+
+    // ------------------------------------------------------------------
+    // Forecast (predictions, imperfect further out)
+    // ------------------------------------------------------------------
+
+    /** The predicted weather for each of the next {@link #HOURS_PER_DAY} hours (index 0 = now). */
+    public ForecastSlot[] getHourlyForecast() {
+        if (startHour < 0) return new ForecastSlot[0];
+        ForecastSlot[] out = new ForecastSlot[HOURS_PER_DAY];
+        for (int i = 0; i < HOURS_PER_DAY; i++) {
+            out[i] = predict(hourly[i], strength[i],
+                    hash(calendar.getTotalDay() * 1000003L + (currentHour() + i) * 31L + 7L),
+                    hourlyForecastError(i));
+        }
+        return out;
+    }
+
+    /** The predicted weather for each of the next {@link #FORECAST_DAYS} days (index 0 = today). */
+    public ForecastSlot[] getDailyForecast() {
+        if (startHour < 0) return new ForecastSlot[0];
+        ForecastSlot[] out = new ForecastSlot[FORECAST_DAYS];
+        for (int d = 0; d < FORECAST_DAYS; d++) {
+            int start = d * HOURS_PER_DAY;
+            int end = Math.min(start + HOURS_PER_DAY, FORECAST_HOURS);
+            Weather dominant = dominantWeather(start, end);
+            float peak = 0f;
+            for (int i = start; i < end; i++) peak = Math.max(peak, strength[i]);
+            int absoluteDay = calendar.getTotalDay() + d;
+            out[d] = predict(dominant, peak,
+                    hash(calendar.getTotalDay() * 1000003L + absoluteDay * 31L + 11L),
+                    dailyForecastError(d));
+        }
+        return out;
+    }
+
+    /** The in-game clock hour (0-23) that each hourly forecast slot corresponds to. */
+    public int[] getHourlyClockHours() {
+        int[] hours = new int[HOURS_PER_DAY];
+        int base = currentHour();
+        for (int i = 0; i < HOURS_PER_DAY; i++) {
+            hours[i] = Math.floorMod(base + i, HOURS_PER_DAY);
+        }
+        return hours;
+    }
+
+    /** The absolute calendar day index that daily forecast slot {@code d} corresponds to (0 = today). */
+    public int getDailyDayIndex(int d) {
+        return calendar.getTotalDay() + d;
+    }
+
+    /**
+     * Produces a forecast slot from the actual weather, flipping it to a
+     * different kind of weather with probability {@code error} (deterministic
+     * per slot, so the forecast is stable within a day).
+     */
+    private ForecastSlot predict(Weather actual, float actualStrength, long seed, float error) {
+        Random r = new Random(seed);
+        if (error > 0f && r.nextFloat() < error) {
+            Weather[] others = {Weather.CLEAR, Weather.RAIN, Weather.SNOW};
+            Weather chosen = actual;
+            while (chosen == actual) {
+                chosen = others[r.nextInt(others.length)];
+            }
+            return new ForecastSlot(chosen, chosen.isPrecipitation() ? 0.3f + r.nextFloat() * 0.7f : 0f);
+        }
+        return new ForecastSlot(actual, actualStrength);
+    }
+
+    /** How likely the hourly forecast is to be wrong for an hour {@code hoursAhead} (now is exact). */
+    private static float hourlyForecastError(int hoursAhead) {
+        return Math.min(MAX_FORECAST_ERROR, 0.02f * hoursAhead);
+    }
+
+    /** How likely the daily forecast is to be wrong for a day {@code daysAhead} (today is almost exact). */
+    private static float dailyForecastError(int daysAhead) {
+        return Math.min(MAX_FORECAST_ERROR, 0.05f + 0.06f * daysAhead);
+    }
+
+    private Weather dominantWeather(int start, int end) {
+        int clear = 0, rain = 0, snow = 0;
+        for (int i = start; i < end; i++) {
+            switch (hourly[i]) {
+                case CLEAR -> clear++;
+                case RAIN -> rain++;
+                case SNOW -> snow++;
+            }
+        }
+        if (rain > clear && rain > snow) return Weather.RAIN;
+        if (snow > clear && snow > rain) return Weather.SNOW;
+        return Weather.CLEAR;
+    }
+
+    private int currentHour() {
+        return calendar.getTotalDay() * HOURS_PER_DAY + (int) (dayNightCycle.getTime() * HOURS_PER_DAY);
+    }
+
+    private static long hash(long base) {
+        long h = base * 0x9E3779B97F4A7C15L;
+        h = (h ^ (h >>> 29)) * 0xBF58476D1CE4E5B9L;
+        h = (h ^ (h >>> 32)) * 0x94D049BB133111EBL;
+        return h ^ (h >>> 31);
+    }
+
+    // ------------------------------------------------------------------
+    // Temperature & humidity
+    // ------------------------------------------------------------------
 
     /**
      * Current temperature in °C at {@code biome}: its base, plus the seasonal
@@ -189,19 +277,9 @@ public class Climate {
         return clamp01(baseHumidity(biome) + wetness * WETNESS_HUMIDITY_BOOST);
     }
 
-    private WeatherEvent current() {
-        return schedule[0];
-    }
-
-    /** Forces the current weather (used by tests). */
-    void setWeather(Weather weather, float durationSeconds, float strength) {
-        schedule[0] = new WeatherEvent(weather, durationSeconds, strength);
-    }
-
-    /** Forces a weather state with sensible duration/strength - used by the autotest/screenshots. */
+    /** Forces a weather state (autotest/screenshot hook). */
     public void forceWeather(Weather weather) {
-        if (weather == null) return;
-        setWeather(weather, weather.isPrecipitation() ? 120f : 300f, weather.isPrecipitation() ? 0.8f : 0f);
+        this.forcedWeather = weather;
     }
 
     /** A biome's baseline temperature in °C. */

@@ -45,6 +45,11 @@ public class Calendar {
         return DAY_NAMES[totalDay % DAYS_PER_WEEK];
     }
 
+    /** The day of the week's name for an arbitrary day count (used by the weather forecast). */
+    public String dayOfWeekNameAt(int totalDay) {
+        return DAY_NAMES[totalDay % DAYS_PER_WEEK];
+    }
+
     /** The day of the month, 1-based (1..{@link #getDaysPerMonth()}). */
     public int getDayOfMonth() {
         return totalDay % getDaysPerMonth() + 1;
@@ -73,7 +78,17 @@ public class Calendar {
 
     /** The current season. */
     public Season getSeason() {
+        return seasonAt(totalDay);
+    }
+
+    /** The season for an arbitrary day count (used by the weather forecast). */
+    public Season seasonAt(int totalDay) {
         return Season.values()[(totalDay / getDaysPerSeason()) % SEASONS_PER_YEAR];
+    }
+
+    /** 0..1 how far through the season we are - drives the smooth trait blending. */
+    public float getSeasonProgress() {
+        return seasonProgressAt(totalDay);
     }
 
     /** The current year, 1-based. */
@@ -81,8 +96,8 @@ public class Calendar {
         return totalDay / getDaysPerYear() + 1;
     }
 
-    /** 0..1 how far through the season we are - drives the smooth trait blending. */
-    public float getSeasonProgress() {
+    /** Season progress (0..1) for an arbitrary day count. */
+    public float seasonProgressAt(int totalDay) {
         return (totalDay % getDaysPerSeason()) / (float) getDaysPerSeason();
     }
 
@@ -134,8 +149,13 @@ public class Calendar {
 
     /** Seasonal temperature offset in degrees Celsius, blended toward the next season. */
     public float temperatureOffset() {
-        Season season = getSeason();
-        return lerp(season.temperatureOffset, season.next().temperatureOffset, getSeasonProgress());
+        return temperatureOffsetAt(totalDay);
+    }
+
+    /** Seasonal temperature offset for an arbitrary day count (used by the weather forecast). */
+    public float temperatureOffsetAt(int totalDay) {
+        Season season = seasonAt(totalDay);
+        return lerp(season.temperatureOffset, season.next().temperatureOffset, seasonProgressAt(totalDay));
     }
 
     private static float lerp(float a, float b, float t) {

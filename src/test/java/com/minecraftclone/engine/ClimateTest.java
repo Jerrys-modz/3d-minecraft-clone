@@ -4,6 +4,7 @@ import com.minecraftclone.world.gen.TerrainGenerator.Biome;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClimateTest {
@@ -20,6 +21,12 @@ class ClimateTest {
         return new Climate(calendar, cycle);
     }
 
+    private static Climate rolledClimate(int totalDay) {
+        Climate climate = climateAtDay(totalDay);
+        climate.update(0.001f, Biome.PLAINS); // triggers the initial forecast roll
+        return climate;
+    }
+
     @Test
     void humidityStartsFromTheBiomeBase() {
         Climate climate = climateAtDay(0);
@@ -28,23 +35,16 @@ class ClimateTest {
         assertEquals(0.45f, climate.humidityFor(Biome.PLAINS), 0.001f);
     }
 
-    /** A climate at the given calendar day whose initial schedule has already been rolled. */
-    private static Climate rolledClimate(int totalDay) {
-        Climate climate = climateAtDay(totalDay);
-        climate.update(0.001f, Biome.PLAINS); // triggers the first roll, then stops
-        return climate;
-    }
-
     @Test
     void rainRaisesHumidityAndClearWeatherDrainsIt() {
         Climate climate = rolledClimate(0);
         float before = climate.humidityFor(Biome.PLAINS);
-        climate.setWeather(Weather.RAIN, 100f, 1f);
+        climate.forceWeather(Weather.RAIN);
         climate.update(50f, Biome.PLAINS);
         assertTrue(climate.humidityFor(Biome.PLAINS) > before + 0.05f, "rain should lift humidity");
 
         float rainy = climate.humidityFor(Biome.PLAINS);
-        climate.setWeather(Weather.CLEAR, 200f, 0f);
+        climate.forceWeather(Weather.CLEAR);
         climate.update(100f, Biome.PLAINS);
         assertTrue(climate.humidityFor(Biome.PLAINS) < rainy, "dry weather should drain humidity");
     }
@@ -69,60 +69,56 @@ class ClimateTest {
 
     @Test
     void rainCoolsComparedToClear() {
-        Climate climate = rolledClimate(0);
-        climate.setWeather(Weather.CLEAR, 200f, 0f);
+        Climate climate = climateAtDay(0);
+        climate.forceWeather(Weather.CLEAR);
         float clear = climate.temperatureFor(Biome.PLAINS);
-        climate.setWeather(Weather.RAIN, 200f, 1f);
+        climate.forceWeather(Weather.RAIN);
         float rainy = climate.temperatureFor(Biome.PLAINS);
         assertTrue(rainy < clear, "rain should cool the air");
     }
 
     @Test
-    void forecastHoldsCurrentPlusUpcomingEvents() {
+    void liveWeatherComesFromTheSchedule() {
         Climate climate = rolledClimate(0);
-        Climate.WeatherEvent[] forecast = climate.getForecast();
-        assertEquals(5, forecast.length);
-        assertEquals(climate.getWeather(), forecast[0].weather());
-        assertEquals(climate.getNextWeather(), forecast[1].weather());
-        assertTrue(forecast[0].durationSeconds() > 0);
+        Weather live = climate.getWeather();
+        assertNotNull(live);
+        assertTrue(live == Weather.CLEAR || live == Weather.RAIN || live == Weather.SNOW);
+        // The current hour's forecast is exact (now is known), so it matches the live weather.
+        assertEquals(live, climate.getHourlyForecast()[0].weather());
+    }
 
-        // Start times are cumulative: each upcoming event starts after the ones before it.
-        float[] minutes = climate.getForecastStartMinutes();
-        assertEquals(0f, minutes[0], 0.0001f);
-        for (int i = 1; i < minutes.length; i++) {
-            assertTrue(minutes[i] > minutes[i - 1], "event " + i + " starts after the previous one");
+    @Test
+    void hourlyAndDailyForecastsArePopulated() {
+        Climate climate = rolledClimate(0);
+        assertEquals(24, climate.getHourlyForecast().length);
+        assertEquals(24, climate.getHourlyClockHours().length);
+        assertEquals(7, climate.getDailyForecast().length);
+        for (Climate.ForecastSlot slot : climate.getDailyForecast()) {
+            assertNotNull(slot.weather());
         }
     }
 
     @Test
-    void weatherEventuallyChangesAndShiftsTheForecast() {
+    void forcingWeatherOverridesLive() {
         Climate climate = rolledClimate(0);
-        climate.setWeather(Weather.RAIN, 0.5f, 1f);
-        Weather wasNext = climate.getNextWeather(); // already rolled ahead before the rain expires
-        climate.update(2f, Biome.PLAINS);
-        // The short rain expired; the rolled-ahead next weather takes over.
-        assertEquals(wasNext, climate.getWeather());
-        assertTrue(climate.getWeatherTimeLeft() > 0);
+        climate.forceWeather(Weather.RAIN);
+        assertEquals(Weather.RAIN, climate.getWeather());
+        assertTrue(climate.isPrecipitation());
     }
 
     @Test
-    void scheduleIsOnlyRolledFromTheFirstRealBiome() {
-        Climate climate = climateAtDay(0);
-        // Before any update the schedule is still the empty placeholder (never rolled
-        // against the default plains biome).
-        assertEquals(0f, climate.getForecast()[0].durationSeconds(), 0.0001f);
-        climate.update(1f, Biome.SNOWY);
-        for (Climate.WeatherEvent event : climate.getForecast()) {
-            assertTrue(event.durationSeconds() > 0, "every forecast event should be rolled from the spawn biome");
-        }
+    void largeDeltaKeepsTheForecastValid() {
+        Climate climate = rolledClimate(0);
+        climate.update(100_000f, Biome.PLAINS);
+        assertEquals(24, climate.getHourlyForecast().length);
+        assertEquals(7, climate.getDailyForecast().length);
+        assertTrue(climate.getWetness() <= 1f);
     }
 
     @Test
-    void largeDeltaRollsThroughEveryExpiredEvent() {
-        Climate climate = climateAtDay(0);
-        climate.setWeather(Weather.RAIN, 0.5f, 1f);
-        climate.update(100_000f, Biome.PLAINS); // spans many weather events in one frame
-        assertTrue(climate.getWeatherTimeLeft() > 0, "a fresh event should be running");
-        assertTrue(climate.getWetness() <= 1f, "wetness stays bounded");
+    void dailyForecastReflectsFutureCalendarDays() {
+        Climate climate = rolledClimate(0);
+        assertEquals(0, climate.getDailyDayIndex(0));
+        assertEquals(6, climate.getDailyDayIndex(6));
     }
 }
