@@ -517,10 +517,9 @@ public class Hud {
     }
 
     /**
-     * Draws the weather forecast panel: the current weather and a 7-day grid,
-     * one row per day with that day's 24 hourly weather symbols (hour labels
-     * above). The prediction is less reliable the further out it is - like a
-     * real forecast.
+     * Draws the weather forecast panel: the current weather with the next change,
+     * today's hourly forecast at 3-hour marks, and a rolling 7-day forecast. Like
+     * a real forecast, it's less reliable the further out it is.
      */
     public void renderForecast(Climate climate, Calendar calendar, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
@@ -528,35 +527,40 @@ public class Hud {
 
         float x = -0.85f;
         float y = 0.88f;
-        float size = 0.02f;
         Vector4f dim = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
 
         drawTextAt("Weather Forecast", x, y, 0.035f, WHITE);
         y -= 0.05f;
-        drawTextAt("Now: " + forecastLabel(climate.getWeather(), climate.getWeatherStrength()), x, y, 0.028f, WHITE);
+        drawTextAt("Now: " + forecastLabel(climate.getWeather(), climate.getWeatherStrength())
+                        + "   next: " + climate.nextWeatherChange().displayName + " in ~"
+                        + climate.hoursUntilChange() + "h",
+                x, y, 0.024f, WHITE);
         y -= 0.045f;
 
-        // Hour column, then one row per day with that day's 24 hourly symbols.
-        StringBuilder labels = new StringBuilder("     ");
-        for (int i = 0; i < 24; i++) {
-            String h = Integer.toString(i);
-            labels.append(h).append(h.length() == 1 ? " " : "");
+        // Today's hourly forecast, at 3-hour marks from the current hour.
+        Climate.ForecastSlot[] today = climate.getHourlyForecastForDay(0);
+        Climate.ForecastSlot[] tomorrow = climate.getHourlyForecastForDay(1);
+        int now = climate.getCurrentHourOfDay();
+        StringBuilder hourly = new StringBuilder("Today: ");
+        int count = 0;
+        for (int h = now; count < 8 && h < now + 24; h += 3) {
+            Climate.ForecastSlot slot = h < 24 ? today[h] : tomorrow[h - 24];
+            if (count > 0) hourly.append(", ");
+            hourly.append(h % 24).append("h ").append(slot.weather().displayName);
+            count++;
         }
-        drawTextAt(labels.toString(), x, y, size, dim);
-        y -= 0.028f;
+        drawTextAt(hourly.toString(), x, y, 0.022f, WHITE);
+        y -= 0.05f;
 
-        for (int d = 0; d < Climate.FORECAST_DAYS; d++) {
-            Climate.ForecastSlot[] dayHours = climate.getHourlyForecastForDay(d);
-            StringBuilder row = new StringBuilder(
-                    calendar.dayOfWeekNameAt(climate.getDailyDayIndex(d)).substring(0, 3) + "  ");
-            for (Climate.ForecastSlot slot : dayHours) {
-                row.append(weatherSymbol(slot.weather())).append(' ');
-            }
-            drawTextAt(row.toString(), x, y, size, WHITE);
-            y -= 0.028f;
+        // Rolling 7-day forecast.
+        Climate.ForecastSlot[] days = climate.getDailyForecast();
+        for (int d = 0; d < days.length; d++) {
+            String day = calendar.dayOfWeekNameAt(climate.getDailyDayIndex(d));
+            drawTextAt(day + ": " + forecastLabel(days[d].weather(), days[d].strength()), x, y, 0.024f, WHITE);
+            y -= 0.038f;
         }
-        drawTextAt("C=Clear  R=Rain  S=Snow  (less reliable further out)", x, y - 0.005f, 0.018f, dim);
 
+        drawTextAt("Forecast less reliable further out", x, y - 0.005f, 0.018f, dim);
         glEnable(GL_DEPTH_TEST);
     }
 
@@ -567,14 +571,6 @@ public class Hud {
         }
         String s = strength < 0.4f ? "light" : strength < 0.75f ? "moderate" : "heavy";
         return weather.displayName + " (" + s + ")";
-    }
-
-    private static char weatherSymbol(Weather weather) {
-        return switch (weather) {
-            case CLEAR -> 'C';
-            case RAIN -> 'R';
-            case SNOW -> 'S';
-        };
     }
 
     /**

@@ -95,6 +95,7 @@ class ClimateTest {
         assertEquals(24, climate.getHourlyForecastForDay(0).length);
         assertEquals(24, climate.getHourlyForecastForDay(6).length);
         assertEquals(7, climate.getDailyForecast().length);
+        assertTrue(climate.getCurrentHourOfDay() >= 0 && climate.getCurrentHourOfDay() < 24);
         for (Climate.ForecastSlot slot : climate.getDailyForecast()) {
             assertNotNull(slot.weather());
         }

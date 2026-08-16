@@ -203,13 +203,9 @@ public class Climate {
         return out;
     }
 
-    /** The in-game clock hour (0-23) that each hourly forecast slot corresponds to. */
-    public int[] getHourlyClockHours() {
-        int[] hours = new int[HOURS_PER_DAY];
-        for (int i = 0; i < HOURS_PER_DAY; i++) {
-            hours[i] = i;
-        }
-        return hours;
+    /** The in-game hour of day (0-23) right now - the forecast panel labels hours with it. */
+    public int getCurrentHourOfDay() {
+        return currentHourOfDay();
     }
 
     /** The absolute calendar day index that daily forecast slot {@code d} corresponds to (0 = today). */
