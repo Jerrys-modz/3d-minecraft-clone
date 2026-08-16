@@ -800,7 +800,37 @@ public class Hud {
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
         Vector4f dim = new Vector4f(0.62f, 0.62f, 0.62f, 1f);
-        drawCenteredText("Select World", 0f, 0.5f, 0.07f, WHITE);
+
+        int rows = worldNames.size() + 1; // worlds + Create New World
+        float panelW = 0.95f;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * 0.07f;
+        float left = -panelW / 2f;
+        float top = 0.5f + panelH / 2f;
+
+        // Minecraft-style textured panel background (9-slice) when GUI art is available.
+        if (guiTextures != null) {
+            guiVerts.clear();
+            guiInds.clear();
+            renderGuiPanel(left, 0.5f - panelH / 2f, left + panelW, 0.5f + panelH / 2f);
+            flushGuiQuads();
+        } else {
+            float[] panel = {
+                    left, 0.5f - panelH / 2f, 0, left + panelW, 0.5f - panelH / 2f, 0,
+                    left + panelW, 0.5f + panelH / 2f, 0,
+                    left, 0.5f - panelH / 2f, 0, left + panelW, 0.5f + panelH / 2f, 0,
+                    left, 0.5f + panelH / 2f, 0,
+            };
+            settingsPanel.upload(panel);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.6f));
+            settingsPanel.render();
+            lineShader.unbind();
+        }
+
+        drawCenteredTextShadowed("Select World", 0f, top - SETTINGS_PAD - 0.04f, 0.07f, WHITE);
 
         float y = 0.3f;
         int shown = 0;
@@ -1796,5 +1826,6 @@ public class Hud {
         tooltipPanel.destroy();
         settingsTrack.destroy();
         settingsFill.destroy();
+        guiQuadMesh.destroy();
     }
 }
