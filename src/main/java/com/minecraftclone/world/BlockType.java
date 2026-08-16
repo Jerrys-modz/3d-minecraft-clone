@@ -306,6 +306,16 @@ public enum BlockType {
         return isWater() || isLava();
     }
 
+    /**
+     * True if this block's top face can support an accumulated snow layer:
+     * a full cube that isn't see-through and isn't a cross-shaped plant, so
+     * snow piles up on ground, stone, wood, roofs, sand and snow itself, but
+     * not on leaves, glass, ice, fluids, torches or flowers.
+     */
+    public boolean canHoldSnow() {
+        return solid && !transparent && !cross && !isTranslucent();
+    }
+
     /** True for the placeable, flowing fluid source blocks. */
     public boolean isFluidSource() {
         return this == WATER_SOURCE || this == LAVA_SOURCE;
