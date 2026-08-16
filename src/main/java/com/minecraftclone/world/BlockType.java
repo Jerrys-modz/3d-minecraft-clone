@@ -313,7 +313,7 @@ public enum BlockType {
      * not on leaves, glass, ice, fluids, torches or flowers.
      */
     public boolean canHoldSnow() {
-        return solid && !transparent && !cross && !isTranslucent();
+        return solid && !transparent && !cross && !isTranslucent() && !slab;
     }
 
     /** True for the placeable, flowing fluid source blocks. */
