@@ -133,6 +133,7 @@ public class Hud {
     private final LineMesh statBarFill = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarFill = new LineMesh(GL_TRIANGLES);
+    private final LineMesh frostOverlay = new LineMesh(GL_TRIANGLES); // fullscreen cold vignette
     private final LineMesh settingsPanel = new LineMesh(GL_TRIANGLES);
     private final LineMesh inventoryPanel = new LineMesh(GL_TRIANGLES);
     private final LineMesh inventorySlotBg = new LineMesh(GL_TRIANGLES);
@@ -169,6 +170,12 @@ public class Hud {
         this.text = new TextRenderer(font, hudShader);
         buildCrosshair();
         buildCubeOutline();
+        // A fullscreen quad in NDC covering the whole screen, used for the cold
+        // vignette (drawn with an identity model/projection via the line shader).
+        frostOverlay.upload(new float[]{
+                -1, -1, 0, 1, -1, 0, 1, 1, 0,
+                -1, -1, 0, 1, 1, 0, -1, 1, 0,
+        });
     }
 
     /** Provides the GUI art (must be generated before any screen is drawn) and the current light/dark theme. */
@@ -219,6 +226,25 @@ public class Hud {
         lineShader.setUniform("color", new Vector4f(1, 1, 1, 0.9f));
         glLineWidth(2f);
         crosshair.render();
+        lineShader.unbind();
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
+     * A translucent frost vignette over the whole screen, fading in with cold
+     * exposure (0 = clear, 1 = freezing out in a blizzard). Drawn in NDC so it
+     * covers the viewport regardless of aspect ratio.
+     */
+    public void renderFrostOverlay(float coldness) {
+        if (coldness <= 0f) return;
+        glDisable(GL_DEPTH_TEST);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", modelMatrix.identity());
+        float a = Math.min(1f, coldness) * 0.45f;
+        lineShader.setUniform("color", new Vector4f(0.78f, 0.87f, 1f, a));
+        frostOverlay.render();
         lineShader.unbind();
         glEnable(GL_DEPTH_TEST);
     }
@@ -1827,5 +1853,6 @@ public class Hud {
         settingsTrack.destroy();
         settingsFill.destroy();
         guiQuadMesh.destroy();
+        frostOverlay.destroy();
     }
 }

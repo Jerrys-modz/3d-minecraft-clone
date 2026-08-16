@@ -20,6 +20,10 @@ public class Player {
     private static final float WIDTH = 0.6f;
     private static final float HEIGHT = 1.8f;
     private static final float EYE_HEIGHT = 1.62f;
+    /** Blocks above the eye that count as shelter from the cold (a roof overhead). */
+    private static final int COLD_ROOF_CHECK = 8;
+    /** Horizontal radius (blocks) in which a burning fire warms you against the cold. */
+    private static final int COLD_FIRE_RADIUS = 3;
 
     private static final float WALK_SPEED = 4.3f;
     private static final float SPRINT_SPEED = 6.6f;
@@ -175,7 +179,12 @@ public class Player {
         return true;
     }
 
-    public void update(float dt, Input input, World world) {
+    /**
+     * @param coldFactor 0..1 how cold the current weather is (snow/blizzard); the
+     *                    player's shelter and nearby fires cut it down to the
+     *                    effective coldness that drains hunger/freezes (see PlayerStats).
+     */
+    public void update(float dt, Input input, World world, float coldFactor) {
         updateLook(input);
         if (gameMode.isSpectator()) {
             flying = true; // always in no-clip flight
@@ -208,9 +217,44 @@ public class Player {
         } else {
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
-            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed);
+            // Cold exposure: weather strength, cut down by a roof overhead and
+            // nearly eliminated next to a fire (a lightning-struck tree, or any
+            // fire you huddle beside).
+            float coldness = coldFactor;
+            if (hasRoofAbove(world)) coldness *= 0.15f;
+            if (fireNearby(world)) coldness *= 0.15f;
+            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness);
         }
         lastFallImpactSpeed = 0f;
+    }
+
+    /** True if a solid block sits within {@link #COLD_ROOF_CHECK} blocks overhead - basic shelter. */
+    private boolean hasRoofAbove(World world) {
+        int x = (int) Math.floor(position.x);
+        int z = (int) Math.floor(position.z);
+        int y = (int) Math.floor(position.y + EYE_HEIGHT);
+        for (int i = 1; i <= COLD_ROOF_CHECK; i++) {
+            if (y + i >= 0 && y + i < com.minecraftclone.world.Chunk.HEIGHT) {
+                BlockType b = world.getBlock(x, y + i, z);
+                if (b.solid) return true;
+            }
+        }
+        return false;
+    }
+
+    /** True if a burning fire is within {@link #COLD_FIRE_RADIUS} blocks - huddling close warms you. */
+    private boolean fireNearby(World world) {
+        int cx = (int) Math.floor(position.x);
+        int cy = (int) Math.floor(position.y);
+        int cz = (int) Math.floor(position.z);
+        for (int dx = -COLD_FIRE_RADIUS; dx <= COLD_FIRE_RADIUS; dx++) {
+            for (int dz = -COLD_FIRE_RADIUS; dz <= COLD_FIRE_RADIUS; dz++) {
+                for (int dy = -1; dy <= 2; dy++) {
+                    if (world.getBlock(cx + dx, cy + dy, cz + dz) == BlockType.FIRE) return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** True on exactly the frame the player left the ground under their own jump (not falling off a ledge). */
