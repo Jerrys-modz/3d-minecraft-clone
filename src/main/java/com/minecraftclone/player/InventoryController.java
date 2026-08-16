@@ -274,6 +274,13 @@ public class InventoryController {
     private void depositOne(int slotId) {
         BlockType st = slotType(slotId);
         if (st == null) {
+            // Armor slots: only accept matching armor type into an empty slot.
+            if (gui.isArmorSlot(slotId)) {
+                Armor.Slot wantedSlot = Armor.Slot.values()[slotId - ContainerGui.ARMOR_START];
+                if (Armor.slotOf(cursorType) != wantedSlot) {
+                    return; // Wrong armor type for this slot, skip.
+                }
+            }
             setSlot(slotId, cursorType, 1);
             cursorCount--;
         } else if (st == cursorType && (gui.isPlayerSlot(slotId) || gui.isContainerSlot(slotId))) {

@@ -175,6 +175,16 @@ public class Player {
         return true;
     }
 
+    /**
+     * Applies {@code amount} damage to the player, mitigated by armor and accumulated
+     * for armor wear. Use this for external damage sources (mobs, etc.) so they route
+     * through the same armor-mitigation and armor-wear path as environmental hazards.
+     */
+    public void takeDamage(float amount) {
+        if (gameMode.isInvulnerable()) return;
+        stats.damage(amount);
+    }
+
     public void update(float dt, Input input, World world) {
         updateLook(input);
         if (gameMode.isSpectator()) {
@@ -210,7 +220,8 @@ public class Player {
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
             stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed);
-            wearArmor(stats.lastDamageDealt());
+            wearArmor(stats.frameDamageAccumulator());
+            stats.clearFrameDamage();
         }
         lastFallImpactSpeed = 0f;
     }

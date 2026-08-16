@@ -36,17 +36,22 @@ public class PlayerStats {
     private boolean dead = false;
     /** Damage multiplier from equipped armor (1 = no armor); applied by {@link #damage}. */
     private float armorMultiplier = 1f;
-    /** Damage actually applied by the last {@link #damage} call (after armor), so the caller can wear armor by it. */
-    private float lastDamageDealt = 0f;
+    /** Total damage accumulated this frame (after armor), cleared after armor wear is applied. */
+    private float frameDamageAccumulator = 0f;
 
     /** Sets the damage multiplier from the player's equipped armor (1 = no armor, lower = more protection). */
     public void setArmorMultiplier(float multiplier) {
         this.armorMultiplier = multiplier;
     }
 
-    /** Damage actually taken (after armor) from the most recent {@link #damage} call - 0 if none. */
-    public float lastDamageDealt() {
-        return lastDamageDealt;
+    /** Total damage accumulated this frame (after armor) - cleared after armor wear is applied. */
+    public float frameDamageAccumulator() {
+        return frameDamageAccumulator;
+    }
+
+    /** Clears the per-frame damage accumulator after armor wear has been consumed. */
+    public void clearFrameDamage() {
+        frameDamageAccumulator = 0f;
     }
 
     public float getHealth() {
@@ -148,8 +153,9 @@ public class PlayerStats {
 
     public void damage(float amount) {
         if (dead || amount <= 0f) return;
-        lastDamageDealt = amount * armorMultiplier;
-        health -= lastDamageDealt;
+        float damageDealt = amount * armorMultiplier;
+        frameDamageAccumulator += damageDealt;
+        health -= damageDealt;
         if (health <= 0f) {
             health = 0f;
             dead = true;

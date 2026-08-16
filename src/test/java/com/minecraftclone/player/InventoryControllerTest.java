@@ -244,4 +244,17 @@ class InventoryControllerTest {
         assertTrue(gui.isArmorSlot(ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_COUNT - 1));
         assertFalse(gui.isArmorSlot(ContainerGui.OUTPUT_SLOT));
     }
+
+    @Test
+    void dragRejectsMismatchedArmorOnSlot() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        int helmetSlot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_HELMET;
+        c.pickCreativeItem(BlockType.DIAMOND_CHESTPLATE, false);
+        c.beginDrag(10, false);
+        c.continueDrag(helmetSlot);
+        c.endDrag(helmetSlot);
+        assertEquals(BlockType.DIAMOND_CHESTPLATE, c.cursorType(), "chestplate can't be dragged into helmet slot");
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_HELMET));
+    }
 }

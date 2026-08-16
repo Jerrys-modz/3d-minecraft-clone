@@ -44,6 +44,17 @@ public class Inventory implements StorageContainer {
 
     /** Equips {@code type} into an armor slot, replacing whatever was there. */
     public void setArmor(int slot, BlockType type) {
+        if (slot < 0 || slot >= ARMOR_SLOT_COUNT) {
+            throw new IllegalArgumentException("Invalid armor slot: " + slot);
+        }
+        if (type != null) {
+            Armor.Slot expectedSlot = Armor.Slot.values()[slot];
+            Armor.Slot actualSlot = Armor.slotOf(type);
+            if (actualSlot != expectedSlot) {
+                throw new IllegalArgumentException(
+                    "Armor type " + type + " (slot " + actualSlot + ") does not match slot " + expectedSlot);
+            }
+        }
         armor[slot] = type;
     }
 

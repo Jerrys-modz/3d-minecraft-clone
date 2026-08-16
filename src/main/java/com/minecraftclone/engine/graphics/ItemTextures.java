@@ -460,7 +460,7 @@ public class ItemTextures {
     /** A Minecraft-style chestplate: a broad torso with arm holes and a lit top. */
     private static BufferedImage paintChestplate(int color) {
         BufferedImage img = blank();
-        int[][] rows = {{4, 5, 6, 7, 8, 9, 10, 11}, {4, 5, 6, 7, 8, 9, 10, 11}, {5, 6, 7, 8, 9, 10}};
+        int[][] rows = {{4, 5, 6, 7, 8, 9, 10, 11}, {4, 5, 6, 7, 8, 9, 10, 11}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}};
         for (int y = 0; y < rows.length; y++) {
             int[] xs = rows[y];
             for (int x : xs) {

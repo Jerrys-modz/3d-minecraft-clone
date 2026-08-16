@@ -1188,13 +1188,14 @@ public class Main {
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
             // to the player's health, where the existing death/respawn handling picks
-            // it up.
+            // it up. Use takeDamage (not getStats().damage) so mob damage routes through
+            // the same armor-mitigation and armor-wear path as environmental hazards.
             Vector3f playerPos = player.getPosition();
             AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
                     playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
             float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
             if (mobDamage > 0f) {
-                player.getStats().damage(mobDamage);
+                player.takeDamage(mobDamage);
                 audio.play(SoundEvent.HURT);
             }
 
