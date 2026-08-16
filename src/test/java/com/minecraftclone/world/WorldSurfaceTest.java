@@ -3,6 +3,8 @@ package com.minecraftclone.world;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The pure block-transformation rules behind seasonal surface changes: which
@@ -30,5 +32,19 @@ class WorldSurfaceTest {
         assertEquals(BlockType.PACKED_ICE, World.thawedForm(BlockType.PACKED_ICE));
         assertEquals(BlockType.SNOW, World.thawedForm(BlockType.SNOW));
         assertEquals(BlockType.STONE, World.thawedForm(BlockType.STONE));
+    }
+
+    @Test
+    void lightningFireSpreadsOnlyToFlammableBlocks() {
+        assertTrue(World.isFlammable(BlockType.WOOD_LOG));
+        assertTrue(World.isFlammable(BlockType.PLANKS));
+        assertTrue(World.isFlammable(BlockType.LEAVES));
+        assertTrue(World.isFlammable(BlockType.CHERRY_LEAVES));
+        // Stone, dirt, sand, snow and ice don't burn.
+        assertFalse(World.isFlammable(BlockType.STONE));
+        assertFalse(World.isFlammable(BlockType.DIRT));
+        assertFalse(World.isFlammable(BlockType.SAND));
+        assertFalse(World.isFlammable(BlockType.SNOW));
+        assertFalse(World.isFlammable(BlockType.ICE));
     }
 }

@@ -16,6 +16,7 @@ public class PlayerStats {
     private static final float SAFE_FALL_SPEED = 10f;          // blocks/sec you can land at with no damage
     private static final float FALL_DAMAGE_PER_SPEED = 3.5f;   // damage per (blocks/sec) over the safe speed
     private static final float LAVA_DAMAGE_PER_SECOND = 20f;
+    private static final float FIRE_DAMAGE_PER_SECOND = 6f;   // standing in lightning-lit fire burns
     private static final float DROWN_GRACE_SECONDS = 6f;       // how long you can hold your breath
     private static final float DROWN_DAMAGE_PER_SECOND = 5f;
     private static final float STARVE_DAMAGE_PER_SECOND = 2f;
@@ -78,7 +79,7 @@ public class PlayerStats {
      *
      * @param fallImpactSpeed the speed (blocks/sec) the player just landed at this frame, or 0 if not landing.
      */
-    public void update(float dt, boolean inLava, boolean submerged, boolean sprintingAndMoving, float fallImpactSpeed) {
+    public void update(float dt, boolean inLava, boolean inFire, boolean submerged, boolean sprintingAndMoving, float fallImpactSpeed) {
         if (dead) return;
 
         if (sprintingAndMoving) {
@@ -106,6 +107,11 @@ public class PlayerStats {
 
         if (inLava) {
             damage(LAVA_DAMAGE_PER_SECOND * dt);
+            tookDamage = true;
+        }
+
+        if (inFire) {
+            damage(FIRE_DAMAGE_PER_SECOND * dt);
             tookDamage = true;
         }
 

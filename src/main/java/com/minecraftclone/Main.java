@@ -434,6 +434,8 @@ public class Main {
         MobRenderer mobRenderer = new MobRenderer();
         WeatherParticles weatherParticles = new WeatherParticles();
         WeatherRenderer weatherRenderer = new WeatherRenderer();
+        List<LightningBolt> bolts = new ArrayList<>();
+        Random lightningRnd = new Random(); // strike placement
         float prevFlash = 0f; // previous frame's lightning intensity - to catch a new flash
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
@@ -496,6 +498,9 @@ public class Main {
         boolean autoTest = System.getenv("MCCLONE_AUTOTEST") != null;
         int autoTestFrames = autoTest ? Integer.parseInt(System.getenv().getOrDefault("MCCLONE_AUTOTEST_FRAMES", "60")) : 0;
         String autoTestPath = System.getenv().getOrDefault("MCCLONE_AUTOTEST_PATH", "screenshot.png");
+        // Autotest hook: strike a bolt in front of the camera on the final frame,
+        // so the bolt + its fire can be screenshotted right as they appear.
+        boolean forceLightning = System.getenv("MCCLONE_AUTOTEST_LIGHTNING") != null;
         if (System.getenv("MCCLONE_AUTOTEST_TIME") != null) {
             dayNightCycle.setTime(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_TIME")));
         }
@@ -678,8 +683,33 @@ public class Main {
                 float flash = climate.getFlashIntensity();
                 if (flash > 0f && prevFlash <= 0f) {
                     audio.play(SoundEvent.THUNDER, 0.8f);
+                    if (world != null) {
+                        lightningStrike(world, player, bolts, lightningRnd);
+                    }
                 }
                 prevFlash = flash;
+                // Burning cells tick down, spread, hurt mobs and get doused by water.
+                world.tickFires(dt);
+                // Bolts flare and die quickly; drop any that have finished.
+                for (int i = bolts.size() - 1; i >= 0; i--) {
+                    LightningBolt bolt = bolts.get(i);
+                    bolt.update(dt);
+                    if (!bolt.isAlive()) bolts.remove(i);
+                }
+                // Autotest hook: force a strike just before the screenshot so the
+                // bolt (0.35s lifetime) is still crackling in frame.
+                if (forceLightning && frameCount == autoTestFrames - 1) {
+                    Vector3f front = player.getCamera().getFront();
+                    Vector3f pos = player.getPosition();
+                    LightningBolt bolt = world.strikeLightning(lightningRnd, pos.x + front.x * 14f, pos.z + front.z * 14f);
+                    if (bolt != null) {
+                        bolts.add(bolt);
+                        audio.play(SoundEvent.THUNDER, 0.8f);
+                        System.out.println("Autotest lightning strike at frame " + frameCount);
+                    } else {
+                        System.out.println("Autotest lightning: no surface at strike target");
+                    }
+                }
             }
             animTime[0] += dt;
             attackCooldown[0] -= dt;
@@ -1327,10 +1357,10 @@ public class Main {
             chunkShader.unbind();
             }
 
-            // Rain/snow particles, drawn against the world (depth-tested) but
-            // hidden behind menus just like the crosshair and hotbar.
+            // Rain/snow particles and lightning bolts, drawn against the world
+            // (depth-tested) but hidden behind menus just like the crosshair.
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                weatherRenderer.render(lineShader, projection, view, weatherParticles);
+                weatherRenderer.render(lineShader, projection, view, weatherParticles, bolts);
             }
 
             // First-person held item (Minecraft-style): drawn after the world so it
@@ -1568,6 +1598,21 @@ public class Main {
         while (existing.contains(base + " " + n)) n++;
         return base + " " + n;
     }
+    /**
+     * Picks a strike target near the player (a random distance, biased toward
+     * where the camera is looking so the bolt usually lands in view) and spawns
+     * the cosmetic bolt; the strike's fire and mob blast happen in World.
+     */
+    private static void lightningStrike(World world, Player player, List<LightningBolt> bolts, Random rnd) {
+        Vector3f front = player.getCamera().getFront();
+        Vector3f pos = player.getPosition();
+        float angle = player.getCamera().getYaw() + (rnd.nextFloat() - 0.5f) * 2.2f;
+        float dist = 12f + rnd.nextFloat() * 30f;
+        LightningBolt bolt = world.strikeLightning(rnd, pos.x + (float) Math.cos(angle) * dist,
+                pos.z + (float) Math.sin(angle) * dist);
+        if (bolt != null) bolts.add(bolt);
+    }
+
     /** Finds a dry, non-mountain spawn near the origin by scanning outward in square rings. */
     private static float[] findSpawn(World world) {
         for (int r = 0; r <= 50; r++) {
