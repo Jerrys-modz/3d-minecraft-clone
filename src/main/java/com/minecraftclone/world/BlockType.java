@@ -1,5 +1,7 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.engine.graphics.TextureAtlas;
+
 /**
  * All placeable/generatable block types. Each entry defines which tile of
  * the procedural texture atlas is used for the top, side and bottom faces,
@@ -16,7 +18,7 @@ package com.minecraftclone.world;
  *       existing tile index).</li>
  *   <li>Give it break times in {@link com.minecraftclone.world.Mining}: {@code put(type, hardness, tool, tier)}.</li>
  *   <li>Add a {@link com.minecraftclone.player.Crafting#shaped} / {@code #shapeless}
- *       or {@code Smelting#smelt} recipe if it's made from ingredients.</li>
+ *       recipe, or a {@code Smelting#outputFor} smelting entry, if it's made from ingredients.</li>
  *   <li>Add it to a tab in {@link com.minecraftclone.player.CreativeCatalog} so creative mode offers it.</li>
  * </ol>
  */
@@ -46,7 +48,7 @@ public enum BlockType {
     BERRY_BUSH(22, false, true, 37),
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
     LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
-    FURNACE(40, true, false, 4, 26, 4), // smelting station: stone top/bottom, furnace-face sides (tile 26)
+    FURNACE(40, true, false, 4, 4, 4, 26, TextureAtlas.FURNACE_LIT_TILE, 0, 0), // smelting station: stone top/bottom/sides, furnace-face front (tile 26) that glows when burning
     STONE_SLAB(44, true, false, true, 4),   // bottom-half slab, stone texture
     PLANKS_SLAB(45, true, false, true, 11), // bottom-half slab, planks texture
     // Fluids: SOURCE variants are placeable and flow (see FluidSim); the WATER/LAVA
@@ -71,21 +73,29 @@ public enum BlockType {
     LILY_PAD(61, false, true, 43),
     PUMPKIN(62, true, false, 44, 44, 44),
     SEAWEED(63, false, true, 45),
+    DOOR(64, true, false, 46, 46, 46),
+    DOOR_OPEN(70, false, true, 46),
+    TRAPDOOR(71, true, false, 47, 47, 47),
+    TRAPDOOR_OPEN(72, false, true, 47),
+    CRAFTING_TABLE(73, true, false, 48, 48, 48), // workbench: right-click opens the 3x3 crafting GUI
+    CHEST(87, true, false, 50, 50, 50),          // storage: right-click opens a 27-slot container GUI (54 when doubled)
+    BARREL(88, true, false, 51, 51, 51),         // storage: cheaper single 27-slot container, never doubles
 
     // Dimension blocks: Nether terrain, End terrain, and the portal blocks that
     // link the dimensions (see DimensionType.portalDestination). Portals are
     // non-solid glowing swirls you walk into to teleport.
-    NETHERRACK(64, true, false, 46, 46, 46),
-    SOUL_SAND(65, true, false, 47, 47, 47),
-    GLOWSTONE(66, true, false, 48, 48, 48, 0, 15), // dim self-light source
-    NETHER_PORTAL(67, false, true, 49, 49, 49, 0, 15),
-    END_STONE(68, true, false, 50, 50, 50),
-    OBSIDIAN(69, true, false, 51, 51, 51),
-    END_PORTAL(70, false, true, 52, 52, 52, 0, 15),
+    NETHERRACK(89, true, false, 52, 52, 52),
+    SOUL_SAND(90, true, false, 53, 53, 53),
+    GLOWSTONE(91, true, false, 54, 54, 54, 0, 15), // dim self-light source
+    NETHER_PORTAL(92, false, true, 55, 55, 55, 0, 15),
+    END_STONE(93, true, false, 56, 56, 56),
+    OBSIDIAN(94, true, false, 57, 57, 57),
+    END_PORTAL(95, false, true, 58, 58, 58, 0, 15),
 
     // Inventory-only items: food and tools. Never placed as a world block,
-    // so they have no atlas tile - each gets its own PNG texture instead,
-    // see com.minecraftclone.engine.graphics.ItemTextures. Mining stats for
+    // so they have no atlas tile - each gets its own procedurally generated
+    // texture instead, see com.minecraftclone.engine.graphics.ItemTextures.
+    // Mining stats for
     // tools (kind/tier/durability) live in Mining.java, not here, to keep
     // this enum focused on rendering/collision.
     APPLE(23, 20),   // food: restores 20 hunger
@@ -103,9 +113,31 @@ public enum BlockType {
     STONE_SWORD(35, 0),
     IRON_SWORD(36, 0),
     DIAMOND_SWORD(37, 0),
+    // Shovels, hammers and broadaxes - the rest of the tool set (see Mining):
+    // shovel = soft ground, hammer = stone/building, broadaxe = wood (faster than an axe).
+    WOOD_SHOVEL(75, 0),
+    STONE_SHOVEL(76, 0),
+    IRON_SHOVEL(77, 0),
+    DIAMOND_SHOVEL(78, 0),
+    WOOD_HAMMER(79, 0),
+    STONE_HAMMER(80, 0),
+    IRON_HAMMER(81, 0),
+    DIAMOND_HAMMER(82, 0),
+    WOOD_BROADAXE(83, 0),
+    STONE_BROADAXE(84, 0),
+    IRON_BROADAXE(85, 0),
+    DIAMOND_BROADAXE(86, 0),
     IRON_INGOT(41, 0), // smelted from iron ore (see Smelting)
     GOLD_INGOT(42, 0), // smelted from gold ore
-    DIAMOND(43, 0);    // smelted from diamond ore
+    DIAMOND(43, 0),    // smelted from diamond ore
+    COAL(74, 0),       // mined from coal ore, the furnace fuel (see Smelting)
+    // Raw meat - dropped by passive mobs when killed (see World.damageMob), edible.
+    RAW_PORKCHOP(65, 16),
+    RAW_BEEF(66, 16),
+    MUTTON(67, 12),
+    // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
+    ROTTEN_FLESH(68, 4),
+    BONES(69, 0);
 
     public final byte id;
     public final boolean solid;
@@ -114,8 +146,12 @@ public enum BlockType {
     public final int topTile;
     public final int sideTile;
     public final int bottomTile;
+    /** Atlas tile for the block's front face (the face it "faces" toward via its orientation), when directional. */
+    public final int frontTile;
+    /** Atlas tile used for the front face while the block is "active" (e.g. a burning furnace's glowing mouth); equals {@link #frontTile} for blocks that don't change. */
+    public final int litFrontTile;
     public final int foodValue;
-    /** True for inventory-only items (food/tools): no atlas tile, own PNG texture, never placeable as a world block. */
+    /** True for inventory-only items (food/tools): no atlas tile, own procedurally generated texture, never placeable as a world block. */
     public final boolean isItem;
     /** 0-15, Minecraft-style: how brightly this block glows (0 = not a light source). See torch handling in {@link Chunk}. */
     public final int lightLevel;
@@ -126,7 +162,7 @@ public enum BlockType {
 
     /** Full-cube block: distinct top/side/bottom textures, collides with the player. */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile) {
-        this(id, solid, transparent, topTile, sideTile, bottomTile, 0);
+        this(id, solid, transparent, topTile, sideTile, bottomTile, sideTile);
     }
 
     /** Full-cube block with a food value (not currently used - cubes aren't eaten - but kept symmetric). */
@@ -134,8 +170,13 @@ public enum BlockType {
         this(id, solid, transparent, topTile, sideTile, bottomTile, foodValue, 0);
     }
 
-    /** Full-cube block that also emits light (e.g. a lamp), plus an (unused) food value. */
-    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue, int lightLevel) {
+    /** Full-cube block with a distinct front face (the face it faces via orientation), e.g. a furnace. */
+    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int frontTile, int foodValue, int lightLevel) {
+        this(id, solid, transparent, topTile, sideTile, bottomTile, frontTile, frontTile, foodValue, lightLevel);
+    }
+
+    /** Full-cube block with a distinct front face that also changes while active (a lit furnace mouth). */
+    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int frontTile, int litFrontTile, int foodValue, int lightLevel) {
         this.id = (byte) id;
         this.solid = solid;
         this.transparent = transparent;
@@ -144,10 +185,17 @@ public enum BlockType {
         this.topTile = topTile;
         this.sideTile = sideTile;
         this.bottomTile = bottomTile;
+        this.frontTile = frontTile;
+        this.litFrontTile = litFrontTile;
         this.foodValue = foodValue;
         this.isItem = false;
         this.lightLevel = lightLevel;
         this.collisionHeight = 1.0f;
+    }
+
+    /** Full-cube block that also emits light (e.g. a lamp), plus an (unused) food value. */
+    BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int foodValue, int lightLevel) {
+        this(id, solid, transparent, topTile, sideTile, bottomTile, sideTile, foodValue, lightLevel);
     }
 
     /** Bottom-half slab: a partial cube, one atlas tile for all faces, colliding only in its lower half. */
@@ -160,6 +208,8 @@ public enum BlockType {
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
+        this.frontTile = tile;
+        this.litFrontTile = tile;
         this.foodValue = 0;
         this.isItem = false;
         this.lightLevel = 0;
@@ -181,13 +231,15 @@ public enum BlockType {
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
+        this.frontTile = tile;
+        this.litFrontTile = tile;
         this.foodValue = 0;
         this.isItem = false;
         this.lightLevel = lightLevel;
         this.collisionHeight = 1.0f;
     }
 
-    /** Inventory-only item (tool, or foraged food like apple/berries): no atlas tile, has its own PNG texture, never placeable as a world block. */
+    /** Inventory-only item (tool, or foraged food like apple/berries): no atlas tile, has its own procedurally generated texture, never placeable as a world block. */
     BlockType(int id, int foodValue) {
         this.id = (byte) id;
         this.solid = false;
@@ -197,6 +249,8 @@ public enum BlockType {
         this.topTile = -1;
         this.sideTile = -1;
         this.bottomTile = -1;
+        this.frontTile = -1;
+        this.litFrontTile = -1;
         this.foodValue = foodValue;
         this.isItem = true;
         this.lightLevel = 0;
@@ -233,6 +287,11 @@ public enum BlockType {
     /** True if this block stops the player / blocks a raycast. */
     public boolean isCollidable() {
         return solid;
+    }
+
+    /** True if this block has a distinct front face that faces its orientation (e.g. a furnace). */
+    public boolean isDirectional() {
+        return frontTile != sideTile;
     }
 
     public boolean isEdible() {
@@ -281,6 +340,32 @@ public enum BlockType {
     /** True if a ray should pass straight through this block (air, static water, or transient flow). */
     public boolean isPassThrough() {
         return this == AIR || this == WATER || this == WATER_FLOW || this == LAVA_FLOW;
+    }
+
+    /** True if this block is drawn in the see-through translucent render pass (glass, ice). */
+    public boolean isTranslucent() {
+        return this == GLASS || this == ICE;
+    }
+
+    /**
+     * True for decoration that grows/sits <em>inside</em> a fluid cell rather
+     * than needing to replace it - Minecraft's "waterlogged" plants (seagrass,
+     * kelp) work the same way. World-gen and manual placement both route this
+     * into the target cell's overlay slot instead of overwriting the water
+     * there - see {@link Chunk#setOverlay} and {@link BlockAccessor#getOverlay}.
+     */
+    public boolean isSubmersible() {
+        return this == SEAWEED;
+    }
+
+    /** True for either half of a functional door (closed solid, or open walk-through). */
+    public boolean isDoor() {
+        return this == DOOR || this == DOOR_OPEN;
+    }
+
+    /** True for a functional trapdoor (closed solid panel, or open walk-through). */
+    public boolean isTrapdoor() {
+        return this == TRAPDOOR || this == TRAPDOOR_OPEN;
     }
 
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */

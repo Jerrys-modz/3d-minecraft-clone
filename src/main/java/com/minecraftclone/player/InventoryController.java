@@ -1,26 +1,28 @@
 package com.minecraftclone.player;
 
+import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.world.BlockType;
 
 /**
- * Drives the mouse interaction on the inventory screen, Minecraft-style. It
+ * Drives the mouse interaction on any container screen, Minecraft-style. It
  * owns the <b>cursor stack</b> (the item currently "held" by the mouse) and
- * applies click/drag/shift-click actions against the player's {@link Inventory}
- * and {@link CraftingGrid}.
+ * applies click/drag/shift-click actions against the active {@link ContainerGui}
+ * - the player's {@link Inventory} plus, depending on which container is open,
+ * the crafting grid and/or a placed furnace.
  * <p>
- * Slot numbering: {@code 0..Inventory.SIZE-1} are the inventory slots (0-8 the
- * hotbar), {@code Inventory.SIZE..Inventory.SIZE+CraftingGrid.SIZE-1} are the
- * 3x3 crafting grid, and {@link #OUTPUT_SLOT} is the crafting result. The
+ * Slot numbering is defined by {@link ContainerGui}: {@code 0..35} are the
+ * inventory slots (0-8 the hotbar), {@code 36..44} the 3x3 crafting grid,
+ * {@code 45} the crafting result, and {@code 46..48} a furnace's slots. The
  * caller (Main) resolves which slot the mouse is over and forwards the events;
  * this class is pure logic so the whole interaction is testable without GL.
  */
 public class InventoryController {
 
     /** Slot id of the crafting result (one past the grid). */
-    public static final int OUTPUT_SLOT = Inventory.SIZE + CraftingGrid.SIZE;
+    public static final int OUTPUT_SLOT = ContainerGui.OUTPUT_SLOT;
 
     private final Inventory inventory;
-    private final CraftingGrid grid;
+    private ContainerGui gui;
 
     private BlockType cursorType;
     private int cursorCount;
@@ -32,11 +34,29 @@ public class InventoryController {
     private int dragStart = -1;
     private boolean dragRight;
     private int dragDistinct;
-    private final boolean[] dragVisited = new boolean[OUTPUT_SLOT + 1];
+    private boolean[] dragVisited = new boolean[ContainerGui.OUTPUT_SLOT + 1];
 
+    /** Wraps the plain inventory screen (player inventory + crafting grid). */
     public InventoryController(Inventory inventory, CraftingGrid grid) {
-        this.inventory = inventory;
-        this.grid = grid;
+        this(new ContainerGui(ContainerGui.Kind.INVENTORY, inventory, grid, null));
+    }
+
+    public InventoryController(ContainerGui gui) {
+        this.inventory = gui.inventory();
+        this.gui = gui;
+    }
+
+    /** Rebinds the controller to a different open container (inventory/furnace/crafting table). */
+    public void setGui(ContainerGui gui) {
+        this.gui = gui;
+        // Resize dragVisited to accommodate all slots in the new GUI
+        if (dragVisited.length < gui.slotCount()) {
+            dragVisited = new boolean[gui.slotCount()];
+        }
+    }
+
+    public ContainerGui gui() {
+        return gui;
     }
 
     public BlockType cursorType() {
@@ -57,23 +77,17 @@ public class InventoryController {
 
     /** A slot's type (null if empty); the output slot is handled separately and never reported here. */
     private BlockType slotType(int slotId) {
-        if (slotId >= Inventory.SIZE) return grid.get(slotId - Inventory.SIZE);
-        return inventory.typeOf(slotId);
+        return gui.typeOf(slotId);
     }
 
     /** A slot's count (grid cells hold 0 or 1). */
     private int slotCount(int slotId) {
-        if (slotId >= Inventory.SIZE) return grid.get(slotId - Inventory.SIZE) == null ? 0 : 1;
-        return inventory.countOf(slotId);
+        return gui.countOf(slotId);
     }
 
     /** Writes a whole stack to a slot; grid cells ignore {@code count} and just record the type. */
     private void setSlot(int slotId, BlockType type, int count) {
-        if (slotId >= Inventory.SIZE) {
-            grid.set(slotId - Inventory.SIZE, type);
-        } else {
-            inventory.setSlot(slotId, type, count);
-        }
+        gui.setSlot(slotId, type, count);
     }
 
     private void clearCursor() {
@@ -88,19 +102,19 @@ public class InventoryController {
      * cursor.
      */
     public void click(int slotId, boolean right, boolean shift) {
-        if (slotId < 0 || slotId > OUTPUT_SLOT) return;
+        if (slotId < 0 || slotId >= gui.slotCount()) return;
         if (shift) {
             quickMove(slotId);
             return;
         }
-        if (slotId == OUTPUT_SLOT) {
+        if (gui.isOutputSlot(slotId)) {
             craft();
             return;
         }
 
         BlockType st = slotType(slotId);
         int sc = slotCount(slotId);
-        boolean isGrid = slotId >= Inventory.SIZE;
+        boolean isGrid = gui.isGridSlot(slotId);
 
         if (!hasCursorItem()) {
             if (st == null) return;                       // empty click on empty slot
@@ -109,7 +123,7 @@ public class InventoryController {
             cursorType = st;
             cursorCount = take;
             if (take < sc) {
-                inventory.setSlot(slotId, st, sc - take);
+                setSlot(slotId, st, sc - take);
             } else {
                 setSlot(slotId, null, 0);
             }
@@ -125,7 +139,7 @@ public class InventoryController {
             int space = Inventory.maxStack(st) - sc;
             if (space > 0) {
                 int add = right ? 1 : Math.min(space, cursorCount);
-                inventory.setSlot(slotId, st, sc + add);
+                setSlot(slotId, st, sc + add);
                 cursorCount -= add;
                 if (cursorCount <= 0) clearCursor();
             }
@@ -147,18 +161,23 @@ public class InventoryController {
      * item per slot.
      */
     public void beginDrag(int slotId, boolean right) {
-        if (slotId < 0 || slotId > OUTPUT_SLOT) return;
+        if (slotId < 0 || slotId >= gui.slotCount()) return;
         dragging = true;
         dragStart = slotId;
         dragRight = right;
         dragDistinct = 1;
-        for (int i = 0; i < dragVisited.length; i++) dragVisited[i] = false;
+        // Ensure dragVisited is large enough for all GUI slots
+        if (dragVisited.length < gui.slotCount()) {
+            dragVisited = new boolean[gui.slotCount()];
+        } else {
+            for (int i = 0; i < dragVisited.length; i++) dragVisited[i] = false;
+        }
         dragVisited[slotId] = true;
     }
 
     /** Mouse move over a slot while the button is held: record it for the drag resolution. */
     public void continueDrag(int slotId) {
-        if (!dragging || slotId < 0 || slotId == OUTPUT_SLOT) return;
+        if (!dragging || slotId < 0 || slotId >= gui.slotCount() || gui.isOutputSlot(slotId)) return;
         if (dragVisited[slotId]) return;
         dragVisited[slotId] = true;
         dragDistinct++;
@@ -167,7 +186,7 @@ public class InventoryController {
     /** Mouse release: resolve the session as a click (one slot) or a drag (several). */
     public void endDrag(int releaseSlot) {
         if (!dragging) return;
-        if (releaseSlot >= 0 && releaseSlot != OUTPUT_SLOT && !dragVisited[releaseSlot]) {
+        if (releaseSlot >= 0 && releaseSlot < gui.slotCount() && !gui.isOutputSlot(releaseSlot) && !dragVisited[releaseSlot]) {
             dragVisited[releaseSlot] = true;
             dragDistinct++;
         }
@@ -188,12 +207,12 @@ public class InventoryController {
      * holding a different item, like Minecraft's drag).
      */
     private void resolveDrag() {
-        if (!hasCursorItem() && dragStart != OUTPUT_SLOT && slotType(dragStart) != null) {
+        if (!hasCursorItem() && !gui.isOutputSlot(dragStart) && slotType(dragStart) != null) {
             click(dragStart, false, false);
         }
         if (!hasCursorItem()) return;
         for (int i = 0; i < dragVisited.length; i++) {
-            if (i != OUTPUT_SLOT && dragVisited[i]) {
+            if (!gui.isOutputSlot(i) && dragVisited[i]) {
                 depositOne(i);
             }
         }
@@ -205,10 +224,10 @@ public class InventoryController {
         if (st == null) {
             setSlot(slotId, cursorType, 1);
             cursorCount--;
-        } else if (st == cursorType && slotId < Inventory.SIZE) {
+        } else if (st == cursorType && (gui.isPlayerSlot(slotId) || gui.isContainerSlot(slotId))) {
             int max = Inventory.maxStack(st);
-            if (inventory.countOf(slotId) < max) {
-                inventory.setSlot(slotId, st, inventory.countOf(slotId) + 1);
+            if (slotCount(slotId) < max) {
+                setSlot(slotId, st, slotCount(slotId) + 1);
                 cursorCount--;
             }
         }
@@ -216,29 +235,83 @@ public class InventoryController {
         if (cursorCount <= 0) clearCursor();
     }
 
-    /** Shift-click: quick-move a stack between hotbar and inventory, or a grid cell back to the inventory. */
+    /**
+     * Shift-click: quick-move a stack. Container slots and grid cells move to
+     * the inventory; a player inventory slot moves into the open container when
+     * it belongs there (smeltable ore/fuel into a furnace, anything into a
+     * chest or an empty crafting-table cell), otherwise it hops between hotbar
+     * and main inventory.
+     */
     private void quickMove(int slotId) {
-        if (slotId == OUTPUT_SLOT) {
-            Crafting.Recipe recipe = Crafting.match(grid.snapshot());
-            if (recipe != null && inventory.add(recipe.output(), recipe.outputAmount()) == 0) {
-                grid.reset();
+        if (gui.isOutputSlot(slotId)) {
+            // Craft repeatedly into the inventory while the grid keeps matching.
+            Crafting.Recipe recipe = gui.currentRecipe();
+            while (recipe != null) {
+                if (inventory.add(recipe.output(), recipe.outputAmount()) != 0) break;
+                gui.grid().reset();
+                recipe = gui.currentRecipe();
             }
             return;
         }
-        if (slotId >= Inventory.SIZE) {
-            BlockType t = grid.get(slotId - Inventory.SIZE);
-            if (t != null && inventory.add(t, 1) == 0) grid.set(slotId - Inventory.SIZE, null);
+        if (gui.isGridSlot(slotId)) {
+            BlockType t = gui.grid().get(slotId - ContainerGui.GRID_START);
+            if (t != null && inventory.add(t, 1) == 0) gui.grid().set(slotId - ContainerGui.GRID_START, null);
+            return;
+        }
+        if (gui.isContainerSlot(slotId)) {
+            int cs = slotId - ContainerGui.CONTAINER_START;
+            BlockType t = gui.container().typeOf(cs);
+            int count = gui.container().countOf(cs);
+            if (t == null) return;
+            int leftover = inventory.add(t, count);
+            gui.container().setSlot(cs, leftover > 0 ? t : null, leftover);
             return;
         }
 
         BlockType t = inventory.typeOf(slotId);
         if (t == null) return;
         int count = inventory.countOf(slotId);
+        int original = count;
+
+        // Prefer the open container: ore/fuel into a furnace, anything into a
+        // chest, items into empty crafting-table cells.
+        if (gui.kind() == ContainerGui.Kind.FURNACE) {
+            int target = -1;
+            if (Smelting.isSmeltable(t)) {
+                target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_INPUT;
+            } else if (com.minecraftclone.world.Furnace.isFuel(t)) {
+                target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_FUEL;
+            }
+            if (target >= 0) {
+                int moved = moveToFurnaceSlot(target, t, count);
+                count -= moved;
+                if (count == 0) {
+                    inventory.setSlot(slotId, null, 0);
+                    return;
+                }
+            }
+        } else if (gui.kind() == ContainerGui.Kind.CHEST) {
+            // A chest accepts anything; fill its stacks first, then empty slots.
+            int moved = count - gui.container().add(t, count);
+            count -= moved;
+            if (count == 0) {
+                inventory.setSlot(slotId, null, 0);
+                return;
+            }
+        } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE) {
+            for (int i = 0; i < CraftingGrid.SIZE && count > 0; i++) {
+                if (gui.grid().get(i) == null) {
+                    gui.grid().set(i, t);
+                    count--;
+                }
+            }
+        }
+
+        // Anything left hops between hotbar and main inventory.
         int from = slotId < Inventory.HOTBAR_SIZE ? Inventory.HOTBAR_SIZE : 0;
         int to = slotId < Inventory.HOTBAR_SIZE ? Inventory.SIZE : Inventory.HOTBAR_SIZE;
-
-        int remaining = count;
         int max = Inventory.maxStack(t);
+        int remaining = count;
         for (int i = from; i < to && remaining > 0; i++) {
             if (inventory.typeOf(i) == t && inventory.countOf(i) < max) {
                 int add = Math.min(max - inventory.countOf(i), remaining);
@@ -253,14 +326,27 @@ public class InventoryController {
                 remaining -= add;
             }
         }
-        if (remaining != count) {
+        if (remaining != original) {
             inventory.setSlot(slotId, remaining == 0 ? null : t, remaining);
         }
     }
 
+    /** Moves up to {@code count} of {@code t} into a furnace slot, topping up a same-type stack; returns items moved. */
+    private int moveToFurnaceSlot(int slotId, BlockType t, int count) {
+        com.minecraftclone.world.Furnace f = gui.furnace();
+        int fs = slotId - ContainerGui.CONTAINER_START;
+        int max = Inventory.maxStack(t);
+        int current = f.countOf(fs);
+        if (f.typeOf(fs) != null && f.typeOf(fs) != t) return 0;
+        int space = max - current;
+        int add = Math.min(space, count);
+        f.setSlot(fs, t, current + add);
+        return add;
+    }
+
     /** Crafts the current grid match into the cursor (if there's room), consuming the ingredients. */
     private void craft() {
-        Crafting.Recipe recipe = Crafting.match(grid.snapshot());
+        Crafting.Recipe recipe = gui.currentRecipe();
         if (recipe == null) return;
         BlockType out = recipe.output();
         int amount = recipe.outputAmount();
@@ -272,10 +358,10 @@ public class InventoryController {
             cursorType = out;
             cursorCount = amount;
         }
-        grid.reset();
+        gui.grid().reset();
     }
 
-    /** Returns any items still on the cursor to the inventory - called when the inventory screen closes. */
+    /** Returns any items still on the cursor to the inventory - called when the screen closes. */
     public void returnCursorToInventory() {
         if (hasCursorItem()) {
             inventory.add(cursorType, cursorCount);
@@ -285,10 +371,11 @@ public class InventoryController {
 
     /** Returns grid contents to the inventory (keeping any that don't fit) - called when the screen closes. */
     public void returnGridToInventory() {
+        if (!gui.hasGrid()) return;
         for (int i = 0; i < CraftingGrid.SIZE; i++) {
-            BlockType t = grid.get(i);
+            BlockType t = gui.grid().get(i);
             if (t != null && inventory.add(t, 1) == 0) {
-                grid.set(i, null);
+                gui.grid().set(i, null);
             }
         }
     }

@@ -11,11 +11,14 @@ import static org.lwjgl.system.MemoryUtil.*;
 /**
  * A GPU mesh with an interleaved vertex buffer:
  * position(3 floats), uv(2 floats), light(1 float), blockLight(1 float),
- * fluidFlow(1 float) = 8 floats/vertex, plus an index buffer.
+ * fluidFlow(1 float), flowDir(2 floats) = 10 floats/vertex, plus an index
+ * buffer. flowDir is the direction (in texture space) the fluid surface scroll
+ * animation travels - (0,0) for anything that doesn't animate like flowing
+ * water.
  */
 public class Mesh {
 
-    public static final int STRIDE_FLOATS = 8;
+    public static final int STRIDE_FLOATS = 10;
 
     private final int vaoId;
     private final int vboId;
@@ -55,6 +58,8 @@ public class Mesh {
         glEnableVertexAttribArray(3);
         glVertexAttribPointer(4, 1, GL_FLOAT, false, strideBytes, 7L * Float.BYTES);
         glEnableVertexAttribArray(4);
+        glVertexAttribPointer(5, 2, GL_FLOAT, false, strideBytes, 8L * Float.BYTES);
+        glEnableVertexAttribArray(5);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);

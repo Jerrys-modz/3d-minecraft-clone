@@ -13,9 +13,9 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
  * blocks fully self-contained with no external image assets to ship - and,
  * unlike items, blocks genuinely benefit from living on one shared sheet
  * since chunk meshing batches many block faces into a single draw call.
- * (Inventory-only items have their own individual PNG files instead - see
- * {@link ItemTextures} - and the HUD's text font lives in its own small
- * atlas - see {@link FontAtlas} - since neither is a block.)
+ * (Inventory-only items are procedurally generated too, each into its own
+ * small GL texture - see {@link ItemTextures} - and the HUD's text font lives
+ * in its own small atlas - see {@link FontAtlas} - since neither is a block.)
  * <p>
  * Tile indices match {@link com.minecraftclone.world.BlockType}'s
  * topTile/sideTile/bottomTile fields. Not every tile in the 8x8 grid is
@@ -24,6 +24,12 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
  * Tiles for cross-shaped decoration blocks (grass/flowers/berry bush) are
  * painted onto a transparent background and rely on the chunk fragment
  * shader's alpha-cutout discard.
+ * <p>
+ * Textures are painted with seamless 2-octave value noise (see {@link #fbm})
+ * rather than per-pixel static: each material gets a coherent, organic grain,
+ * a light-from-above tint, and its own detail pass (pebbles, bark ridges,
+ * wood grain, ore highlights...), with a per-tile noise offset so identical
+ * materials never line up into a visible repeating grid.
  */
 public class TextureAtlas {
 
@@ -37,6 +43,14 @@ public class TextureAtlas {
     public static final int LAMP_TILE = 25;
     /** Tile index of the furnace's front/side face. */
     public static final int FURNACE_TILE = 26;
+    /** Tile index of the crafting table's workbench face. */
+    public static final int CRAFTING_TABLE_TILE = 48;
+    /** Tile index of the furnace's front face when it's actively burning - the mouth glows orange. */
+    public static final int FURNACE_LIT_TILE = 49;
+    /** Tile index of the chest's lid/front face. */
+    public static final int CHEST_TILE = 50;
+    /** Tile index of the barrel's face. */
+    public static final int BARREL_TILE = 51;
 
     private int textureId;
 
@@ -49,63 +63,71 @@ public class TextureAtlas {
         BufferedImage image = new BufferedImage(ATLAS_PX, ATLAS_PX, BufferedImage.TYPE_INT_ARGB);
         Random rnd = new Random(1337);
 
-        paintTile(image, 1, rnd, 0x5EA836, 0x4C8C2C, true);   // grass top
-        paintTile(image, 2, rnd, 0x8B5A2B, 0x6E4623, true, 0x5EA836, 0.28f); // grass side (dirt + grass fringe)
-        paintTile(image, 3, rnd, 0x8B5A2B, 0x6E4623, true);   // dirt
-        paintTile(image, 4, rnd, 0x8A8A8A, 0x777777, true);   // stone
-        paintTile(image, 5, rnd, 0xE0D2A0, 0xCBBB84, true);   // sand
-        paintFluidTile(image, 6, 0x3B6FD1, 0x2E58A8, 190);     // water (translucent)
-        paintTile(image, 7, rnd, 0x6E4A2A, 0x543A20, false);  // log side (bark stripes)
-        paintLogStripes(image, 7, rnd);
-        paintTile(image, 8, rnd, 0xC9A063, 0xAE8850, true);   // log top rings
-        paintRings(image, 8);
-        paintTile(image, 9, rnd, 0x3E8E35, 0x2F701F, true);   // leaves
-        paintTile(image, 10, rnd, 0x3A3A3A, 0x232323, true);  // bedrock
-        paintTile(image, 11, rnd, 0xC69A56, 0xAF8646, false); // planks
-        paintPlankLines(image, 11);
-        paintTile(image, 12, rnd, 0xF7F7FA, 0xE3E3EA, true);  // snow top
-        paintTile(image, 13, rnd, 0x8B5A2B, 0x6E4623, true, 0xF7F7FA, 0.28f); // snow side
-        paintTile(image, 14, rnd, 0x8D8878, 0x716C5E, true);  // gravel
-        paintTile(image, 15, rnd, 0x4E8B3C, 0x3D6E2E, true);  // cactus
+        // --- Core terrain ---
+        paintGrassTop(image, 1, rnd);
+        paintFringedSide(image, 2, rnd, 0x63B034, 0x3E7A24);            // grass side (dirt + grass fringe)
+        paintDirt(image, 3, rnd);
+        paintStone(image, 4, rnd);
+        paintSand(image, 5, rnd);
+        paintFluidTile(image, 6, rnd, 0x6FB4E8, 0x1F4A96, 195, 0xEAFBFF); // water
+        paintLogSide(image, 7, rnd);
+        paintLogTop(image, 8, rnd);
+        paintLeaves(image, 9, rnd);
+        paintBedrock(image, 10, rnd);
+        paintPlanks(image, 11, rnd);
+        paintSnow(image, 12, rnd);
+        paintFringedSide(image, 13, rnd, 0xFFFFFF, 0xD8E3F0);            // snow side
+        paintGravel(image, 14, rnd);
+        paintCactus(image, 15, rnd);
 
-        paintOreTile(image, 16, rnd, 0x1B1B1B);               // coal ore (dark speckles in stone)
-        paintOreTile(image, 17, rnd, 0xC08B5C);                // iron ore (rusty tan speckles)
-        paintOreTile(image, 18, rnd, 0xE8C93A);                // gold ore (gold speckles)
-        paintOreTile(image, 19, rnd, 0x5FE0E0);                // diamond ore (cyan speckles)
-        paintFluidTile(image, 20, 0xE25822, 0xB33A12, 225);     // lava
+        paintOreTile(image, 16, rnd, 0x242424, 0x0E0E0E);                // coal ore
+        paintOreTile(image, 17, rnd, 0xD8A66A, 0xA87C44);                // iron ore
+        paintOreTile(image, 18, rnd, 0xFFD93A, 0xE0A81E);                // gold ore
+        paintOreTile(image, 19, rnd, 0x6FE8E8, 0x3FBFBF);                // diamond ore
+        paintFluidTile(image, 20, rnd, 0xF2A93B, 0x9E2A0C, 225, 0xFFE066); // lava
 
         paintCrossGrass(image, 21, rnd, 0x4C8C2C);                        // tall grass
-        paintCrossFlower(image, 22, rnd, 0x3D6E2E, 0xD0392B, 0xE8C93A);   // red flower
-        paintCrossFlower(image, 23, rnd, 0x3D6E2E, 0xF2D33A, 0xB5651D);   // yellow flower
+        paintCrossFlower(image, 22, rnd, 0x3D6E2E, 0xD0392B, 0x241008, false); // red poppy (dark center)
+        paintCrossFlower(image, 23, rnd, 0x3D6E2E, 0xF2D33A, 0xB5651D, true);  // yellow dandelion (fluffy)
 
-        paintTile(image, 34, rnd, 0xBEE7EA, 0xA8D3D6, false); // glass
-        paintGlassPanes(image, 34);
-        paintTile(image, 27, rnd, 0x2F6B2F, 0x245424, true);                 // swamp grass top
-        paintTile(image, 28, rnd, 0x8B5A2B, 0x6E4623, true, 0x2F6B2F, 0.28f); // swamp grass side
-        paintTile(image, 29, rnd, 0xB5532B, 0x94411F, true);                 // red clay (badlands)
-        paintTile(image, 30, rnd, 0x8A6FA0, 0x6E5584, true);                 // mycelium top
-        paintTile(image, 31, rnd, 0x8B5A2B, 0x6E4623, true, 0x8A6FA0, 0.28f); // mycelium side
-        paintFluidTile(image, 32, 0x9ADBEA, 0x7FC4D6, 200);                  // ice
+        // --- Biome blocks ---
+        paintGrassTop(image, 27, rnd, 0x4A9444, 0x2E6B2A);               // swamp grass top
+        paintFringedSide(image, 28, rnd, 0x4A9444, 0x2E6B2A);            // swamp grass side
+        paintRedClay(image, 29, rnd);
+        paintMycelium(image, 30, rnd);
+        paintFringedSide(image, 31, rnd, 0x9A7FB0, 0x6E5584);            // mycelium side
+        paintFluidTile(image, 32, rnd, 0x9ADBEA, 0x7FC4D6, 200, 0xF2FEFF); // ice
         paintDeadBush(image, 33, rnd);
-        paintMushroom(image, 35, rnd, 0xD0392B, 0xB3251C);                   // red mushroom
-        paintMushroom(image, 36, rnd, 0x8B5A2B, 0x6E4623);                   // brown mushroom
+        paintGlass(image, 34);
+        paintMushroom(image, 35, rnd, 0xD0392B, 0xB3251C);               // red mushroom
+        paintMushroom(image, 36, rnd, 0x9A6A3A, 0x7A5028);               // brown mushroom
         paintVine(image, 39, rnd);
-        paintTile(image, 40, rnd, 0xE8A0B4, 0xC97E97, true);   // cherry leaves (pink)
-        paintTile(image, 41, rnd, 0xA5DBEE, 0x8AC6DE, true);   // packed ice
+        paintLeaves(image, 40, rnd, 0xF2AEBF, 0xC97E97);                 // cherry leaves (pink)
+        paintPackedIce(image, 41, rnd);
         paintBamboo(image, 42, rnd);
         paintLilyPad(image, 43, rnd);
-        paintTile(image, 44, rnd, 0xE08A2E, 0xC7731F, true);   // pumpkin
+        paintPumpkin(image, 44, rnd);
         paintSeaweed(image, 45, rnd);
-        paintNetherrack(image, 46, rnd);
-        paintSoulSand(image, 47, rnd);
-        paintTile(image, 48, rnd, 0xF5E6A0, 0xE8CE6A, true, 0xFFF7C0, 0.5f); // glowstone (bright, yellowish)
-        paintNetherPortal(image, 49, rnd);
-        paintTile(image, 50, rnd, 0xE4E0C8, 0xCFC8A8, true);   // end stone (pale, sandy)
-        paintObsidian(image, 51, rnd);
-        paintEndPortal(image, 52, rnd);
+        paintDoor(image, 46, rnd);
+        paintTrapdoor(image, 47, rnd);
+
+        // --- Nether / End dimension blocks ---
+        paintNetherrack(image, 52, rnd);
+        paintSoulSand(image, 53, rnd);
+        paintTile(image, 54, rnd, 0xF5E6A0, 0xE8CE6A, true, 0xFFF7C0, 0.5f); // glowstone (bright, yellowish)
+        paintNetherPortal(image, 55, rnd);
+        paintTile(image, 56, rnd, 0xE4E0C8, 0xCFC8A8, true);   // end stone (pale, sandy)
+        paintObsidian(image, 57, rnd);
+        paintEndPortal(image, 58, rnd);
+
+        // --- Furniture / fixtures ---
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
+        paintFurnaceLit(image, FURNACE_LIT_TILE);
+        paintCraftingTable(image, CRAFTING_TABLE_TILE);
+        paintChest(image, CHEST_TILE);
+        paintBarrel(image, BARREL_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
 
@@ -120,116 +142,433 @@ public class TextureAtlas {
         return (index / GRID) * TILE_PX;
     }
 
-    private void paintTile(BufferedImage img, int index, Random rnd, int baseColor, int altColor, boolean speckled) {
-        paintTile(img, index, rnd, baseColor, altColor, speckled, 0, 0f);
+    // ---------------------------------------------------------------------
+    // Color helpers
+    // ---------------------------------------------------------------------
+
+    /** Linearly interpolates between two 0xRRGGBB colors; t=0 -> c0, t=1 -> c1. */
+    private static int lerpColor(int c0, int c1, float t) {
+        int r = Math.round(((c0 >> 16) & 0xFF) + ((((c1 >> 16) & 0xFF) - ((c0 >> 16) & 0xFF)) * t));
+        int g = Math.round(((c0 >> 8) & 0xFF) + ((((c1 >> 8) & 0xFF) - ((c0 >> 8) & 0xFF)) * t));
+        int b = Math.round((c0 & 0xFF) + (((c1 & 0xFF) - (c0 & 0xFF)) * t));
+        return (r << 16) | (g << 8) | b;
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    /** Multiplies a 0xRRGGBB color's brightness by {@code f}. */
+    private static int shade(int color, float f) {
+        int r = Math.min(255, Math.max(0, Math.round(((color >> 16) & 0xFF) * f)));
+        int g = Math.min(255, Math.max(0, Math.round(((color >> 8) & 0xFF) * f)));
+        int b = Math.min(255, Math.max(0, Math.round((color & 0xFF) * f)));
+        return (r << 16) | (g << 8) | b;
+    }
+
+    // ---------------------------------------------------------------------
+    // Seamless value noise
+    // ---------------------------------------------------------------------
+
+    private static int latticeValue(int gx, int gy) {
+        int h = gx * 374761393 + gy * 668265263;
+        h = (h ^ (h >> 13)) * 1274126177;
+        h = h ^ (h >> 16);
+        return h & 0xFFFF;
+    }
+
+    private static float smoothstep(float t) {
+        return t * t * (3f - 2f * t);
     }
 
     /**
-     * Fills a tile with a base color, sprinkling in noise speckles of altColor,
-     * and optionally a fringe band of fringeColor along the top edge (used for
-     * the grass/snow "side" tiles that blend into dirt).
+     * Seamless value noise at tile-space {@code (x, y)}, sampled from a
+     * lattice of {@code 16/cell} cells per axis. Wraps in both directions so a
+     * 16px tile tiles seamlessly, which is what lets a material repeat across
+     * many blocks without visible seams.
      */
-    private void paintTile(BufferedImage img, int index, Random rnd, int baseColor, int altColor,
-                            boolean speckled, int fringeColor, float fringeHeightFraction) {
+    private static float valueNoise(float x, float y, int cell) {
+        int n = TILE_PX / cell;
+        int gx = (int) Math.floor(x / cell);
+        int gy = (int) Math.floor(y / cell);
+        float fx = (x - gx * cell) / cell;
+        float fy = (y - gy * cell) / cell;
+        int gx0 = Math.floorMod(gx, n), gy0 = Math.floorMod(gy, n);
+        int gx1 = Math.floorMod(gx + 1, n), gy1 = Math.floorMod(gy + 1, n);
+        float u = smoothstep(fx), v = smoothstep(fy);
+        float v00 = latticeValue(gx0, gy0) / 65535f;
+        float v10 = latticeValue(gx1, gy0) / 65535f;
+        float v01 = latticeValue(gx0, gy1) / 65535f;
+        float v11 = latticeValue(gx1, gy1) / 65535f;
+        return lerp(lerp(v00, v10, u), lerp(v01, v11, u), v);
+    }
+
+    /** Two-octave fractal noise in [0,1] - big soft blobs plus fine grain. */
+    private static float fbm(float x, float y) {
+        return 0.62f * valueNoise(x, y, 4) + 0.38f * valueNoise(x, y, 2);
+    }
+
+    /** Per-tile noise offset, so each copy of a tile has its own coherent grain instead of a repeating grid. */
+    private static float noiseOffset(Random rnd) {
+        return rnd.nextFloat() * 1000f;
+    }
+
+    /** A subtle light-from-above tint and corner darkening, so tiles read as solid blocks. */
+    private static float faceShade(float x, float y) {
+        float top = 1f + 0.04f - 0.09f * (y / (TILE_PX - 1f));
+        float dx = (x - 7.5f) / 7.5f;
+        float dy = (y - 7.5f) / 7.5f;
+        return top * (1f - 0.04f * (dx * dx + dy * dy));
+    }
+
+    /**
+     * The core material painter: base color mottled by seamless fbm noise,
+     * pushed through a light-to-dark ramp and lightly shaded from above.
+     * {@code light}/{@code dark} are the bright and dark ends of the ramp,
+     * {@code contrast} (0..1) how far the noise spreads between them.
+     */
+    private void paintNoiseTile(BufferedImage img, int index, int light, int dark, float contrast, Random rnd) {
         int ox = tileX(index);
         int oy = tileY(index);
-        int fringeRows = Math.round(TILE_PX * fringeHeightFraction);
+        float oxs = rnd != null ? noiseOffset(rnd) : 0f;
+        float oys = rnd != null ? noiseOffset(rnd) : 0f;
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
-                int color;
-                if (fringeColor != 0 && y < fringeRows) {
-                    color = (rnd.nextFloat() < 0.75f) ? fringeColor : baseColor;
-                } else {
-                    color = baseColor;
-                    if (speckled && rnd.nextFloat() < 0.35f) {
-                        color = altColor;
-                    }
+                float n = (fbm(x + oxs, y + oys) - 0.5f) * contrast + 0.5f;
+                int color = lerpColor(dark, light, n);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(color, faceShade(x, y)));
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Terrain materials
+    // ---------------------------------------------------------------------
+
+    /** Grass top: bright fbm green with a scattering of darker patches and lighter blade tips. */
+    private void paintGrassTop(BufferedImage img, int index, Random rnd) {
+        paintGrassTop(img, index, rnd, 0x63B034, 0x3E7A24);
+    }
+
+    private void paintGrassTop(BufferedImage img, int index, Random rnd, int light, int dark) {
+        paintNoiseTile(img, index, light, dark, 0.55f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Lighter blade tips on the top rows.
+        for (int y = 0; y < 3; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                if (rnd.nextFloat() < 0.35f) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | shade(light, 1.12f));
                 }
+            }
+        }
+    }
+
+    /** Dirt: a warm medium-brown (modern Minecraft tone) with granular speckles, small pebbles and light flecks. */
+    private void paintDirt(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0x9B7653, 0x6B4F34, 0.45f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int i = 0; i < 6; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x54402A);
+        }
+        for (int i = 0; i < 5; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0xA88963);
+        }
+    }
+
+    /** Stone: low-contrast gray mottling with a few faint diagonal cracks. */
+    private void paintStone(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0x9A9A9A, 0x6A6A6A, 0.4f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int c = 0; c < 3; c++) {
+            int x = rnd.nextInt(TILE_PX - 3), y = rnd.nextInt(TILE_PX - 3);
+            int dx = rnd.nextBoolean() ? 1 : -1;
+            for (int i = 0; i < 3; i++) {
+                img.setRGB(ox + x + i, oy + y + dx * i, 0xFF000000 | 0x555555);
+            }
+        }
+    }
+
+    /** Sand: fine warm grain with faint sparkle. */
+    private void paintSand(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0xE6D8A8, 0xC0AC78, 0.35f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int i = 0; i < 4; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0xF4E8C8);
+        }
+    }
+
+    /** A dirt-style base with a ragged colored fringe along the top edge (grass/snow/mycelium sides). */
+    private void paintFringedSide(BufferedImage img, int index, Random rnd, int fringeLight, int fringeDark) {
+        paintNoiseTile(img, index, 0x9B7653, 0x6B4F34, 0.45f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int maxRows = Math.round(TILE_PX * 0.30f);
+        for (int x = 0; x < TILE_PX; x++) {
+            // Ragged, column-varying fringe height.
+            float n = fbm(x * 1.4f, 0f);
+            int rows = 2 + (int) (n * maxRows);
+            for (int y = 0; y < rows; y++) {
+                float t = 1f - y / (float) rows;
+                int color = lerpColor(fringeLight, fringeDark, t * 0.5f + 0.25f);
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }
     }
 
-    /** Paints a translucent, lightly banded fluid tile without noisy speckles. */
-    private void paintFluidTile(BufferedImage img, int index, int baseColor, int altColor, int alpha) {
+    /** Log side: bark with vertical ridges and a few light highlights. */
+    private void paintLogSide(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0x7A5430, 0x4E341C, 0.45f, rnd);
         int ox = tileX(index);
         int oy = tileY(index);
-        for (int y = 0; y < TILE_PX; y++) {
-            int color = (y / 3) % 2 == 0 ? baseColor : altColor;
-            for (int x = 0; x < TILE_PX; x++) {
-                img.setRGB(ox + x, oy + y, (alpha << 24) | color);
-            }
-        }
-    }
-
-    private void paintLogStripes(BufferedImage img, int index, Random rnd) {
-        int ox = tileX(index);
-        int oy = tileY(index);
-        int dark = 0x4A3018;
-        for (int x = 0; x < TILE_PX; x += 4) {
-            for (int y = 0; y < TILE_PX; y++) {
-                if (rnd.nextFloat() < 0.6f) {
+        int dark = 0x3A2613;
+        int light = 0x8A6A42;
+        for (int x = 0; x < TILE_PX; x++) {
+            // Wobbly vertical ridge lines.
+            float n = fbm(x * 1.8f, 0f);
+            if (n < 0.32f) {
+                for (int y = 0; y < TILE_PX; y++) {
                     img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
+                }
+            } else if (n > 0.8f) {
+                for (int y = 0; y < TILE_PX; y++) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | light);
                 }
             }
         }
     }
 
-    private void paintRings(BufferedImage img, int index) {
+    /** Log top: pale wood with wobbly concentric growth rings around the center. */
+    private void paintLogTop(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0xD2AF72, 0xA8864E, 0.3f, rnd);
         int ox = tileX(index);
         int oy = tileY(index);
-        double cx = TILE_PX / 2.0 - 0.5;
-        double cy = TILE_PX / 2.0 - 0.5;
-        int dark = 0x8A6B3F;
+        int ring = 0x8A6B3F;
+        double cx = TILE_PX / 2.0 - 0.5, cy = TILE_PX / 2.0 - 0.5;
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
-                double d = Math.hypot(x - cx, y - cy);
+                double wobble = 0.4 * Math.sin(x * 1.7) + 0.4 * Math.cos(y * 2.1);
+                double d = Math.hypot(x - cx, y - cy) + wobble;
                 if (((int) Math.round(d)) % 3 == 0) {
-                    img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | ring);
                 }
             }
         }
     }
 
-    private void paintPlankLines(BufferedImage img, int index) {
+    /** Leaves: clustered low-frequency mottling with scattered darker and lighter leaves. */
+    private void paintLeaves(BufferedImage img, int index, Random rnd) {
+        paintLeaves(img, index, rnd, 0x4C9A38, 0x2F6B1F);
+    }
+
+    private void paintLeaves(BufferedImage img, int index, Random rnd, int light, int dark) {
+        paintNoiseTile(img, index, light, dark, 0.75f, rnd);
         int ox = tileX(index);
         int oy = tileY(index);
-        int dark = 0x8E6A34;
-        for (int y = 0; y < TILE_PX; y++) {
-            if (y % 4 == 0) {
+        for (int i = 0; i < 6; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextBoolean() ? shade(light, 1.15f) : shade(dark, 0.8f)));
+        }
+    }
+
+    /** Bedrock: near-black, barely-patterned. */
+    private void paintBedrock(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0x4A4A4A, 0x202020, 0.55f, rnd);
+    }
+
+    /** Planks: boards with horizontal seams and wood grain streaks. */
+    private void paintPlanks(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0xC69A56, 0x8E6A34, 0.5f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int seam = 0x6E4F28;
+        int grain = 0xA88044;
+        // Four horizontal boards.
+        for (int b = 0; b < 4; b++) {
+            int y0 = b * 4;
+            int seamY = b * 4;
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + seamY, 0xFF000000 | seam);
+            }
+            // Horizontal grain streaks across each board.
+            for (int y = y0; y < y0 + 4; y++) {
                 for (int x = 0; x < TILE_PX; x++) {
-                    img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
-                }
-            }
-        }
-    }
-
-    /** Stone base with a few small clustered "ore" speckle blobs, for coal/iron/gold/diamond ore blocks. */
-    private void paintOreTile(BufferedImage img, int index, Random rnd, int oreColor) {
-        paintTile(img, index, rnd, 0x8A8A8A, 0x777777, true);
-        int ox = tileX(index);
-        int oy = tileY(index);
-        int blobs = 3 + rnd.nextInt(3);
-        for (int b = 0; b < blobs; b++) {
-            int cx = rnd.nextInt(TILE_PX);
-            int cy = rnd.nextInt(TILE_PX);
-            int size = 1 + rnd.nextInt(2);
-            for (int dy = -size; dy <= size; dy++) {
-                for (int dx = -size; dx <= size; dx++) {
-                    int px = cx + dx, py = cy + dy;
-                    if (px < 0 || px >= TILE_PX || py < 0 || py >= TILE_PX) continue;
-                    if (dx * dx + dy * dy <= size * size && rnd.nextFloat() < 0.85f) {
-                        img.setRGB(ox + px, oy + py, 0xFF000000 | oreColor);
+                    float n = fbm(x * 1.2f, y * 0.6f + b * 7f);
+                    if (n > 0.78f) {
+                        img.setRGB(ox + x, oy + y, 0xFF000000 | grain);
                     }
                 }
             }
         }
     }
 
+    /** Snow: near-white with a faint cool tint and sparkle. */
+    private void paintSnow(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0xFFFFFF, 0xD8E3F0, 0.35f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int i = 0; i < 5; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0xFFFFFF);
+        }
+    }
+
+    /** Gravel: a mix of rounded pebbles in grays and tans over a coarse base. */
+    private void paintGravel(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0x9A9284, 0x6E685E, 0.55f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int[] pebbles = {0xB0A898, 0x7A746A, 0x8A8070, 0xA89C84, 0x5E5850};
+        for (int i = 0; i < 8; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            int color = pebbles[rnd.nextInt(pebbles.length)];
+            img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            if (x + 1 < TILE_PX) img.setRGB(ox + x + 1, oy + y, 0xFF000000 | color);
+            if (y + 1 < TILE_PX) img.setRGB(ox + x, oy + y + 1, 0xFF000000 | color);
+        }
+    }
+
+    /** Cactus: green with vertical ridge seams and highlights. */
+    private void paintCactus(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0x5EA83C, 0x3A7A28, 0.5f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int x = 3; x < TILE_PX; x += 5) {
+            for (int y = 0; y < TILE_PX; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | 0x2E621F);
+            }
+        }
+    }
+
+    /** Stone base with a few clustered "ore" blobs (highlighted top edge, darker rim). */
+    private void paintOreTile(BufferedImage img, int index, Random rnd, int oreColor, int oreDark) {
+        paintStone(img, index, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int blobs = 3 + rnd.nextInt(3);
+        for (int b = 0; b < blobs; b++) {
+            int cx = 2 + rnd.nextInt(TILE_PX - 4);
+            int cy = 2 + rnd.nextInt(TILE_PX - 4);
+            int size = 1 + rnd.nextInt(2);
+            for (int dy = -size - 1; dy <= size + 1; dy++) {
+                for (int dx = -size - 1; dx <= size + 1; dx++) {
+                    int px = cx + dx, py = cy + dy;
+                    if (px < 0 || px >= TILE_PX || py < 0 || py >= TILE_PX) continue;
+                    float d = dx * dx + dy * dy;
+                    if (d <= size * size && rnd.nextFloat() < 0.85f) {
+                        // Rim darker, centre brighter, top lit.
+                        float t = 1f - Math.min(1f, d / (size * size + 1f));
+                        int color = lerpColor(oreDark, oreColor, t);
+                        if (dy < 0) color = shade(color, 1.18f);
+                        img.setRGB(ox + px, oy + py, 0xFF000000 | color);
+                    } else if (d <= (size + 1) * (size + 1) && rnd.nextFloat() < 0.5f) {
+                        img.setRGB(ox + px, oy + py, 0xFF000000 | oreDark);
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Biome & derived materials
+    // ---------------------------------------------------------------------
+
+    private void paintRedClay(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0xC05A30, 0x8A3D1E, 0.5f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int i = 0; i < 4; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0xE07048);
+        }
+    }
+
+    private void paintMycelium(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0x9A7FB0, 0x6E5584, 0.55f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int i = 0; i < 5; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0xC0A8D0);
+        }
+    }
+
+    private void paintPackedIce(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0xB0DCEF, 0x86C0D9, 0.4f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int i = 0; i < 5; i++) {
+            int x = rnd.nextInt(TILE_PX), y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0xE8FAFF);
+        }
+    }
+
+    private void paintPumpkin(BufferedImage img, int index, Random rnd) {
+        paintNoiseTile(img, index, 0xE8962E, 0xB8651F, 0.5f, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Vertical gourd ridges.
+        for (int x = 2; x < TILE_PX; x += 3) {
+            for (int y = 0; y < TILE_PX; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | 0x9A4E1A);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Fluids
+    // ---------------------------------------------------------------------
+
     /**
-     * A tuft of a few vertical (slightly swaying) blade strokes on a fully
-     * transparent background, for the cross-shaped tall grass decoration.
+     * Paints a translucent fluid tile as soft, gently wavy bands between a
+     * light and dark shade, plus a few bright sparkle pixels for glints off
+     * the surface - water/lava's flowing translucent surface. Each band's
+     * edge is smoothly interpolated rather than a hard stripe boundary, and
+     * a small per-column phase shift bends the bands into a wave instead of
+     * dead-straight horizontal lines. The band period (8) divides the tile size
+     * (16) evenly, and the per-column wave shift repeats every tile width, so
+     * the flowing-fluid scroll animation (see chunk.frag) wraps with no visible
+     * seam in either direction - which is what lets it scroll along the actual
+     * flow direction instead of always straight down.
      */
+    private void paintFluidTile(BufferedImage img, int index, Random rnd, int lightColor, int darkColor, int alpha, int sparkleColor) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int period = 8; // divides TILE_PX (16) evenly - see the seam note above
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // One full sine cycle across the tile width (period 16), so the
+                // wave shift repeats exactly at the tile's horizontal seam too -
+                // otherwise scrolling the texture along the flow direction would
+                // hit a seam at every tile boundary.
+                int waveShift = Math.round(1.5f * (float) Math.sin(x * (Math.PI / 8)));
+                int phase = Math.floorMod(y + waveShift, period);
+                // Triangle wave 0..1..0 across the period: a soft gradient
+                // band instead of a hard edge between shades.
+                float t = phase < period / 2f ? phase / (period / 2f) : (period - phase) / (period / 2f);
+                float n = fbm(x * 1.3f, y * 1.3f) * 0.25f;
+                img.setRGB(ox + x, oy + y, (alpha << 24) | lerpColor(darkColor, lightColor, t + n));
+            }
+        }
+        int sparkles = 3 + rnd.nextInt(3);
+        for (int i = 0; i < sparkles; i++) {
+            int sx = rnd.nextInt(TILE_PX);
+            int sy = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + sx, oy + sy, (Math.min(255, alpha + 45) << 24) | sparkleColor);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Cross-shaped decorations (transparent backgrounds)
+    // ---------------------------------------------------------------------
+
+    /** A tuft of a few vertical (slightly swaying) blade strokes on a fully transparent background. */
     private void paintCrossGrass(BufferedImage img, int index, Random rnd, int color) {
         int ox = tileX(index);
         int oy = tileY(index);
@@ -243,48 +582,68 @@ public class TextureAtlas {
                 int t = y - topY;
                 int x = bx + (sway * t) / Math.max(1, height - 1);
                 if (x < 0 || x >= TILE_PX) continue;
-                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                // Blades shade lighter toward the tips.
+                int c = t > height * 0.6f ? shade(color, 1.2f) : shade(color, 0.9f);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | c);
             }
         }
     }
 
-    /** A simple stem + petal cluster + center on a transparent background, for the cross-shaped flower decorations. */
-    private void paintCrossFlower(BufferedImage img, int index, Random rnd, int stemColor, int petalColor, int centerColor) {
+    /**
+     * A flower on a swaying stem: the red poppy (four petals around a dark
+     * center) or the yellow dandelion (a dense fluffy head), each with a small
+     * leaf pair at the base, on a transparent background.
+     */
+    private void paintCrossFlower(BufferedImage img, int index, Random rnd, int stemColor, int petalColor, int centerColor, boolean puffy) {
         int ox = tileX(index);
         int oy = tileY(index);
-        int stemX = TILE_PX / 2;
+        int stemX = 8;
+        // Swaying 2px stem with a lighter edge.
         for (int y = TILE_PX - 6; y < TILE_PX; y++) {
             img.setRGB(ox + stemX, oy + y, 0xFF000000 | stemColor);
+            img.setRGB(ox + stemX + 1, oy + y, 0xFF000000 | shade(stemColor, 0.8f));
         }
-        int headY = TILE_PX - 8;
-        int[][] petalOffsets = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
-        for (int[] o : petalOffsets) {
-            int x = stemX + o[0], y = headY + o[1];
-            if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
-            img.setRGB(ox + x, oy + y, 0xFF000000 | petalColor);
+        // Small leaves at the base of the stem.
+        img.setRGB(ox + stemX - 2, oy + TILE_PX - 4, 0xFF000000 | stemColor);
+        img.setRGB(ox + stemX + 3, oy + TILE_PX - 4, 0xFF000000 | stemColor);
+
+        // Bloom head, radially shaded (lit from above).
+        double cx = 7.5, cy = 6.5;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                double dx = x - cx, dy = (y - cy) * 1.15;
+                double d = Math.hypot(dx, dy);
+                if (d > 4.5) continue;
+                if (puffy) {
+                    // Dandelion: a dense fluffy head, brighter toward the top.
+                    float t = Math.max(0f, 1f - (float) d / 4.5f);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | lerpColor(shade(petalColor, 0.85f), shade(petalColor, 1.2f), t));
+                } else {
+                    // Poppy: four petals around a dark center; the diagonal
+                    // bands between petals stay transparent as petal gaps.
+                    if (d <= 1.3) {
+                        img.setRGB(ox + x, oy + y, 0xFF000000 | centerColor);
+                    } else {
+                        if (Math.abs(dx) > 1.7 && Math.abs(dy) > 1.7 && d > 2.2) continue;
+                        float t = Math.max(0f, 1f - (float) d / 4.5f);
+                        img.setRGB(ox + x, oy + y, 0xFF000000 | lerpColor(shade(petalColor, 0.8f), shade(petalColor, 1.18f), t));
+                    }
+                }
+            }
         }
-        img.setRGB(ox + stemX, oy + headY, 0xFF000000 | centerColor);
+        if (puffy) {
+            // A few darker fluff seeds and green sepals under the head.
+            for (int i = 0; i < 5; i++) {
+                int x = 5 + rnd.nextInt(6);
+                int y = 3 + rnd.nextInt(4);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(petalColor, 0.85f));
+            }
+            img.setRGB(ox + 7, oy + 9, 0xFF000000 | stemColor);
+            img.setRGB(ox + 8, oy + 9, 0xFF000000 | stemColor);
+        }
     }
 
-    /** Thin pane-divider lines (border + cross) over the base fill, for the glass block. */
-    private void paintGlassPanes(BufferedImage img, int index) {
-        int ox = tileX(index);
-        int oy = tileY(index);
-        int line = 0x8FB9BC;
-        for (int i = 0; i < TILE_PX; i++) {
-            img.setRGB(ox + i, oy, 0xFF000000 | line);
-            img.setRGB(ox + i, oy + TILE_PX - 1, 0xFF000000 | line);
-            img.setRGB(ox, oy + i, 0xFF000000 | line);
-            img.setRGB(ox + TILE_PX - 1, oy + i, 0xFF000000 | line);
-        }
-        int mid = TILE_PX / 2;
-        for (int i = 0; i < TILE_PX; i++) {
-            img.setRGB(ox + mid, oy + i, 0xFF000000 | line);
-            img.setRGB(ox + i, oy + mid, 0xFF000000 | line);
-        }
-    }
-
-    /** A round leafy bush silhouette speckled with berries, on a transparent background - the harvestable world decoration. */
+    /** A round leafy bush silhouette speckled with berries, on a transparent background. */
     private void paintBerryBush(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);
         int oy = tileY(index);
@@ -295,20 +654,15 @@ public class TextureAtlas {
                 if (d <= r) {
                     float roll = rnd.nextFloat();
                     int color = roll < 0.15f ? 0x9C2B4E : (roll < 0.55f ? 0x3E8E35 : 0x2F701F);
+                    // A light top edge makes the bush read as a sphere.
+                    if (y < cy) color = shade(color, 1.15f);
                     img.setRGB(ox + x, oy + y, 0xFF000000 | color);
                 }
             }
         }
     }
 
-    /**
-     * A "fast leaves" tile for the see-through-leaves setting: the same green
-     * palette as the solid leaves tile (index 9) but with small square holes
-     * carved out, so the chunk shader's alpha-cutout (see chunk.frag's discard)
-     * lets the world behind the canopy show through. Painted with its own draw
-     * from the shared seeded Random, so the hole pattern differs from tile 9's.
-     */
-    /** A dead, dried-out twig clump on a transparent background - the badlands decoration. */
+    /** A dead, dried-out twig clump on a transparent background. */
     private void paintDeadBush(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);
         int oy = tileY(index);
@@ -327,7 +681,7 @@ public class TextureAtlas {
         }
     }
 
-    /** A simple stem + rounded cap on a transparent background, for red/brown mushrooms. */
+    /** A simple stem + rounded cap on a transparent background. */
     private void paintMushroom(BufferedImage img, int index, Random rnd, int capColor, int capDark) {
         int ox = tileX(index);
         int oy = tileY(index);
@@ -335,31 +689,33 @@ public class TextureAtlas {
         int stemX = TILE_PX / 2;
         for (int y = TILE_PX - 7; y < TILE_PX - 1; y++) {
             img.setRGB(ox + stemX, oy + y, 0xFF000000 | stemColor);
-            img.setRGB(ox + stemX + 1, oy + y, 0xFF000000 | stemColor);
+            img.setRGB(ox + stemX + 1, oy + y, 0xFF000000 | shade(stemColor, 0.9f));
         }
         double cx = TILE_PX / 2.0, cy = TILE_PX - 9.0;
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
                 double d = Math.hypot(x - cx, (y - cy) * 1.5);
                 if (d <= 5.5) {
-                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.3f ? capDark : capColor));
+                    int color = rnd.nextFloat() < 0.3f ? capDark : capColor;
+                    if (y < cy) color = shade(color, 1.12f);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | color);
                 }
             }
         }
     }
 
-    /** A thin green vine strand with a few leaves, on a transparent background - hangs from jungle canopies. */
+    /** A thin green vine strand with a few leaves, on a transparent background. */
     private void paintVine(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);
         int oy = tileY(index);
         for (int y = 0; y < TILE_PX; y++) {
             img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x2F6B2F);
-            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x2F6B2F);
+            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x3E8E35);
         }
         for (int i = 0; i < 7; i++) {
             int x = 5 + rnd.nextInt(6);
             int y = 2 + rnd.nextInt(TILE_PX - 4);
-            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x3E8E35);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x4E9A3E);
         }
     }
 
@@ -369,7 +725,7 @@ public class TextureAtlas {
         int oy = tileY(index);
         for (int y = 0; y < TILE_PX; y++) {
             img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x5FA84C);
-            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x5FA84C);
+            img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x7AC460);
         }
         for (int y = 2; y < TILE_PX; y += 5) {
             img.setRGB(ox + 6, oy + y, 0xFF000000 | 0x4A8A3A);
@@ -378,11 +734,11 @@ public class TextureAtlas {
         for (int i = 0; i < 4; i++) {
             int x = 3 + rnd.nextInt(9);
             int y = 1 + rnd.nextInt(TILE_PX - 4);
-            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x3E8E35);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | 0x4E9A3E);
         }
     }
 
-    /** A flat elliptical pad floating on water, on a transparent background - swamp lily pads. */
+    /** A flat elliptical pad floating on water, on a transparent background. */
     private void paintLilyPad(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);
         int oy = tileY(index);
@@ -391,13 +747,15 @@ public class TextureAtlas {
             for (int x = 0; x < TILE_PX; x++) {
                 double d = Math.hypot(x - cx, (y - cy) * 0.5);
                 if (d <= r) {
-                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rnd.nextFloat() < 0.3f ? 0x3E8E35 : 0x2F701F));
+                    int color = rnd.nextFloat() < 0.3f ? 0x3E8E35 : 0x2F701F;
+                    if (y < cy) color = shade(color, 1.12f);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | color);
                 }
             }
         }
     }
 
-    /** Wavy green strands of seaweed, on a transparent background - grows on ocean floors. */
+    /** Wavy green strands of seaweed, on a transparent background. */
     private void paintSeaweed(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);
         int oy = tileY(index);
@@ -410,41 +768,86 @@ public class TextureAtlas {
                 int t = y - topY;
                 int x = bx + (sway * t * t) / Math.max(1, height * height);
                 if (x < 0 || x >= TILE_PX) continue;
-                img.setRGB(ox + x, oy + y, 0xFF000000 | 0x2F8F3A);
+                int c = t > height * 0.7f ? 0x4AA048 : 0x2F8F3A;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | c);
             }
         }
     }
 
-    private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {
+    // ---------------------------------------------------------------------
+    // Furniture / fixtures
+    // ---------------------------------------------------------------------
+
+    /** Semi-transparent glass with thin pane-divider lines, so you can see through it. */
+    private void paintGlass(BufferedImage img, int index) {
         int ox = tileX(index);
         int oy = tileY(index);
-        for (int cy = 0; cy < TILE_PX; cy += 2) {
-            for (int cx = 0; cx < TILE_PX; cx += 2) {
-                boolean hole = rnd.nextFloat() < 0.32f;
-                int base = rnd.nextFloat() < 0.55f ? 0x3E8E35 : 0x2F701F;
-                for (int y = 0; y < 2; y++) {
-                    for (int x = 0; x < 2; x++) {
-                        int px = ox + cx + x, py = oy + cy + y;
-                        img.setRGB(px, py, hole ? 0x00000000 : (0xFF000000 | base));
-                    }
-                }
+        int fill = 0xBEE7EA;
+        int line = 0x8FB9BC;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, (150 << 24) | fill);
             }
+        }
+        for (int i = 0; i < TILE_PX; i++) {
+            img.setRGB(ox + i, oy, (190 << 24) | line);
+            img.setRGB(ox + i, oy + TILE_PX - 1, (190 << 24) | line);
+            img.setRGB(ox, oy + i, (190 << 24) | line);
+            img.setRGB(ox + TILE_PX - 1, oy + i, (190 << 24) | line);
+        }
+        int mid = TILE_PX / 2;
+        for (int i = 0; i < TILE_PX; i++) {
+            img.setRGB(ox + mid, oy + i, (190 << 24) | line);
+            img.setRGB(ox + i, oy + mid, (190 << 24) | line);
         }
     }
 
-    /**
-     * A glowing full-cube lamp: a warm light panel with a bright center and a
-     * darker frame, on an opaque background. The lamp itself emits light (see
-     * {@link com.minecraftclone.world.BlockType#LAMP}), so this tile just gives
-     * it a distinct "lit fixture" look; nearby blocks are brightened by the
-     * light baking in {@link com.minecraftclone.world.Chunk}.
-     */
+    /** A wooden door panel: plank boards with grooves, a crossbar and a handle. */
+    private void paintDoor(BufferedImage img, int index, Random rnd) {
+        paintPlanks(img, index, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int dark = 0x6E4F28;
+        // Vertical board grooves.
+        for (int x = 3; x < TILE_PX; x += 4) {
+            for (int y = 0; y < TILE_PX; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
+            }
+        }
+        // Crossbar.
+        for (int x = 0; x < TILE_PX; x++) {
+            img.setRGB(ox + x, oy + 9, 0xFF000000 | dark);
+        }
+        img.setRGB(ox + 13, oy + 11, 0xFF000000 | 0x3A2613);
+    }
+
+    /** A trapdoor top: planks with a metal hinge strip and a frame. */
+    private void paintTrapdoor(BufferedImage img, int index, Random rnd) {
+        paintPlanks(img, index, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int dark = 0x6E4F28, metal = 0x8A8A8A;
+        // Frame border.
+        for (int i = 0; i < TILE_PX; i++) {
+            img.setRGB(ox + i, oy, 0xFF000000 | dark);
+            img.setRGB(ox + i, oy + TILE_PX - 1, 0xFF000000 | dark);
+            img.setRGB(ox, oy + i, 0xFF000000 | dark);
+            img.setRGB(ox + TILE_PX - 1, oy + i, 0xFF000000 | dark);
+        }
+        // Metal hinge strip along one edge.
+        for (int i = 0; i < TILE_PX; i++) {
+            img.setRGB(ox + i, oy + 2, 0xFF000000 | metal);
+            img.setRGB(ox + i, oy + 3, 0xFF000000 | metal);
+        }
+    }
+
+    /** A glowing full-cube lamp: a warm light panel with a bright center and a darker frame. */
     private void paintLamp(BufferedImage img, int index) {
         int ox = tileX(index);
         int oy = tileY(index);
-        int frame = 0x6E4A2A;  // dark wood/graphite border
-        int warm = 0xFFE08A;   // warm glow body
-        int core = 0xFFFFF0;   // bright center
+        int frame = 0x6E4A2A;
+        int warm = 0xFFE08A;
+        int core = 0xFFFFF0;
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
                 boolean edge = x < 2 || x >= TILE_PX - 2 || y < 2 || y >= TILE_PX - 2;
@@ -455,23 +858,14 @@ public class TextureAtlas {
         }
     }
 
-    /**
-     * A furnace's front face: a stone body with a dark rectangular mouth and a
-     * lighter lintel above it, on an opaque background. The block reuses the
-     * plain stone tile for its top/bottom, so only the (orientation-less) sides
-     * get this "furnace" look - see {@link com.minecraftclone.world.BlockType#FURNACE}.
-     */
+    /** A furnace's front face: a stone body with a dark mouth and a lintel above it. */
     private void paintFurnace(BufferedImage img, int index) {
+        Random rnd = new Random(7);
+        paintStone(img, index, rnd);
         int ox = tileX(index);
         int oy = tileY(index);
-        int stone = 0x8A8A8A;
         int dark = 0x2E2E2E;
         int lintel = 0x6E6E6E;
-        for (int y = 0; y < TILE_PX; y++) {
-            for (int x = 0; x < TILE_PX; x++) {
-                img.setRGB(ox + x, oy + y, 0xFF000000 | stone);
-            }
-        }
         // Lintel across the top of the opening.
         for (int x = 3; x < 13; x++) {
             img.setRGB(ox + x, oy + 5, 0xFF000000 | lintel);
@@ -588,16 +982,124 @@ public class TextureAtlas {
         }
     }
 
-    /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background - the torch light source. */
-    private void paintTorch(BufferedImage img, int index) {
+    /**
+     * A lit furnace's front face: the same stone body and lintel as
+     * {@link #paintFurnace}, but the mouth glows - warm orange around the rim
+     * with a bright yellow core, the classic "furnace is burning" look. The
+     * front tile is swapped for this one while the furnace is actively
+     * smelting (see {@link com.minecraftclone.world.Chunk#emitFace}).
+     */
+    private void paintFurnaceLit(BufferedImage img, int index) {
         int ox = tileX(index);
         int oy = tileY(index);
-        // Stick: a thin vertical shaft in the lower two-thirds of the tile.
+        int stone = 0x8A8A8A;
+        int lintel = 0x6E6E6E;
+        int ember = 0xFFB040;
+        int glow = 0xFFD060;
+        int core = 0xFFF080;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | stone);
+            }
+        }
+        // Lintel across the top of the opening.
+        for (int x = 3; x < 13; x++) {
+            img.setRGB(ox + x, oy + 5, 0xFF000000 | lintel);
+        }
+        // Glowing mouth: warm rim, brighter toward the center.
+        for (int y = 6; y < 12; y++) {
+            for (int x = 4; x < 12; x++) {
+                boolean corePx = x >= 6 && x < 10 && y >= 7 && y < 11;
+                boolean midPx = x >= 5 && x < 11 && y >= 6 && y < 12;
+                int color = corePx ? core : (midPx ? glow : ember);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** A planks workbench top: light wood with a darker 2x2 grid and corner bolts. */
+    private void paintCraftingTable(BufferedImage img, int index) {
+        Random rnd = new Random(11);
+        paintPlanks(img, index, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int grid = 0x6E4F28;
+        // 2x2 inset panel, slightly darker, like the four planks of the recipe.
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                if (x == 3 || x == 7 || x == 11 || y == 3 || y == 7 || y == 11) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | grid);
+                }
+            }
+        }
+    }
+
+    /** A wooden chest front: plank fill with a curved lid seam, a brass lock plate and a latch. */
+    private void paintChest(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int plank = 0xB8863F;
+        int grain = 0x9A6F2F;
+        int seam = 0x7A5A2E;
+        int metal = 0xC9B458;
+        int lock = 0x8A6E2E;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (x % 2 == 0 && y % 4 == 1 ? grain : plank));
+            }
+        }
+        // Curved lid seam near the top (a shallow arc), splitting lid from body.
+        for (int x = 1; x < TILE_PX - 1; x++) {
+            int y = 4 + Math.round(2f * (float) Math.sin(x * (Math.PI / (TILE_PX - 2))));
+            img.setRGB(ox + x, oy + y, 0xFF000000 | seam);
+        }
+        // Brass lock plate at the front-center, with a darker keyhole.
+        for (int dy = -2; dy <= 2; dy++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                int x = 8 + dx, y = 8 + dy;
+                if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | metal);
+            }
+        }
+        img.setRGB(ox + 8, oy + 8, 0xFF000000 | lock);
+    }
+
+    /** A wooden barrel: vertical stave planks with a metal band across the middle and a bung. */
+    private void paintBarrel(BufferedImage img, int index) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int stave = 0xA8763A;
+        int grain = 0x8F5F2A;
+        int band = 0x8A8A8A;
+        int bung = 0x5A3D1D;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (y % 3 == 0 ? grain : stave));
+            }
+        }
+        // Metal band across the middle.
+        for (int y = 7; y < 10; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | band);
+            }
+        }
+        // A dark bung (the stopper hole) just above the band, off-center.
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int x = 11 + dx, y = 5 + dy;
+                if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | bung);
+            }
+        }
+    }
+
+    /** A short brown stick with a glowing orange/yellow flame on top, on a transparent background - the torch light source. */
+    private void paintTorch(BufferedImage img, int index) {        int ox = tileX(index);
+        int oy = tileY(index);
         for (int y = 7; y < TILE_PX; y++) {
             img.setRGB(ox + 7, oy + y, 0xFF000000 | 0x6E4A2A);
             img.setRGB(ox + 8, oy + y, 0xFF000000 | 0x8B5A2B);
         }
-        // Flame: a small warm blob at the top, brighter toward the center.
         double cx = 7.5, cy = 4.5;
         for (int y = 1; y <= 8; y++) {
             for (int x = 4; x <= 11; x++) {
@@ -605,6 +1107,24 @@ public class TextureAtlas {
                 if (d <= 3.2) {
                     int color = d <= 1.4 ? 0xFFE066 : (d <= 2.4 ? 0xF2A93B : 0xD9601A);
                     img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                }
+            }
+        }
+    }
+
+    /** A "fast leaves" tile: same palette as the solid leaves tile but with small square holes carved out. */
+    private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int cy = 0; cy < TILE_PX; cy += 2) {
+            for (int cx = 0; cx < TILE_PX; cx += 2) {
+                boolean hole = rnd.nextFloat() < 0.32f;
+                int base = rnd.nextFloat() < 0.55f ? 0x3E8E35 : 0x2F701F;
+                for (int y = 0; y < 2; y++) {
+                    for (int x = 0; x < 2; x++) {
+                        int px = ox + cx + x, py = oy + cy + y;
+                        img.setRGB(px, py, hole ? 0x00000000 : (0xFF000000 | base));
+                    }
                 }
             }
         }

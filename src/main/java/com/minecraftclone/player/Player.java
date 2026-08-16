@@ -45,6 +45,9 @@ public class Player {
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
     private GameMode gameMode = GameMode.SURVIVAL;
     private KeyBindings keyBinds = new KeyBindings();
+    private boolean invertMouseY = false;
+    private boolean viewBobbing = true;
+    private float bobPhase = 0f;
 
     public void setKeyBinds(KeyBindings keyBinds) {
         this.keyBinds = keyBinds;
@@ -52,6 +55,7 @@ public class Player {
 
     private boolean onGround = false;
     private boolean flying = false;
+    private boolean movingOnGround = false; // moving horizontally while grounded (drives view bob)
     private float lastFallImpactSpeed = 0f;
     private final DoubleTapDetector wTapDetector = new DoubleTapDetector(DOUBLE_TAP_WINDOW);
     private boolean sprintLatched = false; // sprint started by a double-tap, held until W is released
@@ -116,6 +120,22 @@ public class Player {
         this.mouseSensitivity = value;
     }
 
+    /** Enables/disables the subtle camera bob while walking on the ground (settings menu). */
+    public void setViewBobbing(boolean enabled) {
+        this.viewBobbing = enabled;
+        if (!enabled) bobPhase = 0f;
+    }
+
+    /** Enables/disables inverted vertical mouse look (settings menu). */
+    public void setInvertMouseY(boolean invert) {
+        this.invertMouseY = invert;
+    }
+
+    /** The walk-bob phase (radians) - drives the held-item sway in first person. */
+    public float getBobPhase() {
+        return bobPhase;
+    }
+
     /** Sets the current game mode (creative/spectator are invulnerable, spectator is no-clip). */
     public void setGameMode(GameMode mode) {
         this.gameMode = mode;
@@ -148,7 +168,7 @@ public class Player {
         }
         updateDoubleTapW(input, dt);
         boolean sprintingAndMoving = updateMovement(dt, input, world);
-        camera.setPosition(position.x, position.y + EYE_HEIGHT, position.z);
+        updateBobbing(dt, sprintingAndMoving);
 
         if (gameMode.isInvulnerable()) {
             stats.forceFull();
@@ -165,7 +185,8 @@ public class Player {
     private void updateLook(Input input) {
         float dx = (float) input.getDeltaX();
         float dy = (float) input.getDeltaY();
-        camera.addRotation(dx * mouseSensitivity, -dy * mouseSensitivity);
+        float pitchDir = invertMouseY ? 1f : -1f;
+        camera.addRotation(dx * mouseSensitivity, pitchDir * dy * mouseSensitivity);
         input.resetMouseDelta();
     }
 
@@ -258,7 +279,20 @@ public class Player {
         }
 
         moveAndCollide(world, velocity.x * dt, velocity.y * dt, velocity.z * dt);
+        movingOnGround = onGround && moving && !flying;
         return sprinting && moving;
+    }
+
+    /** Advances the subtle walk-bob phase when the player is moving on the ground, and applies it to the camera. */
+    private void updateBobbing(float dt, boolean sprintingAndMoving) {
+        if (viewBobbing && movingOnGround) {
+            bobPhase += dt * (sprintingAndMoving ? 14f : 10f);
+        } else {
+            bobPhase = 0f;
+        }
+        float bobY = (float) Math.sin(bobPhase) * 0.035f;
+        float bobX = (float) Math.cos(bobPhase) * 0.02f;
+        camera.setPosition(position.x + bobX, position.y + EYE_HEIGHT + bobY, position.z);
     }
 
     private AABB aabbAt(Vector3f pos) {

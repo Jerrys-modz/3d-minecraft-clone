@@ -59,7 +59,7 @@ public final class Crafting {
         CHARS.put('W', BlockType.WOOD_LOG);
         CHARS.put('P', BlockType.PLANKS);
         CHARS.put('S', BlockType.STICK);
-        CHARS.put('C', BlockType.COAL_ORE);
+        CHARS.put('C', BlockType.COAL);
         CHARS.put('G', BlockType.GLASS);
         CHARS.put('T', BlockType.TORCH);
         CHARS.put('K', BlockType.STONE);
@@ -77,12 +77,21 @@ public final class Crafting {
         shaped(".G.", ".T.", "...", BlockType.LAMP, 1);          // glass over torch -> lamp
         shaped("KKK", "...", "...", BlockType.STONE_SLAB, 6);    // 3 stone -> slabs
         shaped("PPP", "...", "...", BlockType.PLANKS_SLAB, 6);   // 3 planks -> slabs
+        shaped("PP.", "PP.", "PP.", BlockType.DOOR, 1);          // 6 planks -> door
+        shaped("PPP", "PPP", "...", BlockType.TRAPDOOR, 2);      // 6 planks -> 2 trapdoors
+        shaped("PP.", "PP.", "...", BlockType.CRAFTING_TABLE, 1); // 4 planks -> crafting table
+        shaped("PPP", "P.P", "PPP", BlockType.CHEST, 1);          // 8 planks ring -> chest
+        shaped("PP.", "PP.", "PP.", BlockType.BARREL, 1);        // 6 planks -> barrel
 
         // Tools (mirrored matching lets an axe be built either way round).
-        tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD);
-        tools('K', BlockType.STONE_PICKAXE, BlockType.STONE_AXE, BlockType.STONE_SWORD);
-        tools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD);
-        tools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD);
+        tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD,
+                BlockType.WOOD_SHOVEL, BlockType.WOOD_HAMMER, BlockType.WOOD_BROADAXE);
+        tools('K', BlockType.STONE_PICKAXE, BlockType.STONE_AXE, BlockType.STONE_SWORD,
+                BlockType.STONE_SHOVEL, BlockType.STONE_HAMMER, BlockType.STONE_BROADAXE);
+        tools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD,
+                BlockType.IRON_SHOVEL, BlockType.IRON_HAMMER, BlockType.IRON_BROADAXE);
+        tools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD,
+                BlockType.DIAMOND_SHOVEL, BlockType.DIAMOND_HAMMER, BlockType.DIAMOND_BROADAXE);
 
         // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
         // itself is made by quenching a lava source with a water source (see
@@ -108,11 +117,15 @@ public final class Crafting {
         RECIPES.add(new ShapelessRecipe(ingredients, output, amount));
     }
 
-    /** Registers the three tool recipes for one material character (pickaxe/axe/sword). */
-    private static void tools(char m, BlockType pickaxe, BlockType axe, BlockType sword) {
+    /** Registers the six tool recipes for one material character (pickaxe/axe/sword/shovel/hammer/broadaxe). */
+    private static void tools(char m, BlockType pickaxe, BlockType axe, BlockType sword,
+                              BlockType shovel, BlockType hammer, BlockType broadaxe) {
         shaped("" + m + m + m, ".S.", ".S.", pickaxe, 1);
         shaped("" + m + m + ".", "" + m + "S.", ".S.", axe, 1);
         shaped("." + m + ".", "." + m + ".", ".S.", sword, 1);
+        shaped("." + m + ".", ".S.", ".S.", shovel, 1);
+        shaped("" + m + m + ".", "" + m + m + ".", ".S.", hammer, 1);
+        shaped("" + m + m + m, "" + m + "S.", ".S.", broadaxe, 1);
     }
 
     private static BlockType[] cells(String r0, String r1, String r2) {

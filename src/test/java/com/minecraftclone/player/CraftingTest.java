@@ -69,4 +69,30 @@ class CraftingTest {
         grid[0] = BlockType.STONE;   // one stone is not the stone-ring furnace recipe
         assertNull(Crafting.match(grid));
     }
+
+    @Test
+    void doorAndTrapdoorCraftFromPlanks() {
+        BlockType[] door = new BlockType[9];
+        door[0] = BlockType.PLANKS;
+        door[1] = BlockType.PLANKS;
+        door[3] = BlockType.PLANKS;
+        door[4] = BlockType.PLANKS;
+        door[6] = BlockType.PLANKS;
+        door[7] = BlockType.PLANKS;
+        Crafting.Recipe rd = Crafting.match(door);
+        assertNotNull(rd);
+        assertEquals(BlockType.DOOR, rd.output());
+
+        BlockType[] trap = new BlockType[9];
+        trap[0] = BlockType.PLANKS;
+        trap[1] = BlockType.PLANKS;
+        trap[2] = BlockType.PLANKS;
+        trap[3] = BlockType.PLANKS;
+        trap[4] = BlockType.PLANKS;
+        trap[5] = BlockType.PLANKS;
+        Crafting.Recipe rt = Crafting.match(trap);
+        assertNotNull(rt);
+        assertEquals(BlockType.TRAPDOOR, rt.output());
+        assertEquals(2, rt.outputAmount());
+    }
 }
