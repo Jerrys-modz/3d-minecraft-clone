@@ -272,6 +272,8 @@ class InventoryControllerTest {
         c.continueDrag(helmetSlot);
         c.endDrag(helmetSlot);
         assertEquals(BlockType.DIAMOND_CHESTPLATE, c.cursorType(), "still on the cursor, not auto-equipped");
+        assertEquals(1, c.cursorCount(), "exactly the one piece - not duplicated");
+        assertTrue(inv.isEmpty(10), "lifted out of its source slot, not left behind too");
         assertNull(inv.armorType(Inventory.ARMOR_SLOT_HELMET));
         assertNull(inv.armorType(Inventory.ARMOR_SLOT_CHESTPLATE), "never auto-equipped into its own slot either");
     }
