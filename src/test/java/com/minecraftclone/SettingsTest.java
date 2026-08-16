@@ -132,6 +132,108 @@ class SettingsTest {
     }
 
     @Test
+    void soundVolumeAdjustsClampsAndPersists() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Settings s = new Settings();
+            assertEquals(1f, s.getSoundVolume(), 1e-6f); // full volume by default
+            assertEquals("100%", s.valueText(Settings.SOUND_VOLUME));
+            s.adjust(Settings.SOUND_VOLUME, -1);
+            assertEquals(0.95f, s.getSoundVolume(), 1e-6f);
+            s.setFromFraction(Settings.SOUND_VOLUME, -1f);
+            assertEquals(0f, s.getSoundVolume(), 1e-6f); // clamped at min - silent, not negative
+            s.setFromFraction(Settings.SOUND_VOLUME, 2f);
+            assertEquals(1f, s.getSoundVolume(), 1e-6f); // clamped at max
+            s.setFromFraction(Settings.SOUND_VOLUME, 0.5f);
+            s.save(file);
+            Settings loaded = Settings.load(file);
+            assertEquals(0.5f, loaded.getSoundVolume(), 1e-6f);
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void categoryVolumesAdjustClampAndPersistIndependently() throws IOException {
+        int[] categoryRows = {
+                Settings.MUSIC_VOLUME, Settings.AMBIENT_VOLUME, Settings.MOBS_VOLUME,
+                Settings.MACHINES_VOLUME, Settings.PLAYER_VOLUME, Settings.UI_VOLUME
+        };
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Settings s = new Settings();
+            assertEquals(1f, s.getMusicVolume(), 1e-6f);
+            assertEquals(1f, s.getAmbientVolume(), 1e-6f);
+            assertEquals(1f, s.getMobsVolume(), 1e-6f);
+            assertEquals(1f, s.getMachinesVolume(), 1e-6f);
+            assertEquals(1f, s.getPlayerVolume(), 1e-6f);
+            assertEquals(1f, s.getUiVolume(), 1e-6f);
+
+            for (int row : categoryRows) {
+                assertEquals(0f, Settings.minValue(row), 1e-6f);
+                assertEquals(1f, Settings.maxValue(row), 1e-6f);
+                s.adjust(row, -1);
+                assertEquals(0.95f, s.fraction(row), 1e-6f); // min is 0 and max is 1, so fraction == value
+                s.setFromFraction(row, -1f);
+                assertEquals(0f, s.fraction(row), 1e-6f); // clamped at min
+                s.setFromFraction(row, 2f);
+                assertEquals(1f, s.fraction(row), 1e-6f); // clamped at max
+            }
+
+            s.setFromFraction(Settings.MUSIC_VOLUME, 0.4f);
+            s.setFromFraction(Settings.AMBIENT_VOLUME, 0.6f);
+            s.setFromFraction(Settings.MOBS_VOLUME, 0.8f);
+            s.setFromFraction(Settings.MACHINES_VOLUME, 0.2f);
+            s.setFromFraction(Settings.PLAYER_VOLUME, 0.3f);
+            s.setFromFraction(Settings.UI_VOLUME, 0.7f);
+            s.save(file);
+
+            Settings loaded = Settings.load(file);
+            assertEquals(0.4f, loaded.getMusicVolume(), 1e-6f);
+            assertEquals(0.6f, loaded.getAmbientVolume(), 1e-6f);
+            assertEquals(0.8f, loaded.getMobsVolume(), 1e-6f);
+            assertEquals(0.2f, loaded.getMachinesVolume(), 1e-6f);
+            assertEquals(0.3f, loaded.getPlayerVolume(), 1e-6f);
+            assertEquals(0.7f, loaded.getUiVolume(), 1e-6f);
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void categoryVolumesAreIndependentOfEachOtherAndOfMaster() {
+        Settings s = new Settings();
+        s.setFromFraction(Settings.MOBS_VOLUME, 0.25f);
+        assertEquals("25%", s.valueText(Settings.MOBS_VOLUME));
+        // Only the Mobs slider moved - every other slider (including master) is untouched.
+        assertEquals(1f, s.getMachinesVolume(), 1e-6f);
+        assertEquals(1f, s.getMusicVolume(), 1e-6f);
+        assertEquals(1f, s.getAmbientVolume(), 1e-6f);
+        assertEquals(1f, s.getPlayerVolume(), 1e-6f);
+        assertEquals(1f, s.getUiVolume(), 1e-6f);
+        assertEquals(1f, s.getSoundVolume(), 1e-6f);
+    }
+
+    @Test
+    void categoryVolumesRejectNonFiniteFileValues() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Files.writeString(file, "music_volume=NaN\nmobs_volume=Infinity\nui_volume=-Infinity\n");
+            Settings loaded = Settings.load(file);
+            assertEquals(1f, loaded.getMusicVolume(), 1e-6f);
+            assertEquals(1f, loaded.getMobsVolume(), 1e-6f);
+            assertEquals(1f, loaded.getUiVolume(), 1e-6f);
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void audioTabHasOneRowPerVolumeSlider() {
+        assertEquals(7, Settings.tabRowCount(Settings.TAB_AUDIO)); // master + 6 categories
+    }
+
+    @Test
     void tabsCoverAllRowsWithoutOverlap() {
         int seen = 0;
         for (int tab = 0; tab < Settings.TAB_COUNT; tab++) {
@@ -143,5 +245,25 @@ class SettingsTest {
             }
         }
         assertEquals(Settings.ROW_COUNT, seen, "every settings row should live on exactly one tab");
+    }
+
+    @Test
+    void soundVolumeIgnoresNaNAndInfinities() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Files.writeString(file, "sound_volume=NaN\n");
+            Settings loaded = Settings.load(file);
+            assertEquals(1f, loaded.getSoundVolume(), 1e-6f); // default unchanged
+
+            Files.writeString(file, "sound_volume=Infinity\n");
+            loaded = Settings.load(file);
+            assertEquals(1f, loaded.getSoundVolume(), 1e-6f); // default unchanged
+
+            Files.writeString(file, "sound_volume=-Infinity\n");
+            loaded = Settings.load(file);
+            assertEquals(1f, loaded.getSoundVolume(), 1e-6f); // default unchanged
+        } finally {
+            Files.deleteIfExists(file);
+        }
     }
 }
