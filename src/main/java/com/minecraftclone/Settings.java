@@ -34,8 +34,14 @@ public class Settings {
     public static final int SENSITIVITY = 9;        // Gameplay
     public static final int INVERT_MOUSE_Y = 10;    // toggle (Gameplay)
     public static final int VIEW_BOBBING = 11;      // toggle (Gameplay)
-    public static final int SOUND_VOLUME = 12;      // Audio
-    public static final int ROW_COUNT = 13;
+    public static final int SOUND_VOLUME = 12;      // Audio - master, multiplies every category below
+    public static final int MUSIC_VOLUME = 13;      // Audio
+    public static final int AMBIENT_VOLUME = 14;    // Audio
+    public static final int MOBS_VOLUME = 15;       // Audio
+    public static final int MACHINES_VOLUME = 16;   // Audio - blocks, doors, tools, crafting
+    public static final int PLAYER_VOLUME = 17;     // Audio - footsteps, jump/land, eat, hurt, ...
+    public static final int UI_VOLUME = 18;         // Audio
+    public static final int ROW_COUNT = 19;
 
     // Settings tabs: each owns a contiguous slice of the rows above. The
     // Controls tab has no Settings rows - it shows the keybind list instead.
@@ -84,12 +90,24 @@ public class Settings {
         toggles[STARS] = true;
         toggles[VIEW_BOBBING] = true;
         ranges[SOUND_VOLUME] = 1f;
+        ranges[MUSIC_VOLUME] = 1f;
+        ranges[AMBIENT_VOLUME] = 1f;
+        ranges[MOBS_VOLUME] = 1f;
+        ranges[MACHINES_VOLUME] = 1f;
+        ranges[PLAYER_VOLUME] = 1f;
+        ranges[UI_VOLUME] = 1f;
     }
 
     /** True if the given row is a boolean toggle; false for a numeric range. */
     public static boolean isToggle(int row) {
         return row == LEAVES_TRANSPARENT || row == VSYNC || row == STARS
                 || row == INVERT_MOUSE_Y || row == VIEW_BOBBING;
+    }
+
+    /** True for every Audio-tab volume slider (master + each category) - they all share the same 0-100% shape. */
+    private static boolean isVolumeRow(int row) {
+        return row == SOUND_VOLUME || row == MUSIC_VOLUME || row == AMBIENT_VOLUME
+                || row == MOBS_VOLUME || row == MACHINES_VOLUME || row == PLAYER_VOLUME || row == UI_VOLUME;
     }
 
     public static String label(int row) {
@@ -106,13 +124,20 @@ public class Settings {
             case STARS -> "Stars";
             case INVERT_MOUSE_Y -> "Invert mouse Y";
             case VIEW_BOBBING -> "View bobbing";
-            case SOUND_VOLUME -> "Sound volume";
+            case SOUND_VOLUME -> "Master volume";
+            case MUSIC_VOLUME -> "Music volume";
+            case AMBIENT_VOLUME -> "Ambient volume";
+            case MOBS_VOLUME -> "Mobs volume";
+            case MACHINES_VOLUME -> "Machines volume";
+            case PLAYER_VOLUME -> "Player volume";
+            case UI_VOLUME -> "UI volume";
             default -> "?";
         };
     }
 
     /** Step applied per Left/Right keypress on a numeric range row. */
     public static float step(int row) {
+        if (isVolumeRow(row)) return 0.05f;
         return switch (row) {
             case RENDER_DISTANCE -> 1f;
             case FOV -> 5f;
@@ -121,12 +146,12 @@ public class Settings {
             case GAME_MODE -> 1f;
             case CLOUDS -> 1f;
             case CLOUD_SPEED -> 1f;
-            case SOUND_VOLUME -> 0.05f;
             default -> 0f;
         };
     }
 
     public static float minValue(int row) {
+        if (isVolumeRow(row)) return 0f;
         return switch (row) {
             case RENDER_DISTANCE -> 3f;
             case FOV -> 60f;
@@ -135,12 +160,12 @@ public class Settings {
             case GAME_MODE -> 0f;
             case CLOUDS -> 0f;
             case CLOUD_SPEED -> 0f;
-            case SOUND_VOLUME -> 0f;
             default -> 0f;
         };
     }
 
     public static float maxValue(int row) {
+        if (isVolumeRow(row)) return 1f;
         return switch (row) {
             case RENDER_DISTANCE -> 12f;
             case FOV -> 110f;
@@ -149,7 +174,6 @@ public class Settings {
             case GAME_MODE -> GameMode.values().length - 1f;
             case CLOUDS -> 3f;
             case CLOUD_SPEED -> 2f;
-            case SOUND_VOLUME -> 1f;
             default -> 0f;
         };
     }
@@ -162,7 +186,7 @@ public class Settings {
         if (row == SENSITIVITY) {
             return String.format("%.2f", ranges[row]);
         }
-        if (row == BRIGHTNESS || row == SOUND_VOLUME) {
+        if (row == BRIGHTNESS || isVolumeRow(row)) {
             return Math.round(ranges[row] * 100f) + "%";
         }
         if (row == GAME_MODE) {
@@ -240,6 +264,12 @@ public class Settings {
         lines.add("invert_mouse_y=" + (toggles[INVERT_MOUSE_Y] ? 1 : 0));
         lines.add("view_bobbing=" + (toggles[VIEW_BOBBING] ? 1 : 0));
         lines.add("sound_volume=" + ranges[SOUND_VOLUME]);
+        lines.add("music_volume=" + ranges[MUSIC_VOLUME]);
+        lines.add("ambient_volume=" + ranges[AMBIENT_VOLUME]);
+        lines.add("mobs_volume=" + ranges[MOBS_VOLUME]);
+        lines.add("machines_volume=" + ranges[MACHINES_VOLUME]);
+        lines.add("player_volume=" + ranges[PLAYER_VOLUME]);
+        lines.add("ui_volume=" + ranges[UI_VOLUME]);
         keyBinds.saveLines(lines);
         worldGen.saveLines(lines);
         try {
@@ -280,12 +310,13 @@ public class Settings {
                         case "stars" -> s.toggles[STARS] = parseBool(value);
                         case "invert_mouse_y" -> s.toggles[INVERT_MOUSE_Y] = parseBool(value);
                         case "view_bobbing" -> s.toggles[VIEW_BOBBING] = parseBool(value);
-                        case "sound_volume" -> {
-                            float parsed = Float.parseFloat(value);
-                            if (Float.isFinite(parsed)) {
-                                s.ranges[SOUND_VOLUME] = clamp(SOUND_VOLUME, parsed);
-                            }
-                        }
+                        case "sound_volume" -> loadFiniteRange(s, SOUND_VOLUME, value);
+                        case "music_volume" -> loadFiniteRange(s, MUSIC_VOLUME, value);
+                        case "ambient_volume" -> loadFiniteRange(s, AMBIENT_VOLUME, value);
+                        case "mobs_volume" -> loadFiniteRange(s, MOBS_VOLUME, value);
+                        case "machines_volume" -> loadFiniteRange(s, MACHINES_VOLUME, value);
+                        case "player_volume" -> loadFiniteRange(s, PLAYER_VOLUME, value);
+                        case "ui_volume" -> loadFiniteRange(s, UI_VOLUME, value);
                         default -> {
                             s.keyBinds.loadEntry(key, value);
                             s.worldGen.loadEntry(key, value);
@@ -303,6 +334,19 @@ public class Settings {
 
     private static boolean parseBool(String value) {
         return value.equals("1") || value.equalsIgnoreCase("true");
+    }
+
+    /**
+     * Parses a numeric range value that must reject non-finite input: a
+     * corrupted or hand-edited settings.txt could otherwise pass NaN/Infinity
+     * straight through {@code clamp} (which leaves them untouched) and hand
+     * AudioEngine a non-finite gain. Malformed values keep the row's default.
+     */
+    private static void loadFiniteRange(Settings s, int row, String value) {
+        float parsed = Float.parseFloat(value);
+        if (Float.isFinite(parsed)) {
+            s.ranges[row] = clamp(row, parsed);
+        }
     }
 
     private static float clamp(int row, float value) {
@@ -358,9 +402,39 @@ public class Settings {
         return toggles[VIEW_BOBBING];
     }
 
-    /** Master sound effect volume (0..1), applied to every sound the game plays. */
+    /** Master sound volume (0..1), multiplied into every category volume below. */
     public float getSoundVolume() {
         return ranges[SOUND_VOLUME];
+    }
+
+    /** Music category volume (0..1). No music is wired up yet, but the slider is ready for one. */
+    public float getMusicVolume() {
+        return ranges[MUSIC_VOLUME];
+    }
+
+    /** Ambient/environment category volume (0..1). No ambience is wired up yet, but the slider is ready for one. */
+    public float getAmbientVolume() {
+        return ranges[AMBIENT_VOLUME];
+    }
+
+    /** Mob sounds category volume (0..1): attacks and mob deaths. */
+    public float getMobsVolume() {
+        return ranges[MOBS_VOLUME];
+    }
+
+    /** Machines/world category volume (0..1): block break/place, doors, tool wear, crafting. */
+    public float getMachinesVolume() {
+        return ranges[MACHINES_VOLUME];
+    }
+
+    /** Player category volume (0..1): footsteps, jump/land, splash, eat, hurt, death, item pickup. */
+    public float getPlayerVolume() {
+        return ranges[PLAYER_VOLUME];
+    }
+
+    /** UI category volume (0..1): menu/inventory/crafting clicks and open/close. */
+    public float getUiVolume() {
+        return ranges[UI_VOLUME];
     }
 
     /** World-generation settings for new worlds (see {@link WorldGenSettings}). */

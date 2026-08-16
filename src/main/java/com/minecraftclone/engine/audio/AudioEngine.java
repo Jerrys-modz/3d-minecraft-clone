@@ -44,12 +44,20 @@ public class AudioEngine {
     private final Map<SoundMaterial, Integer> stepBuffers = new EnumMap<>(SoundMaterial.class);
     private final java.util.List<Integer> allBuffers = new java.util.ArrayList<>();
 
+    private final Map<SoundCategory, Float> categoryVolumes = new EnumMap<>(SoundCategory.class);
+
     private boolean enabled = false;
     private long device = 0;
     private long context = 0;
     private int[] sources = new int[0];
     private int nextSource = 0;
     private float masterVolume = 1f;
+
+    public AudioEngine() {
+        for (SoundCategory category : SoundCategory.values()) {
+            categoryVolumes.put(category, 1f);
+        }
+    }
 
     /** Opens the default OpenAL device and uploads every sound. Safe to call even with no audio hardware at all. */
     public void init() {
@@ -102,6 +110,20 @@ public class AudioEngine {
         }
     }
 
+    /**
+     * Per-category volume (0..1), multiplied into every sound of that
+     * category on top of the master volume - see the settings menu's Audio
+     * tab sliders (Music, Ambient, Mobs, Machines, Player, UI).
+     */
+    public void setCategoryVolume(SoundCategory category, float volume) {
+        categoryVolumes.put(category, Math.max(0f, Math.min(1f, volume)));
+    }
+
+    private float categoryVolume(SoundCategory category) {
+        Float v = categoryVolumes.get(category);
+        return v != null ? v : 1f;
+    }
+
     /** Updates the OpenAL listener from the camera each frame, so positional sounds pan/attenuate correctly. */
     public void setListener(Vector3f position, Vector3f front, Vector3f up) {
         if (!enabled) return;
@@ -121,14 +143,14 @@ public class AudioEngine {
         int source = nextSource();
         AL10.alSourcei(source, AL10.AL_SOURCE_RELATIVE, AL10.AL_TRUE);
         AL10.alSource3f(source, AL10.AL_POSITION, 0f, 0f, 0f);
-        AL10.alSourcef(source, AL10.AL_GAIN, clampVolume(volume));
+        AL10.alSourcef(source, AL10.AL_GAIN, clampVolume(volume) * categoryVolume(event.category()));
         AL10.alSourcei(source, AL10.AL_BUFFER, buffer);
         AL10.alSourcePlay(source);
     }
 
     /** Plays a non-positional sound at the given world position (block breaks, mobs, footsteps, ...). */
     public void playAt(SoundEvent event, float x, float y, float z, float volume) {
-        playPositional(fixedBuffers.get(event), x, y, z, volume);
+        playPositional(fixedBuffers.get(event), event.category(), x, y, z, volume);
     }
 
     /** The block break/place/footstep sound for {@code material}, played at a world position. */
@@ -138,10 +160,15 @@ public class AudioEngine {
             case PLACE -> placeBuffers;
             case STEP -> stepBuffers;
         };
-        playPositional(table.get(material), x, y, z, volume);
+        playPositional(table.get(material), categoryFor(action), x, y, z, volume);
     }
 
-    private void playPositional(Integer buffer, float x, float y, float z, float volume) {
+    /** Which slider a block break/place/footstep sound mixes against - footsteps read as a player sound, break/place as interacting with the world. */
+    private static SoundCategory categoryFor(BlockAction action) {
+        return action == BlockAction.STEP ? SoundCategory.PLAYER : SoundCategory.MACHINES;
+    }
+
+    private void playPositional(Integer buffer, SoundCategory category, float x, float y, float z, float volume) {
         if (!enabled || buffer == null) return;
         int source = nextSource();
         AL10.alSourcei(source, AL10.AL_SOURCE_RELATIVE, AL10.AL_FALSE);
@@ -149,7 +176,7 @@ public class AudioEngine {
         AL10.alSourcef(source, AL10.AL_REFERENCE_DISTANCE, REFERENCE_DISTANCE);
         AL10.alSourcef(source, AL10.AL_MAX_DISTANCE, MAX_DISTANCE);
         AL10.alSourcef(source, AL10.AL_ROLLOFF_FACTOR, 1f);
-        AL10.alSourcef(source, AL10.AL_GAIN, clampVolume(volume));
+        AL10.alSourcef(source, AL10.AL_GAIN, clampVolume(volume) * categoryVolume(category));
         AL10.alSourcei(source, AL10.AL_BUFFER, buffer);
         AL10.alSourcePlay(source);
     }

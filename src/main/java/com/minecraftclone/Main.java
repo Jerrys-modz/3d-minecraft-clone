@@ -3,6 +3,7 @@ package com.minecraftclone;
 import com.minecraftclone.engine.*;
 import com.minecraftclone.engine.audio.AudioEngine;
 import com.minecraftclone.engine.audio.BlockAction;
+import com.minecraftclone.engine.audio.SoundCategory;
 import com.minecraftclone.engine.audio.SoundEvent;
 import com.minecraftclone.engine.audio.SoundMaterial;
 import com.minecraftclone.engine.graphics.FontAtlas;
@@ -98,6 +99,12 @@ public class Main {
         player.setInvertMouseY(settings.isInvertMouseY());
         player.setViewBobbing(settings.isViewBobbing());
         audio.setMasterVolume(settings.getSoundVolume());
+        audio.setCategoryVolume(SoundCategory.MUSIC, settings.getMusicVolume());
+        audio.setCategoryVolume(SoundCategory.AMBIENT, settings.getAmbientVolume());
+        audio.setCategoryVolume(SoundCategory.MOBS, settings.getMobsVolume());
+        audio.setCategoryVolume(SoundCategory.MACHINES, settings.getMachinesVolume());
+        audio.setCategoryVolume(SoundCategory.PLAYER, settings.getPlayerVolume());
+        audio.setCategoryVolume(SoundCategory.UI, settings.getUiVolume());
     }
 
     /**
