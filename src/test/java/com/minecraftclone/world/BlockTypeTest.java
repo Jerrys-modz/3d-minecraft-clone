@@ -51,8 +51,11 @@ class BlockTypeTest {
         assertFalse(BlockType.TALL_GRASS.canHoldSnow());
         assertFalse(BlockType.TORCH.canHoldSnow());
         assertFalse(BlockType.WATER.canHoldSnow());
-        // Slabs don't hold snow either.
-        assertFalse(BlockType.STONE_SLAB.canHoldSnow());
-        assertFalse(BlockType.PLANKS_SLAB.canHoldSnow());
+        // Slabs hold snow too - it caps them flush (see World.tryAddSnow / Chunk.emitSnowySlab).
+        assertTrue(BlockType.STONE_SLAB.canHoldSnow());
+        assertTrue(BlockType.PLANKS_SLAB.canHoldSnow());
+        assertTrue(BlockType.SNOWY_STONE_SLAB.isSnowCappedSlab());
+        assertTrue(BlockType.SNOWY_PLANKS_SLAB.isSnowCappedSlab());
+        assertFalse(BlockType.STONE_SLAB.isSnowCappedSlab());
     }
 }

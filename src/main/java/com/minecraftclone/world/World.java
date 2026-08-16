@@ -712,7 +712,19 @@ public class World implements BlockAccessor {
     private void tryAddSnow(int x, int z, Climate climate, boolean blizzard) {
         if (climate.temperatureFor(getBiome(x, z)) > SNOW_ACCUMULATE_TEMP) return;
         int y = findSurfaceY(x, z);
-        if (y < 0 || !getBlock(x, y, z).canHoldSnow()) return;
+        if (y < 0) return;
+        BlockType surface = getBlock(x, y, z);
+        if (surface.slab) {
+            // Cap a bottom-half slab flush with snow by swapping in a snow-capped
+            // slab (which meshes as a slab under a snow cap), so there's no
+            // half-block gap above the slab's half-height top. Melting restores
+            // the plain slab, and the block type itself remembers it - so a
+            // saved-and-reloaded snowy slab still melts back correctly.
+            if (getBlock(x, y + 1, z) != BlockType.AIR) return;
+            setBlock(x, y, z, snowCapped(surface));
+            return;
+        }
+        if (!surface.canHoldSnow()) return;
         if (getBlock(x, y + 1, z) != BlockType.AIR) return; // something's already there
         if (snowDepth(x, z) >= (blizzard ? SNOW_MAX_LAYERS_BLIZZARD : SNOW_MAX_LAYERS_NORMAL)) return;
         setBlock(x, y + 1, z, BlockType.SNOW);
@@ -723,9 +735,25 @@ public class World implements BlockAccessor {
         if (permanentSnow(biome)) return;
         if (climate.temperatureFor(biome) <= SNOW_MELT_TEMP) return;
         int y = findSurfaceY(x, z);
-        if (y >= 0 && getBlock(x, y, z) == BlockType.SNOW && getBlock(x, y + 1, z) == BlockType.AIR) {
+        if (y < 0) return;
+        BlockType top = getBlock(x, y, z);
+        if (top.isSnowCappedSlab()) {
+            setBlock(x, y, z, uncapped(top)); // the snow cap melts, the slab shows again
+            return;
+        }
+        if (top == BlockType.SNOW && getBlock(x, y + 1, z) == BlockType.AIR) {
             setBlock(x, y, z, BlockType.AIR); // peel one layer off the top of the pile
         }
+    }
+
+    /** The snow-capped-slab form of a plain bottom-half slab. */
+    private static BlockType snowCapped(BlockType slab) {
+        return slab == BlockType.STONE_SLAB ? BlockType.SNOWY_STONE_SLAB : BlockType.SNOWY_PLANKS_SLAB;
+    }
+
+    /** The plain bottom-half slab a snow-capped slab melts back to. */
+    private static BlockType uncapped(BlockType capped) {
+        return capped == BlockType.SNOWY_STONE_SLAB ? BlockType.STONE_SLAB : BlockType.PLANKS_SLAB;
     }
 
     /** The y of the top-most non-air, non-fluid block in a column, or -1 if none. */
