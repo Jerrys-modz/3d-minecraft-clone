@@ -241,6 +241,41 @@ public class TextureAtlas {
         }
     }
 
+    /**
+     * Generic fbm-grain material tile between {@code dark} and {@code light}. When
+     * {@code opaque} the whole tile is painted solid; otherwise only the bright noise
+     * regions are drawn onto a transparent background (for alpha-cutout blocks).
+     */
+    private void paintTile(BufferedImage img, int index, Random rnd, int light, int dark, boolean opaque) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        float oxs = noiseOffset(rnd);
+        float oys = noiseOffset(rnd);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                float n = (fbm(x + oxs, y + oys) - 0.5f) * 0.5f + 0.5f;
+                if (!opaque && n < 0.35f) {
+                    continue;
+                }
+                int color = shade(lerpColor(dark, light, n), faceShade(x, y));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** {@link #paintTile(BufferedImage, int, Random, int, int, boolean)} plus {@code accent} speckles at {@code density} (0..1 fraction of pixels). */
+    private void paintTile(BufferedImage img, int index, Random rnd, int light, int dark, boolean opaque, int accent, float density) {
+        paintTile(img, index, rnd, light, dark, opaque);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int count = Math.round(TILE_PX * TILE_PX * density);
+        for (int i = 0; i < count; i++) {
+            int x = rnd.nextInt(TILE_PX);
+            int y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | accent);
+        }
+    }
+
     // ---------------------------------------------------------------------
     // Terrain materials
     // ---------------------------------------------------------------------
