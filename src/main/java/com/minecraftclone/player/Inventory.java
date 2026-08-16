@@ -22,11 +22,52 @@ public class Inventory implements StorageContainer {
     public static final int MAIN_SIZE = HOTBAR_SIZE * ROWS;      // 27
     public static final int SIZE = HOTBAR_SIZE + MAIN_SIZE;      // 36
 
+    /** Armor slots, Minecraft-style: helmet, chestplate, leggings, boots. */
+    public static final int ARMOR_SLOT_HELMET = 0;
+    public static final int ARMOR_SLOT_CHESTPLATE = 1;
+    public static final int ARMOR_SLOT_LEGGINGS = 2;
+    public static final int ARMOR_SLOT_BOOTS = 3;
+    public static final int ARMOR_SLOT_COUNT = 4;
+
     /** Default stack limit: 64, like Minecraft. */
     public static final int STACK_MAX = 64;
 
     private final BlockType[] types = new BlockType[SIZE];
     private final int[] counts = new int[SIZE];
+    /** Equipped armor, one piece per {@code ARMOR_SLOT_*} slot (never stacked). */
+    private final BlockType[] armor = new BlockType[ARMOR_SLOT_COUNT];
+
+    /** The type in an equipped armor slot (null if empty). */
+    public BlockType armorType(int slot) {
+        return armor[slot];
+    }
+
+    /** Equips {@code type} into an armor slot, replacing whatever was there. */
+    public void setArmor(int slot, BlockType type) {
+        if (slot < 0 || slot >= ARMOR_SLOT_COUNT) {
+            throw new IllegalArgumentException("Invalid armor slot: " + slot);
+        }
+        if (type != null) {
+            Armor.Slot expectedSlot = Armor.Slot.values()[slot];
+            Armor.Slot actualSlot = Armor.slotOf(type);
+            if (actualSlot != expectedSlot) {
+                throw new IllegalArgumentException(
+                    "Armor type " + type + " (slot " + actualSlot + ") does not match slot " + expectedSlot);
+            }
+        }
+        armor[slot] = type;
+    }
+
+    /** Total defense points from the equipped armor, capped at the game's limit. */
+    public int armorDefense() {
+        return Armor.totalDefense(armor[ARMOR_SLOT_HELMET], armor[ARMOR_SLOT_CHESTPLATE],
+                armor[ARMOR_SLOT_LEGGINGS], armor[ARMOR_SLOT_BOOTS]);
+    }
+
+    /** Clears every armor slot - the death penalty, alongside {@link #clear()}. */
+    public void clearArmor() {
+        for (int i = 0; i < ARMOR_SLOT_COUNT; i++) armor[i] = null;
+    }
 
     @Override
     public int size() {
@@ -56,9 +97,9 @@ public class Inventory implements StorageContainer {
         return true;
     }
 
-    /** Maximum items a single stack of {@code type} can hold (1 for tools, else {@link #STACK_MAX}). */
+    /** Maximum items a single stack of {@code type} can hold (1 for tools/armor, else {@link #STACK_MAX}). */
     public static int maxStack(BlockType type) {
-        return Mining.isTool(type) ? 1 : STACK_MAX;
+        return (Mining.isTool(type) || Armor.isArmor(type)) ? 1 : STACK_MAX;
     }
 
     @Override

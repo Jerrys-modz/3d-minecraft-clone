@@ -7,17 +7,25 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * Tracks remaining durability for tools. The inventory only tracks how many
- * of a tool type you own (a stack count, like any other item) rather than
- * per-instance state, so durability follows the same simplification: one
- * shared "uses left" counter per tool type, as if you always swing whichever
- * one is at the front of the stack. When it hits zero that tool is used up -
- * the caller removes one from the inventory - and the next swing (if any are
- * left) starts a fresh one at full durability.
+ * Tracks remaining durability for tools and armor. The inventory only tracks
+ * how many of a tool/armor type you own (a stack count, like any other item)
+ * rather than per-instance state, so durability follows the same
+ * simplification: one shared "uses left" counter per type, as if you always
+ * swing whichever one is at the front of the stack. When it hits zero the item
+ * is used up - the caller removes it (a tool from the inventory, a piece of
+ * armor from its slot) - and the next one (if any are left) starts fresh at
+ * full durability.
  */
 public final class ToolDurability {
 
     private final Map<BlockType, Integer> remaining = new EnumMap<>(BlockType.class);
+
+    /** How many uses an item starts with: a tool's max uses, an armor piece's, or 0 for anything else. */
+    private int maxUsesOf(BlockType type) {
+        Mining.ToolStats tool = Mining.toolStats(type);
+        if (tool != null) return tool.maxUses();
+        return Armor.maxUses(type);
+    }
 
     /**
      * Registers one use of {@code tool} - call this only when it actually
@@ -26,32 +34,42 @@ public final class ToolDurability {
      * the inventory.
      */
     public boolean use(BlockType tool) {
-        Mining.ToolStats stats = Mining.toolStats(tool);
-        if (stats == null) return false; // not a tool - nothing to wear out
-        int current = remaining.getOrDefault(tool, stats.maxUses()) - 1;
+        return wear(tool, 1);
+    }
+
+    /**
+     * Registers {@code cost} uses worth of wear on an equipped item - armor
+     * pieces wear by {@link Armor#durabilityCost} per hit rather than one use
+     * at a time. Returns true if the item wore out, in which case the caller
+     * must unequip it.
+     */
+    public boolean wear(BlockType type, int cost) {
+        int max = maxUsesOf(type);
+        if (max <= 0 || cost <= 0) return false; // not a wearable item
+        int current = remaining.getOrDefault(type, max) - cost;
         if (current <= 0) {
-            remaining.remove(tool); // next one pulled from the stack starts fresh
+            remaining.remove(type); // next one pulled from the stack starts fresh
             return true;
         }
-        remaining.put(tool, current);
+        remaining.put(type, current);
         return false;
     }
 
-    /** Remaining uses left on {@code tool}'s currently-active instance (full durability if it hasn't been used yet). */
-    public int remaining(BlockType tool) {
-        Mining.ToolStats stats = Mining.toolStats(tool);
-        if (stats == null) return 0;
-        return remaining.getOrDefault(tool, stats.maxUses());
+    /** Remaining uses left on {@code type}'s currently-active instance (full durability if it hasn't been used yet). */
+    public int remaining(BlockType type) {
+        int max = maxUsesOf(type);
+        if (max <= 0) return 0;
+        return remaining.getOrDefault(type, max);
     }
 
-    /** Fraction (0..1) of durability left, for HUD wear indicators. 1 for non-tools/untouched tools. */
-    public float fraction(BlockType tool) {
-        Mining.ToolStats stats = Mining.toolStats(tool);
-        if (stats == null) return 1f;
-        return remaining(tool) / (float) stats.maxUses();
+    /** Fraction (0..1) of durability left, for HUD wear indicators. 1 for non-wearables/untouched items. */
+    public float fraction(BlockType type) {
+        int max = maxUsesOf(type);
+        if (max <= 0) return 1f;
+        return remaining(type) / (float) max;
     }
 
-    /** Clears all tracked wear, as if every tool were freshly acquired - used on death, alongside the inventory wipe. */
+    /** Clears all tracked wear, as if every item were freshly acquired - used on death, alongside the inventory wipe. */
     public void reset() {
         remaining.clear();
     }

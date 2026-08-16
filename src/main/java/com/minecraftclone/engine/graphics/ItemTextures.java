@@ -74,6 +74,24 @@ public class ItemTextures {
             case GOLD_INGOT -> paintIngot(0xE8C93A);
             case DIAMOND -> paintGem(0x5FE0E0);
 
+            // Armor: each piece shares one painter per slot, tinted by material.
+            case WOOD_HELMET -> paintHelmet(0xA9814F);
+            case STONE_HELMET -> paintHelmet(0x9E9E9E);
+            case IRON_HELMET -> paintHelmet(0xE8E8E8);
+            case DIAMOND_HELMET -> paintHelmet(0x5FE0E0);
+            case WOOD_CHESTPLATE -> paintChestplate(0xA9814F);
+            case STONE_CHESTPLATE -> paintChestplate(0x9E9E9E);
+            case IRON_CHESTPLATE -> paintChestplate(0xE8E8E8);
+            case DIAMOND_CHESTPLATE -> paintChestplate(0x5FE0E0);
+            case WOOD_LEGGINGS -> paintLeggings(0xA9814F);
+            case STONE_LEGGINGS -> paintLeggings(0x9E9E9E);
+            case IRON_LEGGINGS -> paintLeggings(0xE8E8E8);
+            case DIAMOND_LEGGINGS -> paintLeggings(0x5FE0E0);
+            case WOOD_BOOTS -> paintBoots(0xA9814F);
+            case STONE_BOOTS -> paintBoots(0x9E9E9E);
+            case IRON_BOOTS -> paintBoots(0xE8E8E8);
+            case DIAMOND_BOOTS -> paintBoots(0x5FE0E0);
+
             case RAW_PORKCHOP -> paintMeat(0xE8A0A0, 0xC87878);
             case RAW_BEEF -> paintMeat(0xC04848, 0x8E2E2E);
             case MUTTON -> paintMeat(0xD87870, 0xB04848);
@@ -409,6 +427,92 @@ public class ItemTextures {
         // Long diagonal handle from the bottom-right into the head.
         drawThickLine(img, 10, 15, 8, 5, handleDark);
         drawThickLine(img, 9, 15, 7, 5, handle);
+        return img;
+    }
+
+    /** A Minecraft-style helmet: a rounded dome with a face opening and a lit top edge. */
+    private static BufferedImage paintHelmet(int color) {
+        BufferedImage img = blank();
+        // Dome: rows widening then narrowing, with a face gap at the bottom.
+        int[][] rows = {{7, 8}, {6, 7, 8, 9}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}};
+        for (int y = 0; y < rows.length; y++) {
+            int[] xs = rows[y];
+            for (int x : xs) {
+                int c = y == 0 ? lighten(color) : (y == rows.length - 1 ? shade(color, 0.8f) : color);
+                if (x == xs[0] || x == xs[xs.length - 1]) c = shade(color, 0.85f);
+                img.setRGB(x, y + 2, 0xFF000000 | c);
+            }
+        }
+        // Face opening.
+        for (int y = 6; y <= 8; y++) {
+            for (int x = 5; x <= 10; x++) {
+                img.setRGB(x, y, 0xFF000000 | 0x202020);
+            }
+        }
+        // Brim.
+        for (int x = 4; x <= 11; x++) {
+            img.setRGB(x, 9, 0xFF000000 | shade(color, 0.7f));
+            img.setRGB(x, 10, 0xFF000000 | shade(color, 0.6f));
+        }
+        return img;
+    }
+
+    /** A Minecraft-style chestplate: a broad torso with arm holes and a lit top. */
+    private static BufferedImage paintChestplate(int color) {
+        BufferedImage img = blank();
+        int[][] rows = {{4, 5, 6, 7, 8, 9, 10, 11}, {4, 5, 6, 7, 8, 9, 10, 11}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}, {5, 6, 7, 8, 9, 10}};
+        for (int y = 0; y < rows.length; y++) {
+            int[] xs = rows[y];
+            for (int x : xs) {
+                int c = y == 0 ? lighten(color) : (y == rows.length - 1 ? shade(color, 0.8f) : color);
+                if (x == xs[0] || x == xs[xs.length - 1]) c = shade(color, 0.85f);
+                img.setRGB(x, y + 3, 0xFF000000 | c);
+            }
+        }
+        // A center seam.
+        for (int y = 4; y <= 11; y++) {
+            img.setRGB(8, y, 0xFF000000 | shade(color, 0.7f));
+        }
+        return img;
+    }
+
+    /** A Minecraft-style pair of leggings: two legs from a hip band. */
+    private static BufferedImage paintLeggings(int color) {
+        BufferedImage img = blank();
+        // Hip band.
+        for (int x = 5; x <= 10; x++) {
+            img.setRGB(x, 4, 0xFF000000 | lighten(color));
+            img.setRGB(x, 5, 0xFF000000 | color);
+        }
+        // Two legs with a split down the middle.
+        for (int y = 6; y <= 12; y++) {
+            for (int x = 5; x <= 10; x++) {
+                if (x == 7 || x == 8) {
+                    img.setRGB(x, y, 0xFF000000 | 0x202020); // split
+                } else {
+                    int c = y == 12 ? shade(color, 0.7f) : (x == 5 || x == 10 ? shade(color, 0.85f) : color);
+                    img.setRGB(x, y, 0xFF000000 | c);
+                }
+            }
+        }
+        return img;
+    }
+
+    /** A Minecraft-style boot: a short shaft with a wide foot, pointing left. */
+    private static BufferedImage paintBoots(int color) {
+        BufferedImage img = blank();
+        // Shaft.
+        for (int y = 5; y <= 9; y++) {
+            for (int x = 7; x <= 11; x++) {
+                img.setRGB(x, y, 0xFF000000 | (y == 5 ? lighten(color) : color));
+            }
+        }
+        // Foot.
+        for (int y = 10; y <= 12; y++) {
+            for (int x = 4; x <= 12; x++) {
+                img.setRGB(x, y, 0xFF000000 | (y == 12 ? shade(color, 0.7f) : (x == 4 ? lighten(color) : color)));
+            }
+        }
         return img;
     }
 

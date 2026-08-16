@@ -37,6 +37,25 @@ public class PlayerStats {
     private float coldness = 0f; // 0 (warm) .. 1 (freezing out in a blizzard), set by Player each frame
     private boolean staminaExhausted = false;
     private boolean dead = false;
+    /** Damage multiplier from equipped armor (1 = no armor); applied by {@link #damage}. */
+    private float armorMultiplier = 1f;
+    /** Total damage accumulated this frame (after armor), cleared after armor wear is applied. */
+    private float frameDamageAccumulator = 0f;
+
+    /** Sets the damage multiplier from the player's equipped armor (1 = no armor, lower = more protection). */
+    public void setArmorMultiplier(float multiplier) {
+        this.armorMultiplier = multiplier;
+    }
+
+    /** Total damage accumulated this frame (after armor) - cleared after armor wear is applied. */
+    public float frameDamageAccumulator() {
+        return frameDamageAccumulator;
+    }
+
+    /** Clears the per-frame damage accumulator after armor wear has been consumed. */
+    public void clearFrameDamage() {
+        frameDamageAccumulator = 0f;
+    }
 
     /** How exposed to the cold the player is this frame, 0 (warm) to 1 (freezing). */
     public float getColdness() {
@@ -67,6 +86,8 @@ public class PlayerStats {
         coldness = 0f;
         staminaExhausted = false;
         dead = false;
+        armorMultiplier = 1f;
+        frameDamageAccumulator = 0f;
     }
 
     /** Keeps every stat topped up and the player alive - used in creative/spectator modes. */
@@ -78,6 +99,12 @@ public class PlayerStats {
         coldness = 0f;
         staminaExhausted = false;
         dead = false;
+        // Also drop any damage a stray hit accumulated right before switching into an
+        // invulnerable mode - otherwise it lingers unconsumed (this branch skips
+        // Player.finalizeDamage's wear step) and gets wrongly applied to whatever armor
+        // is equipped much later, if the player switches back to a mortal mode.
+        armorMultiplier = 1f;
+        frameDamageAccumulator = 0f;
     }
 
     public boolean canSprint() {
@@ -156,7 +183,9 @@ public class PlayerStats {
 
     public void damage(float amount) {
         if (dead || amount <= 0f) return;
-        health -= amount;
+        float damageDealt = amount * armorMultiplier;
+        frameDamageAccumulator += damageDealt;
+        health -= damageDealt;
         if (health <= 0f) {
             health = 0f;
             dead = true;

@@ -655,6 +655,18 @@ public class Main {
             activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, container);
             openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
         }
+        // Opt-in autotest hook: open the player's own inventory screen, equipping a
+        // full iron set (plus a couple of bag items) so the armor column renders.
+        if (System.getenv("MCCLONE_AUTOTEST_INVENTORY") != null && started[0]) {
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_HELMET, BlockType.IRON_HELMET);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_CHESTPLATE, BlockType.IRON_CHESTPLATE);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_LEGGINGS, BlockType.IRON_LEGGINGS);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_BOOTS, BlockType.IRON_BOOTS);
+            player.getInventory().setSlot(0, BlockType.APPLE, 12);
+            player.getInventory().setSlot(1, BlockType.DIAMOND_PICKAXE, 1);
+            activeGui[0] = inventoryGui;
+            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+        }
         // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
         // the first-person hand can be screenshotted holding something.
         if (System.getenv("MCCLONE_AUTOTEST_HELD") != null) {
@@ -712,7 +724,7 @@ public class Main {
                     if (world != null) {
                         float lightningDamage = lightningStrike(world, player, bolts, lightningRnd);
                         if (lightningDamage > 0f) {
-                            player.getStats().damage(lightningDamage);
+                            player.takeDamage(lightningDamage);
                         }
                     }
                 }
@@ -735,7 +747,7 @@ public class Main {
                         bolts.add(result.bolt());
                         audio.play(SoundEvent.THUNDER, 0.8f);
                         if (result.playerDamage() > 0f) {
-                            player.getStats().damage(result.playerDamage());
+                            player.takeDamage(result.playerDamage());
                         }
                         System.out.println("Autotest lightning strike at frame " + frameCount);
                     } else {
@@ -1148,7 +1160,16 @@ public class Main {
                                 (int) Math.floor(deathPos.z), t, player.getInventory().countOf(slot), loot);
                     }
                 }
+                // Worn armor drops too (one piece per slot).
+                for (int slot = 0; slot < Inventory.ARMOR_SLOT_COUNT; slot++) {
+                    BlockType t = player.getInventory().armorType(slot);
+                    if (t != null) {
+                        world.spawnItem((int) Math.floor(deathPos.x), (int) Math.floor(deathPos.y),
+                                (int) Math.floor(deathPos.z), t, 1, loot);
+                    }
+                }
                 player.getInventory().clear();
+                player.getInventory().clearArmor();
                 player.getDurability().reset();
                 // Respawn back in the overworld, wherever you died.
                 if (currentDim[0] != DimensionType.OVERWORLD) {
@@ -1173,15 +1194,22 @@ public class Main {
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
             // to the player's health, where the existing death/respawn handling picks
-            // it up.
+            // it up. Use takeDamage (not getStats().damage) so mob damage routes through
+            // the same armor-mitigation and armor-wear path as environmental hazards.
             Vector3f playerPos = player.getPosition();
             AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
                     playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
             float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
             if (mobDamage > 0f) {
-                player.getStats().damage(mobDamage);
+                player.takeDamage(mobDamage);
                 audio.play(SoundEvent.HURT);
             }
+            // Every damage source for this frame (environmental hazards inside
+            // player.update(), lightning and mob hits via takeDamage() above/below it)
+            // has now had its chance to run - wear armor for the frame's total and
+            // clear the accumulator, once, here. See Player.finalizeDamage's javadoc
+            // for why this can't just live inside player.update() itself.
+            player.finalizeDamage();
 
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
             for (int i = messages.size() - 1; i >= 0; i--) {

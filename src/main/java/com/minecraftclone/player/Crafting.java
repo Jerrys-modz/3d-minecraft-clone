@@ -93,6 +93,12 @@ public final class Crafting {
         tools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD,
                 BlockType.DIAMOND_SHOVEL, BlockType.DIAMOND_HAMMER, BlockType.DIAMOND_BROADAXE);
 
+        // Armor: helmet (5), chestplate (8), leggings (7), boots (4) of each material.
+        armor('P', BlockType.WOOD_HELMET, BlockType.WOOD_CHESTPLATE, BlockType.WOOD_LEGGINGS, BlockType.WOOD_BOOTS);
+        armor('K', BlockType.STONE_HELMET, BlockType.STONE_CHESTPLATE, BlockType.STONE_LEGGINGS, BlockType.STONE_BOOTS);
+        armor('I', BlockType.IRON_HELMET, BlockType.IRON_CHESTPLATE, BlockType.IRON_LEGGINGS, BlockType.IRON_BOOTS);
+        armor('D', BlockType.DIAMOND_HELMET, BlockType.DIAMOND_CHESTPLATE, BlockType.DIAMOND_LEGGINGS, BlockType.DIAMOND_BOOTS);
+
         // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
         // itself is made by quenching a lava source with a water source (see
         // shapeless below), so the Nether is reachable from raw overworld finds.
@@ -126,6 +132,14 @@ public final class Crafting {
         shaped("." + m + ".", ".S.", ".S.", shovel, 1);
         shaped("" + m + m + ".", "" + m + m + ".", ".S.", hammer, 1);
         shaped("" + m + m + m, "" + m + "S.", ".S.", broadaxe, 1);
+    }
+
+    /** Registers the four armor-piece recipes for one material character (helmet/chestplate/leggings/boots). */
+    private static void armor(char m, BlockType helmet, BlockType chestplate, BlockType leggings, BlockType boots) {
+        shaped("" + m + m + m, "" + m + "." + m, "...", helmet, 1);         // 5 material
+        shaped("" + m + "." + m, "" + m + m + m, "" + m + m + m, chestplate, 1); // 8 material
+        shaped("" + m + m + m, "" + m + "." + m, "" + m + "." + m, leggings, 1); // 7 material
+        shaped("" + m + "." + m, "" + m + "." + m, "...", boots, 1);        // 4 material
     }
 
     private static BlockType[] cells(String r0, String r1, String r2) {

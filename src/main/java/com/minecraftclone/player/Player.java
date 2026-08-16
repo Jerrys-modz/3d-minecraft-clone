@@ -180,6 +180,37 @@ public class Player {
     }
 
     /**
+     * Applies {@code amount} damage to the player, mitigated by armor and accumulated
+     * for armor wear. Use this for external damage sources (mobs, lightning, etc.) so
+     * they route through the same armor-mitigation and armor-wear path as environmental
+     * hazards - and so they respect the invulnerability check, which a direct
+     * {@code getStats().damage(...)} call would silently skip.
+     * <p>
+     * Refreshes the armor multiplier from the current inventory first: callers may run
+     * before or after {@link #update}, so this can't rely on that frame's {@code update}
+     * having already refreshed it.
+     */
+    public void takeDamage(float amount) {
+        if (gameMode.isInvulnerable()) return;
+        stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
+        stats.damage(amount);
+    }
+
+    /**
+     * Wears equipped armor by whatever damage has accumulated this frame and clears the
+     * accumulator. Called once per frame from {@code Main}, after every damage source for
+     * the frame (environmental hazards inside {@link #update}, plus mob/lightning hits via
+     * {@link #takeDamage} which can happen before or after it) has had a chance to run -
+     * consuming the accumulator from inside {@code update} itself would miss damage from
+     * calls made later in the same frame, deferring their wear to the next frame instead
+     * (and, worse, applying it to whatever armor happens to be equipped by then).
+     */
+    public void finalizeDamage() {
+        wearArmor(stats.frameDamageAccumulator());
+        stats.clearFrameDamage();
+    }
+
+    /**
      * @param coldFactor 0..1 how cold the current weather is (snow/blizzard); the
      *                    player's shelter and nearby fires cut it down to the
      *                    effective coldness that drains hunger/freezes (see PlayerStats).
@@ -215,6 +246,7 @@ public class Player {
         if (gameMode.isInvulnerable()) {
             stats.forceFull();
         } else {
+            stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
             // Cold exposure: weather strength, cut down by a roof overhead and
@@ -226,6 +258,22 @@ public class Player {
             stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness);
         }
         lastFallImpactSpeed = 0f;
+    }
+
+    /**
+     * Wears the equipped armor by the damage just taken: each piece loses
+     * durability proportional to the hit (see {@link Armor#durabilityCost}) and
+     * is unequipped once worn out, exactly like a tool breaking.
+     */
+    public void wearArmor(float damage) {
+        if (damage <= 0f) return;
+        int cost = Armor.durabilityCost(damage);
+        for (int slot = 0; slot < Inventory.ARMOR_SLOT_COUNT; slot++) {
+            BlockType piece = inventory.armorType(slot);
+            if (piece != null && durability.wear(piece, cost)) {
+                inventory.setArmor(slot, null);
+            }
+        }
     }
 
     /** True if a solid block sits within {@link #COLD_ROOF_CHECK} blocks overhead - basic shelter. */
