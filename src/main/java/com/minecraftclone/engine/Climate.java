@@ -61,8 +61,15 @@ public class Climate {
         if (dt <= 0) return;
         currentBiome = playerBiome == null ? Biome.PLAINS : playerBiome;
         if (!rolled) {
+            Weather preservedWeather = schedule[0].weather;
+            float preservedDuration = schedule[0].durationSeconds;
+            float preservedStrength = schedule[0].strength;
+            boolean wasForced = preservedDuration > 0;
             for (int i = 0; i < FORECAST_HORIZON; i++) {
                 rollWeather(i);
+            }
+            if (wasForced) {
+                schedule[0] = new WeatherEvent(preservedWeather, preservedDuration, preservedStrength);
             }
             rolled = true;
         }

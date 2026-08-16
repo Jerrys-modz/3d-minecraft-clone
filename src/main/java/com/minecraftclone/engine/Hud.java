@@ -76,6 +76,12 @@ public class Hud {
     private static final float FURNACE_ARROW_X0 = FURNACE_FLAME_X + 0.035f;
     private static final float FURNACE_ARROW_X1 = FURNACE_OUTPUT_X - 0.09f;
 
+    // Chest GUI layout: a grid of the chest's slots (3x9 single, 6x9 double)
+    // stacked directly above the player's 3x9 main grid (the hotbar sits below
+    // that as row 3). The top row rises to fit however many rows the container
+    // has.
+    private static final int CHEST_COLUMNS = 9;
+
     // Creative inventory screen layout (logical square units).
     private static final float CAT_SLOT = 0.09f;
     private static final float CAT_GAP = 0.014f;
@@ -1064,6 +1070,27 @@ public class Hud {
         return INV_GRID_CENTER_X - invGridWidth() / 2f + INV_SLOT / 2f;
     }
 
+    /** Center y of the chest grid's bottom row - fixed, so the gap to the player grid below it is always the same. */
+    private static final float CHEST_BOTTOM_ROW_Y = INV_TOP_ROW_Y + 0.15f;
+
+    /** Center y of a chest gui's top row: the fixed bottom row plus however many rows the chest has above it. */
+    private float chestTopRowY(ContainerGui gui) {
+        int rows = (gui.container().size() + CHEST_COLUMNS - 1) / CHEST_COLUMNS;
+        return CHEST_BOTTOM_ROW_Y + (rows - 1) * INV_STEP;
+    }
+
+    /**
+     * How far a chest gui shifts <em>down</em> to fit on screen. A tall chest
+     * (e.g. a 2x2 = 108 slots = 12 rows) would otherwise push its top row above
+     * the top edge; shifting the whole screen down keeps every slot the same
+     * size. Zero for chests short enough to fit in the normal position.
+     */
+    private float chestLayoutShift(ContainerGui gui) {
+        if (gui.kind() != ContainerGui.Kind.CHEST) return 0f;
+        float panelTop = chestTopRowY(gui) + INV_SLOT / 2f + 0.055f;
+        return Math.max(0f, panelTop - 1f);
+    }
+
     /** Center (logical x, y) of the given slot id in the open gui; see {@link ContainerGui} for numbering. */
     private float[] slotCenter(ContainerGui gui, int slotId) {
         if (gui.isOutputSlot(slotId)) {
@@ -1074,8 +1101,15 @@ public class Hud {
             int r = g / CraftingGrid.WIDTH, c = g % CraftingGrid.WIDTH;
             return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
         }
-        if (gui.isFurnaceSlot(slotId)) {
-            int fs = slotId - ContainerGui.CONTAINER_START;
+        if (gui.isContainerSlot(slotId)) {
+            int cs = slotId - ContainerGui.CONTAINER_START;
+            if (gui.kind() == ContainerGui.Kind.CHEST) {
+                // A chest is a rows-by-9 grid of slots above the player's inventory.
+                int r = cs / CHEST_COLUMNS, c = cs % CHEST_COLUMNS;
+                return new float[]{invGridLeft() + c * INV_STEP, chestTopRowY(gui) - r * INV_STEP - chestLayoutShift(gui)};
+            }
+            // Furnace: a 3-slot column - input, fuel, output.
+            int fs = cs;
             if (fs == Furnace.SLOT_OUTPUT) return new float[]{FURNACE_OUTPUT_X, FURNACE_MID_Y};
             float y = fs == Furnace.SLOT_INPUT ? INV_TOP_ROW_Y : FURNACE_FUEL_Y;
             return new float[]{FURNACE_INPUT_X, y};
@@ -1090,7 +1124,7 @@ public class Hud {
                 r = s / 9;
                 c = s % 9;
             }
-            return new float[]{invGridLeft() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP};
+            return new float[]{invGridLeft() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP - chestLayoutShift(gui)};
         }
         return null;
     }
@@ -1182,11 +1216,23 @@ public class Hud {
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         // Panel background spanning the container area and the inventory grid.
+        // A chest's grid stacks above the player grid, so its panel extends
+        // upward to cover it (higher for a 54-slot double chest, taller still
+        // for a 108-slot 2x2); it also hugs the 9-wide inventory grid rather
+        // than reaching out to the crafting grid's column, since a chest has no
+        // crafting grid. Tall chests shift the whole screen down so every slot
+        // stays the same size.
         float gridW = invGridWidth();
-        float panelLeft = CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
+        boolean chest = gui.kind() == ContainerGui.Kind.CHEST;
+        float shift = chestLayoutShift(gui);
+        float panelLeft = chest
+                ? INV_GRID_CENTER_X - gridW / 2f - 0.03f
+                : CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
         float panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
-        float panelTop = INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
-        float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f;
+        float panelTop = chest
+                ? chestTopRowY(gui) + INV_SLOT / 2f + 0.055f - shift
+                : INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
+        float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f - shift;
         float[] panel = {
                 panelLeft, panelBottom, 0, panelRight, panelBottom, 0, panelRight, panelTop, 0,
                 panelLeft, panelBottom, 0, panelRight, panelTop, 0, panelLeft, panelTop, 0,
@@ -1204,28 +1250,78 @@ public class Hud {
             renderFurnaceProgress(gui.furnace());
         }
 
-        // Slot backgrounds (dark squares) for every interactive slot.
-        slotBgVerts.clear();
+        // Slot backgrounds (dark squares) for every interactive slot. The open
+        // container's own slots are tinted differently from the player's so it's
+        // obvious which grid belongs to what (a chest's 3x9/6x9 grid vs the
+        // player's inventory below it).
         float half = INV_SLOT / 2f - 0.004f;
-        for (int id = 0; id < gui.slotCount(); id++) {
+
+        // The player inventory's slots first.
+        slotBgVerts.clear();
+        for (int id = 0; id < Inventory.SIZE; id++) {
             float[] c = slotCenter(gui, id);
             addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
         }
         inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
         lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.35f));
         inventorySlotBg.render();
+
+        // The open container's slots (crafting grid, furnace, chest...).
+        slotBgVerts.clear();
+        for (int id = 0; id < gui.slotCount(); id++) {
+            if (gui.isPlayerSlot(id)) continue;
+            float[] c = slotCenter(gui, id);
+            if (c != null) addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
+        }
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        // Chest slots get a warmer tint to read as "the container's own space".
+        lineShader.setUniform("color", chest
+                ? new Vector4f(0.22f, 0.13f, 0.04f, 0.5f)
+                : new Vector4f(0f, 0f, 0f, 0.45f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+
+        // A solid divider band between the chest's grid and the player's
+        // inventory, so the two spaces read as separate sections at a glance.
+        // The chest's bottom row sits CHEST_BOTTOM_ROW_Y above the player's top
+        // row, leaving a clear gap for it.
+        if (chest) {
+            float sepCenter = (CHEST_BOTTOM_ROW_Y + INV_TOP_ROW_Y) / 2f - shift;
+            float sepHalf = 0.016f;
+            inventoryPanel.upload(new float[]{
+                    panelLeft + 0.02f, sepCenter - sepHalf, 0, panelRight - 0.02f, sepCenter - sepHalf, 0,
+                    panelRight - 0.02f, sepCenter + sepHalf, 0,
+                    panelLeft + 0.02f, sepCenter - sepHalf, 0, panelRight - 0.02f, sepCenter + sepHalf, 0,
+                    panelLeft + 0.02f, sepCenter + sepHalf, 0,
+            });
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0.1f, 0.1f, 0.1f, 0.6f));
+            inventoryPanel.render();
+            lineShader.unbind();
+        }
 
         // Hover highlight.
         if (hoveredSlot >= 0) {
             float[] c = slotCenter(gui, hoveredSlot);
             if (c != null) {
                 inventoryHover.upload(outlineLines(c[0], c[1], INV_SLOT / 2f + 0.004f));
+                lineShader.bind();
+                lineShader.setUniform("projection", identity);
+                lineShader.setUniform("view", identity);
+                lineShader.setUniform("model", hudTransform);
                 lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.9f));
                 glLineWidth(2f);
                 inventoryHover.render();
+                lineShader.unbind();
             }
         }
-        lineShader.unbind();
 
         // Icons + counts + wear bars for every occupied slot (the crafting
         // output is derived from the recipe rather than stored).

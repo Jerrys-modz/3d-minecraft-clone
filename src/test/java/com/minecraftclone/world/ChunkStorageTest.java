@@ -158,7 +158,12 @@ class ChunkStorageTest {
             f.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 2);
             f.tick(3f);
 
-            storage.save(a, List.of(new ChunkStorage.BlockEntitySave(48, 40, -25, f)));
+            Chest chest = new Chest();
+            chest.setSlot(0, BlockType.IRON_INGOT, 5);
+            chest.setSlot(12, BlockType.PUMPKIN, 2);
+
+            storage.save(a, List.of(new ChunkStorage.BlockEntitySave(48, 40, -25, f),
+                    new ChunkStorage.BlockEntitySave(0, 0, 0, chest)));
 
             StubChunk b = new StubChunk(pos);
             List<ChunkStorage.BlockEntitySave> restored = storage.load(b);
@@ -166,7 +171,7 @@ class ChunkStorageTest {
             assertEquals(BlockType.FURNACE.id, b.getRawBlocks()[0]);
             assertEquals(BlockType.STONE.id, b.getRawBlocks()[10]);
             assertEquals(BlockType.SEAWEED.id, b.getRawOverlays()[5]);
-            assertEquals(1, restored.size());
+            assertEquals(2, restored.size());
             ChunkStorage.BlockEntitySave es = restored.get(0);
             assertEquals(48, es.x());
             assertEquals(40, es.y());
@@ -178,6 +183,14 @@ class ChunkStorageTest {
             assertEquals(BlockType.COAL, g.typeOf(Furnace.SLOT_FUEL));
             assertEquals(1, g.countOf(Furnace.SLOT_FUEL), "one of two coals burned during tick(3)");
             assertEquals(f.progressFraction(), g.progressFraction(), 0.001f);
+
+            ChunkStorage.BlockEntitySave chestSave = restored.get(1);
+            assertTrue(chestSave.entity() instanceof Chest);
+            Chest loadedChest = (Chest) chestSave.entity();
+            assertEquals(BlockType.IRON_INGOT, loadedChest.typeOf(0));
+            assertEquals(5, loadedChest.countOf(0));
+            assertEquals(BlockType.PUMPKIN, loadedChest.typeOf(12));
+            assertEquals(2, loadedChest.countOf(12));
         } finally {
             deleteRecursively(dir);
         }
