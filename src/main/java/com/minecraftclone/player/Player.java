@@ -194,7 +194,8 @@ public class Player {
             stats.forceFull();
         } else {
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
-            stats.update(dt, inLava, submerged, sprintingAndMoving, lastFallImpactSpeed);
+            boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
+            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed);
         }
         lastFallImpactSpeed = 0f;
     }

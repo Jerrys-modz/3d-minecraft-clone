@@ -58,4 +58,11 @@ class BlockTypeTest {
         assertTrue(BlockType.SNOWY_PLANKS_SLAB.isSnowCappedSlab());
         assertFalse(BlockType.STONE_SLAB.isSnowCappedSlab());
     }
+
+    @Test
+    void fireIsABrightNonSolidCross() {
+        assertTrue(BlockType.FIRE.cross, "fire renders as a crossed-plane flame");
+        assertFalse(BlockType.FIRE.solid, "fire never collides");
+        assertEquals(14, BlockType.FIRE.lightLevel, "a lightning-lit flame glows brightly");
+    }
 }

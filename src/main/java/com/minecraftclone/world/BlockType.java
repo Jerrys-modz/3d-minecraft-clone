@@ -47,6 +47,7 @@ public enum BlockType {
     GLASS(21, true, false, 34, 34, 34),
     BERRY_BUSH(22, false, true, 37),
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
+    FIRE(91, false, true, TextureAtlas.FIRE_TILE, 14), // transient burning block lit by lightning; never placeable
     LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
     FURNACE(40, true, false, 4, 4, 4, 26, TextureAtlas.FURNACE_LIT_TILE, 0, 0), // smelting station: stone top/bottom/sides, furnace-face front (tile 26) that glows when burning
     STONE_SLAB(44, true, false, true, 4),   // bottom-half slab, stone texture

@@ -1,6 +1,7 @@
 package com.minecraftclone.world;
 
 import com.minecraftclone.engine.Climate;
+import com.minecraftclone.engine.LightningBolt;
 import com.minecraftclone.engine.Shader;
 import com.minecraftclone.engine.Weather;
 import com.minecraftclone.engine.graphics.TextureAtlas;
@@ -93,6 +94,19 @@ public class World implements BlockAccessor {
     /** How deep a snow pile may get: a light coat in ordinary snow, buried under a blizzard. */
     private static final int SNOW_MAX_LAYERS_NORMAL = 1;
     private static final int SNOW_MAX_LAYERS_BLIZZARD = 3;
+
+    // Lightning fire: each burning cell carries a per-block remaining-seconds
+    // timer (keyed like block entities), ticked every frame by tickFires. Fires
+    // are transient - lightning lights them, they spread to nearby flammable
+    // blocks, get put out by water or rain, and burn out on their own.
+    private static final float FIRE_BURN_MIN_SECONDS = 4f;
+    private static final float FIRE_BURN_MAX_SECONDS = 9f;
+    private static final float FIRE_SPREAD_CHANCE_PER_SECOND = 0.8f;
+    private static final float FIRE_SPREAD_RADIUS = 2f;
+    private static final float FIRE_MOB_DAMAGE_RADIUS = 1.7f;
+    private static final float FIRE_MOB_DAMAGE_PER_SECOND = 6f;
+    private static final int FIRE_MAX_ACTIVE = 48;
+    private final Map<Long, Float> fires = new HashMap<>();
     private double lastSnowUpdateNanos = Double.NaN;
     private final Random snowRandom = new Random();
 
@@ -618,6 +632,17 @@ public class World implements BlockAccessor {
                                 blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
                             }
                         }
+                        // Lightning fire is transient: any saved mid-burn fire cells
+                        // are cleared on reload rather than persisting forever.
+                        byte[] raw = chunk.getRawBlocks();
+                        boolean hadFire = false;
+                        for (int i = 0; i < raw.length; i++) {
+                            if ((raw[i] & 0xFF) == BlockType.FIRE.id) {
+                                raw[i] = BlockType.AIR.id;
+                                hadFire = true;
+                            }
+                        }
+                        if (hadFire) chunk.setRawBlocks(raw);
                     } else {
                         generator.generate(chunk);
                     }
@@ -803,6 +828,161 @@ public class World implements BlockAccessor {
     /** The plain bottom-half slab a snow-capped slab melts back to. */
     private static BlockType uncapped(BlockType capped) {
         return capped == BlockType.SNOWY_STONE_SLAB ? BlockType.STONE_SLAB : BlockType.PLANKS_SLAB;
+    }
+
+    /** Result of a lightning strike: the cosmetic bolt (or null) plus player damage. */
+    public record LightningStrikeResult(LightningBolt bolt, float playerDamage) {
+    }
+
+    /**
+     * A lightning strike landing at {@code targetX/targetZ}: lights a fire at
+     * the surface (and sets any nearby flammable blocks alight), blasts mobs and
+     * the player in the immediate area, and returns the cosmetic bolt for the
+     * renderer (or null if there's nowhere to strike). The player-facing flash
+     * and rumble are driven separately by the climate's thunderstorm.
+     */
+    public LightningStrikeResult strikeLightning(Random rnd, float targetX, float targetZ, Vector3f playerPos) {
+        int x = (int) Math.floor(targetX);
+        int z = (int) Math.floor(targetZ);
+        int surfaceY = findSurfaceY(x, z);
+        if (surfaceY < 0) return new LightningStrikeResult(null, 0f);
+
+        // Light the ground on fire at the strike point, plus flammable neighbors
+        // (a struck tree actually catches).
+        igniteCell(x, surfaceY + 1, z);
+        for (int dx = -(int) FIRE_SPREAD_RADIUS; dx <= FIRE_SPREAD_RADIUS; dx++) {
+            for (int dz = -(int) FIRE_SPREAD_RADIUS; dz <= FIRE_SPREAD_RADIUS; dz++) {
+                if (rnd.nextFloat() < 0.5f) {
+                    int fy = findSurfaceY(x + dx, z + dz);
+                    if (fy >= 0 && isFlammable(getBlock(x + dx, fy, z + dz))) {
+                        igniteCell(x + dx, fy + 1, z + dz);
+                    }
+                }
+            }
+        }
+
+        // Blast anything living within a few blocks of the strike point.
+        float strikeX = x + 0.5f;
+        float strikeZ = z + 0.5f;
+        List<Mob> nearbyMobs = new ArrayList<>();
+        for (Mob mob : mobs) {
+            float dx = mob.position.x - strikeX;
+            float dz = mob.position.z - strikeZ;
+            if (dx * dx + dz * dz <= 16f) { // ~4-block radius
+                nearbyMobs.add(mob);
+            }
+        }
+        for (Mob mob : nearbyMobs) {
+            damageMob(mob, 10f, strikeX, strikeZ, rnd);
+        }
+
+        // Damage player within the same radius.
+        float playerDamage = 0f;
+        if (playerPos != null) {
+            float dx = playerPos.x - strikeX;
+            float dz = playerPos.z - strikeZ;
+            if (dx * dx + dz * dz <= 16f) {
+                playerDamage = 10f;
+            }
+        }
+
+        return new LightningStrikeResult(
+                new LightningBolt(strikeX, surfaceY + 46f, strikeZ,
+                        strikeX, surfaceY + 1f, strikeZ, rnd),
+                playerDamage);
+    }
+
+    /**
+     * Ticks every burning fire cell by {@code dt}: they burn out on their own,
+     * spread to nearby flammable blocks, hurt mobs standing in or next to them,
+     * and are doused by water. Call once per frame.
+     */
+    public void tickFires(float dt) {
+        if (fires.isEmpty()) return;
+        List<Long> gone = null;
+        for (Map.Entry<Long, Float> e : fires.entrySet()) {
+            long key = e.getKey();
+            int x = keyX(key), y = keyY(key), z = keyZ(key);
+            // Validate the block is still fire; remove timer if not.
+            if (getBlock(x, y, z) != BlockType.FIRE) {
+                if (gone == null) gone = new ArrayList<>();
+                gone.add(key);
+                continue;
+            }
+            // Doused by water?
+            boolean wet = isWet(x + 1, y, z) || isWet(x - 1, y, z)
+                    || isWet(x, y, z + 1) || isWet(x, y, z - 1) || isWet(x, y + 1, z);
+            float remaining = wet ? 0f : e.getValue() - dt;
+            if (remaining <= 0f) {
+                if (getBlock(x, y, z) == BlockType.FIRE) setBlock(x, y, z, BlockType.AIR);
+                if (gone == null) gone = new ArrayList<>();
+                gone.add(key);
+            } else {
+                e.setValue(remaining);
+            }
+        }
+        if (gone != null) {
+            for (Long key : gone) fires.remove(key);
+        }
+        if (fires.isEmpty()) return;
+
+        // Spread to flammable neighbors and burn anything standing in the flames.
+        // Snapshot the keys and mobs: spreading adds fires and burning kills mobs,
+        // both of which would otherwise trip a concurrent-modification exception.
+        List<Long> burning = new ArrayList<>(fires.keySet());
+        List<Mob> burnList = null;
+        for (Long key : burning) {
+            if (snowRandom.nextFloat() < FIRE_SPREAD_CHANCE_PER_SECOND * dt
+                    && fires.size() < FIRE_MAX_ACTIVE) {
+                spreadFrom(keyX(key), keyY(key), keyZ(key));
+            }
+            for (Mob mob : mobs) {
+                float dx = mob.position.x - (keyX(key) + 0.5f);
+                float dy = mob.position.y - (keyY(key) + 0.5f);
+                float dz = mob.position.z - (keyZ(key) + 0.5f);
+                if (dx * dx + dy * dy + dz * dz <= FIRE_MOB_DAMAGE_RADIUS * FIRE_MOB_DAMAGE_RADIUS) {
+                    if (burnList == null) burnList = new ArrayList<>();
+                    burnList.add(mob);
+                }
+            }
+        }
+        if (burnList != null) {
+            for (Mob mob : burnList) {
+                damageMob(mob, FIRE_MOB_DAMAGE_PER_SECOND * dt, mob.position.x, mob.position.z, snowRandom);
+            }
+        }
+    }
+
+    private void spreadFrom(int x, int y, int z) {
+        int[][] dirs = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+        for (int[] d : dirs) {
+            int nx = x + d[0], ny = y + d[1], nz = z + d[2];
+            BlockType n = getBlock(nx, ny, nz);
+            if (isFlammable(n)) {
+                igniteCell(nx, ny, nz);
+                return;
+            }
+        }
+    }
+
+    private void igniteCell(int x, int y, int z) {
+        if (y < 0 || y >= Chunk.HEIGHT) return;
+        if (getBlock(x, y, z) == BlockType.FIRE) return;
+        if (getBlock(x, y, z) != BlockType.AIR) return;
+        if (fires.size() >= FIRE_MAX_ACTIVE) return;
+        setBlock(x, y, z, BlockType.FIRE);
+        fires.put(blockKey(x, y, z), FIRE_BURN_MIN_SECONDS + snowRandom.nextFloat() * (FIRE_BURN_MAX_SECONDS - FIRE_BURN_MIN_SECONDS));
+    }
+
+    /** True if this block is a fire hazard a struck/neighbouring flame can spread to. */
+    static boolean isFlammable(BlockType block) {
+        return block == BlockType.LEAVES || block == BlockType.WOOD_LOG
+                || block == BlockType.PLANKS || block == BlockType.CHERRY_LEAVES;
+    }
+
+    private boolean isWet(int x, int y, int z) {
+        if (y < 0 || y >= Chunk.HEIGHT) return false;
+        return getBlock(x, y, z).isWater();
     }
 
     /** The y of the top-most non-air, non-fluid block in a column, or -1 if none. */
