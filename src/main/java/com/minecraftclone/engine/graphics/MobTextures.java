@@ -56,13 +56,15 @@ public class MobTextures {
 
     private final Map<Mob.Type, Integer> textureIds = new EnumMap<>(Mob.Type.class);
     private int arrowTextureId = -1;
+    private int playerTextureId = -1;
 
-    /** Paints and uploads every mob type's skin, plus the skeleton-arrow sprite. */
+    /** Paints and uploads every mob type's skin, plus the skeleton-arrow sprite and the player skin. */
     public void generate() {
         for (Mob.Type type : Mob.Type.values()) {
             textureIds.put(type, GLTexture.upload(build(type)));
         }
         arrowTextureId = GLTexture.upload(buildArrow());
+        playerTextureId = GLTexture.upload(buildPlayer());
     }
 
     private BufferedImage build(Mob.Type type) {
@@ -92,6 +94,12 @@ public class MobTextures {
     public void bindArrow() {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, arrowTextureId);
+    }
+
+    /** Binds the player skin to texture unit 0 (for rendering remote players). */
+    public void bindPlayer() {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, playerTextureId);
     }
 
     /** A diagonal arrow sprite for skeleton projectiles: brown shaft, grey head, white fletching. */
@@ -216,6 +224,47 @@ public class MobTextures {
         }
     }
 
+    /** The remote-player skin: a classic Steve-like skin in the same 16x16 layout as the mob skins. */
+    private static BufferedImage buildPlayer() {
+        BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
+        int shirt = 0x3E6EB5, shirtDark = 0x2F5490, shirtLight = 0x4A7FC4;
+        int pants = 0x4A4A6A, pantsDark = 0x36364F;
+        int skin = 0xC8A67C, skinDark = 0xA88A64, skinLight = 0xD8BA92;
+        // Body: a blue shirt.
+        fill(img, 0, 15, 0, 5, shirt);
+        fill(img, 0, 15, 0, 0, shirtLight);
+        fill(img, 0, 15, 5, 5, shirtDark);
+        fill(img, 0, 15, 6, 6, shirtLight); // body top (shoulders)
+        // Head side: skin with an eye in profile.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) {
+                float f = 1.04f - 0.05f * (x / 15f) - 0.04f * (y - 7);
+                set(img, x, y, shade(skin, f));
+            }
+        }
+        set(img, 13, 8, 0x2A1E12); set(img, 14, 8, 0x2A1E12); // eye
+        set(img, 12, 8, shade(skinDark, 1f));                 // nose
+        // Head front (4 rows): hair, eyes, nose, mouth.
+        fill(img, 0, 15, 10, 10, 0x3A2A18);              // hairline
+        for (int y = 11; y <= 13; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(skin, 1f));
+        }
+        set(img, 7, 11, 0x2A1E12); set(img, 8, 11, 0x2A1E12); // brow
+        fill(img, 2, 4, 11, 12, 0xFFFFFFFF);             // eye whites
+        fill(img, 11, 13, 11, 12, 0xFFFFFFFF);
+        fill(img, 3, 4, 11, 11, 0x3A6EA8);               // blue irises
+        fill(img, 12, 13, 11, 11, 0x3A6EA8);
+        fill(img, 3, 4, 12, 12, 0x1A1A1A);               // pupils
+        fill(img, 12, 13, 12, 12, 0x1A1A1A);
+        set(img, 7, 12, shade(skinDark, 1f)); set(img, 8, 12, shade(skinDark, 1f)); // nose
+        set(img, 6, 13, shade(skinDark, 0.9f)); set(img, 7, 13, shade(skinDark, 0.9f));
+        set(img, 8, 13, shade(skinDark, 0.9f)); set(img, 9, 13, shade(skinDark, 0.9f)); // mouth
+        // Legs: blue-grey pants.
+        fill(img, 0, 15, 14, 15, pants);
+        fill(img, 0, 15, 14, 14, pantsDark);
+        return img;
+    }
+
     /** A skeleton: bone-white torso with a ribcage, and a full skull face. */
     private void paintSkeleton(BufferedImage img, Random rnd) {
         int bone = 0xE8E0D0, boneDark = 0xB0A68F, boneLight = 0xF6F0E4;
@@ -306,6 +355,9 @@ public class MobTextures {
         }
         if (arrowTextureId != -1) {
             glDeleteTextures(arrowTextureId);
+        }
+        if (playerTextureId != -1) {
+            glDeleteTextures(playerTextureId);
         }
     }
 }

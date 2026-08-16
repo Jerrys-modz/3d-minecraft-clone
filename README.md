@@ -61,6 +61,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
   - All of these apply immediately, while the menu is open. The same page is reachable from the main menu's **Settings** button before a world starts.
 - **Sound**: footsteps, block breaking/placing, jumping/landing, splashing in and out of water, eating, taking damage, dying, hitting (and killing) a mob, a tool breaking, picking up an item, doors/trapdoors, opening/closing menus and inventories, and taking a crafting/smelting result all play a sound - positional ones (breaks, footsteps, mobs, doors) pan and fade with distance from the camera, the rest (UI, the player's own jump/hurt/death/eat) play centered regardless of where you're standing. Block sounds vary by **material** (stone/wood/dirt/gravel/sand/glass/leaves), covering break, place *and* footsteps from the same handful of categories rather than one bespoke sound per block type. Every sound is synthesized procedurally at startup (see [Textures](#textures)'s "nothing downloaded at runtime" rule, which this follows too - simple tone sweeps and filtered noise bursts rather than recorded/sampled audio) - see [Notes & Simplifications](#notes--simplifications) for what that trades away. Every sound belongs to a category (Mobs, Machines, Player, UI, or Ambient - Music is reserved, see below) mixed against that category's slider *and* the master slider, so the settings menu's **Audio** tab can turn down or mute just mob noises, just UI clicks, etc. without touching everything else.
 - **Main menu & world generation**: on launch a main menu (Play / Settings / Quit) appears, Minecraft-style. **Play** opens the world-selection screen listing your saved worlds plus a **Create New World** entry; picking one plays it, and creating one opens the world-generation page where you name the world and set a seed, world type (Default/Superflat), whether structures (trees, cacti, ...) generate, the sea level, terrain size, and **weeks per month** (2, 3 or 4 - each week is 7 in-game days; 4 is the default) before pressing Done. Each world is saved in its own folder under `saves/` with its settings, so it reloads on the next launch. **Settings** opens the same settings page as the in-game `Esc` menu (graphics, game mode, keybinds) before you even start a world - `Esc` returns to the main menu.
+- **Multiplayer**: **Multiplayer** on the main menu opens a connect screen - pick a player name, host and port, then **Host & Play** (starts an embedded server in this process and joins it) or **Join Server** to connect to an existing one. A dedicated headless server is available too: `java -jar minecraft-clone.jar --server [port]`. The server is authoritative for the world: every client sees the same terrain (generated from the server's seed - clients regenerate untouched chunks locally and request only player-edited ones over the wire), block breaks/places/re-toggles are validated and broadcast to everyone, and other players appear as blocky humanoid figures with their names. Chat with **T** (Enter to send, Esc to cancel) and see join/leave notices. Mobs are local-only for now (see [Multiplayer](#multiplayer)); see the section below for what's shared vs. still per-player.
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, four ores, berry bushes, torches, lamps, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet.
 
 ## Requirements
@@ -110,6 +111,7 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 | `F2` | Save a screenshot to `screenshot.png` |
 | `F3` | Toggle the debug overlay (FPS/frame time, position, chunk/facing info, selected item, biome, chunk/entity counts, memory, targeted block) |
 | `H` | Toggle the weather forecast panel (current weather and the upcoming forecast) |
+| `T` | Chat (multiplayer): type a message, Enter to send, Esc to cancel |
 | `Esc` | Open/close the settings menu (pauses the game); on the main menu, closes the Settings page |
 
 You start with an empty inventory - break blocks to collect them (they show up with a count on the hotbar) before you can place them elsewhere. Bedrock can't be broken.
@@ -148,6 +150,26 @@ A **crafting table** (4 planks) is the same idea for crafting: right-click it fo
 
 The world is saved to `saves/world/` next to wherever you run the jar from (override with the `MCCLONE_SAVE_DIR` environment variable). The world seed is written there on first launch and reused on every subsequent launch, so it's the same world each time you start the game. Only chunks you've actually broken/placed blocks in are ever written to disk — untouched terrain is cheap to regenerate deterministically from the seed, which is what keeps disk and memory usage bounded no matter how far you explore. Each saved chunk also carries its **block entities** (persistent per-block state — a furnace's contents and smelting progress today, and any future machine's inventory), length-prefixed by type so a chunk written by a newer build still loads if an entity type has since been removed. Edits autosave every 60 seconds and on a clean exit. Graphics settings (render distance, VSync, FOV, sensitivity, see-through leaves) are saved to `settings.txt` in the same directory and restored on the next launch.
 
+## Multiplayer
+
+Two ways to play with others:
+
+- **Host & Play**: main menu → **Multiplayer** → **Host & Play**. This starts an embedded server on the same machine (default port `25565`, configurable in the Port field) and connects you to it. Anyone on your LAN can then join with **Join Server** using your machine's IP and that port.
+- **Dedicated server**: `java -jar minecraft-clone.jar --server [port]` runs a headless authoritative world with no window at all (no OpenGL needed). Clients join it the same way. The server persists edited chunks to `saves/multiplayer_server/`.
+
+The server is authoritative for the world. It uses a fresh random seed each launch (the embedded Host & Play and dedicated server are throwaway worlds; the client always mirrors whatever the server picks). On join you receive the seed + worldgen settings, so your client regenerates untouched terrain locally and only asks the server for chunks a player has edited - keeping bandwidth to the deltas. Everything shared:
+
+- **Terrain and blocks** - a place or break anywhere is validated by the server and broadcast to every client, so everyone sees the same world (including door toggles and directional facing).
+- **Players** - every connected player appears as a blocky humanoid figure (procedurally painted skin) that moves smoothly via server-relayed position/look updates at ~20 Hz, with a name above its head. Join/leave messages appear on screen.
+- **Chat** - press **T**, type, Enter to send; the line appears above the hotbar and everyone sees it.
+
+Deliberately **not shared yet** (each player keeps their own):
+
+- **Mobs** - hostile/passive mobs are disabled in multiplayer until they're synced, so there's no night-time danger while connected.
+- **Inventory, health/hunger, item drops** - these stay client-side per player for now.
+
+A disconnect (server closed, connection lost) returns you to the main menu with a message; Host & Play's embedded server shuts down when you leave.
+
 ## Textures
 
 Two different asset strategies, chosen per what actually benefits from each:
@@ -166,9 +188,10 @@ src/main/java/com/minecraftclone/
 ├── Settings.java             # In-game settings menu rows & values (see Settings menu)
 ├── GameMode.java             # Survival/Creative/Adventure/Spectator behaviour
 ├── engine/                   # Window, input, camera, shaders, HUD, DayNightCycle, Calendar, Season, Climate, Weather
-│   ├── graphics/              # TextureAtlas, ItemTextures, FontAtlas, GLTexture, Mesh, LineMesh, IconMesh, ItemRenderer
+│   ├── graphics/              # TextureAtlas, ItemTextures, FontAtlas, GLTexture, Mesh, LineMesh, IconMesh, ItemRenderer, PlayerRenderer
 │   └── gui/                   # ContainerGui (shared slot model for the inventory/furnace/crafting-table screens)
-├── world/                    # Chunk, World (streaming/meshing), BlockType, Mining, ItemEntity, FluidSim, BlockEntity/BlockEntities (registry), Furnace
+├── net/                      # Multiplayer: Packets (wire protocol), GameServer (authoritative headless host), NetClient
+├── world/                    # Chunk, World (streaming/meshing), BlockType, Mining, ItemEntity, FluidSim, BlockEntity/BlockEntities (registry), Furnace, RemotePlayer
 │   └── gen/                   # TerrainGenerator (noise-based world gen)
 ├── player/                    # Player controller, PlayerStats, Inventory, Crafting, CraftingGrid, Smelting, MiningController
 └── util/                      # Noise, AABB, Raycaster, ResourceLoader
@@ -203,6 +226,7 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 - **Boats**, **horse/animal riding**.
 - **Electricity**, **clothes/armor**, **temperature effects**.
 - A real **recipe book / on-screen UI** now that a text renderer exists - the crafting grid, message logs, death/damage messaging, and debug info are in-game (see Features), but there's no scrollable/laid-out recipe book or map/inventory screen beyond the hotbar and crafting grid.
+- **Multiplayer depth**: the basics are in (players see each other, shared authoritative world, block sync, chat - see [Multiplayer](#multiplayer)), but mobs, inventories, health/hunger and item drops are still per-player rather than shared. Syncing those - starting with mobs - is the natural next step.
 
 If you've got a specific one of these in mind, just say which and it jumps the queue.
 

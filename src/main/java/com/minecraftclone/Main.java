@@ -12,10 +12,14 @@ import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.MobRenderer;
 import com.minecraftclone.engine.graphics.MobTextures;
+import com.minecraftclone.engine.graphics.PlayerRenderer;
 import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.engine.graphics.WeatherRenderer;
 import com.minecraftclone.engine.gui.ContainerGui;
+import com.minecraftclone.net.GameServer;
+import com.minecraftclone.net.NetClient;
+import com.minecraftclone.net.Packets;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
@@ -35,6 +39,7 @@ import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Door;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.Mob;
+import com.minecraftclone.world.RemotePlayer;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import com.minecraftclone.world.gen.WorldGenSettings;
@@ -49,8 +54,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -92,6 +99,18 @@ public class Main {
 
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
     private static final Vector3f WORLD_UP = new Vector3f(0f, 1f, 0f);
+
+    // --- Multiplayer state (set from the main menu / network thread) ---
+    /** The active server connection, or null when not in a multiplayer session. */
+    private volatile NetClient netClient;
+    /** An embedded server started by "Host & Play" (same process), or null. */
+    private volatile GameServer hostServer;
+    /** The last multiplayer connection error to surface to the user, or null. */
+    private volatile String netError;
+    /** Remote players seen via the server, keyed by their server-assigned id. */
+    private final Map<Integer, RemotePlayer> remotePlayers = new LinkedHashMap<>();
+    /** Draws other players' bodies; created in run() once the GL context exists. */
+    private PlayerRenderer playerRenderer;
 
     /** Queues a transient on-screen message (rendered via {@link Hud#renderMessages}). */
     private static void showMessage(List<Hud.Message> messages, String text, Vector4f color, float duration) {
@@ -276,6 +295,248 @@ public class Main {
         calendar.setWeeksPerMonth(genSettings.getWeeksPerMonth());
     }
 
+    // ------------------------------------------------------------------
+    // Multiplayer
+    // ------------------------------------------------------------------
+
+    private static int parsePort(String text) {
+        try {
+            int p = Integer.parseInt(text.trim());
+            return (p >= 1 && p <= 65535) ? p : 25565;
+        } catch (NumberFormatException e) {
+            return 25565;
+        }
+    }
+
+    /** Starts an embedded {@link GameServer} in this process, then connects the local client to it. */
+    private void hostAndPlay(int port, Path saveRoot, String playerName) {
+        Thread t = new Thread(() -> {
+            try {
+                WorldGenSettings serverSettings = new WorldGenSettings();
+                long seed = serverSettings.resolveSeed();
+                Path serverSaveDir = saveRoot.resolve("multiplayer_server");
+                GameServer server = new GameServer(port, serverSettings, seed, serverSaveDir);
+                hostServer = server;
+                server.start();
+                System.out.println("Hosted server on port " + server.getPort() + " (seed " + seed + ")");
+                connectClient("127.0.0.1", server.getPort(), playerName);
+            } catch (Exception e) {
+                netError = "Failed to start server: " + e.getMessage();
+                hostServer = null;
+            }
+        }, "host-and-play");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Connects the local client to an existing server. */
+    private void joinServer(String host, int port, String playerName) {
+        Thread t = new Thread(() -> connectClient(host, port, playerName), "join-server");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Connects, sends the join packet, and stashes the client for the main loop to pick up. */
+    private void connectClient(String host, int port, String playerName) {
+        try {
+            NetClient client = new NetClient(host, port);
+            client.sendJoin(playerName);
+            netClient = client;
+            netError = null;
+        } catch (Exception e) {
+            netError = "Could not connect to " + host + ":" + port + " - " + e.getMessage();
+            netClient = null;
+        }
+    }
+
+    /** Sends the local player's current position/look to the server (throttled by the caller). */
+    private void sendPlayerMove(NetClient client, Player player) {
+        if (client == null || !client.isConnected()) return;
+        Vector3f p = player.getPosition();
+        Camera cam = player.getCamera();
+        try {
+            client.sendMove(new Packets.Move(p.x, p.y, p.z, cam.getYaw(), cam.getPitch(),
+                    player.isOnGround(), player.isFlying(), player.isSprinting()));
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /** Broadcasts a block change to the server (break/place intent). */
+    private void sendBlockChange(int x, int y, int z, BlockType type, byte orientation, boolean overlay) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        try {
+            if (type == BlockType.AIR) {
+                client.sendBreakBlock(new Packets.BreakBlock(x, y, z, overlay));
+            } else {
+                client.sendPlaceBlock(new Packets.PlaceBlock(x, y, z, type.id, orientation, overlay));
+            }
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /** Sends a cell's current state to the server (used after local edits like door toggles). */
+    private void syncBlockToServer(World world, int x, int y, int z, boolean force) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        BlockType block = world.getBlock(x, y, z);
+        if (block == BlockType.AIR) {
+            if (force) sendBlockChange(x, y, z, BlockType.AIR, (byte) 0, false);
+            return;
+        }
+        sendBlockChange(x, y, z, block, world.getOrientation(x, y, z), false);
+    }
+
+    /** Sends both halves of a door column to the server after a toggle. */
+    private void syncDoorToServer(World world, int x, int y, int z) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        int bottom = Door.bottomHalf(world, x, y, z);
+        for (int yy = bottom; yy <= bottom + 1; yy++) {
+            BlockType block = world.getBlock(x, yy, z);
+            sendBlockChange(x, yy, z, block, world.getOrientation(x, yy, z), false);
+        }
+    }
+
+    /** Sends a chat message typed by the local player. */
+    private void sendChat(String text) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        try {
+            client.sendChat(text);
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /** Tears down the multiplayer session and returns to the main menu. */
+    private void leaveMultiplayer() {
+        if (hostServer != null) {
+            hostServer.close();
+            hostServer = null;
+        }
+        if (netClient != null) {
+            netClient.close();
+            netClient = null;
+        }
+        remotePlayers.clear();
+        netError = null;
+    }
+
+    /**
+     * Drains every pending server packet and applies it to the local client
+     * state. Returns a newly-created {@link World} if a WELCOME packet set one
+     * up this frame (the caller assigns it to its {@code world} variable),
+     * otherwise null. Runs entirely on the main thread.
+     */
+    private World processNetPackets(NetClient client, World world, Player player, TextureAtlas atlas,
+                                    Settings settings, Path saveRoot,
+                                    WorldGenSettings genSettings,
+                                    DayNightCycle dayNightCycle, Calendar calendar, boolean[] started,
+                                    boolean[] mainMenuOpen, boolean[] multiplayerOpen, boolean[] mpConnecting,
+                                    Window window, Input input, List<Hud.Message> messages) {
+        World created = null;
+        Object packet;
+        while ((packet = client.poll()) != null) {
+            if (packet instanceof Packets.Welcome welcome) {
+                // Server accepted us: build the client world from its seed + settings.
+                WorldGenSettings remoteSettings = new WorldGenSettings();
+                remoteSettings.setSeedText(Long.toString(welcome.seed()));
+                remoteSettings.setWorldType(welcome.worldType());
+                remoteSettings.setStructures(welcome.structures());
+                remoteSettings.setSeaLevelIndex(welcome.seaLevelIndex());
+                remoteSettings.setTerrainSizeIndex(welcome.terrainSizeIndex());
+                remoteSettings.setWeeksPerMonthIndex(welcome.weeksPerMonth());
+                // The client's world is a live mirror of the server's: unmodified
+                // chunks regenerate from the seed, modified ones arrive over the
+                // wire. A throwaway save dir keeps a previous session's stale
+                // chunks from ever being loaded instead.
+                Path clientSaveDir;
+                try {
+                    clientSaveDir = java.nio.file.Files.createTempDirectory("mclonemp");
+                } catch (IOException e) {
+                    clientSaveDir = saveRoot.getParent() != null
+                            ? saveRoot.resolve("multiplayer_client").resolve(Long.toString(System.nanoTime()))
+                            : Paths.get("multiplayer_client");
+                }
+                World w = new World(welcome.seed(), remoteSettings, atlas, clientSaveDir);
+                w.setRenderDistance(settings.getRenderDistance());
+                w.setLeavesTransparent(settings.isLeavesTransparent());
+                // When the client generates a chunk from the seed, ask the server whether
+                // a player has edited it; the server replies with full data or a vanilla ack.
+                w.setChunkListener((cx, cz) -> {
+                    try {
+                        if (netClient != null && netClient.isConnected()) {
+                            netClient.sendChunkRequest(cx, cz);
+                        }
+                    } catch (IOException e) {
+                        netError = e.getMessage();
+                    }
+                });
+                for (int i = 0; i < 200; i++) w.update(0, 0);
+                player.teleport(welcome.spawnX(), welcome.spawnY(), welcome.spawnZ());
+                for (int i = 0; i < 80; i++) w.update(player.getPosition().x, player.getPosition().z);
+                startCalendar(dayNightCycle, calendar, remoteSettings);
+                System.out.println("Joined server (seed " + welcome.seed() + ", spawn " + welcome.spawnX() + "," + welcome.spawnY() + "," + welcome.spawnZ() + ")");
+                created = w;
+                world = w;
+                try {
+                    client.sendReady();
+                } catch (IOException e) {
+                    netError = e.getMessage();
+                }
+            } else if (packet instanceof Packets.PlayerJoined joined) {
+                RemotePlayer rp = new RemotePlayer(joined.id(), joined.name());
+                rp.update(joined.x(), joined.y(), joined.z(), joined.yaw(), joined.pitch(), false, false, false);
+                rp.tick(1f); // snap the render pose to the join position
+                remotePlayers.put(joined.id(), rp);
+                showMessage(messages, joined.name() + " joined", new Vector4f(0.7f, 0.9f, 0.7f, 1f), 3f);
+            } else if (packet instanceof Packets.PlayerLeft left) {
+                RemotePlayer gone = remotePlayers.remove(left.id());
+                if (gone != null) {
+                    showMessage(messages, gone.name + " left", new Vector4f(0.9f, 0.7f, 0.7f, 1f), 3f);
+                }
+            } else if (packet instanceof Packets.PlayerState state) {
+                RemotePlayer rp = remotePlayers.get(state.id());
+                if (rp != null) {
+                    rp.update(state.x(), state.y(), state.z(), state.yaw(), state.pitch(),
+                            state.onGround(), state.flying(), state.sprinting());
+                }
+            } else if (packet instanceof Packets.BlockChange change) {
+                if (world != null) {
+                    if (change.overlay()) {
+                        world.setOverlay(change.x(), change.y(), change.z(), BlockType.byId(change.blockId()));
+                    } else {
+                        world.setBlock(change.x(), change.y(), change.z(), BlockType.byId(change.blockId()));
+                        world.setBlockOrientation(change.x(), change.y(), change.z(), change.orientation());
+                    }
+                }
+            } else if (packet instanceof Packets.ChunkData data) {
+                if (world != null) {
+                    world.applyRemoteChunkData(data.cx(), data.cz(), data.blocks(), data.overlays(), data.orientations());
+                }
+            } else if (packet instanceof Packets.ChunkAck ack) {
+                // Chunk matches the seed - the client's own generation already has it.
+            } else if (packet instanceof Packets.ChatMsg msg) {
+                showMessage(messages, "<" + msg.name() + "> " + msg.text(), new Vector4f(0.92f, 0.92f, 0.92f, 1f), 5f);
+            } else if (packet instanceof Packets.Reject reject) {
+                showMessage(messages, reject.reason(), new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
+                netError = reject.reason();
+            }
+        }
+        if (created != null) {
+            started[0] = true;
+            mainMenuOpen[0] = false;
+            multiplayerOpen[0] = false;
+            mpConnecting[0] = false;
+            window.setCursorCaptured(true);
+            input.resetMouseDelta();
+        }
+        return created;
+    }
+
     /**
      * Breaks one block cell (whatever it is: a door, an overlay decoration, or a
      * solid block), dropping its loot and wearing the tool in survival. Shared by
@@ -299,6 +560,20 @@ public class Main {
             world.setOverlay(bx, by, bz, BlockType.AIR);
         } else {
             world.setBlock(bx, by, bz, BlockType.AIR);
+        }
+
+        // Tell the server about the change so other players see it too (a door
+        // clears both halves; an overlay clears only the decoration).
+        if (netClient != null && netClient.isConnected()) {
+            if (Door.isDoor(targetType)) {
+                int bottom = Door.bottomHalf(world, bx, by, bz);
+                sendBlockChange(bx, bottom, bz, BlockType.AIR, (byte) 0, false);
+                sendBlockChange(bx, bottom + 1, bz, BlockType.AIR, (byte) 0, false);
+            } else if (targetingOverlay) {
+                sendBlockChange(bx, by, bz, BlockType.AIR, (byte) 0, true);
+            } else {
+                sendBlockChange(bx, by, bz, BlockType.AIR, (byte) 0, false);
+            }
         }
 
         if (!mode.isCreative()) {
@@ -365,7 +640,42 @@ public class Main {
     }
 
     public static void main(String[] args) {
+        // Dedicated headless server: `--server [port]` (default 25565) hosts a
+        // world with no window or GL at all. Clients join it with "Multiplayer"
+        // -> "Join Server".
+        if (args.length >= 1 && args[0].equals("--server")) {
+            runDedicatedServer(args);
+            return;
+        }
         new Main().run();
+    }
+
+    /** Hosts a headless world that clients connect to; runs until interrupted. */
+    private static void runDedicatedServer(String[] args) {
+        int port = 25565;
+        if (args.length >= 2) {
+            try {
+                port = Integer.parseInt(args[1]);
+            } catch (NumberFormatException e) {
+                System.err.println("Bad port '" + args[1] + "', using " + port);
+            }
+        }
+        String saveEnv = System.getenv("MCCLONE_SAVE_DIR");
+        Path saveRoot = saveEnv != null ? Paths.get(saveEnv).getParent() : Paths.get("saves");
+        Path serverSaveDir = saveRoot.resolve("multiplayer_server");
+        try {
+            WorldGenSettings settings = new WorldGenSettings();
+            long seed = settings.resolveSeed();
+            GameServer server = new GameServer(port, settings, seed, serverSaveDir);
+            server.start();
+            System.out.println("Multiplayer server running on port " + server.getPort()
+                    + " (seed " + seed + ", save dir " + serverSaveDir + ")");
+            System.out.println("Press Ctrl+C to stop.");
+            Thread.currentThread().join(); // block until interrupted
+        } catch (Exception e) {
+            System.err.println("Server failed: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private void run() {
@@ -421,6 +731,7 @@ public class Main {
         ItemRenderer itemRenderer = new ItemRenderer();
         HandRenderer handRenderer = new HandRenderer();
         MobRenderer mobRenderer = new MobRenderer();
+        playerRenderer = new PlayerRenderer();
         WeatherParticles weatherParticles = new WeatherParticles();
         WeatherRenderer weatherRenderer = new WeatherRenderer();
         float prevFlash = 0f; // previous frame's lightning intensity - to catch a new flash
@@ -444,10 +755,22 @@ public class Main {
         boolean[] mainSettingsOpen = {false}; // settings page opened from the main menu
         boolean[] worldSelectOpen = {false};
         boolean[] worldGenOpen = {false};
+        boolean[] multiplayerOpen = {false}; // multiplayer connect screen
         int[] mainMenuSelection = {Hud.MENU_PLAY};
         int[] worldSelectSelection = {0};
         int[] worldGenSelection = {0};
         int[] editingRow = {-1};
+        // Multiplayer connect screen state.
+        int[] mpSelection = {0};
+        int[] mpEditingRow = {-1};
+        String[] mpName = {"Player"};
+        String[] mpHost = {"127.0.0.1"};
+        String[] mpPort = {"25565"};
+        boolean[] mpConnecting = {false};
+        float[] mpConnectingElapsed = {0f};
+        float[] netMoveTimer = {0f}; // time since the last player-state packet was sent
+        boolean[] chatOpen = {false};
+        StringBuilder chatText = new StringBuilder();
 
         window.setCursorCaptured(false); // free cursor in the main menu
 
@@ -670,6 +993,51 @@ public class Main {
             float breakFraction = 0f;
             boolean screenshotRequested = false;
 
+            // --- Multiplayer: surface connection errors, drain server packets, send local state. ---
+            if (mpConnecting[0] && netError != null) {
+                showMessage(messages, netError, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
+                leaveMultiplayer();
+                mpConnecting[0] = false;
+                multiplayerOpen[0] = false;
+                mainMenuOpen[0] = true;
+            }
+            if (netClient != null) {
+                if (netClient.isDisconnected()) {
+                    String reason = netClient.getDisconnectReason();
+                    if (started[0]) {
+                        showMessage(messages, "Disconnected: " + reason, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
+                        started[0] = false;
+                        // The world was a throwaway multiplayer mirror - release its
+                        // chunks (and GL meshes) rather than leaving them resident.
+                        if (world != null) {
+                            world.saveAllModified();
+                            world.destroy();
+                            world = null;
+                        }
+                    } else if (mpConnecting[0]) {
+                        showMessage(messages, "Could not connect: " + reason, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
+                    }
+                    leaveMultiplayer();
+                    mpConnecting[0] = false;
+                    multiplayerOpen[0] = false;
+                    mainMenuOpen[0] = true;
+                    window.setCursorCaptured(false);
+                    input.resetMouseDelta();
+                } else {
+                    World newWorld = processNetPackets(netClient, world, player, atlas, settings, saveRoot,
+                            genSettings, dayNightCycle, calendar, started, mainMenuOpen, multiplayerOpen,
+                            mpConnecting, window, input, messages);
+                    if (newWorld != null) world = newWorld;
+                    // Send the local player's pose to the server at ~20 Hz.
+                    if (started[0] && netMoveTimer[0] >= 0.05f) {
+                        netMoveTimer[0] = 0f;
+                        sendPlayerMove(netClient, player);
+                    } else {
+                        netMoveTimer[0] += dt;
+                    }
+                }
+            }
+
             // Main menu / world select / world-gen page input (before a world starts).
             if (!started[0]) {
                 if (mainSettingsOpen[0]) {
@@ -812,6 +1180,76 @@ public class Main {
                         worldSelectOpen[0] = false;
                         mainMenuOpen[0] = true;
                     }
+                } else if (multiplayerOpen[0]) {
+                    // Multiplayer connect screen: name/host/port fields + host & play / join / back.
+                    if (mpEditingRow[0] >= 0) {
+                        String typed = input.consumeTypedChars();
+                        StringBuilder sb = new StringBuilder(switch (mpEditingRow[0]) {
+                            case Hud.MP_ROW_NAME -> mpName[0];
+                            case Hud.MP_ROW_HOST -> mpHost[0];
+                            default -> mpPort[0];
+                        });
+                        for (int i = 0; i < typed.length(); i++) {
+                            char ch = typed.charAt(i);
+                            if (Character.isLetterOrDigit(ch) || ch == '-' || ch == '.' || ch == '_' || ch == ' ') {
+                                if (mpEditingRow[0] == Hud.MP_ROW_PORT && !Character.isDigit(ch)) continue;
+                                sb.append(ch);
+                            }
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE)) {
+                            if (sb.length() > 0) sb.deleteCharAt(sb.length() - 1);
+                        }
+                        switch (mpEditingRow[0]) {
+                            case Hud.MP_ROW_NAME -> mpName[0] = sb.toString();
+                            case Hud.MP_ROW_HOST -> mpHost[0] = sb.toString();
+                            default -> mpPort[0] = sb.toString();
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                            mpEditingRow[0] = -1;
+                        }
+                    } else {
+                        if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                            mpSelection[0] = Math.floorMod(mpSelection[0] - 1, Hud.MP_ROW_COUNT);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                            mpSelection[0] = Math.floorMod(mpSelection[0] + 1, Hud.MP_ROW_COUNT);
+                        }
+                        boolean clickedMp = false;
+                        float mpLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                        float mpLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                        int hoverMp = hud.multiplayerRowAt(mpLx, mpLy);
+                        if (hoverMp >= 0) {
+                            mpSelection[0] = hoverMp;
+                            clickedMp = input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE) || clickedMp) {
+                            if (mpSelection[0] <= Hud.MP_ROW_PORT) {
+                                mpEditingRow[0] = mpSelection[0];
+                                input.consumeTypedChars();
+                            } else if (mpSelection[0] == Hud.MP_ROW_HOST_SERVER) {
+                                int port = parsePort(mpPort[0]);
+                                hostAndPlay(port, saveRoot, mpName[0]);
+                                mpConnecting[0] = true;
+                                mpConnectingElapsed[0] = 0f;
+                                window.setCursorCaptured(false);
+                            } else if (mpSelection[0] == Hud.MP_ROW_CONNECT) {
+                                int port = parsePort(mpPort[0]);
+                                joinServer(mpHost[0], port, mpName[0]);
+                                mpConnecting[0] = true;
+                                mpConnectingElapsed[0] = 0f;
+                                window.setCursorCaptured(false);
+                            } else {
+                                multiplayerOpen[0] = false;
+                                mainMenuOpen[0] = true;
+                                mpConnecting[0] = false;
+                            }
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                            multiplayerOpen[0] = false;
+                            mainMenuOpen[0] = true;
+                            mpConnecting[0] = false;
+                        }
+                    }
                 } else {
                     // Main menu: navigate with arrows/WASD, or hover + click with the mouse.
                     if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
@@ -833,6 +1271,11 @@ public class Main {
                             worldNames = listWorlds(saveRoot);
                             worldSelectOpen[0] = true;
                             worldSelectSelection[0] = 0;
+                        } else if (mainMenuSelection[0] == Hud.MENU_MULTIPLAYER) {
+                            multiplayerOpen[0] = true;
+                            mpSelection[0] = 0;
+                            mpEditingRow[0] = -1;
+                            mpConnecting[0] = false;
                         } else if (mainMenuSelection[0] == Hud.MENU_SETTINGS) {
                             mainSettingsOpen[0] = true;
                             settingsTab[0] = Settings.TAB_GRAPHICS;
@@ -978,8 +1421,42 @@ public class Main {
             }
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            // Chat: T opens the line (multiplayer only), Enter sends, Esc cancels.
+            if (netClient != null && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && input.isKeyJustPressed(GLFW_KEY_T)) {
+                chatOpen[0] = !chatOpen[0];
+                if (chatOpen[0]) {
+                    chatText.setLength(0);
+                    input.consumeTypedChars();
+                }
+            }
+            if (chatOpen[0]) {
+                String typed = input.consumeTypedChars();
+                for (int i = 0; i < typed.length() && chatText.length() < 200; i++) {
+                    char ch = typed.charAt(i);
+                    if (ch == '\n' || ch == '\r') continue;
+                    chatText.append(ch);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE) && chatText.length() > 0) {
+                    chatText.deleteCharAt(chatText.length() - 1);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_ENTER)) {
+                    if (chatText.length() > 0) {
+                        sendChat(chatText.toString());
+                    }
+                    chatOpen[0] = false;
+                } else if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                    chatOpen[0] = false;
+                }
+            }
+
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !chatOpen[0]) {
                 player.update(dt, input, world);
+
+                // Advance remote players' smoothed poses toward their server targets.
+                for (RemotePlayer rp : remotePlayers.values()) {
+                    rp.tick(dt);
+                }
 
                 if (player.hasJustJumped()) audio.play(SoundEvent.JUMP);
                 if (player.hasJustLanded()) audio.play(SoundEvent.LAND);
@@ -1047,14 +1524,17 @@ public class Main {
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
             // to the player's health, where the existing death/respawn handling picks
-            // it up.
+            // it up. Mobs are local-only (not synced between players yet), so they're
+            // disabled in multiplayer to keep every client's world consistent.
             Vector3f playerPos = player.getPosition();
-            AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
-                    playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
-            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
-            if (mobDamage > 0f) {
-                player.getStats().damage(mobDamage);
-                audio.play(SoundEvent.HURT);
+            if (netClient == null) {
+                AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
+                        playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
+                float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
+                if (mobDamage > 0f) {
+                    player.getStats().damage(mobDamage);
+                    audio.play(SoundEvent.HURT);
+                }
             }
 
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
@@ -1090,7 +1570,7 @@ public class Main {
                 }
             }
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !chatOpen[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 // A cell can hold an overlay decoration inside its primary block (e.g.
@@ -1173,12 +1653,14 @@ public class Main {
                             Door.toggle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                             audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
                             handRenderer.triggerSwing();
+                            syncDoorToServer(world, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         }
                     } else if (Door.isTrapdoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                             audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
                             handRenderer.triggerSwing();
+                            syncBlockToServer(world, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
                         }
                     } else if (noMob && targeted == BlockType.FURNACE) {
                         // Right-click a furnace to open its smelting gui.
@@ -1232,13 +1714,10 @@ public class Main {
                                         world.setBlock(p.x, p.y, p.z, heldItem);
                                     }
                                     audio.playBlockSound(SoundMaterial.of(heldItem), BlockAction.PLACE, p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
-                                    // Doors, trapdoors, and other directional blocks
-                                    // (e.g. a furnace) face the player: the front sits
-                                    // on the side of the block nearest to them (opposite
-                                    // the look direction).
+                                    byte facing = 0;
                                     if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
                                         Vector3f front = player.getCamera().getFront();
-                                        byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
+                                        facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
                                                 ? (front.x >= 0 ? 3 : 2)
                                                 : (front.z >= 0 ? 1 : 0));
                                         world.setBlockOrientation(p.x, p.y, p.z, facing);
@@ -1246,6 +1725,14 @@ public class Main {
                                         if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
                                             world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
                                             world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
+                                        }
+                                    }
+                                    // Tell the server so every other client places it too.
+                                    if (netClient != null && netClient.isConnected()) {
+                                        sendBlockChange(p.x, p.y, p.z, intoFluid ? world.getOverlay(p.x, p.y, p.z) : heldItem,
+                                                intoFluid ? (byte) 0 : facing, intoFluid);
+                                        if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.DOOR) {
+                                            sendBlockChange(p.x, p.y + 1, p.z, BlockType.DOOR, facing, false);
                                         }
                                     }
                                 }
@@ -1307,6 +1794,9 @@ public class Main {
             world.render(chunkShader, projection, view);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
+            if (!remotePlayers.isEmpty()) {
+                playerRenderer.render(mobTextures, List.copyOf(remotePlayers.values()));
+            }
             chunkShader.unbind();
             }
 
@@ -1343,6 +1833,10 @@ public class Main {
                 }
             }
             hud.renderMessages(messages, window.getAspectRatio());
+            // The chat input line, drawn under the messages while typing.
+            if (chatOpen[0] && netClient != null) {
+                hud.drawTextLeft("> " + chatText + "_", -0.95f, 0.12f, 0.04f, WHITE, window.getAspectRatio());
+            }
             if (started[0] && forecastOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 hud.renderForecast(climate, calendar, window.getAspectRatio());
             }
@@ -1391,6 +1885,10 @@ public class Main {
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Entities: %d mobs, %d items", world.getMobs().size(), world.getItems().size()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                if (netClient != null) {
+                    hud.drawTextLeft("Multiplayer: " + remotePlayers.size() + " other player(s)",
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
                 Runtime rt = Runtime.getRuntime();
                 long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
                 long maxMb = rt.maxMemory() / (1024 * 1024);
@@ -1436,6 +1934,8 @@ public class Main {
                     hud.renderWorldGenMenu(genSettings, worldGenSelection[0], editingRow[0], window.getAspectRatio());
                 } else if (worldSelectOpen[0]) {
                     hud.renderWorldSelectMenu(worldNames, worldSelectSelection[0], window.getAspectRatio());
+                } else if (multiplayerOpen[0]) {
+                    hud.renderMultiplayerMenu(mpName[0], mpHost[0], mpPort[0], mpSelection[0], mpEditingRow[0], window.getAspectRatio());
                 } else {
                     hud.renderMainMenu(mainMenuSelection[0], window.getAspectRatio());
                 }
@@ -1472,11 +1972,13 @@ public class Main {
 
         if (world != null) world.saveAllModified();
         settings.save(settingsFile);
+        leaveMultiplayer(); // close any embedded server and client connection
 
         hud.destroy();
         itemRenderer.destroy();
         handRenderer.destroy();
         mobRenderer.destroy();
+        playerRenderer.destroy();
         weatherRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();

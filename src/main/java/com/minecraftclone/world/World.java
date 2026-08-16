@@ -40,11 +40,35 @@ public class World implements BlockAccessor {
     /** Per-block block entities (furnaces today, machines/chests tomorrow), keyed by {@link #blockKey}. */
     private final Map<Long, BlockEntity> blockEntities = new HashMap<>();
     private final TerrainGenerator generator;
+    /** May be null when the world is hosted headless (a dedicated server) - meshing is then skipped entirely. */
     private final TextureAtlas atlas;
     private final ChunkStorage storage;
 
+    /** Called whenever a chunk is generated or loaded, with its grid coords - lets a client know to request it. */
+    private java.util.function.BiConsumer<Integer, Integer> chunkListener;
+
+    public void setChunkListener(java.util.function.BiConsumer<Integer, Integer> listener) {
+        this.chunkListener = listener;
+    }
+
+    private void notifyChunkLoaded(int cx, int cz) {
+        if (chunkListener != null) chunkListener.accept(cx, cz);
+    }
+
     private int renderDistance = 6;
     private boolean leavesTransparent = false;
+    /**
+     * True for a headless (server) world: chunks are generated but never meshed.
+     * {@link #atlas} is null in that case; update() skips the remesh pass.
+     */
+    private final boolean headless;
+    /**
+     * When true the streaming loop never unloads chunks - the whole generated
+     * area stays in memory. Used by the server, where chunks are shared across
+     * many players scattered around the map (each player's position streams its
+     * own neighborhood, and unloading around one player would evict another's).
+     */
+    private boolean keepChunks = false;
     // Generation and meshing used to be budgeted by a fixed chunk *count* per
     // frame (generate/mesh up to N, however long that takes). That has the
     // same flaw the fluid-tick throttle below already learned the hard way:
@@ -109,8 +133,17 @@ public class World implements BlockAccessor {
     private final List<ArrowEntity> arrows = new ArrayList<>();
 
     public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir) {
+        this(seed, genSettings, atlas, saveDir, false);
+    }
+
+    /**
+     * @param headless true to run without an OpenGL context (a dedicated server):
+     *                 {@code atlas} must be null then and meshing is skipped.
+     */
+    public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir, boolean headless) {
         this.generator = new TerrainGenerator(seed, genSettings);
         this.atlas = atlas;
+        this.headless = headless;
         this.storage = new ChunkStorage(saveDir);
     }
 
@@ -121,6 +154,15 @@ public class World implements BlockAccessor {
 
     public void setRenderDistance(int renderDistance) {
         this.renderDistance = renderDistance;
+    }
+
+    /** Prevents the streaming loop from unloading chunks (see {@link #keepChunks}). */
+    public void setKeepChunks(boolean keepChunks) {
+        this.keepChunks = keepChunks;
+    }
+
+    public boolean isHeadless() {
+        return headless;
     }
 
     public int getRenderDistance() {
@@ -151,6 +193,74 @@ public class World implements BlockAccessor {
 
     private Chunk getChunk(int chunkX, int chunkZ) {
         return chunks.get(key(chunkX, chunkZ));
+    }
+
+    /** True if the chunk at grid coordinate {@code (cx, cz)} is loaded/generated. */
+    public boolean isChunkLoaded(int cx, int cz) {
+        return chunks.containsKey(key(cx, cz));
+    }
+
+    /** The stored facing hint for a door block at a world position (0:+Z, 1:-Z, 2:+X, 3:-X). */
+    public byte getOrientation(int worldX, int worldY, int worldZ) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return 0;
+        Chunk chunk = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
+        if (chunk == null) return 0;
+        return chunk.getOrientation(Math.floorMod(worldX, Chunk.SIZE), worldY, Math.floorMod(worldZ, Chunk.SIZE));
+    }
+
+    /** True if a loaded chunk has been edited by a player (differs from seed regeneration). */
+    public boolean isChunkModifiedByPlayer(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        return chunk != null && chunk.isModifiedByPlayer();
+    }
+
+    /** Returns the chunk's raw block-id array for sending to a client, or null if it isn't loaded. */
+    public byte[] getChunkRawBlocks(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        return chunk == null ? null : chunk.getRawBlocks();
+    }
+
+    /** Returns the chunk's raw overlay-id array for sending to a client, or null if it isn't loaded. */
+    public byte[] getChunkRawOverlays(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        return chunk == null ? null : chunk.getRawOverlays();
+    }
+
+    /** Returns the chunk's raw orientation array for sending to a client, or null if it isn't loaded. */
+    public byte[] getChunkRawOrientations(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        return chunk == null ? null : chunk.getRawOrientations();
+    }
+
+    /** Applies server-provided raw chunk data to a loaded chunk (the multiplayer client path). */
+    public void applyRemoteChunkData(int cx, int cz, byte[] blocks, byte[] overlays, byte[] orientations) {
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk == null) return;
+        if (blocks != null) chunk.setRawBlocks(blocks);
+        if (overlays != null) chunk.setRawOverlays(overlays);
+        if (orientations != null) chunk.setRawOrientations(orientations);
+        chunk.markGenerated();
+    }
+
+    /** Loads (from disk) or generates the chunk at grid coordinate {@code (cx, cz)} if it isn't already loaded. */
+    public void ensureChunk(int cx, int cz) {
+        if (chunks.containsKey(key(cx, cz))) return;
+        Chunk chunk = new Chunk(new ChunkPos(cx, cz));
+        chunks.put(key(cx, cz), chunk);
+        if (storage.hasSavedChunk(chunk.getPos())) {
+            for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
+                if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
+                    blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                }
+            }
+        } else {
+            generator.generate(chunk);
+        }
+        markNeighborDirty(cx - 1, cz);
+        markNeighborDirty(cx + 1, cz);
+        markNeighborDirty(cx, cz - 1);
+        markNeighborDirty(cx, cz + 1);
+        notifyChunkLoaded(cx, cz);
     }
 
     @Override
@@ -605,17 +715,19 @@ public class World implements BlockAccessor {
                     markNeighborDirty(cx + 1, cz);
                     markNeighborDirty(cx, cz - 1);
                     markNeighborDirty(cx, cz + 1);
+                    notifyChunkLoaded(cx, cz);
                     generated++;
                 }
             }
         }
 
         // Unload far chunks. Most frames unload nothing, so the removal list
-        // is only allocated once something actually needs to go.
+        // is only allocated once something actually needs to go. A headless
+        // server with keepChunks set never unloads (chunks are shared).
         int unloadRadius = renderDistance + 2;
         List<Chunk> toRemove = null;
         for (Chunk c : chunks.values()) {
-            if (c.getPos().distanceSq(pcx, pcz) > (double) unloadRadius * unloadRadius) {
+            if (!keepChunks && c.getPos().distanceSq(pcx, pcz) > (double) unloadRadius * unloadRadius) {
                 if (toRemove == null) toRemove = new ArrayList<>();
                 toRemove.add(c);
             }
@@ -641,17 +753,20 @@ public class World implements BlockAccessor {
         }
 
         // Remesh dirty chunks nearest-first, budgeted by wall-clock time (see
-        // MESH_BUDGET_SECONDS above) rather than a fixed count per tick.
-        List<Chunk> dirty = new ArrayList<>();
-        for (Chunk c : chunks.values()) {
-            if (c.isDirty()) dirty.add(c);
-        }
-        dirty.sort((a, b) -> Double.compare(a.getPos().distanceSq(pcx, pcz), b.getPos().distanceSq(pcx, pcz)));
-        long meshDeadline = System.nanoTime() + (long) (MESH_BUDGET_SECONDS * 1e9);
-        for (int i = 0; i < dirty.size(); i++) {
-            if (i > 0 && System.nanoTime() >= meshDeadline) break;
-            Chunk c = dirty.get(i);
-            c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
+        // MESH_BUDGET_SECONDS above) rather than a fixed count per tick. Skipped
+        // entirely on a headless server (no GL context, chunks never meshed).
+        if (!headless) {
+            List<Chunk> dirty = new ArrayList<>();
+            for (Chunk c : chunks.values()) {
+                if (c.isDirty()) dirty.add(c);
+            }
+            dirty.sort((a, b) -> Double.compare(a.getPos().distanceSq(pcx, pcz), b.getPos().distanceSq(pcx, pcz)));
+            long meshDeadline = System.nanoTime() + (long) (MESH_BUDGET_SECONDS * 1e9);
+            for (int i = 0; i < dirty.size(); i++) {
+                if (i > 0 && System.nanoTime() >= meshDeadline) break;
+                Chunk c = dirty.get(i);
+                c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
+            }
         }
     }
 

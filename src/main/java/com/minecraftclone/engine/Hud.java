@@ -732,9 +732,10 @@ public class Hud {
 
     /** Main menu button indices. */
     public static final int MENU_PLAY = 0;
-    public static final int MENU_SETTINGS = 1;
-    public static final int MENU_QUIT = 2;
-    public static final int MENU_COUNT = 3;
+    public static final int MENU_MULTIPLAYER = 1;
+    public static final int MENU_SETTINGS = 2;
+    public static final int MENU_QUIT = 3;
+    public static final int MENU_COUNT = 4;
 
     /** The main menu (title screen) shown before a world is created. */
     public void renderMainMenu(int selectedIndex, float aspectRatio) {
@@ -743,7 +744,7 @@ public class Hud {
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
         drawCenteredText("3D Minecraft Clone", 0f, 0.5f, 0.085f, WHITE);
-        String[] items = {"Play", "Settings", "Quit"};
+        String[] items = {"Play", "Multiplayer", "Settings", "Quit"};
         for (int i = 0; i < items.length; i++) {
             boolean selected = i == selectedIndex;
             float y = 0.05f - i * 0.1f;
@@ -756,9 +757,9 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
-    /** The main-menu button under the mouse (Play/Settings/Quit), or -1. */
+    /** The main-menu button under the mouse (Play/Multiplayer/Settings/Quit), or -1. */
     public int mainMenuItemAt(float logicalX, float logicalY) {
-        String[] items = {"Play", "Settings", "Quit"};
+        String[] items = {"Play", "Multiplayer", "Settings", "Quit"};
         for (int i = 0; i < items.length; i++) {
             float y = 0.05f - i * 0.1f;
             // Hover band around each button: about twice the text height and a
@@ -947,6 +948,88 @@ public class Hud {
         float left = -panelW / 2f;
         for (int i = 0; i < rows; i++) {
             float rowTop = worldGenRowTop(i);
+            if (logicalX >= left && logicalX <= left + panelW
+                    && logicalY <= rowTop && logicalY >= rowTop - SETTINGS_ROW_H) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Multiplayer connect-screen row indices. */
+    public static final int MP_ROW_NAME = 0;
+    public static final int MP_ROW_HOST = 1;
+    public static final int MP_ROW_PORT = 2;
+    public static final int MP_ROW_HOST_SERVER = 3; // start an embedded server, then join it
+    public static final int MP_ROW_CONNECT = 4;     // join an existing server
+    public static final int MP_ROW_BACK = 5;
+    public static final int MP_ROW_COUNT = 6;
+
+    private float mpRowTop(int i) {
+        int rows = MP_ROW_COUNT;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
+        float top = SETTINGS_CENTER_Y + panelH / 2f;
+        return top - SETTINGS_PAD - SETTINGS_TITLE_H - i * SETTINGS_ROW_H;
+    }
+
+    /** The multiplayer connect screen: name / host / port fields + Host Server / Connect / Back buttons. */
+    public void renderMultiplayerMenu(String name, String host, String port, int selectedIndex, int editingRow, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        int rows = MP_ROW_COUNT;
+        float size = SETTINGS_SIZE;
+        float panelW = 0.95f;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
+        float left = -panelW / 2f;
+        float top = SETTINGS_CENTER_Y + panelH / 2f;
+
+        float[] panel = {
+                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y - panelH / 2f, 0,
+                left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                left, SETTINGS_CENTER_Y + panelH / 2f, 0,
+        };
+        settingsPanel.upload(panel);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.6f));
+        settingsPanel.render();
+        lineShader.unbind();
+
+        drawCenteredText("Multiplayer", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
+
+        Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
+        Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
+        Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
+        String[] labels = {"Player name", "Host", "Port", "Host & Play", "Join Server", "Back"};
+        String[] values = {name, host, port, null, null, null};
+        for (int i = 0; i < rows; i++) {
+            float baseline = mpRowTop(i) - SETTINGS_ROW_H + 0.013f;
+            boolean selected = i == selectedIndex;
+            boolean editable = i <= MP_ROW_PORT;
+            boolean activeEdit = i == editingRow;
+            Vector4f color = selected ? highlight : (activeEdit ? highlight : idle);
+            drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+            drawTextAt(labels[i], left + SETTINGS_LEFT_PAD, baseline, size, color);
+            if (editable) {
+                String value = activeEdit ? values[i] + "_" : values[i];
+                float valueWidth = text.measure(value, size);
+                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                        activeEdit ? highlight : idleValue);
+            }
+        }
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** The multiplayer row under the mouse, or -1. */
+    public int multiplayerRowAt(float logicalX, float logicalY) {
+        float panelW = 0.95f;
+        float left = -panelW / 2f;
+        for (int i = 0; i < MP_ROW_COUNT; i++) {
+            float rowTop = mpRowTop(i);
             if (logicalX >= left && logicalX <= left + panelW
                     && logicalY <= rowTop && logicalY >= rowTop - SETTINGS_ROW_H) {
                 return i;
