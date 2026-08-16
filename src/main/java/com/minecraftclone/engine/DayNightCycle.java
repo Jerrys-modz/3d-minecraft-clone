@@ -104,9 +104,14 @@ public class DayNightCycle {
 
     /** 0 at night, 1 at noon, smoothly rising through the seasonal daylight window. */
     public float getDaylightFactor() {
+        return getDaylightFactorAt(time);
+    }
+
+    /** Daylight factor for an arbitrary time of day (0..1), used by the weather forecast. */
+    public float getDaylightFactorAt(float timeOfDay) {
         float sunrise = getSunriseTime();
         float sunset = getSunsetTime();
-        float t = (time - sunrise) / (sunset - sunrise);
+        float t = (timeOfDay - sunrise) / (sunset - sunrise);
         if (t <= 0f || t >= 1f) return 0f;
         return (float) ((1 - Math.cos(2 * Math.PI * t)) / 2);
     }

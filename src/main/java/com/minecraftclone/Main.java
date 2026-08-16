@@ -263,11 +263,11 @@ public class Main {
         audio.play(gui != null && gui.isOutputSlot(slotId) ? SoundEvent.CRAFT : SoundEvent.UI_CLICK);
     }
 
-    /** Resets the calendar for a freshly started world and applies its days-per-season setting. */
+    /** Resets the calendar for a freshly started world and applies its weeks-per-month setting. */
     private void startCalendar(DayNightCycle dayNightCycle, Calendar calendar, WorldGenSettings genSettings) {
         dayNightCycle.resetDays();
         calendar.reset();
-        calendar.setDaysPerSeason(genSettings.getDaysPerSeason());
+        calendar.setWeeksPerMonth(genSettings.getWeeksPerMonth());
     }
 
     /**
@@ -1314,7 +1314,7 @@ public class Main {
             }
             hud.renderMessages(messages, window.getAspectRatio());
             if (started[0] && forecastOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                hud.renderForecast(climate, window.getAspectRatio());
+                hud.renderForecast(climate, calendar, window.getAspectRatio());
             }
             if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();
@@ -1345,12 +1345,13 @@ public class Main {
                 TerrainGenerator.Biome biome = world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z));
                 hud.drawTextLeft("Biome: " + biome,
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft("Season: " + calendar.getSeason().displayName + " - Day " + calendar.getDay()
-                                + "/" + calendar.getDaysPerSeason() + ", Year " + calendar.getYear(),
+                hud.drawTextLeft("Calendar: " + calendar.getDayOfWeekName() + " - Week " + calendar.getWeekOfMonth()
+                                + " of " + calendar.getMonthName() + " (" + calendar.getSeason().displayName
+                                + "), Year " + calendar.getYear(),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in %.0fm",
+                hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in ~%dh",
                                 climate.getWeather().displayName, climate.getWeatherStrength() * 100f,
-                                climate.getNextWeather().displayName, climate.getWeatherTimeLeft() / 60f),
+                                climate.nextWeatherChange().displayName, climate.hoursUntilChange()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C, %.0f%% humidity",
                                 climate.temperatureFor(biome), climate.humidityFor(biome) * 100f),

@@ -48,15 +48,12 @@ public class WeatherRenderer {
         if (snow > 0) {
             lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.85f));
             snowMesh.upload(verts.toArray());
-            // Disable face culling so the crossed single-sided snow planes are visible from both sides.
-            boolean cullingWasEnabled = glIsEnabled(GL_CULL_FACE);
-            if (cullingWasEnabled) {
-                glDisable(GL_CULL_FACE);
-            }
+            // The crossed snow planes are single-sided; turn culling off so a flake
+            // stays visible from any angle (restore the prior state after).
+            boolean cull = glIsEnabled(GL_CULL_FACE);
+            if (cull) glDisable(GL_CULL_FACE);
             snowMesh.render();
-            if (cullingWasEnabled) {
-                glEnable(GL_CULL_FACE);
-            }
+            if (cull) glEnable(GL_CULL_FACE);
         }
 
         lineShader.unbind();

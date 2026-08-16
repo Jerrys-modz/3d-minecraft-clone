@@ -518,74 +518,60 @@ public class Hud {
     }
 
     /**
-     * Draws the weather forecast panel: the current weather with its strength and
-     * the rolled-ahead upcoming events with rough start times, centered near the
-     * top of the screen.
+     * Draws the weather forecast panel: the current weather with the next change,
+     * today's hourly forecast at 3-hour marks, and a rolling 7-day forecast. Like
+     * a real forecast, it's less reliable the further out it is.
      */
-    public void renderForecast(Climate climate, float aspectRatio) {
+    public void renderForecast(Climate climate, Calendar calendar, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
-        float titleY = 0.84f;
-        float titleSize = 0.042f;
-        float rowSize = 0.032f;
-        float closeSize = 0.022f;
-        float titlePad = 0.062f;
-        float rowStep = 0.05f;
-        float closePad = 0.015f;
+        float x = -0.85f;
+        float y = 0.88f;
+        Vector4f dim = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
 
-        Climate.WeatherEvent[] forecast = climate.getForecast();
-        float[] minutes = climate.getForecastStartMinutes();
+        drawTextAt("Weather Forecast", x, y, 0.035f, WHITE);
+        y -= 0.05f;
+        drawTextAt("Now: " + forecastLabel(climate.getWeather(), climate.getWeatherStrength())
+                        + "   next: " + climate.nextWeatherChange().displayName + " in ~"
+                        + climate.hoursUntilChange() + "h",
+                x, y, 0.024f, WHITE);
+        y -= 0.045f;
 
-        // Calculate panel dimensions from content layout.
-        float panelW = 0.65f;  // Enough width for forecast text
-        float titleH = titleSize * 1.2f;  // Title with breathing room
-        float rowsH = forecast.length * rowStep;  // All forecast rows
-        float closeH = closeSize * 1.2f + closePad;  // Close instruction with its padding
-        float panelH = 0.05f + titleH + titlePad + rowsH + closeH + 0.03f;  // Total with top/bottom margins
-        float panelTop = titleY + titleSize * 0.5f + 0.025f;
-        float panelBottom = panelTop - panelH;
-        float panelLeft = -panelW / 2f;
-        float panelRight = panelW / 2f;
-
-        // Semi-transparent background panel.
-        float[] panel = {
-                panelLeft, panelBottom, 0, panelRight, panelBottom, 0, panelRight, panelTop, 0,
-                panelLeft, panelBottom, 0, panelRight, panelTop, 0, panelLeft, panelTop, 0,
-        };
-        settingsPanel.upload(panel);
-
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.45f));
-        settingsPanel.render();
-        lineShader.unbind();
-
-        // Forecast content: title, rows, and close instruction.
-        float y = titleY;
-        drawCenteredText("Weather Forecast", 0f, y, titleSize, WHITE);
-        y -= titlePad;
-
-        for (int i = 0; i < forecast.length; i++) {
-            Climate.WeatherEvent event = forecast[i];
-            String when = i == 0 ? "Now" : "In " + (int) Math.ceil(minutes[i]) + "m";
-            drawCenteredText(when + ": " + forecastLabel(event), 0f, y, rowSize, WHITE);
-            y -= rowStep;
+        // Today's hourly forecast, at 3-hour marks from the current hour.
+        Climate.ForecastSlot[] today = climate.getHourlyForecastForDay(0);
+        Climate.ForecastSlot[] tomorrow = climate.getHourlyForecastForDay(1);
+        int now = climate.getCurrentHourOfDay();
+        StringBuilder hourly = new StringBuilder("Today: ");
+        int count = 0;
+        for (int h = now; count < 8 && h < now + 24; h += 3) {
+            Climate.ForecastSlot slot = h < 24 ? today[h] : tomorrow[h - 24];
+            if (count > 0) hourly.append(", ");
+            hourly.append(h % 24).append("h ").append(slot.weather().displayName);
+            count++;
         }
-        drawCenteredText("Forecast key to close", 0f, y - closePad, closeSize, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+        drawTextAt(hourly.toString(), x, y, 0.022f, WHITE);
+        y -= 0.05f;
 
+        // Rolling 7-day forecast.
+        Climate.ForecastSlot[] days = climate.getDailyForecast();
+        for (int d = 0; d < days.length; d++) {
+            String day = calendar.dayOfWeekNameAt(climate.getDailyDayIndex(d));
+            drawTextAt(day + ": " + forecastLabel(days[d].weather(), days[d].strength()), x, y, 0.024f, WHITE);
+            y -= 0.038f;
+        }
+
+        drawTextAt("Forecast less reliable further out", x, y - 0.005f, 0.018f, dim);
         glEnable(GL_DEPTH_TEST);
     }
 
-    /** A forecast line label: "Rain (heavy)" etc., with no strength for clear skies. */
-    private static String forecastLabel(Climate.WeatherEvent event) {
-        if (!event.weather().isPrecipitation()) {
-            return event.weather().displayName;
+    /** A forecast label: "Rain (heavy)" etc., with no strength for clear skies. */
+    private static String forecastLabel(Weather weather, float strength) {
+        if (!weather.isPrecipitation()) {
+            return weather.displayName;
         }
-        String strength = event.strength() < 0.4f ? "light" : event.strength() < 0.75f ? "moderate" : "heavy";
-        return event.weather().displayName + " (" + strength + ")";
+        String s = strength < 0.4f ? "light" : strength < 0.75f ? "moderate" : "heavy";
+        return weather.displayName + " (" + s + ")";
     }
 
     /**
