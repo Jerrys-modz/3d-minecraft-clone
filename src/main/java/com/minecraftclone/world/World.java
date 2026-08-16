@@ -79,17 +79,18 @@ public class World implements BlockAccessor {
     private static final double FLUID_TICK_SECONDS = 0.15;
     private double lastFluidTickNanos = Double.NaN;
 
-    // Snow accumulation runs on a fixed wall-clock cadence for the same frame-rate
-    // independence reason as the fluid tick above (see FLUID_TICK_SECONDS), and
-    // probes random columns in a radius around the player so a blizzard visibly
-    // buries the ground rather than costing a full-column sweep every tick.
+    // Seasonal surface updates (snow accumulation + water freezing) run on a
+    // fixed wall-clock cadence for the same frame-rate independence reason as
+    // the fluid tick above (see FLUID_TICK_SECONDS), and probe random columns
+    // in a radius around the player so a blizzard visibly buries the ground
+    // rather than costing a full-column sweep every tick.
     private static final double SNOW_UPDATE_SECONDS = 0.5;
     private static final int SNOW_RADIUS = 24;
-    /** Accumulate snow only where it's freezing (matches the climate's snow/rain cutoff). */
-    private static final float SNOW_ACCUMULATE_TEMP = 0f;
-    /** Leave a little hysteresis so a column stuck at ~0°C doesn't flip-flop every tick. */
-    private static final float SNOW_MELT_TEMP = 1f;
-    /** How deep a pile may get: a light coat in ordinary snow, buried under a blizzard. */
+    /** Freezing point: water freezes and snow sticks only where it's at or below this. */
+    private static final float FREEZING_TEMP = 0f;
+    /** Thaw point: accumulated snow melts and ice thaws only above this (a little hysteresis so a column stuck near 0°C doesn't flip-flop every tick). */
+    private static final float THAW_TEMP = 1f;
+    /** How deep a snow pile may get: a light coat in ordinary snow, buried under a blizzard. */
     private static final int SNOW_MAX_LAYERS_NORMAL = 1;
     private static final int SNOW_MAX_LAYERS_BLIZZARD = 3;
     private double lastSnowUpdateNanos = Double.NaN;
@@ -675,15 +676,17 @@ public class World implements BlockAccessor {
     }
 
     /**
-     * Drives seasonal snow on the ground near the player: while it's snowing it
-     * lays down real {@link BlockType#SNOW} blocks on exposed surfaces (a thin
-     * coat in ordinary snow, piled deeper and faster in a blizzard), and when the
-     * weather clears above freezing it melts the accumulated snow back away.
-     * Gated per-column by the local temperature, so in winter the snowline creeps
-     * down into temperate biomes and retreats in spring - and naturally snowy
-     * biomes (taiga, snowy, tundra, mountains, frozen ocean) keep their snow.
+     * Drives seasonal surface changes near the player: while it's freezing it
+     * lays real {@link BlockType#SNOW} blocks on exposed surfaces (a thin coat
+     * in ordinary snow, piled deeper and faster in a blizzard) and freezes
+     * exposed water over to ice; once the weather warms it melts the
+     * accumulated snow back away and thaws the ice. Both are gated per-column
+     * by the local temperature, so in winter the snowline creeps down into
+     * temperate biomes (and lakes freeze over) and it all retreats in spring -
+     * while naturally snowy biomes (taiga, snowy, tundra, mountains, frozen
+     * ocean) keep their snow.
      */
-    public void updateSnow(double dt, float playerX, float playerZ, Climate climate) {
+    public void updateSeasonalSurfaces(double dt, float playerX, float playerZ, Climate climate) {
         Weather weather = climate.getWeather();
         boolean snowing = weather == Weather.SNOW || weather == Weather.BLIZZARD;
         boolean blizzard = weather == Weather.BLIZZARD;
@@ -706,11 +709,16 @@ public class World implements BlockAccessor {
             if (x == px && z == pz) continue; // never bury the player's own column
             if (snowing) tryAddSnow(x, z, climate, blizzard);
             else tryMeltSnow(x, z, climate);
+            // Freezing is temperature-driven (independent of precipitation), but
+            // never right around the player - a winter swim shouldn't cage you.
+            if (Math.abs(x - px) > 1 || Math.abs(z - pz) > 1) {
+                tryUpdateWater(x, z, climate);
+            }
         }
     }
 
     private void tryAddSnow(int x, int z, Climate climate, boolean blizzard) {
-        if (climate.temperatureFor(getBiome(x, z)) > SNOW_ACCUMULATE_TEMP) return;
+        if (climate.temperatureFor(getBiome(x, z)) > FREEZING_TEMP) return;
         int y = findSurfaceY(x, z);
         if (y < 0) return;
         BlockType surface = getBlock(x, y, z);
@@ -733,7 +741,7 @@ public class World implements BlockAccessor {
     private void tryMeltSnow(int x, int z, Climate climate) {
         Biome biome = getBiome(x, z);
         if (permanentSnow(biome)) return;
-        if (climate.temperatureFor(biome) <= SNOW_MELT_TEMP) return;
+        if (climate.temperatureFor(biome) <= THAW_TEMP) return;
         int y = findSurfaceY(x, z);
         if (y < 0) return;
         BlockType top = getBlock(x, y, z);
@@ -744,6 +752,42 @@ public class World implements BlockAccessor {
         if (top == BlockType.SNOW && getBlock(x, y + 1, z) == BlockType.AIR) {
             setBlock(x, y, z, BlockType.AIR); // peel one layer off the top of the pile
         }
+    }
+
+    /** Freezes exposed water over to ice while it's freezing, thaws it back to water once warm. */
+    private void tryUpdateWater(int x, int z, Climate climate) {
+        float temperature = climate.temperatureFor(getBiome(x, z));
+        if (temperature <= FREEZING_TEMP) {
+            int y = findSurfaceWaterY(x, z);
+            if (y >= 0 && getBlock(x, y + 1, z) == BlockType.AIR) {
+                setBlock(x, y, z, frozenForm(getBlock(x, y, z)));
+            }
+        } else if (temperature > THAW_TEMP) {
+            int y = findSurfaceY(x, z);
+            if (y >= 0 && getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
+                setBlock(x, y, z, BlockType.WATER); // the surface ice thaws back into water
+            }
+        }
+    }
+
+    /** The top-most exposed water cell (WATER / WATER_SOURCE with only air above), or -1 if the column has none. */
+    private int findSurfaceWaterY(int x, int z) {
+        for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
+            BlockType b = getBlock(x, y, z);
+            if (b == BlockType.WATER || b == BlockType.WATER_SOURCE) return y;
+            if (b != BlockType.AIR) return -1; // solid (ice, ground, a roof) sits above any water
+        }
+        return -1;
+    }
+
+    /** The block an exposed water cell becomes at freezing temperatures: ice, or the same block unchanged. */
+    static BlockType frozenForm(BlockType water) {
+        return (water == BlockType.WATER || water == BlockType.WATER_SOURCE) ? BlockType.ICE : water;
+    }
+
+    /** The block a surface cell becomes once it thaws: water, or the same block unchanged. */
+    static BlockType thawedForm(BlockType block) {
+        return block == BlockType.ICE ? BlockType.WATER : block;
     }
 
     /** The snow-capped-slab form of a plain bottom-half slab. */
