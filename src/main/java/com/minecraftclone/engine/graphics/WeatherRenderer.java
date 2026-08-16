@@ -11,6 +11,7 @@ import static org.lwjgl.opengl.GL11.GL_LINES;
 import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
 import static org.lwjgl.opengl.GL11.glDisable;
 import static org.lwjgl.opengl.GL11.glEnable;
+import static org.lwjgl.opengl.GL11.glIsEnabled;
 import static org.lwjgl.opengl.GL11.glLineWidth;
 
 /**
@@ -47,9 +48,15 @@ public class WeatherRenderer {
         if (snow > 0) {
             lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.85f));
             snowMesh.upload(verts.toArray());
-            glDisable(GL_CULL_FACE);
+            // Disable face culling so the crossed single-sided snow planes are visible from both sides.
+            boolean cullingWasEnabled = glIsEnabled(GL_CULL_FACE);
+            if (cullingWasEnabled) {
+                glDisable(GL_CULL_FACE);
+            }
             snowMesh.render();
-            glEnable(GL_CULL_FACE);
+            if (cullingWasEnabled) {
+                glEnable(GL_CULL_FACE);
+            }
         }
 
         lineShader.unbind();
