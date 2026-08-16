@@ -111,7 +111,8 @@ public class Hud {
     // tab strip stays in the same place when switching between tabs.
     private static final int SETTINGS_MAX_ROWS = Math.max(
             Settings.tabRowCount(Settings.TAB_GRAPHICS),
-            Math.max(Settings.tabRowCount(Settings.TAB_GAMEPLAY), KeyBindings.COUNT));
+            Math.max(Settings.tabRowCount(Settings.TAB_GAMEPLAY),
+                    Math.max(Settings.tabRowCount(Settings.TAB_AUDIO), KeyBindings.COUNT)));
 
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
 

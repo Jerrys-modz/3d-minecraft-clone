@@ -34,6 +34,7 @@ public class Climate {
     public record ForecastSlot(Weather weather, float strength) {
     }
 
+    /** How strongly rain raises a biome's humidity toward wet. */
     private static final float WETNESS_HUMIDITY_BOOST = 0.4f;
     private static final float WETNESS_RISE_PER_SECOND = 0.006f;
     private static final float WETNESS_DRAIN_PER_SECOND = 0.005f;

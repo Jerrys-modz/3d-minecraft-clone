@@ -124,4 +124,29 @@ class ClimateTest {
         assertEquals(0, climate.getDailyDayIndex(0));
         assertEquals(6, climate.getDailyDayIndex(6));
     }
+
+    @Test
+    void precipitationClassificationUsesAmbientTemperatureNotCurrentWeather() {
+        // Regression: rollHour must classify precipitation using ambient temperature
+        // (forecastTemperature: base + season + nightly dip) rather than whatever the
+        // "live" weather happens to be - so forcing the current weather must not
+        // retroactively change the already-rolled hourly forecast for other hours.
+        Calendar calendar = new Calendar();
+        calendar.update(3 * calendar.getDaysPerSeason() + 10); // mid-winter
+        DayNightCycle cycle = new DayNightCycle();
+        cycle.setTime(0.5f); // noon
+        Climate climate = new Climate(calendar, cycle);
+        // BEACH (base 22°C) in winter is just above freezing (~2°C ambient at noon),
+        // so its forecast should include both rain and snow hours over the day as the
+        // nightly dip pushes some hours below freezing.
+        climate.update(0.001f, Biome.BEACH); // rolls the initial hourly schedule
+
+        Climate.ForecastSlot[] before = climate.getHourlyForecast();
+        climate.forceWeather(Weather.SNOW); // -7°C live effect; must not affect the roll
+        Climate.ForecastSlot[] after = climate.getHourlyForecast();
+        for (int h = 0; h < before.length; h++) {
+            assertEquals(before[h].weather(), after[h].weather(),
+                    "forcing the live weather must not change the already-rolled forecast");
+        }
+    }
 }
