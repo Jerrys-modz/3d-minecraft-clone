@@ -237,6 +237,13 @@ public class Main {
         input.resetMouseDelta();
     }
 
+    /** Resets the calendar for a freshly started world and applies its days-per-season setting. */
+    private void startCalendar(DayNightCycle dayNightCycle, Calendar calendar, WorldGenSettings genSettings) {
+        dayNightCycle.resetDays();
+        calendar.reset();
+        calendar.setDaysPerSeason(genSettings.getDaysPerSeason());
+    }
+
     /**
      * Breaks one block cell (whatever it is: a door, an overlay decoration, or a
      * solid block), dropping its loot and wearing the tool in survival. Shared by
@@ -405,6 +412,7 @@ public class Main {
         int[] selectedSlot = {0};
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
+        Calendar calendar = new Calendar(); // in-game calendar: days, seasons, years
         MiningController mining = new MiningController();
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
         float[] attackCooldown = {0f}; // time until the next mob hit can land
@@ -469,6 +477,7 @@ public class Main {
             saveWorldGenSettings(autoDir, genSettings);
             long seed = genSettings.resolveSeed();
             world = new World(seed, genSettings, atlas, autoDir);
+            startCalendar(dayNightCycle, calendar, genSettings);
             world.setRenderDistance(settings.getRenderDistance());
             world.setLeavesTransparent(settings.isLeavesTransparent());
             for (int i = 0; i < 200; i++) world.update(0, 0);
@@ -575,6 +584,11 @@ public class Main {
             float dt = timer.getDeltaTime();
             timer.updateFps(dt);
             dayNightCycle.update(dt);
+            // The calendar advances with the day/night cycle, and its season
+            // feeds the cycle's daylight length back - so days grow and shrink
+            // through the year (long summer days, short winter days).
+            calendar.update(dayNightCycle.getDayIndex());
+            dayNightCycle.setDaylightFraction(calendar.daylightFraction());
             animTime[0] += dt;
             attackCooldown[0] -= dt;
             Raycaster.Hit hit = null;
@@ -645,7 +659,8 @@ public class Main {
                                     saveWorldGenSettings(worldDir, genSettings);
                                 }
                                 world = new World(seed, genSettings, atlas, worldDir);
-                                world.setRenderDistance(settings.getRenderDistance());
+                                startCalendar(dayNightCycle, calendar, genSettings);
+                            world.setRenderDistance(settings.getRenderDistance());
                                 world.setLeavesTransparent(settings.isLeavesTransparent());
                                 for (int i = 0; i < 200; i++) world.update(0, 0);
                                 float[] spawn = findSpawn(world);
@@ -697,6 +712,7 @@ public class Main {
                                 saveWorldGenSettings(worldDir, genSettings);
                             }
                             world = new World(seed, genSettings, atlas, worldDir);
+                            startCalendar(dayNightCycle, calendar, genSettings);
                             world.setRenderDistance(settings.getRenderDistance());
                             world.setLeavesTransparent(settings.isLeavesTransparent());
                             for (int i = 0; i < 200; i++) world.update(0, 0);
@@ -1202,6 +1218,9 @@ public class Main {
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft("Biome: " + world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z)),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft("Season: " + calendar.getSeason().displayName + " - Day " + calendar.getDay()
+                                + "/" + calendar.getDaysPerSeason() + ", Year " + calendar.getYear(),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),
