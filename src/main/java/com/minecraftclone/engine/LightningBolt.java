@@ -55,13 +55,13 @@ public class LightningBolt {
             int len = 2 + rnd.nextInt(3);
             float bx = px[at], by = py[at], bz = pz[at];
             for (int j = 0; j < len; j++) {
-                float startX = bx, startY = by, startZ = bz;
+                float prevX = bx, prevY = by, prevZ = bz;
                 bx += (rnd.nextFloat() - 0.5f) * 1.8f;
                 by -= 2.2f;
                 bz += (rnd.nextFloat() - 0.5f) * 1.8f;
-                segments.add(startX);
-                segments.add(startY);
-                segments.add(startZ);
+                segments.add(prevX);
+                segments.add(prevY);
+                segments.add(prevZ);
                 segments.add(bx);
                 segments.add(by);
                 segments.add(bz);
