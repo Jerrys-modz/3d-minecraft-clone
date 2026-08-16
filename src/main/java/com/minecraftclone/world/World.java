@@ -760,7 +760,12 @@ public class World implements BlockAccessor {
         if (temperature <= FREEZING_TEMP) {
             int y = findSurfaceWaterY(x, z);
             if (y >= 0 && getBlock(x, y + 1, z) == BlockType.AIR) {
-                setBlock(x, y, z, frozenForm(getBlock(x, y, z)));
+                BlockType water = getBlock(x, y, z);
+                // Only freeze static WATER, not WATER_SOURCE - sources keep flowing
+                // even in winter so their flow field stays intact through freeze/thaw.
+                if (water == BlockType.WATER) {
+                    setBlock(x, y, z, BlockType.ICE);
+                }
             }
         } else if (temperature > THAW_TEMP) {
             int y = findSurfaceY(x, z);
@@ -770,11 +775,11 @@ public class World implements BlockAccessor {
         }
     }
 
-    /** The top-most exposed water cell (WATER / WATER_SOURCE with only air above), or -1 if the column has none. */
+    /** The top-most exposed static water cell (WATER with only air above), or -1 if the column has none. */
     private int findSurfaceWaterY(int x, int z) {
         for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
             BlockType b = getBlock(x, y, z);
-            if (b == BlockType.WATER || b == BlockType.WATER_SOURCE) return y;
+            if (b == BlockType.WATER) return y;
             if (b != BlockType.AIR) return -1; // solid (ice, ground, a roof) sits above any water
         }
         return -1;

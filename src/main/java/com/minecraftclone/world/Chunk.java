@@ -1016,41 +1016,58 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                     slabUvs, LIGHT_BOTTOM, blockLight);
         }
 
-        // Four sides: the slab's lower half, then the snow's upper half, both
-        // toward air/cross neighbors (a full block covers the whole face, and an
-        // adjacent slab shares the half-height faces).
+        // Four sides: the slab's lower half, then the snow's upper half. Apply
+        // the same visibility rules as solid blocks (including fluids and
+        // translucent neighbors). When adjacent to a plain slab, emit only the
+        // upper cap half - the lower slab half is shared and remains culled.
         BlockType east = world.getBlock(wx + 1, wy, wz);
-        if (east == BlockType.AIR || east.cross) {
+        if (east == BlockType.AIR || east.cross || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || (leavesTransparent && east == BlockType.LEAVES)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, yBot, z1}, {x1, yBot, z0}, {x1, yMid, z0}, {x1, yMid, z1}},
                     slabUvs, LIGHT_EAST_WEST, blockLight);
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, yMid, z1}, {x1, yMid, z0}, {x1, yTop, z0}, {x1, yTop, z1}},
                     capUvs, LIGHT_EAST_WEST, blockLight);
+        } else if (east.slab || east.isSnowCappedSlab()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, yMid, z1}, {x1, yMid, z0}, {x1, yTop, z0}, {x1, yTop, z1}},
+                    capUvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType west = world.getBlock(wx - 1, wy, wz);
-        if (west == BlockType.AIR || west.cross) {
+        if (west == BlockType.AIR || west.cross || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || (leavesTransparent && west == BlockType.LEAVES)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, yBot, z0}, {x0, yBot, z1}, {x0, yMid, z1}, {x0, yMid, z0}},
                     slabUvs, LIGHT_EAST_WEST, blockLight);
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, yMid, z0}, {x0, yMid, z1}, {x0, yTop, z1}, {x0, yTop, z0}},
                     capUvs, LIGHT_EAST_WEST, blockLight);
+        } else if (west.slab || west.isSnowCappedSlab()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yMid, z0}, {x0, yMid, z1}, {x0, yTop, z1}, {x0, yTop, z0}},
+                    capUvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType south = world.getBlock(wx, wy, wz + 1);
-        if (south == BlockType.AIR || south.cross) {
+        if (south == BlockType.AIR || south.cross || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || (leavesTransparent && south == BlockType.LEAVES)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, yBot, z1}, {x1, yBot, z1}, {x1, yMid, z1}, {x0, yMid, z1}},
                     slabUvs, LIGHT_NORTH_SOUTH, blockLight);
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, yMid, z1}, {x1, yMid, z1}, {x1, yTop, z1}, {x0, yTop, z1}},
                     capUvs, LIGHT_NORTH_SOUTH, blockLight);
+        } else if (south.slab || south.isSnowCappedSlab()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yMid, z1}, {x1, yMid, z1}, {x1, yTop, z1}, {x0, yTop, z1}},
+                    capUvs, LIGHT_NORTH_SOUTH, blockLight);
         }
         BlockType north = world.getBlock(wx, wy, wz - 1);
-        if (north == BlockType.AIR || north.cross) {
+        if (north == BlockType.AIR || north.cross || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || (leavesTransparent && north == BlockType.LEAVES)) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, yBot, z0}, {x0, yBot, z0}, {x0, yMid, z0}, {x1, yMid, z0}},
                     slabUvs, LIGHT_NORTH_SOUTH, blockLight);
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, yMid, z0}, {x0, yMid, z0}, {x0, yTop, z0}, {x1, yTop, z0}},
+                    capUvs, LIGHT_NORTH_SOUTH, blockLight);
+        } else if (north.slab || north.isSnowCappedSlab()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, yMid, z0}, {x0, yMid, z0}, {x0, yTop, z0}, {x1, yTop, z0}},
                     capUvs, LIGHT_NORTH_SOUTH, blockLight);
