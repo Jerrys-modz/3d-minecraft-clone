@@ -34,4 +34,22 @@ class BlockTypeTest {
         assertFalse(BlockType.STONE.isDirectional());
         assertFalse(BlockType.DIRT.isDirectional());
     }
+
+    @Test
+    void canHoldSnowOnOpaqueCubesButNotTransparentOrCross() {
+        // Ground, stone, wood, sand and snow itself all take a snow coat.
+        assertTrue(BlockType.GRASS.canHoldSnow());
+        assertTrue(BlockType.DIRT.canHoldSnow());
+        assertTrue(BlockType.STONE.canHoldSnow());
+        assertTrue(BlockType.WOOD_LOG.canHoldSnow());
+        assertTrue(BlockType.SAND.canHoldSnow());
+        assertTrue(BlockType.SNOW.canHoldSnow(), "snow piles on snow (deep drifts)");
+        // See-through, cross-shaped plants and fluids don't hold snow.
+        assertFalse(BlockType.GLASS.canHoldSnow());
+        assertFalse(BlockType.ICE.canHoldSnow());
+        assertFalse(BlockType.LEAVES.canHoldSnow());
+        assertFalse(BlockType.TALL_GRASS.canHoldSnow());
+        assertFalse(BlockType.TORCH.canHoldSnow());
+        assertFalse(BlockType.WATER.canHoldSnow());
+    }
 }
