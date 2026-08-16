@@ -12,6 +12,8 @@ public class PlayerStats {
     public static final float MAX_HEALTH = 100f;
     public static final float MAX_HUNGER = 100f;
     public static final float MAX_STAMINA = 100f;
+    /** Seconds of breath you start a dive with - same value as {@link #DROWN_GRACE_SECONDS}, just public for the HUD's breath meter. */
+    public static final float MAX_BREATH = 6f;
 
     private static final float SAFE_FALL_SPEED = 10f;          // blocks/sec you can land at with no damage
     private static final float FALL_DAMAGE_PER_SPEED = 3.5f;   // damage per (blocks/sec) over the safe speed
@@ -19,7 +21,7 @@ public class PlayerStats {
     private static final float FIRE_DAMAGE_PER_SECOND = 6f;   // standing in lightning-lit fire burns
     private static final float COLD_HUNGER_DRAIN_PER_SECOND = 100f / 300f; // ~5 min to empty at full exposure
     private static final float COLD_DAMAGE_PER_SECOND = 2f;   // freezing once hunger is gone
-    private static final float DROWN_GRACE_SECONDS = 6f;       // how long you can hold your breath
+    private static final float DROWN_GRACE_SECONDS = MAX_BREATH; // how long you can hold your breath
     private static final float DROWN_DAMAGE_PER_SECOND = 5f;
     private static final float STARVE_DAMAGE_PER_SECOND = 2f;
     private static final float REGEN_HUNGER_THRESHOLD = 50f;   // need at least this much hunger to regenerate health
@@ -72,6 +74,11 @@ public class PlayerStats {
 
     public float getStamina() {
         return stamina;
+    }
+
+    /** Seconds of breath left before you start drowning (0..{@link #MAX_BREATH}) - only counts down while submerged. */
+    public float getBreath() {
+        return Math.max(0f, DROWN_GRACE_SECONDS - submergedTime);
     }
 
     public boolean isDead() {
