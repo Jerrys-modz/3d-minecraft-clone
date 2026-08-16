@@ -17,6 +17,8 @@ public class PlayerStats {
     private static final float FALL_DAMAGE_PER_SPEED = 3.5f;   // damage per (blocks/sec) over the safe speed
     private static final float LAVA_DAMAGE_PER_SECOND = 20f;
     private static final float FIRE_DAMAGE_PER_SECOND = 6f;   // standing in lightning-lit fire burns
+    private static final float COLD_HUNGER_DRAIN_PER_SECOND = 100f / 300f; // ~5 min to empty at full exposure
+    private static final float COLD_DAMAGE_PER_SECOND = 2f;   // freezing once hunger is gone
     private static final float DROWN_GRACE_SECONDS = 6f;       // how long you can hold your breath
     private static final float DROWN_DAMAGE_PER_SECOND = 5f;
     private static final float STARVE_DAMAGE_PER_SECOND = 2f;
@@ -32,8 +34,14 @@ public class PlayerStats {
     private float hunger = MAX_HUNGER;
     private float stamina = MAX_STAMINA;
     private float submergedTime = 0f;
+    private float coldness = 0f; // 0 (warm) .. 1 (freezing out in a blizzard), set by Player each frame
     private boolean staminaExhausted = false;
     private boolean dead = false;
+
+    /** How exposed to the cold the player is this frame, 0 (warm) to 1 (freezing). */
+    public float getColdness() {
+        return coldness;
+    }
 
     public float getHealth() {
         return health;
@@ -79,9 +87,9 @@ public class PlayerStats {
      *
      * @param fallImpactSpeed the speed (blocks/sec) the player just landed at this frame, or 0 if not landing.
      */
-    public void update(float dt, boolean inLava, boolean inFire, boolean submerged, boolean sprintingAndMoving, float fallImpactSpeed) {
+    public void update(float dt, boolean inLava, boolean inFire, boolean submerged, boolean sprintingAndMoving, float fallImpactSpeed, float coldness) {
         if (dead) return;
-
+        this.coldness = coldness;
         if (sprintingAndMoving) {
             stamina = Math.max(0f, stamina - STAMINA_SPRINT_DRAIN_PER_SECOND * dt);
             if (stamina <= 0f) staminaExhausted = true;
@@ -123,6 +131,18 @@ public class PlayerStats {
             }
         } else {
             submergedTime = 0f;
+        }
+
+        if (coldness > 0f) {
+            // Freezing out in a storm: the cold burns through hunger first, then
+            // health once you've run out of food. Shelter or a warm fire reduces
+            // the exposure (see Player). tookDamage stays clear while food lasts
+            // so the regen below keeps working.
+            hunger = Math.max(0f, hunger - COLD_HUNGER_DRAIN_PER_SECOND * coldness * dt);
+            if (hunger <= 0f) {
+                damage(COLD_DAMAGE_PER_SECOND * coldness * dt);
+                tookDamage = true;
+            }
         }
 
         if (hunger <= 0f) {
