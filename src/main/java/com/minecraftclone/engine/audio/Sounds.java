@@ -92,6 +92,24 @@ public final class Sounds {
                 SoundSynth.tone(523, 523, 0.08f, 0.35f, 0.05f),
                 SoundSynth.tone(659, 659, 0.08f, 0.35f, 0.05f),
                 SoundSynth.tone(784, 784, 0.14f, 0.4f, 0f)));
+
+        // Weather ambience. Rain is a soft hissing noise loop (its tail fades into
+        // its head so it loops seamlessly); thunder is a low, rolling rumble.
+        fixed.put(SoundEvent.RAIN, seamlessNoise(200, 2f, 0.30f, 0.38f));
+        fixed.put(SoundEvent.THUNDER, SoundSynth.mix(
+                SoundSynth.tone(70, 35, 1.3f, 0.7f, 0.05f),
+                SoundSynth.noise(201, 1.3f, 0.5f, 0.03f, 0.12f)));
+    }
+
+    /** A constant-amplitude noise loop whose tail fades into its head, so looping it doesn't click at the seam. */
+    private static short[] seamlessNoise(long seed, float durationSeconds, float amp, float brightness) {
+        short[] samples = SoundSynth.noise(seed, durationSeconds, amp, amp, brightness);
+        int fade = Math.max(1, (int) (0.05f * SoundSynth.SAMPLE_RATE));
+        for (int i = 0; i < fade && i < samples.length / 2; i++) {
+            float t = (float) i / fade;
+            samples[samples.length - fade + i] = (short) (samples[samples.length - fade + i] * (1f - t) + samples[i] * t);
+        }
+        return samples;
     }
 
     /**

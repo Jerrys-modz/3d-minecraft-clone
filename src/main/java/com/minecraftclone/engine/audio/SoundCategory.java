@@ -7,11 +7,11 @@ package com.minecraftclone.engine.audio;
  * exactly one category - see {@link SoundEvent#category()} and
  * {@link AudioEngine#categoryFor(BlockAction)}.
  * <p>
- * {@link #MUSIC} and {@link #AMBIENT} have no sounds wired up yet (there is
- * no music or ambience system in the game), but their sliders still work:
- * a future music/ambience system just needs to call
+ * {@link #MUSIC} has no sounds wired up yet (there is no music system in the
+ * game), but its slider still works: a future music system just needs to call
  * {@link AudioEngine#setCategoryVolume} with the right category and the
- * settings menu, persistence, and mixing are already in place.
+ * settings menu, persistence, and mixing are already in place. {@link #AMBIENT}
+ * drives the weather sounds (the precipitation hiss and thunder).
  */
 public enum SoundCategory {
     MUSIC,

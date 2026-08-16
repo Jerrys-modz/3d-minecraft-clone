@@ -71,10 +71,16 @@ public class WeatherParticles {
      */
     public void update(float dt, float eyeX, float eyeY, float eyeZ, Weather weather, float strength) {
         time += dt;
-        if (weather == Weather.RAIN) {
+        // Thunderstorms rain heavily; blizzards snow heavily; fog has no fall.
+        Weather fall = switch (weather) {
+            case RAIN, THUNDERSTORM -> Weather.RAIN;
+            case SNOW, BLIZZARD -> Weather.SNOW;
+            default -> Weather.CLEAR;
+        };
+        if (fall == Weather.RAIN) {
             updateRain(dt, eyeX, eyeY, eyeZ, (int) (strength * MAX_RAIN));
             snowCount = 0;
-        } else if (weather == Weather.SNOW) {
+        } else if (fall == Weather.SNOW) {
             updateSnow(dt, eyeX, eyeY, eyeZ, (int) (strength * MAX_SNOW));
             rainCount = 0;
         } else {

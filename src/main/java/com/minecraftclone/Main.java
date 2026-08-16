@@ -80,6 +80,12 @@ public class Main {
     private static final float AUTOSAVE_INTERVAL_SECONDS = 60f;
 
     private static final int APPLE_DROP_CHANCE = 8;    // 1 in 8 leaves broken also yield an apple
+
+    // Weather sky tints: overcast skies lean toward these greys, and a lightning
+    // flash briefly washes the sky toward white.
+    private static final Vector3f OVERCAST_HORIZON = new Vector3f(0.40f, 0.42f, 0.46f);
+    private static final Vector3f OVERCAST_ZENITH = new Vector3f(0.28f, 0.30f, 0.34f);
+    private static final Vector3f FLASH_COLOR = new Vector3f(0.85f, 0.92f, 1.0f);
     private static final int BERRIES_PER_BUSH = 2;
 
     private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
@@ -417,6 +423,7 @@ public class Main {
         MobRenderer mobRenderer = new MobRenderer();
         WeatherParticles weatherParticles = new WeatherParticles();
         WeatherRenderer weatherRenderer = new WeatherRenderer();
+        float prevFlash = 0f; // previous frame's lightning intensity - to catch a new flash
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
         boolean[] forecastOpen = {false};
@@ -648,6 +655,14 @@ public class Main {
                 // Rain/snow falls around the player's eye, scaled by the weather.
                 Vector3f eye = player.getEyePosition();
                 weatherParticles.update(dt, eye.x, eye.y, eye.z, climate.getWeather(), climate.getWeatherStrength());
+                // Weather ambience: the precipitation hiss follows the weather's
+                // intensity, and a lightning flash that just started gets its rumble.
+                audio.setWeatherAmbience(climate.isPrecipitation() ? climate.getWeatherStrength() : 0f);
+                float flash = climate.getFlashIntensity();
+                if (flash > 0f && prevFlash <= 0f) {
+                    audio.play(SoundEvent.THUNDER, 0.8f);
+                }
+                prevFlash = flash;
             }
             animTime[0] += dt;
             attackCooldown[0] -= dt;
@@ -1246,7 +1261,20 @@ public class Main {
             Matrix4f projection = player.getCamera().getProjectionMatrix(settings.getFov(), window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
             Matrix4f view = player.getCamera().getViewMatrix();
 
-            Vector3f horizonColor = dayNightCycle.getHorizonColor();
+            // Weather dims the sky: overcast skies lean grey and drop the light,
+            // and a thunderstorm's lightning briefly flashes everything bright.
+            float overcast = climate.getOvercast();
+            float flash = climate.getFlashIntensity();
+            Vector3f horizonColor = new Vector3f(dayNightCycle.getHorizonColor());
+            Vector3f zenithColor = new Vector3f(dayNightCycle.getZenithColor());
+            if (overcast > 0f) {
+                horizonColor.lerp(OVERCAST_HORIZON, overcast);
+                zenithColor.lerp(OVERCAST_ZENITH, overcast);
+            }
+            if (flash > 0f) {
+                horizonColor.lerp(FLASH_COLOR, flash * 0.8f);
+                zenithColor.lerp(FLASH_COLOR, flash * 0.8f);
+            }
             window.setClearColor(horizonColor.x, horizonColor.y, horizonColor.z, 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -1255,10 +1283,10 @@ public class Main {
             glDisable(GL_DEPTH_TEST);
             skyRenderer.render(skyShader, projection, view,
                     dayNightCycle.getSunDirection(), dayNightCycle.getDaylightFactor(), dayNightCycle.getCloudPhase(),
-                    settings.getCloudAmount() / 3f,
+                    Math.min(1.5f, settings.getCloudAmount() / 3f + overcast * 0.9f),
                     0.5f + settings.getCloudSpeed() * 0.5f,
-                    settings.isStars() ? 1f : 0f,
-                    dayNightCycle.getZenithColor(), dayNightCycle.getHorizonColor(),
+                    (settings.isStars() ? 1f : 0f) * (1f - overcast),
+                    zenithColor, horizonColor,
                     dayNightCycle.getNightZenithColor(), dayNightCycle.getSunColor(), dayNightCycle.getMoonColor());
             glEnable(GL_DEPTH_TEST);
 
@@ -1270,7 +1298,9 @@ public class Main {
             chunkShader.setUniform("fogColor", horizonColor);
             chunkShader.setUniform("fogStart", (world.getRenderDistance() - 2) * 16f);
             chunkShader.setUniform("fogEnd", world.getRenderDistance() * 16f);
-            chunkShader.setUniform("ambientBrightness", dayNightCycle.getAmbientBrightness() * settings.getBrightness());
+            chunkShader.setUniform("ambientBrightness",
+                    dayNightCycle.getAmbientBrightness() * settings.getBrightness()
+                            * (1f - 0.55f * overcast) + flash * 0.5f);
             chunkShader.setUniform("time", animTime[0]);
             chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
