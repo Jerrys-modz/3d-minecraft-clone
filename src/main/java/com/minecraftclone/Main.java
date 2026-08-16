@@ -7,6 +7,7 @@ import com.minecraftclone.engine.audio.SoundCategory;
 import com.minecraftclone.engine.audio.SoundEvent;
 import com.minecraftclone.engine.audio.SoundMaterial;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.GuiTextures;
 import com.minecraftclone.engine.graphics.HandRenderer;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
@@ -90,6 +91,12 @@ public class Main {
 
     private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
 
+    /** Procedurally-generated GUI art (light/dark panels and slots), shared by every screen. */
+    private GuiTextures guiTextures;
+
+    /** HUD renderer; referenced by {@link #applySettings} to push the GUI theme live. */
+    private Hud hud;
+
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
     private static final Vector3f WORLD_UP = new Vector3f(0f, 1f, 0f);
 
@@ -109,6 +116,7 @@ public class Main {
         player.setGameMode(settings.getGameMode());
         player.setInvertMouseY(settings.isInvertMouseY());
         player.setViewBobbing(settings.isViewBobbing());
+        hud.setGuiTextures(guiTextures, settings.isDarkGui());
         audio.setMasterVolume(settings.getSoundVolume());
         audio.setCategoryVolume(SoundCategory.MUSIC, settings.getMusicVolume());
         audio.setCategoryVolume(SoundCategory.AMBIENT, settings.getAmbientVolume());
@@ -398,6 +406,8 @@ public class Main {
         mobTextures.generate();
         FontAtlas font = new FontAtlas();
         font.generate();
+        guiTextures = new GuiTextures();
+        guiTextures.generate();
         // Best-effort: a machine with no audio device at all (routine for a
         // headless CI/verification environment) leaves this permanently
         // disabled rather than throwing - see AudioEngine's own javadoc.
@@ -417,7 +427,8 @@ public class Main {
         boolean[] started = {false};
         List<String> worldNames = new ArrayList<>();
 
-        Hud hud = new Hud(lineShader, hudShader, font);
+        hud = new Hud(lineShader, hudShader, font);
+        hud.setGuiTextures(guiTextures, false); // theme is applied via applySettings below
         ItemRenderer itemRenderer = new ItemRenderer();
         HandRenderer handRenderer = new HandRenderer();
         MobRenderer mobRenderer = new MobRenderer();
@@ -1474,6 +1485,7 @@ public class Main {
         settings.save(settingsFile);
 
         hud.destroy();
+        guiTextures.destroy();
         itemRenderer.destroy();
         handRenderer.destroy();
         mobRenderer.destroy();

@@ -248,6 +248,29 @@ class SettingsTest {
     }
 
     @Test
+    void darkGuiToggleFlipsAndPersists() throws IOException {
+        Settings s = new Settings();
+        assertFalse(s.isDarkGui()); // light GUI by default
+        assertTrue(Settings.isToggle(Settings.DARK_GUI));
+        assertEquals("OFF", s.valueText(Settings.DARK_GUI));
+        s.adjust(Settings.DARK_GUI, 1); // flip on
+        assertTrue(s.isDarkGui());
+        assertEquals("ON", s.valueText(Settings.DARK_GUI));
+        s.adjust(Settings.DARK_GUI, -1); // flip back off
+        assertFalse(s.isDarkGui());
+
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            s.adjust(Settings.DARK_GUI, 1); // on
+            s.save(file);
+            Settings loaded = Settings.load(file);
+            assertTrue(loaded.isDarkGui());
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
     void soundVolumeIgnoresNaNAndInfinities() throws IOException {
         Path file = Files.createTempFile("mc-settings", ".txt");
         try {
