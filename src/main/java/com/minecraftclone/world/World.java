@@ -1,10 +1,14 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.engine.Climate;
+import com.minecraftclone.engine.LightningBolt;
 import com.minecraftclone.engine.Shader;
+import com.minecraftclone.engine.Weather;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.gen.TerrainGenerator;
+import com.minecraftclone.world.gen.TerrainGenerator.Biome;
 import com.minecraftclone.world.gen.WorldGenSettings;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
@@ -75,6 +79,36 @@ public class World implements BlockAccessor {
     // this is independent of frame rate altogether.
     private static final double FLUID_TICK_SECONDS = 0.15;
     private double lastFluidTickNanos = Double.NaN;
+
+    // Seasonal surface updates (snow accumulation + water freezing) run on a
+    // fixed wall-clock cadence for the same frame-rate independence reason as
+    // the fluid tick above (see FLUID_TICK_SECONDS), and probe random columns
+    // in a radius around the player so a blizzard visibly buries the ground
+    // rather than costing a full-column sweep every tick.
+    private static final double SNOW_UPDATE_SECONDS = 0.5;
+    private static final int SNOW_RADIUS = 24;
+    /** Freezing point: water freezes and snow sticks only where it's at or below this. */
+    private static final float FREEZING_TEMP = 0f;
+    /** Thaw point: accumulated snow melts and ice thaws only above this (a little hysteresis so a column stuck near 0°C doesn't flip-flop every tick). */
+    private static final float THAW_TEMP = 1f;
+    /** How deep a snow pile may get: a light coat in ordinary snow, buried under a blizzard. */
+    private static final int SNOW_MAX_LAYERS_NORMAL = 1;
+    private static final int SNOW_MAX_LAYERS_BLIZZARD = 3;
+
+    // Lightning fire: each burning cell carries a per-block remaining-seconds
+    // timer (keyed like block entities), ticked every frame by tickFires. Fires
+    // are transient - lightning lights them, they spread to nearby flammable
+    // blocks, get put out by water or rain, and burn out on their own.
+    private static final float FIRE_BURN_MIN_SECONDS = 4f;
+    private static final float FIRE_BURN_MAX_SECONDS = 9f;
+    private static final float FIRE_SPREAD_CHANCE_PER_SECOND = 0.8f;
+    private static final float FIRE_SPREAD_RADIUS = 2f;
+    private static final float FIRE_MOB_DAMAGE_RADIUS = 1.7f;
+    private static final float FIRE_MOB_DAMAGE_PER_SECOND = 6f;
+    private static final int FIRE_MAX_ACTIVE = 48;
+    private final Map<Long, Float> fires = new HashMap<>();
+    private double lastSnowUpdateNanos = Double.NaN;
+    private final Random snowRandom = new Random();
 
     // Reused across frames (see render) rather than allocated fresh each call -
     // frustum culling runs every single frame regardless of whether anything
@@ -598,6 +632,17 @@ public class World implements BlockAccessor {
                                 blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
                             }
                         }
+                        // Lightning fire is transient: any saved mid-burn fire cells
+                        // are cleared on reload rather than persisting forever.
+                        byte[] raw = chunk.getRawBlocks();
+                        boolean hadFire = false;
+                        for (int i = 0; i < raw.length; i++) {
+                            if ((raw[i] & 0xFF) == BlockType.FIRE.id) {
+                                raw[i] = BlockType.AIR.id;
+                                hadFire = true;
+                            }
+                        }
+                        if (hadFire) chunk.setRawBlocks(raw);
                     } else {
                         generator.generate(chunk);
                     }
@@ -653,6 +698,318 @@ public class World implements BlockAccessor {
             Chunk c = dirty.get(i);
             c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
         }
+    }
+
+    /**
+     * Drives seasonal surface changes near the player: while it's freezing it
+     * lays real {@link BlockType#SNOW} blocks on exposed surfaces (a thin coat
+     * in ordinary snow, piled deeper and faster in a blizzard) and freezes
+     * exposed water over to ice; once the weather warms it melts the
+     * accumulated snow back away and thaws the ice. Both are gated per-column
+     * by the local temperature, so in winter the snowline creeps down into
+     * temperate biomes (and lakes freeze over) and it all retreats in spring -
+     * while naturally snowy biomes (taiga, snowy, tundra, mountains, frozen
+     * ocean) keep their snow.
+     */
+    public void updateSeasonalSurfaces(double dt, float playerX, float playerZ, Climate climate) {
+        Weather weather = climate.getWeather();
+        boolean snowing = weather == Weather.SNOW || weather == Weather.BLIZZARD;
+        boolean blizzard = weather == Weather.BLIZZARD;
+        double nowNanos = System.nanoTime();
+        if (Double.isNaN(lastSnowUpdateNanos)) {
+            lastSnowUpdateNanos = nowNanos;
+        } else if ((nowNanos - lastSnowUpdateNanos) / 1e9 < SNOW_UPDATE_SECONDS) {
+            return;
+        } else {
+            lastSnowUpdateNanos = nowNanos;
+        }
+        // Blizzards lay snow faster (and deeper), and melting works harder so
+        // the snowline retreats at a visible pace once the weather warms up.
+        int passes = snowing ? (blizzard ? 16 : 8) : 12;
+        int px = (int) Math.floor(playerX);
+        int pz = (int) Math.floor(playerZ);
+        for (int i = 0; i < passes; i++) {
+            int x = px + snowRandom.nextInt(SNOW_RADIUS * 2) - SNOW_RADIUS;
+            int z = pz + snowRandom.nextInt(SNOW_RADIUS * 2) - SNOW_RADIUS;
+            if (x == px && z == pz) continue; // never bury the player's own column
+            if (snowing) tryAddSnow(x, z, climate, blizzard);
+            else tryMeltSnow(x, z, climate);
+            // Freezing is temperature-driven (independent of precipitation), but
+            // never right around the player - a winter swim shouldn't cage you.
+            if (Math.abs(x - px) > 1 || Math.abs(z - pz) > 1) {
+                tryUpdateWater(x, z, climate);
+            }
+        }
+    }
+
+    private void tryAddSnow(int x, int z, Climate climate, boolean blizzard) {
+        if (climate.temperatureFor(getBiome(x, z)) > FREEZING_TEMP) return;
+        int y = findSurfaceY(x, z);
+        if (y < 0) return;
+        BlockType surface = getBlock(x, y, z);
+        if (surface.slab) {
+            // Cap a bottom-half slab flush with snow by swapping in a snow-capped
+            // slab (which meshes as a slab under a snow cap), so there's no
+            // half-block gap above the slab's half-height top. Melting restores
+            // the plain slab, and the block type itself remembers it - so a
+            // saved-and-reloaded snowy slab still melts back correctly.
+            if (getBlock(x, y + 1, z) != BlockType.AIR) return;
+            setBlock(x, y, z, snowCapped(surface));
+            return;
+        }
+        if (!surface.canHoldSnow()) return;
+        if (getBlock(x, y + 1, z) != BlockType.AIR) return; // something's already there
+        if (snowDepth(x, z) >= (blizzard ? SNOW_MAX_LAYERS_BLIZZARD : SNOW_MAX_LAYERS_NORMAL)) return;
+        setBlock(x, y + 1, z, BlockType.SNOW);
+    }
+
+    private void tryMeltSnow(int x, int z, Climate climate) {
+        Biome biome = getBiome(x, z);
+        if (permanentSnow(biome)) return;
+        if (climate.temperatureFor(biome) <= THAW_TEMP) return;
+        int y = findSurfaceY(x, z);
+        if (y < 0) return;
+        BlockType top = getBlock(x, y, z);
+        if (top.isSnowCappedSlab()) {
+            setBlock(x, y, z, uncapped(top)); // the snow cap melts, the slab shows again
+            return;
+        }
+        if (top == BlockType.SNOW && getBlock(x, y + 1, z) == BlockType.AIR) {
+            setBlock(x, y, z, BlockType.AIR); // peel one layer off the top of the pile
+        }
+    }
+
+    /** Freezes exposed water over to ice while it's freezing, thaws it back to water once warm. */
+    private void tryUpdateWater(int x, int z, Climate climate) {
+        float temperature = climate.temperatureFor(getBiome(x, z));
+        if (temperature <= FREEZING_TEMP) {
+            int y = findSurfaceWaterY(x, z);
+            if (y >= 0 && getBlock(x, y + 1, z) == BlockType.AIR) {
+                BlockType water = getBlock(x, y, z);
+                // Only freeze static WATER, not WATER_SOURCE - sources keep flowing
+                // even in winter so their flow field stays intact through freeze/thaw.
+                if (water == BlockType.WATER) {
+                    setBlock(x, y, z, BlockType.ICE);
+                }
+            }
+        } else if (temperature > THAW_TEMP) {
+            int y = findSurfaceY(x, z);
+            if (y >= 0 && getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
+                setBlock(x, y, z, BlockType.WATER); // the surface ice thaws back into water
+            }
+        }
+    }
+
+    /** The top-most exposed static water cell (WATER with only air above), or -1 if the column has none. */
+    private int findSurfaceWaterY(int x, int z) {
+        for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
+            BlockType b = getBlock(x, y, z);
+            if (b == BlockType.WATER) return y;
+            if (b != BlockType.AIR) return -1; // solid (ice, ground, a roof) sits above any water
+        }
+        return -1;
+    }
+
+    /** The block an exposed water cell becomes at freezing temperatures: ice, or the same block unchanged. */
+    static BlockType frozenForm(BlockType water) {
+        return (water == BlockType.WATER || water == BlockType.WATER_SOURCE) ? BlockType.ICE : water;
+    }
+
+    /** The block a surface cell becomes once it thaws: water, or the same block unchanged. */
+    static BlockType thawedForm(BlockType block) {
+        return block == BlockType.ICE ? BlockType.WATER : block;
+    }
+
+    /** The snow-capped-slab form of a plain bottom-half slab. */
+    private static BlockType snowCapped(BlockType slab) {
+        return slab == BlockType.STONE_SLAB ? BlockType.SNOWY_STONE_SLAB : BlockType.SNOWY_PLANKS_SLAB;
+    }
+
+    /** The plain bottom-half slab a snow-capped slab melts back to. */
+    private static BlockType uncapped(BlockType capped) {
+        return capped == BlockType.SNOWY_STONE_SLAB ? BlockType.STONE_SLAB : BlockType.PLANKS_SLAB;
+    }
+
+    /** Result of a lightning strike: the cosmetic bolt (or null) plus player damage. */
+    public record LightningStrikeResult(LightningBolt bolt, float playerDamage) {
+    }
+
+    /**
+     * A lightning strike landing at {@code targetX/targetZ}: lights a fire at
+     * the surface (and sets any nearby flammable blocks alight), blasts mobs and
+     * the player in the immediate area, and returns the cosmetic bolt for the
+     * renderer (or null if there's nowhere to strike). The player-facing flash
+     * and rumble are driven separately by the climate's thunderstorm.
+     */
+    public LightningStrikeResult strikeLightning(Random rnd, float targetX, float targetZ, Vector3f playerPos) {
+        int x = (int) Math.floor(targetX);
+        int z = (int) Math.floor(targetZ);
+        int surfaceY = findSurfaceY(x, z);
+        if (surfaceY < 0) return new LightningStrikeResult(null, 0f);
+
+        // Light the ground on fire at the strike point, plus flammable neighbors
+        // (a struck tree actually catches).
+        igniteCell(x, surfaceY + 1, z);
+        for (int dx = -(int) FIRE_SPREAD_RADIUS; dx <= FIRE_SPREAD_RADIUS; dx++) {
+            for (int dz = -(int) FIRE_SPREAD_RADIUS; dz <= FIRE_SPREAD_RADIUS; dz++) {
+                if (rnd.nextFloat() < 0.5f) {
+                    int fy = findSurfaceY(x + dx, z + dz);
+                    if (fy >= 0 && isFlammable(getBlock(x + dx, fy, z + dz))) {
+                        igniteCell(x + dx, fy + 1, z + dz);
+                    }
+                }
+            }
+        }
+
+        // Blast anything living within a few blocks of the strike point.
+        float strikeX = x + 0.5f;
+        float strikeZ = z + 0.5f;
+        List<Mob> nearbyMobs = new ArrayList<>();
+        for (Mob mob : mobs) {
+            float dx = mob.position.x - strikeX;
+            float dz = mob.position.z - strikeZ;
+            if (dx * dx + dz * dz <= 16f) { // ~4-block radius
+                nearbyMobs.add(mob);
+            }
+        }
+        for (Mob mob : nearbyMobs) {
+            damageMob(mob, 10f, strikeX, strikeZ, rnd);
+        }
+
+        // Damage player within the same radius.
+        float playerDamage = 0f;
+        if (playerPos != null) {
+            float dx = playerPos.x - strikeX;
+            float dz = playerPos.z - strikeZ;
+            if (dx * dx + dz * dz <= 16f) {
+                playerDamage = 10f;
+            }
+        }
+
+        return new LightningStrikeResult(
+                new LightningBolt(strikeX, surfaceY + 46f, strikeZ,
+                        strikeX, surfaceY + 1f, strikeZ, rnd),
+                playerDamage);
+    }
+
+    /**
+     * Ticks every burning fire cell by {@code dt}: they burn out on their own,
+     * spread to nearby flammable blocks, hurt mobs standing in or next to them,
+     * and are doused by water. Call once per frame.
+     */
+    public void tickFires(float dt) {
+        if (fires.isEmpty()) return;
+        List<Long> gone = null;
+        for (Map.Entry<Long, Float> e : fires.entrySet()) {
+            long key = e.getKey();
+            int x = keyX(key), y = keyY(key), z = keyZ(key);
+            // Validate the block is still fire; remove timer if not.
+            if (getBlock(x, y, z) != BlockType.FIRE) {
+                if (gone == null) gone = new ArrayList<>();
+                gone.add(key);
+                continue;
+            }
+            // Doused by water?
+            boolean wet = isWet(x + 1, y, z) || isWet(x - 1, y, z)
+                    || isWet(x, y, z + 1) || isWet(x, y, z - 1) || isWet(x, y + 1, z);
+            float remaining = wet ? 0f : e.getValue() - dt;
+            if (remaining <= 0f) {
+                if (getBlock(x, y, z) == BlockType.FIRE) setBlock(x, y, z, BlockType.AIR);
+                if (gone == null) gone = new ArrayList<>();
+                gone.add(key);
+            } else {
+                e.setValue(remaining);
+            }
+        }
+        if (gone != null) {
+            for (Long key : gone) fires.remove(key);
+        }
+        if (fires.isEmpty()) return;
+
+        // Spread to flammable neighbors and burn anything standing in the flames.
+        // Snapshot the keys and mobs: spreading adds fires and burning kills mobs,
+        // both of which would otherwise trip a concurrent-modification exception.
+        List<Long> burning = new ArrayList<>(fires.keySet());
+        List<Mob> burnList = null;
+        for (Long key : burning) {
+            if (snowRandom.nextFloat() < FIRE_SPREAD_CHANCE_PER_SECOND * dt
+                    && fires.size() < FIRE_MAX_ACTIVE) {
+                spreadFrom(keyX(key), keyY(key), keyZ(key));
+            }
+            for (Mob mob : mobs) {
+                float dx = mob.position.x - (keyX(key) + 0.5f);
+                float dy = mob.position.y - (keyY(key) + 0.5f);
+                float dz = mob.position.z - (keyZ(key) + 0.5f);
+                if (dx * dx + dy * dy + dz * dz <= FIRE_MOB_DAMAGE_RADIUS * FIRE_MOB_DAMAGE_RADIUS) {
+                    if (burnList == null) burnList = new ArrayList<>();
+                    burnList.add(mob);
+                }
+            }
+        }
+        if (burnList != null) {
+            for (Mob mob : burnList) {
+                damageMob(mob, FIRE_MOB_DAMAGE_PER_SECOND * dt, mob.position.x, mob.position.z, snowRandom);
+            }
+        }
+    }
+
+    private void spreadFrom(int x, int y, int z) {
+        int[][] dirs = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+        for (int[] d : dirs) {
+            int nx = x + d[0], ny = y + d[1], nz = z + d[2];
+            BlockType n = getBlock(nx, ny, nz);
+            if (isFlammable(n)) {
+                igniteCell(nx, ny, nz);
+                return;
+            }
+        }
+    }
+
+    private void igniteCell(int x, int y, int z) {
+        if (y < 0 || y >= Chunk.HEIGHT) return;
+        if (getBlock(x, y, z) == BlockType.FIRE) return;
+        if (getBlock(x, y, z) != BlockType.AIR) return;
+        if (fires.size() >= FIRE_MAX_ACTIVE) return;
+        setBlock(x, y, z, BlockType.FIRE);
+        fires.put(blockKey(x, y, z), FIRE_BURN_MIN_SECONDS + snowRandom.nextFloat() * (FIRE_BURN_MAX_SECONDS - FIRE_BURN_MIN_SECONDS));
+    }
+
+    /** True if this block is a fire hazard a struck/neighbouring flame can spread to. */
+    static boolean isFlammable(BlockType block) {
+        return block == BlockType.LEAVES || block == BlockType.WOOD_LOG
+                || block == BlockType.PLANKS || block == BlockType.CHERRY_LEAVES;
+    }
+
+    private boolean isWet(int x, int y, int z) {
+        if (y < 0 || y >= Chunk.HEIGHT) return false;
+        return getBlock(x, y, z).isWater();
+    }
+
+    /** The y of the top-most non-air, non-fluid block in a column, or -1 if none. */
+    private int findSurfaceY(int x, int z) {
+        for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
+            BlockType b = getBlock(x, y, z);
+            if (b != BlockType.AIR && !b.isFluid()) return y;
+        }
+        return -1;
+    }
+
+    /** How many stacked snow blocks a column's surface carries (1 = a natural snow floor). */
+    private int snowDepth(int x, int z) {
+        int y = findSurfaceY(x, z);
+        if (y < 0 || getBlock(x, y, z) != BlockType.SNOW) return 0;
+        int depth = 0;
+        while (y >= 0 && getBlock(x, y, z) == BlockType.SNOW) {
+            depth++;
+            y--;
+        }
+        return depth;
+    }
+
+    /** Biomes whose ground is naturally snow (generated as snow), so it never melts away. */
+    private static boolean permanentSnow(Biome b) {
+        return b == Biome.TAIGA || b == Biome.SNOWY || b == Biome.TUNDRA
+                || b == Biome.MOUNTAIN || b == Biome.FROZEN_OCEAN;
     }
 
     /**

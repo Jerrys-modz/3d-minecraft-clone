@@ -34,4 +34,35 @@ class BlockTypeTest {
         assertFalse(BlockType.STONE.isDirectional());
         assertFalse(BlockType.DIRT.isDirectional());
     }
+
+    @Test
+    void canHoldSnowOnOpaqueCubesButNotTransparentOrCross() {
+        // Ground, stone, wood, sand and snow itself all take a snow coat.
+        assertTrue(BlockType.GRASS.canHoldSnow());
+        assertTrue(BlockType.DIRT.canHoldSnow());
+        assertTrue(BlockType.STONE.canHoldSnow());
+        assertTrue(BlockType.WOOD_LOG.canHoldSnow());
+        assertTrue(BlockType.SAND.canHoldSnow());
+        assertTrue(BlockType.SNOW.canHoldSnow(), "snow piles on snow (deep drifts)");
+        // See-through, cross-shaped plants and fluids don't hold snow.
+        assertFalse(BlockType.GLASS.canHoldSnow());
+        assertFalse(BlockType.ICE.canHoldSnow());
+        assertFalse(BlockType.LEAVES.canHoldSnow());
+        assertFalse(BlockType.TALL_GRASS.canHoldSnow());
+        assertFalse(BlockType.TORCH.canHoldSnow());
+        assertFalse(BlockType.WATER.canHoldSnow());
+        // Slabs hold snow too - it caps them flush (see World.tryAddSnow / Chunk.emitSnowySlab).
+        assertTrue(BlockType.STONE_SLAB.canHoldSnow());
+        assertTrue(BlockType.PLANKS_SLAB.canHoldSnow());
+        assertTrue(BlockType.SNOWY_STONE_SLAB.isSnowCappedSlab());
+        assertTrue(BlockType.SNOWY_PLANKS_SLAB.isSnowCappedSlab());
+        assertFalse(BlockType.STONE_SLAB.isSnowCappedSlab());
+    }
+
+    @Test
+    void fireIsABrightNonSolidCross() {
+        assertTrue(BlockType.FIRE.cross, "fire renders as a crossed-plane flame");
+        assertFalse(BlockType.FIRE.solid, "fire never collides");
+        assertEquals(14, BlockType.FIRE.lightLevel, "a lightning-lit flame glows brightly");
+    }
 }

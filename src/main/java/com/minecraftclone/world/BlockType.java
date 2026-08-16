@@ -47,6 +47,7 @@ public enum BlockType {
     GLASS(21, true, false, 34, 34, 34),
     BERRY_BUSH(22, false, true, 37),
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
+    FIRE(91, false, true, TextureAtlas.FIRE_TILE, 14), // transient burning block lit by lightning; never placeable
     LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
     FURNACE(40, true, false, 4, 4, 4, 26, TextureAtlas.FURNACE_LIT_TILE, 0, 0), // smelting station: stone top/bottom/sides, furnace-face front (tile 26) that glows when burning
     STONE_SLAB(44, true, false, true, 4),   // bottom-half slab, stone texture
@@ -127,26 +128,32 @@ public enum BlockType {
     // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
     ROTTEN_FLESH(68, 4),
     BONES(69, 0),
+    // Snow-capped slabs: a bottom-half slab that's been covered by accumulating
+    // snow (see World.tryAddSnow). Full-height solid blocks that MESH as a slab
+    // under a snow cap, so the snow sits flush rather than floating above the
+    // slab's half-height top. Melting restores the plain slab underneath.
+    SNOWY_STONE_SLAB(89, true, false, 12, 4, 4),
+    SNOWY_PLANKS_SLAB(90, true, false, 12, 11, 11),
 
     // Armor pieces (inventory-only items, like tools): one per slot, per tier.
     // Stats (defense points, durability) live in Armor.java, not here, to keep
     // this enum focused on rendering/collision.
-    WOOD_HELMET(89, 0),
-    WOOD_CHESTPLATE(90, 0),
-    WOOD_LEGGINGS(91, 0),
-    WOOD_BOOTS(92, 0),
-    STONE_HELMET(93, 0),
-    STONE_CHESTPLATE(94, 0),
-    STONE_LEGGINGS(95, 0),
-    STONE_BOOTS(96, 0),
-    IRON_HELMET(97, 0),
-    IRON_CHESTPLATE(98, 0),
-    IRON_LEGGINGS(99, 0),
-    IRON_BOOTS(100, 0),
-    DIAMOND_HELMET(101, 0),
-    DIAMOND_CHESTPLATE(102, 0),
-    DIAMOND_LEGGINGS(103, 0),
-    DIAMOND_BOOTS(104, 0);
+    WOOD_HELMET(92, 0),
+    WOOD_CHESTPLATE(93, 0),
+    WOOD_LEGGINGS(94, 0),
+    WOOD_BOOTS(95, 0),
+    STONE_HELMET(96, 0),
+    STONE_CHESTPLATE(97, 0),
+    STONE_LEGGINGS(98, 0),
+    STONE_BOOTS(99, 0),
+    IRON_HELMET(100, 0),
+    IRON_CHESTPLATE(101, 0),
+    IRON_LEGGINGS(102, 0),
+    IRON_BOOTS(103, 0),
+    DIAMOND_HELMET(104, 0),
+    DIAMOND_CHESTPLATE(105, 0),
+    DIAMOND_LEGGINGS(106, 0),
+    DIAMOND_BOOTS(107, 0);
 
     public final byte id;
     public final boolean solid;
@@ -324,6 +331,22 @@ public enum BlockType {
     /** True for any fluid (water or lava), including static and flowing variants. */
     public boolean isFluid() {
         return isWater() || isLava();
+    }
+
+    /**
+     * True if this block's top face can support an accumulated snow layer:
+     * an opaque full cube (or a bottom-half slab, which snow caps flush - see
+     * {@link #isSnowCappedSlab()}) that isn't a cross-shaped plant, so snow
+     * piles up on ground, stone, wood, roofs, sand and snow itself, but not on
+     * leaves, glass, ice, fluids, torches or flowers.
+     */
+    public boolean canHoldSnow() {
+        return solid && !transparent && !cross && !isTranslucent();
+    }
+
+    /** True for a bottom-half slab that's been covered by a flush snow cap (see the snowy slab entries above). */
+    public boolean isSnowCappedSlab() {
+        return this == SNOWY_STONE_SLAB || this == SNOWY_PLANKS_SLAB;
     }
 
     /** True for the placeable, flowing fluid source blocks. */
