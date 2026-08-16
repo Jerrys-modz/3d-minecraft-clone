@@ -622,6 +622,18 @@ public class Main {
             activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, container);
             openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
         }
+        // Opt-in autotest hook: open the player's own inventory screen, equipping a
+        // full iron set (plus a couple of bag items) so the armor column renders.
+        if (System.getenv("MCCLONE_AUTOTEST_INVENTORY") != null && started[0]) {
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_HELMET, BlockType.IRON_HELMET);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_CHESTPLATE, BlockType.IRON_CHESTPLATE);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_LEGGINGS, BlockType.IRON_LEGGINGS);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_BOOTS, BlockType.IRON_BOOTS);
+            player.getInventory().setSlot(0, BlockType.APPLE, 12);
+            player.getInventory().setSlot(1, BlockType.DIAMOND_PICKAXE, 1);
+            activeGui[0] = inventoryGui;
+            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+        }
         // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
         // the first-person hand can be screenshotted holding something.
         if (System.getenv("MCCLONE_AUTOTEST_HELD") != null) {
@@ -1041,7 +1053,16 @@ public class Main {
                                 (int) Math.floor(deathPos.z), t, player.getInventory().countOf(slot), loot);
                     }
                 }
+                // Worn armor drops too (one piece per slot).
+                for (int slot = 0; slot < Inventory.ARMOR_SLOT_COUNT; slot++) {
+                    BlockType t = player.getInventory().armorType(slot);
+                    if (t != null) {
+                        world.spawnItem((int) Math.floor(deathPos.x), (int) Math.floor(deathPos.y),
+                                (int) Math.floor(deathPos.z), t, 1, loot);
+                    }
+                }
                 player.getInventory().clear();
+                player.getInventory().clearArmor();
                 player.getDurability().reset();
                 player.respawn(world, 0.5f, 0.5f);
             }

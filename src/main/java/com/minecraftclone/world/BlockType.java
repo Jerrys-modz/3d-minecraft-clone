@@ -126,7 +126,27 @@ public enum BlockType {
     MUTTON(67, 12),
     // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
     ROTTEN_FLESH(68, 4),
-    BONES(69, 0);
+    BONES(69, 0),
+
+    // Armor pieces (inventory-only items, like tools): one per slot, per tier.
+    // Stats (defense points, durability) live in Armor.java, not here, to keep
+    // this enum focused on rendering/collision.
+    WOOD_HELMET(89, 0),
+    WOOD_CHESTPLATE(90, 0),
+    WOOD_LEGGINGS(91, 0),
+    WOOD_BOOTS(92, 0),
+    STONE_HELMET(93, 0),
+    STONE_CHESTPLATE(94, 0),
+    STONE_LEGGINGS(95, 0),
+    STONE_BOOTS(96, 0),
+    IRON_HELMET(97, 0),
+    IRON_CHESTPLATE(98, 0),
+    IRON_LEGGINGS(99, 0),
+    IRON_BOOTS(100, 0),
+    DIAMOND_HELMET(101, 0),
+    DIAMOND_CHESTPLATE(102, 0),
+    DIAMOND_LEGGINGS(103, 0),
+    DIAMOND_BOOTS(104, 0);
 
     public final byte id;
     public final boolean solid;

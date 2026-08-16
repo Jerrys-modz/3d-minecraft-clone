@@ -46,6 +46,12 @@ public final class CreativeCatalog {
             new Tab("Combat", new BlockType[]{
                     BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD,
             }),
+            new Tab("Armor", new BlockType[]{
+                    BlockType.WOOD_HELMET, BlockType.STONE_HELMET, BlockType.IRON_HELMET, BlockType.DIAMOND_HELMET,
+                    BlockType.WOOD_CHESTPLATE, BlockType.STONE_CHESTPLATE, BlockType.IRON_CHESTPLATE, BlockType.DIAMOND_CHESTPLATE,
+                    BlockType.WOOD_LEGGINGS, BlockType.STONE_LEGGINGS, BlockType.IRON_LEGGINGS, BlockType.DIAMOND_LEGGINGS,
+                    BlockType.WOOD_BOOTS, BlockType.STONE_BOOTS, BlockType.IRON_BOOTS, BlockType.DIAMOND_BOOTS,
+            }),
             new Tab("Food", new BlockType[]{
                     BlockType.APPLE, BlockType.BERRIES,
                     BlockType.RAW_PORKCHOP, BlockType.RAW_BEEF, BlockType.MUTTON,

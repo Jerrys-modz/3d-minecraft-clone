@@ -54,6 +54,14 @@ public class ContainerGui {
     /** Slot id of the crafting result. */
     public static final int OUTPUT_SLOT = GRID_START + CraftingGrid.SIZE;
     /**
+     * First slot id of the armor column (helmet/chestplate/leggings/boots),
+     * just past the crafting output. Only the player's own inventory screen
+     * shows armor slots - placed containers (furnace/chest) don't.
+     */
+    public static final int ARMOR_START = OUTPUT_SLOT + 1;
+    /** Number of armor slots on the player's inventory screen. */
+    public static final int ARMOR_SLOT_COUNT = Inventory.ARMOR_SLOT_COUNT;
+    /**
      * First slot id of a placed container's slots (furnace/chest). A container
      * has no crafting grid, so it reuses the grid's slot numbers: {@code 36..}.
      */
@@ -120,8 +128,14 @@ public class ContainerGui {
     public int slotCount() {
         int count = Inventory.SIZE;
         if (hasGrid()) count += CraftingGrid.SIZE + 1;
+        if (hasArmor()) count += ARMOR_SLOT_COUNT;
         if (hasContainer()) count += container.size();
         return count;
+    }
+
+    /** True only on the player's own inventory screen - the one screen that shows the armor column. */
+    public boolean hasArmor() {
+        return kind == Kind.INVENTORY;
     }
 
     public boolean isPlayerSlot(int slotId) {
@@ -134,6 +148,11 @@ public class ContainerGui {
 
     public boolean isOutputSlot(int slotId) {
         return hasGrid() && slotId == OUTPUT_SLOT;
+    }
+
+    /** True if {@code slotId} is one of the four armor slots (helmet/chestplate/leggings/boots). */
+    public boolean isArmorSlot(int slotId) {
+        return hasArmor() && slotId >= ARMOR_START && slotId < ARMOR_START + ARMOR_SLOT_COUNT;
     }
 
     /** True if {@code slotId} is one of the placed container's slots (furnace or chest). */
@@ -150,6 +169,7 @@ public class ContainerGui {
     public BlockType typeOf(int slotId) {
         if (isPlayerSlot(slotId)) return inventory.typeOf(slotId);
         if (isGridSlot(slotId)) return grid.get(slotId - GRID_START);
+        if (isArmorSlot(slotId)) return inventory.armorType(slotId - ARMOR_START);
         if (isContainerSlot(slotId)) return container.typeOf(slotId - CONTAINER_START);
         return null;
     }
@@ -158,6 +178,7 @@ public class ContainerGui {
     public int countOf(int slotId) {
         if (isPlayerSlot(slotId)) return inventory.countOf(slotId);
         if (isGridSlot(slotId)) return grid.get(slotId - GRID_START) == null ? 0 : 1;
+        if (isArmorSlot(slotId)) return inventory.armorType(slotId - ARMOR_START) == null ? 0 : 1;
         if (isContainerSlot(slotId)) return container.countOf(slotId - CONTAINER_START);
         return 0;
     }
@@ -168,6 +189,8 @@ public class ContainerGui {
             inventory.setSlot(slotId, type, count);
         } else if (isGridSlot(slotId)) {
             grid.set(slotId - GRID_START, type);
+        } else if (isArmorSlot(slotId)) {
+            inventory.setArmor(slotId - ARMOR_START, type);
         } else if (isContainerSlot(slotId)) {
             container.setSlot(slotId - CONTAINER_START, type, count);
         }

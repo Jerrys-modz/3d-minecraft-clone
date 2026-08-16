@@ -193,10 +193,28 @@ public class Player {
         if (gameMode.isInvulnerable()) {
             stats.forceFull();
         } else {
+            stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             stats.update(dt, inLava, submerged, sprintingAndMoving, lastFallImpactSpeed);
+            wearArmor(stats.lastDamageDealt());
         }
         lastFallImpactSpeed = 0f;
+    }
+
+    /**
+     * Wears the equipped armor by the damage just taken: each piece loses
+     * durability proportional to the hit (see {@link Armor#durabilityCost}) and
+     * is unequipped once worn out, exactly like a tool breaking.
+     */
+    public void wearArmor(float damage) {
+        if (damage <= 0f) return;
+        int cost = Armor.durabilityCost(damage);
+        for (int slot = 0; slot < Inventory.ARMOR_SLOT_COUNT; slot++) {
+            BlockType piece = inventory.armorType(slot);
+            if (piece != null && durability.wear(piece, cost)) {
+                inventory.setArmor(slot, null);
+            }
+        }
     }
 
     /** True on exactly the frame the player left the ground under their own jump (not falling off a ledge). */

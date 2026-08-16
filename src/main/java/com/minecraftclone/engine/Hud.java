@@ -10,6 +10,7 @@ import com.minecraftclone.engine.graphics.LineMesh;
 import com.minecraftclone.engine.graphics.TextRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.engine.gui.ContainerGui;
+import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
@@ -67,6 +68,8 @@ public class Hud {
     private static final float CRAFT_TOP_ROW_Y = INV_TOP_ROW_Y;
     private static final float OUTPUT_X = -0.50f;           // crafting result slot
     private static final float OUTPUT_Y = INV_TOP_ROW_Y - INV_STEP;
+    /** Center x of the vertical armor-slot column, just left of the player's inventory grid. */
+    private static final float ARMOR_X = -0.40f;
 
     // Furnace GUI layout (logical square units). The input/fuel slots sit in a
     // column to the left of the inventory grid, the output between them and the
@@ -360,7 +363,7 @@ public class Hud {
             float digitSize = 0.028f;
             text.add(countText, cx + half - text.measure(countText, digitSize), cy - half, digitSize);
         }
-        if (Mining.isTool(type)) {
+        if (Mining.isTool(type) || Armor.isArmor(type)) {
             float fraction = durability.fraction(type);
             if (fraction < 1f) {
                 barCx.add(cx);
@@ -1159,6 +1162,13 @@ public class Hud {
             int r = g / CraftingGrid.WIDTH, c = g % CraftingGrid.WIDTH;
             return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
         }
+        if (gui.isArmorSlot(slotId)) {
+            // A vertical 1x4 column just left of the player's inventory grid:
+            // helmet on top, then chestplate, leggings, boots. Aligned to the
+            // grid's row spacing so the four read as one tidy stack.
+            int a = slotId - ContainerGui.ARMOR_START;
+            return new float[]{ARMOR_X, INV_TOP_ROW_Y - a * INV_STEP};
+        }
         if (gui.isContainerSlot(slotId)) {
             int cs = slotId - ContainerGui.CONTAINER_START;
             if (gui.kind() == ContainerGui.Kind.CHEST) {
@@ -1554,12 +1564,12 @@ public class Hud {
         text.render(hudTransform, WHITE);
     }
 
-    /** The tooltip lines for an item: its display name, plus durability for tools. */
+    /** The tooltip lines for an item: its display name, plus durability for tools and armor. */
     private String[] tooltipLines(BlockType type, ToolDurability durability) {
-        if (Mining.isTool(type)) {
-            int max = Mining.toolStats(type).maxUses();
+        if (Mining.isTool(type) || Armor.isArmor(type)) {
+            int maxUses = Armor.isArmor(type) ? Armor.maxUses(type) : Mining.toolStats(type).maxUses();
             int rem = durability.remaining(type);
-            return new String[]{type.displayName(), "Durability: " + rem + " / " + max};
+            return new String[]{type.displayName(), "Durability: " + rem + " / " + maxUses};
         }
         return new String[]{type.displayName()};
     }

@@ -33,6 +33,20 @@ public class PlayerStats {
     private float submergedTime = 0f;
     private boolean staminaExhausted = false;
     private boolean dead = false;
+    /** Damage multiplier from equipped armor (1 = no armor); applied by {@link #damage}. */
+    private float armorMultiplier = 1f;
+    /** Damage actually applied by the last {@link #damage} call (after armor), so the caller can wear armor by it. */
+    private float lastDamageDealt = 0f;
+
+    /** Sets the damage multiplier from the player's equipped armor (1 = no armor, lower = more protection). */
+    public void setArmorMultiplier(float multiplier) {
+        this.armorMultiplier = multiplier;
+    }
+
+    /** Damage actually taken (after armor) from the most recent {@link #damage} call - 0 if none. */
+    public float lastDamageDealt() {
+        return lastDamageDealt;
+    }
 
     public float getHealth() {
         return health;
@@ -128,7 +142,8 @@ public class PlayerStats {
 
     public void damage(float amount) {
         if (dead || amount <= 0f) return;
-        health -= amount;
+        lastDamageDealt = amount * armorMultiplier;
+        health -= lastDamageDealt;
         if (health <= 0f) {
             health = 0f;
             dead = true;
