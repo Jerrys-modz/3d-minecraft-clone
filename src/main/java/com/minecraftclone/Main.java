@@ -1139,6 +1139,10 @@ public class Main {
                 if (player.isSubmerged() != wasSubmerged[0]) {
                     audio.play(SoundEvent.SPLASH);
                     wasSubmerged[0] = player.isSubmerged();
+                    // Diving in (or surfacing) already just played a splash this frame -
+                    // without this, swimStrokeTimer sitting at 0 (reset while not
+                    // swimming) would immediately fire a second, redundant one below.
+                    swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
                 }
                 // A footstep every FOOTSTEP_INTERVAL seconds while walking/
                 // sprinting on the ground - timed off a countdown rather than a

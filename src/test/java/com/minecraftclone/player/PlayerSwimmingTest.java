@@ -3,6 +3,7 @@ package com.minecraftclone.player;
 import org.junit.jupiter.api.Test;
 
 import static com.minecraftclone.player.Player.computeSwimming;
+import static com.minecraftclone.player.Player.landingImpactSpeed;
 import static com.minecraftclone.player.Player.swimVerticalVelocity;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -89,5 +90,35 @@ class PlayerSwimmingTest {
         float afterOneStep = swimVerticalVelocity(false, false, enteredAt, 0.1f);
         assertTrue(afterOneStep > enteredAt, "buoyancy must slow the fall immediately: " + afterOneStep);
         assertTrue(afterOneStep > -5f, "and land well below a damaging speed after just one step: " + afterOneStep);
+    }
+
+    @Test
+    void landingOnDryGroundRecordsTheRawImpactSpeed() {
+        assertEquals(40f, landingImpactSpeed(40f, false), 1e-6f);
+    }
+
+    @Test
+    void highSpeedEntryIntoOneBlockDeepWaterIsCappedLikeANormalSwimLanding() {
+        // Regression: a fast fall can cross a shallow puddle and hit the solid
+        // floor beneath it within a single physics step, never getting a full
+        // frame of swim buoyancy first (updateMovement's swimming check runs
+        // against the position *before* that same step) - moveAndCollide must
+        // still cap the recorded impact when the landing spot itself is water,
+        // exactly as if buoyancy had gotten a chance to slow the fall down.
+        float lethalFallSpeed = 40f;
+        float capped = landingImpactSpeed(lethalFallSpeed, true);
+        assertTrue(capped < lethalFallSpeed, "must not record the raw fall speed: " + capped);
+        // The cap must match what a genuine frame of buoyancy would have produced,
+        // so a shallow-puddle landing and a deep-water landing feel consistent.
+        float buoyancyCap = -swimVerticalVelocity(false, false, 0f, 1000f);
+        assertEquals(buoyancyCap, capped, 1e-6f);
+    }
+
+    @Test
+    void landingInWaterNeverMakesAGentleFallWorse() {
+        // A landing speed already below the water cap (e.g. stepping off a low
+        // ledge into a puddle) should be recorded as-is, not raised up to the cap.
+        float gentle = 0.2f;
+        assertEquals(gentle, landingImpactSpeed(gentle, true), 1e-6f);
     }
 }

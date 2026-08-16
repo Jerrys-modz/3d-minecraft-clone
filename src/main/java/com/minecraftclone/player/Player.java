@@ -445,6 +445,20 @@ public class Player {
         return Math.max(currentVy - WATER_GRAVITY * dt, WATER_SINK_SPEED);
     }
 
+    /**
+     * The fall-impact speed to record for a landing: the raw one, unless the
+     * player is also touching water right where they're landing, in which case
+     * it's capped to the same safe speed buoyancy would have slowed them to.
+     * Covers landings {@link #swimVerticalVelocity} alone can't: a fast fall can
+     * cross a shallow puddle and hit the solid floor beneath it within a single
+     * physics step, never getting a full frame of buoyancy first (updateMovement's
+     * swimming check runs against the position *before* that same step). No
+     * World/GL dependency, so this is directly unit testable.
+     */
+    static float landingImpactSpeed(float rawImpactSpeed, boolean landingInWater) {
+        return landingInWater ? Math.min(rawImpactSpeed, -WATER_SINK_SPEED) : rawImpactSpeed;
+    }
+
     private void updateDoubleTapW(Input input, float dt) {
         boolean doubleTapped = wTapDetector.tick(dt, input.isKeyJustPressed(keyBinds.get(KeyBindings.FORWARD)));
         switch (decideDoubleTapWAction(doubleTapped, flying, gameMode.isCreative())) {
@@ -604,7 +618,14 @@ public class Player {
         if (collidesAt(world, movedY)) {
             if (dy < 0) {
                 onGround = true;
-                lastFallImpactSpeed = Math.max(lastFallImpactSpeed, -velocity.y);
+                // Landing in water this same frame - possible even if updateMovement's
+                // swimming check (based on the position before this move) said the
+                // player wasn't swimming yet, since a fast fall can cross a shallow
+                // puddle and hit the solid floor beneath it within a single physics
+                // step, never getting a full frame of buoyancy to slow it down first.
+                // Cap the recorded impact the same way buoyancy would have.
+                boolean landingInWater = overlapsAny(world, movedY, BlockType::isWater);
+                lastFallImpactSpeed = Math.max(lastFallImpactSpeed, landingImpactSpeed(-velocity.y, landingInWater));
             }
             velocity.y = 0;
             dy = 0;
