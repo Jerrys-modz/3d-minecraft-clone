@@ -111,7 +111,8 @@ public class Hud {
     // tab strip stays in the same place when switching between tabs.
     private static final int SETTINGS_MAX_ROWS = Math.max(
             Settings.tabRowCount(Settings.TAB_GRAPHICS),
-            Math.max(Settings.tabRowCount(Settings.TAB_GAMEPLAY), KeyBindings.COUNT));
+            Math.max(Settings.tabRowCount(Settings.TAB_GAMEPLAY),
+                    Math.max(Settings.tabRowCount(Settings.TAB_AUDIO), KeyBindings.COUNT)));
 
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
 
@@ -514,6 +515,63 @@ public class Hud {
         text.render(hudTransform, color);
 
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
+     * Draws the weather forecast panel: the current weather with the next change,
+     * today's hourly forecast at 3-hour marks, and a rolling 7-day forecast. Like
+     * a real forecast, it's less reliable the further out it is.
+     */
+    public void renderForecast(Climate climate, Calendar calendar, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        float x = -0.85f;
+        float y = 0.88f;
+        Vector4f dim = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
+
+        drawTextAt("Weather Forecast", x, y, 0.035f, WHITE);
+        y -= 0.05f;
+        drawTextAt("Now: " + forecastLabel(climate.getWeather(), climate.getWeatherStrength())
+                        + "   next: " + climate.nextWeatherChange().displayName + " in ~"
+                        + climate.hoursUntilChange() + "h",
+                x, y, 0.024f, WHITE);
+        y -= 0.045f;
+
+        // Today's hourly forecast, at 3-hour marks from the current hour.
+        Climate.ForecastSlot[] today = climate.getHourlyForecastForDay(0);
+        Climate.ForecastSlot[] tomorrow = climate.getHourlyForecastForDay(1);
+        int now = climate.getCurrentHourOfDay();
+        StringBuilder hourly = new StringBuilder("Today: ");
+        int count = 0;
+        for (int h = now; count < 8 && h < now + 24; h += 3) {
+            Climate.ForecastSlot slot = h < 24 ? today[h] : tomorrow[h - 24];
+            if (count > 0) hourly.append(", ");
+            hourly.append(h % 24).append("h ").append(slot.weather().displayName);
+            count++;
+        }
+        drawTextAt(hourly.toString(), x, y, 0.022f, WHITE);
+        y -= 0.05f;
+
+        // Rolling 7-day forecast.
+        Climate.ForecastSlot[] days = climate.getDailyForecast();
+        for (int d = 0; d < days.length; d++) {
+            String day = calendar.dayOfWeekNameAt(climate.getDailyDayIndex(d));
+            drawTextAt(day + ": " + forecastLabel(days[d].weather(), days[d].strength()), x, y, 0.024f, WHITE);
+            y -= 0.038f;
+        }
+
+        drawTextAt("Forecast less reliable further out", x, y - 0.005f, 0.018f, dim);
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** A forecast label: "Rain (heavy)" etc., with no strength for clear skies. */
+    private static String forecastLabel(Weather weather, float strength) {
+        if (!weather.isPrecipitation()) {
+            return weather.displayName;
+        }
+        String s = strength < 0.4f ? "light" : strength < 0.75f ? "moderate" : "heavy";
+        return weather.displayName + " (" + s + ")";
     }
 
     /**

@@ -1,6 +1,11 @@
 package com.minecraftclone;
 
 import com.minecraftclone.engine.*;
+import com.minecraftclone.engine.audio.AudioEngine;
+import com.minecraftclone.engine.audio.BlockAction;
+import com.minecraftclone.engine.audio.SoundCategory;
+import com.minecraftclone.engine.audio.SoundEvent;
+import com.minecraftclone.engine.audio.SoundMaterial;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.HandRenderer;
 import com.minecraftclone.engine.graphics.ItemRenderer;
@@ -83,7 +88,10 @@ public class Main {
     private static final int APPLE_DROP_CHANCE = 8;    // 1 in 8 leaves broken also yield an apple
     private static final int BERRIES_PER_BUSH = 2;
 
+    private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
+
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
+    private static final Vector3f WORLD_UP = new Vector3f(0f, 1f, 0f);
 
     // Per-dimension sky/fog look (the overworld uses the day/night cycle).
     private static final Vector3f NETHER_HORIZON = new Vector3f(0.28f, 0.07f, 0.03f);
@@ -98,8 +106,8 @@ public class Main {
         messages.add(new Hud.Message(text, color, duration));
     }
 
-    /** Pushes the current in-memory {@link Settings} into every world/renderer/player. */
-    private void applySettings(Settings settings, World[] worlds, Player player, Window window) {
+    /** Pushes the current in-memory {@link Settings} into every world/renderer/player/audio. */
+    private void applySettings(Settings settings, World[] worlds, Player player, Window window, AudioEngine audio) {
         if (worlds != null) {
             for (World world : worlds) {
                 world.setLeavesTransparent(settings.isLeavesTransparent());
@@ -111,6 +119,13 @@ public class Main {
         player.setGameMode(settings.getGameMode());
         player.setInvertMouseY(settings.isInvertMouseY());
         player.setViewBobbing(settings.isViewBobbing());
+        audio.setMasterVolume(settings.getSoundVolume());
+        audio.setCategoryVolume(SoundCategory.MUSIC, settings.getMusicVolume());
+        audio.setCategoryVolume(SoundCategory.AMBIENT, settings.getAmbientVolume());
+        audio.setCategoryVolume(SoundCategory.MOBS, settings.getMobsVolume());
+        audio.setCategoryVolume(SoundCategory.MACHINES, settings.getMachinesVolume());
+        audio.setCategoryVolume(SoundCategory.PLAYER, settings.getPlayerVolume());
+        audio.setCategoryVolume(SoundCategory.UI, settings.getUiVolume());
     }
 
     /**
@@ -121,7 +136,7 @@ public class Main {
      * wraps within the active tab's rows, and Tab (or clicking a tab) switches.
      */
     private void handleSettingsMenuInput(Input input, Settings settings, Path settingsFile, World[] worlds,
-                                         Player player, Window window, Hud hud,
+                                         Player player, Window window, Hud hud, AudioEngine audio,
                                          int[] menuSelection, int[] sliderDragRow, int[] bindingAction,
                                          int[] settingsTab) {
         int tab = settingsTab[0];
@@ -158,13 +173,13 @@ public class Main {
             }
             if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
                 if (tab != Settings.TAB_CONTROLS) {
-                    adjustSettingsRow(settings, settingsFile, worlds, player, window,
+                    adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), -1);
                 }
             }
             if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
                 if (tab != Settings.TAB_CONTROLS) {
-                    adjustSettingsRow(settings, settingsFile, worlds, player, window,
+                    adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), +1);
                 }
             }
@@ -173,7 +188,7 @@ public class Main {
                     bindingAction[0] = menuSelection[0];
                     input.consumeLastKeyPressed(); // discard the Enter/Space that started capture
                 } else {
-                    adjustSettingsRow(settings, settingsFile, worlds, player, window,
+                    adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), +1);
                 }
             }
@@ -190,6 +205,7 @@ public class Main {
                 menuSelection[0] = 0;
                 sliderDragRow[0] = -1;
                 bindingAction[0] = -1;
+                audio.play(SoundEvent.UI_CLICK);
             }
             return;
         }
@@ -203,15 +219,16 @@ public class Main {
                 if (tab == Settings.TAB_CONTROLS) {
                     bindingAction[0] = clicked;
                     input.consumeLastKeyPressed();
+                    audio.play(SoundEvent.UI_CLICK);
                 } else {
                     int row = Settings.rowInTab(tab, clicked);
                     if (Settings.isToggle(row)) {
-                        adjustSettingsRow(settings, settingsFile, worlds, player, window, row, +1);
+                        adjustSettingsRow(settings, settingsFile, worlds, player, window, audio, row, +1);
                     } else {
                         float frac = hud.settingsTrackAt(sLx, sLy, tab);
                         if (frac >= 0f) {
                             settings.setFromFraction(row, frac);
-                            applySettings(settings, worlds, player, window);
+                            applySettings(settings, worlds, player, window, audio);
                             settings.save(settingsFile);
                             sliderDragRow[0] = clicked;
                         }
@@ -222,7 +239,7 @@ public class Main {
         if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && sliderDragRow[0] >= 0) {
             float frac = hud.settingsSliderAt(sLx, sliderDragRow[0], tab);
             settings.setFromFraction(Settings.rowInTab(tab, sliderDragRow[0]), frac);
-            applySettings(settings, worlds, player, window);
+            applySettings(settings, worlds, player, window, audio);
             settings.save(settingsFile);
         }
         if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -232,33 +249,41 @@ public class Main {
 
     /** Steps/toggles a single settings row and pushes the change everywhere it applies. */
     private void adjustSettingsRow(Settings settings, Path settingsFile, World[] worlds, Player player,
-                                   Window window, int row, int direction) {
+                                   Window window, AudioEngine audio, int row, int direction) {
         settings.adjust(row, direction);
-        applySettings(settings, worlds, player, window);
+        applySettings(settings, worlds, player, window, audio);
         settings.save(settingsFile);
+        audio.play(SoundEvent.UI_CLICK);
     }
 
     /** Closes any open container screen (inventory/crafting table/furnace), returning cursor/grid items to the inventory. */
-    private void closeInventory(InventoryController controller, ContainerGui[] activeGui, ContainerGui inventoryGui, boolean[] inventoryOpen) {
+    private void closeInventory(InventoryController controller, ContainerGui[] activeGui, ContainerGui inventoryGui, boolean[] inventoryOpen, AudioEngine audio) {
         controller.returnGridToInventory();
         controller.returnCursorToInventory();
         activeGui[0] = inventoryGui;
         inventoryOpen[0] = false;
+        audio.play(SoundEvent.UI_CLOSE);
     }
 
     /** Opens the given container gui, rebinding the controller and releasing the cursor for mouse use. */
-    private void openGui(InventoryController controller, ContainerGui[] activeGui, Window window, Input input, boolean[] inventoryOpen) {
+    private void openGui(InventoryController controller, ContainerGui[] activeGui, Window window, Input input, boolean[] inventoryOpen, AudioEngine audio) {
         controller.setGui(activeGui[0]);
         inventoryOpen[0] = true;
         window.setCursorCaptured(false);
         input.resetMouseDelta();
+        audio.play(SoundEvent.UI_OPEN);
     }
 
-    /** Resets the calendar for a freshly started world and applies its days-per-season setting. */
+    /** Plays the "took a craft/smelt result" chime for the output slot, a generic click for anything else. */
+    private void playSlotSound(AudioEngine audio, ContainerGui gui, int slotId) {
+        audio.play(gui != null && gui.isOutputSlot(slotId) ? SoundEvent.CRAFT : SoundEvent.UI_CLICK);
+    }
+
+    /** Resets the calendar for a freshly started world and applies its weeks-per-month setting. */
     private void startCalendar(DayNightCycle dayNightCycle, Calendar calendar, WorldGenSettings genSettings) {
         dayNightCycle.resetDays();
         calendar.reset();
-        calendar.setDaysPerSeason(genSettings.getDaysPerSeason());
+        calendar.setWeeksPerMonth(genSettings.getWeeksPerMonth());
     }
 
     /**
@@ -267,12 +292,14 @@ public class Main {
      * the normal break and the hammer's 3x3 area mine.
      */
     private void breakBlockAt(World world, Player player, GameMode mode, BlockType heldItem, Random loot,
-                              List<Hud.Message> messages, int bx, int by, int bz) {
+                              List<Hud.Message> messages, AudioEngine audio, int bx, int by, int bz) {
         BlockType overlay = world.getOverlay(bx, by, bz);
         boolean targetingOverlay = overlay != BlockType.AIR;
         BlockType targetType = targetingOverlay ? overlay : world.getBlock(bx, by, bz);
         if (targetType == BlockType.AIR || targetType == BlockType.BEDROCK) return;
         if (!Mining.canBreak(targetType, heldItem)) return; // e.g. an ore the hammer can't mine
+
+        audio.playBlockSound(SoundMaterial.of(targetType), BlockAction.BREAK, bx + 0.5f, by + 0.5f, bz + 0.5f, 1f);
 
         if (Door.isDoor(targetType)) {
             Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
@@ -335,14 +362,16 @@ public class Main {
                 System.out.println("Your " + heldItem + " broke!");
                 showMessage(messages, "Your " + heldItem + " broke!",
                         new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+                audio.play(SoundEvent.TOOL_BREAK);
             }
         }
     }
 
     /** Closes the creative screen, returning any cursor item to the inventory. */
-    private void closeCreative(InventoryController controller, boolean[] creativeOpen) {
+    private void closeCreative(InventoryController controller, boolean[] creativeOpen, AudioEngine audio) {
         controller.returnCursorToInventory();
         creativeOpen[0] = false;
+        audio.play(SoundEvent.UI_CLOSE);
     }
 
     public static void main(String[] args) {
@@ -379,6 +408,11 @@ public class Main {
         mobTextures.generate();
         FontAtlas font = new FontAtlas();
         font.generate();
+        // Best-effort: a machine with no audio device at all (routine for a
+        // headless CI/verification environment) leaves this permanently
+        // disabled rather than throwing - see AudioEngine's own javadoc.
+        AudioEngine audio = new AudioEngine();
+        audio.init();
 
         String saveDirEnv = System.getenv("MCCLONE_SAVE_DIR");
         Path saveRoot = saveDirEnv != null ? Paths.get(saveDirEnv).getParent() : Paths.get("saves");
@@ -403,6 +437,7 @@ public class Main {
         WeatherRenderer weatherRenderer = new WeatherRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
+        boolean[] forecastOpen = {false};
         boolean[] menuOpen = {false};
         int[] menuSelection = {0};
         int[] settingsTab = {Settings.TAB_GRAPHICS}; // active settings tab
@@ -427,8 +462,8 @@ public class Main {
 
         window.setCursorCaptured(false); // free cursor in the main menu
 
-        // Ensure the renderer/player/window all match the loaded settings.
-        applySettings(settings, worlds, player, window);
+        // Ensure the renderer/player/window/audio all match the loaded settings.
+        applySettings(settings, worlds, player, window, audio);
 
         int[] selectedSlot = {0};
         Random loot = new Random();
@@ -439,6 +474,8 @@ public class Main {
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
         float[] attackCooldown = {0f}; // time until the next mob hit can land
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
+        float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
+        boolean[] wasSubmerged = {false}; // last frame's Player#isSubmerged(), to fire a splash sound only on the change
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
         System.out.println("          F to fly (double-tap W also takes off in creative and boosts speed");
@@ -472,6 +509,9 @@ public class Main {
             } catch (IllegalArgumentException ignored) {
                 // Unknown weather override - leave the random forecast alone.
             }
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_FORECAST") != null) {
+            forecastOpen[0] = true;
         }
         if (System.getenv("MCCLONE_AUTOTEST_PITCH") != null) {
             player.getCamera().setPitch(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_PITCH")));
@@ -587,7 +627,7 @@ public class Main {
                         new JoinedStorage(south, corner));
             }
             activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, container);
-            openGui(inventoryController, activeGui, window, input, inventoryOpen);
+            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
         }
         // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
         // the first-person hand can be screenshotted holding something.
@@ -646,7 +686,7 @@ public class Main {
                 if (mainSettingsOpen[0]) {
                     // Settings page opened from the main menu: same controls as the
                     // in-game Esc menu, but Esc returns to the main menu.
-                    handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud,
+                    handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
                             menuSelection, sliderDragRow, bindingAction, settingsTab);
                     if (input.isKeyJustPressed(GLFW_KEY_ESCAPE) && bindingAction[0] < 0) {
                         mainSettingsOpen[0] = false;
@@ -837,9 +877,9 @@ public class Main {
                 if (bindingAction[0] >= 0) {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
                 } else if (inventoryOpen[0]) {
-                    closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen);
+                    closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                 } else if (creativeOpen[0]) {
-                    closeCreative(inventoryController, creativeOpen);
+                    closeCreative(inventoryController, creativeOpen, audio);
                 } else {
                     menuOpen[0] = !menuOpen[0];
                 }
@@ -849,16 +889,18 @@ public class Main {
 
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY))) {
                 if (inventoryOpen[0]) {
-                    closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen);
+                    closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                 } else if (creativeOpen[0]) {
-                    closeCreative(inventoryController, creativeOpen);
+                    closeCreative(inventoryController, creativeOpen, audio);
                 } else if (settings.getGameMode().isCreative()) {
                     creativeOpen[0] = true;
                     menuOpen[0] = false;
+                    audio.play(SoundEvent.UI_OPEN);
                 } else {
                     activeGui[0] = inventoryGui;
                     inventoryOpen[0] = true;
                     menuOpen[0] = false;
+                    audio.play(SoundEvent.UI_OPEN);
                 }
                 window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
                 input.resetMouseDelta();
@@ -877,12 +919,15 @@ public class Main {
                     int tab = hud.creativeTabAt(logicalX, logicalY);
                     if (tab >= 0) {
                         creativeTab[0] = tab;
+                        audio.play(SoundEvent.UI_CLICK);
                     } else {
                         int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0]);
                         if (item >= 0) {
                             inventoryController.pickCreativeItem(CreativeCatalog.TABS[creativeTab[0]].items()[item], shift);
+                            audio.play(SoundEvent.UI_CLICK);
                         } else if (hud.destroySlotAt(logicalX, logicalY)) {
                             inventoryController.destroyCursor();
+                            audio.play(SoundEvent.UI_CLICK);
                         } else {
                             int hb = hud.hotbarSlotAt(logicalX, logicalY);
                             if (hb >= 0) {
@@ -891,6 +936,7 @@ public class Main {
                                 } else {
                                     inventoryController.beginDrag(hb, false);
                                 }
+                                audio.play(SoundEvent.UI_CLICK);
                             }
                         }
                     }
@@ -905,10 +951,12 @@ public class Main {
                     int hb = hud.hotbarSlotAt(logicalX, logicalY);
                     if (hb >= 0) {
                         inventoryController.beginDrag(hb, true);
+                        audio.play(SoundEvent.UI_CLICK);
                     }
                     int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0]);
                     if (item >= 0) {
                         inventoryController.pickCreativeItem(CreativeCatalog.TABS[creativeTab[0]].items()[item], false);
+                        audio.play(SoundEvent.UI_CLICK);
                     }
                 }
             } else if (inventoryOpen[0]) {
@@ -926,6 +974,7 @@ public class Main {
                     } else {
                         inventoryController.beginDrag(hoveredSlot[0], false);
                     }
+                    playSlotSound(audio, activeGui[0], hoveredSlot[0]);
                 }
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)) {
                     if (shift) {
@@ -933,6 +982,7 @@ public class Main {
                     } else {
                         inventoryController.beginDrag(hoveredSlot[0], true);
                     }
+                    playSlotSound(audio, activeGui[0], hoveredSlot[0]);
                 }
                 if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) || input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT)) {
                     inventoryController.continueDrag(hoveredSlot[0]);
@@ -941,12 +991,15 @@ public class Main {
                     inventoryController.endDrag(hoveredSlot[0]);
                 }
             } else if (menuOpen[0]) {
-                handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud,
+                handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
                         menuSelection, sliderDragRow, bindingAction, settingsTab);
             }
 
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.DEBUG))) {
                 showDebug[0] = !showDebug[0];
+            }
+            if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.FORECAST))) {
+                forecastOpen[0] = !forecastOpen[0];
             }
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
@@ -971,15 +1024,47 @@ public class Main {
                                 new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
                     }
                 }
+
+                if (player.hasJustJumped()) audio.play(SoundEvent.JUMP);
+                if (player.hasJustLanded()) audio.play(SoundEvent.LAND);
+                if (player.isSubmerged() != wasSubmerged[0]) {
+                    audio.play(SoundEvent.SPLASH);
+                    wasSubmerged[0] = player.isSubmerged();
+                }
+                // A footstep every FOOTSTEP_INTERVAL seconds while walking/
+                // sprinting on the ground - timed off a countdown rather than a
+                // fixed-distance-traveled check, since it's simpler and the
+                // difference isn't audible. Reset (not just left to drift) the
+                // instant the player stops, so the very next step after
+                // starting to walk again lands right away instead of waiting
+                // out whatever was left on the old countdown.
+                if (player.isMovingOnGround()) {
+                    footstepTimer[0] -= dt;
+                    if (footstepTimer[0] <= 0f) {
+                        footstepTimer[0] = FOOTSTEP_INTERVAL;
+                        SoundMaterial ground = SoundMaterial.of(player.blockUnderfoot(world));
+                        Vector3f p = player.getPosition();
+                        audio.playBlockSound(ground, BlockAction.STEP, p.x, p.y, p.z, 1f);
+                    }
+                } else {
+                    footstepTimer[0] = 0f;
+                }
             }
 
             // Keep streaming/remeshing even with the menu open, so toggling a
             // rendering setting (e.g. see-through leaves) takes effect live.
             world.update(player.getPosition().x, player.getPosition().z);
 
+            // The OpenAL listener follows the camera every frame regardless of
+            // whether player.update() ran this frame, so positional sounds still
+            // pan/attenuate correctly while a menu is open. The camera never
+            // rolls (only yaw/pitch), so world-up always doubles as its up vector.
+            audio.setListener(player.getCamera().getPosition(), player.getCamera().getFront(), WORLD_UP);
+
             if (player.getStats().isDead()) {
                 System.out.println("You died. Respawning...");
                 showMessage(messages, "You died!", new Vector4f(0.9f, 0.25f, 0.25f, 1f), 3.0f);
+                audio.play(SoundEvent.DEATH);
                 // Drop the whole inventory onto the ground, Minecraft-style.
                 Vector3f deathPos = player.getPosition();
                 for (int slot = 0; slot < Inventory.SIZE; slot++) {
@@ -1003,7 +1088,9 @@ public class Main {
             }
 
             // Item-entity physics + pickup.
-            world.updateItems(dt, player.getPosition(), player.getInventory());
+            if (world.updateItems(dt, player.getPosition(), player.getInventory())) {
+                audio.play(SoundEvent.ITEM_PICKUP);
+            }
 
             // Furnaces (and any other block entities) work in the background,
             // ticking forward with world time.
@@ -1019,6 +1106,7 @@ public class Main {
             float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
             if (mobDamage > 0f) {
                 player.getStats().damage(mobDamage);
+                audio.play(SoundEvent.HURT);
             }
 
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
@@ -1084,7 +1172,9 @@ public class Main {
                     // Creative kills in one hit; survival/adventure deal tool damage
                     // (a sword hits harder than a bare-handed punch).
                     float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldItem);
-                    world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
+                    boolean killed = world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
+                    audio.playAt(killed ? SoundEvent.MOB_DEATH : SoundEvent.ATTACK,
+                            targetedMob.position.x, targetedMob.position.y, targetedMob.position.z, 1f);
                     attackCooldown[0] = 0.45f;
                     // Swords wear out with use (creative tools never break).
                     if (!mode.isCreative() && Mining.isSword(heldItem) && player.getDurability().use(heldItem)) {
@@ -1092,6 +1182,7 @@ public class Main {
                         System.out.println("Your " + heldItem + " broke!");
                         showMessage(messages, "Your " + heldItem + " broke!",
                                 new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+                        audio.play(SoundEvent.TOOL_BREAK);
                     }
                 }
 
@@ -1119,11 +1210,11 @@ public class Main {
                             // eight horizontal neighbours, all in one swing.
                             for (int dx = -1; dx <= 1; dx++) {
                                 for (int dz = -1; dz <= 1; dz++) {
-                                    breakBlockAt(world, player, mode, heldItem, loot, messages, bx + dx, by, bz + dz);
+                                    breakBlockAt(world, player, mode, heldItem, loot, messages, audio, bx + dx, by, bz + dz);
                                 }
                             }
                         } else {
-                            breakBlockAt(world, player, mode, heldItem, loot, messages, bx, by, bz);
+                            breakBlockAt(world, player, mode, heldItem, loot, messages, audio, bx, by, bz);
                         }
                     }
                 }
@@ -1136,39 +1227,43 @@ public class Main {
                     if (Door.isDoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
                             handRenderer.triggerSwing();
                         }
                     } else if (Door.isTrapdoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
                             handRenderer.triggerSwing();
                         }
                     } else if (noMob && targeted == BlockType.FURNACE) {
                         // Right-click a furnace to open its smelting gui.
                         Furnace furnace = world.getOrCreateFurnace(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, furnace);
-                        openGui(inventoryController, activeGui, window, input, inventoryOpen);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, player.getInventory(), craftingGrid, null);
-                        openGui(inventoryController, activeGui, window, input, inventoryOpen);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.CHEST) {
                         // Right-click a chest to open its storage gui; an adjacent
                         // chest merges into a 54-slot double chest.
                         world.getOrCreateChest(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.chestContainerAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
-                        openGui(inventoryController, activeGui, window, input, inventoryOpen);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.BARREL) {
                         // Right-click a barrel to open its storage gui.
                         world.getOrCreateBarrel(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
-                        openGui(inventoryController, activeGui, window, input, inventoryOpen);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         if (heldItem.isEdible() && !mode.isCreative()) {
-                            player.eat(heldItem);
-                            handRenderer.triggerSwing();
+                            if (player.eat(heldItem)) {
+                                audio.play(SoundEvent.EAT);
+                                handRenderer.triggerSwing();
+                            }
                         } else if (!heldItem.isItem) {
                             // Pure inventory items (tools, and any future non-edible item)
                             // have no world tile and can never be placed as a block.
@@ -1192,6 +1287,7 @@ public class Main {
                                     } else {
                                         world.setBlock(p.x, p.y, p.z, heldItem);
                                     }
+                                    audio.playBlockSound(SoundMaterial.of(heldItem), BlockAction.PLACE, p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
                                     // Doors, trapdoors, and other directional blocks
                                     // (e.g. a furnace) face the player: the front sits
                                     // on the side of the block nearest to them (opposite
@@ -1329,6 +1425,9 @@ public class Main {
                 }
             }
             hud.renderMessages(messages, window.getAspectRatio());
+            if (started[0] && forecastOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+                hud.renderForecast(climate, calendar, window.getAspectRatio());
+            }
             if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();
                 float aspect = window.getAspectRatio();
@@ -1360,12 +1459,13 @@ public class Main {
                 TerrainGenerator.Biome biome = world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z));
                 hud.drawTextLeft("Biome: " + biome,
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft("Season: " + calendar.getSeason().displayName + " - Day " + calendar.getDay()
-                                + "/" + calendar.getDaysPerSeason() + ", Year " + calendar.getYear(),
+                hud.drawTextLeft("Calendar: " + calendar.getDayOfWeekName() + " - Week " + calendar.getWeekOfMonth()
+                                + " of " + calendar.getMonthName() + " (" + calendar.getSeason().displayName
+                                + "), Year " + calendar.getYear(),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in %.0fm",
+                hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in ~%dh",
                                 climate.getWeather().displayName, climate.getWeatherStrength() * 100f,
-                                climate.getNextWeather().displayName, climate.getWeatherTimeLeft() / 60f),
+                                climate.nextWeatherChange().displayName, climate.hoursUntilChange()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C, %.0f%% humidity",
                                 climate.temperatureFor(biome), climate.humidityFor(biome) * 100f),
@@ -1480,6 +1580,7 @@ public class Main {
                 w.destroy();
             }
         }
+        audio.destroy();
         window.close();
     }
 
