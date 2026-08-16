@@ -275,6 +275,76 @@ public class World implements BlockAccessor {
         return blockEntityAt(x, y, z) instanceof Furnace furnace ? furnace : null;
     }
 
+    /** The chest at a block position, or null if none (no chest placed / never opened). */
+    public Chest chestAt(int x, int y, int z) {
+        BlockEntity entity = blockEntityAt(x, y, z);
+        if (entity instanceof Barrel) return null;
+        return entity instanceof Chest chest ? chest : null;
+    }
+
+    /** The barrel at a block position, or null if none (no barrel placed / never opened). */
+    public Barrel barrelAt(int x, int y, int z) {
+        return blockEntityAt(x, y, z) instanceof Barrel barrel ? barrel : null;
+    }
+
+    /** Returns the barrel at a position, creating (and registering) it on first use. */
+    public Barrel getOrCreateBarrel(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof Barrel barrel) return barrel;
+        Barrel barrel = new Barrel();
+        blockEntities.put(blockKey(x, y, z), barrel);
+        return barrel;
+    }
+
+    /** Returns the chest at a position, creating (and registering) it on first use. */
+    public Chest getOrCreateChest(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof Barrel) return null;
+        if (existing instanceof Chest chest) return chest;
+        Chest chest = new Chest();
+        blockEntities.put(blockKey(x, y, z), chest);
+        return chest;
+    }
+
+    /**
+     * The storage the player sees when opening the chest at a position: a single
+     * 27-slot chest, a 54-slot {@link JoinedStorage} when it has a chest
+     * immediately beside it on the east-west axis (a Minecraft-style double
+     * chest), or a 108-slot container when four chests form a 2x2 square (a
+     * "quad chest"). Each block keeps its own persisted slots - the merge is
+     * just a combined view, ordered so the layout is stable whichever half you
+     * open. Same-y/z requirement keeps stacked or north-south chests single.
+     */
+    public com.minecraftclone.player.StorageContainer chestContainerAt(int x, int y, int z) {
+        Chest here = chestAt(x, y, z);
+        if (here == null) return null;
+        // A 2x2 square of chests (all four cells present, at the same y) merges
+        // into one 108-slot container, ordered row-major by world position so
+        // it reads the same no matter which corner you open.
+        for (int ox = -1; ox <= 0; ox++) {
+            for (int oz = -1; oz <= 0; oz++) {
+                int x0 = ox == 0 ? x : x - 1;
+                int z0 = oz == 0 ? z : z - 1;
+                Chest a = chestAt(x0, y, z0);
+                Chest b = chestAt(x0 + 1, y, z0);
+                Chest c = chestAt(x0, y, z0 + 1);
+                Chest d = chestAt(x0 + 1, y, z0 + 1);
+                if (a != null && b != null && c != null && d != null) {
+                    // Make sure the whole 2x2 is present regardless of which
+                    // corner was clicked, and order west-to-east, north-to-south.
+                    return new com.minecraftclone.player.JoinedStorage(
+                            new com.minecraftclone.player.JoinedStorage(a, b),
+                            new com.minecraftclone.player.JoinedStorage(c, d));
+                }
+            }
+        }
+        Chest west = chestAt(x - 1, y, z);
+        Chest east = chestAt(x + 1, y, z);
+        if (west != null) return new com.minecraftclone.player.JoinedStorage(west, here);
+        if (east != null) return new com.minecraftclone.player.JoinedStorage(here, east);
+        return here;
+    }
+
     /** True if the block at this position is currently active - for a furnace, that it's burning (its front glows). */
     @Override
     public boolean isBlockActive(int x, int y, int z) {

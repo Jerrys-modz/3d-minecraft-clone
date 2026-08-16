@@ -14,17 +14,22 @@ import com.minecraftclone.engine.graphics.MobRenderer;
 import com.minecraftclone.engine.graphics.MobTextures;
 import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.engine.graphics.WeatherRenderer;
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
+import com.minecraftclone.player.JoinedStorage;
 import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
+import com.minecraftclone.player.StorageContainer;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
+import com.minecraftclone.world.Barrel;
+import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Door;
@@ -258,6 +263,13 @@ public class Main {
         audio.play(gui != null && gui.isOutputSlot(slotId) ? SoundEvent.CRAFT : SoundEvent.UI_CLICK);
     }
 
+    /** Resets the calendar for a freshly started world and applies its days-per-season setting. */
+    private void startCalendar(DayNightCycle dayNightCycle, Calendar calendar, WorldGenSettings genSettings) {
+        dayNightCycle.resetDays();
+        calendar.reset();
+        calendar.setDaysPerSeason(genSettings.getDaysPerSeason());
+    }
+
     /**
      * Breaks one block cell (whatever it is: a door, an overlay decoration, or a
      * solid block), dropping its loot and wearing the tool in survival. Shared by
@@ -308,6 +320,19 @@ public class Main {
                                 world.spawnItem(bx, by, bz, furnace.typeOf(s), furnace.countOf(s), loot);
                             }
                         }
+                    }
+                }
+                if (targetType == BlockType.CHEST || targetType == BlockType.BARREL) {
+                    // A broken chest/barrel spills its contents.
+                    com.minecraftclone.player.StorageContainer storage = world.chestAt(bx, by, bz) != null
+                            ? world.chestAt(bx, by, bz) : world.barrelAt(bx, by, bz);
+                    if (storage != null) {
+                        for (int s = 0; s < com.minecraftclone.world.Chest.SLOT_COUNT; s++) {
+                            if (storage.typeOf(s) != null) {
+                                world.spawnItem(bx, by, bz, storage.typeOf(s), storage.countOf(s), loot);
+                            }
+                        }
+                        world.removeBlockEntity(bx, by, bz);
                     }
                 }
                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
@@ -390,6 +415,8 @@ public class Main {
         ItemRenderer itemRenderer = new ItemRenderer();
         HandRenderer handRenderer = new HandRenderer();
         MobRenderer mobRenderer = new MobRenderer();
+        WeatherParticles weatherParticles = new WeatherParticles();
+        WeatherRenderer weatherRenderer = new WeatherRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
@@ -422,6 +449,8 @@ public class Main {
         int[] selectedSlot = {0};
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
+        Calendar calendar = new Calendar(); // in-game calendar: days, seasons, years
+        Climate climate = new Climate(calendar, dayNightCycle); // weather + biome temperature/humidity
         MiningController mining = new MiningController();
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
         float[] attackCooldown = {0f}; // time until the next mob hit can land
@@ -453,6 +482,14 @@ public class Main {
         }
         if (System.getenv("MCCLONE_AUTOTEST_CLOUD") != null) {
             dayNightCycle.setCloudPhase(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_CLOUD")));
+        }
+        String weatherOverride = System.getenv("MCCLONE_AUTOTEST_WEATHER");
+        if (weatherOverride != null) {
+            try {
+                climate.forceWeather(Weather.valueOf(weatherOverride.toUpperCase()));
+            } catch (IllegalArgumentException ignored) {
+                // Unknown weather override - leave the random forecast alone.
+            }
         }
         if (System.getenv("MCCLONE_AUTOTEST_PITCH") != null) {
             player.getCamera().setPitch(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_PITCH")));
@@ -488,6 +525,7 @@ public class Main {
             saveWorldGenSettings(autoDir, genSettings);
             long seed = genSettings.resolveSeed();
             world = new World(seed, genSettings, atlas, autoDir);
+            startCalendar(dayNightCycle, calendar, genSettings);
             world.setRenderDistance(settings.getRenderDistance());
             world.setLeavesTransparent(settings.isLeavesTransparent());
             for (int i = 0; i < 200; i++) world.update(0, 0);
@@ -532,6 +570,36 @@ public class Main {
                 System.err.println("MCCLONE_AUTOTEST_PLACE: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE"));
             }
         }
+        // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
+        // the container screen can be screenshotted. MCCLONE_AUTOTEST_DOUBLE
+        // merges a second chest beside it to screenshot a 54-slot double chest;
+        // MCCLONE_AUTOTEST_QUAD merges a 2x2 square into a 108-slot quad chest.
+        if (System.getenv("MCCLONE_AUTOTEST_CHEST_GUI") != null && started[0]) {
+            Chest west = world.getOrCreateChest(0, 0, 0);
+            west.setSlot(0, BlockType.IRON_INGOT, 5);
+            west.setSlot(1, BlockType.APPLE, 12);
+            west.setSlot(2, BlockType.WOOD_LOG, 64);
+            StorageContainer container = west;
+            if (System.getenv("MCCLONE_AUTOTEST_DOUBLE") != null) {
+                Chest east = world.getOrCreateChest(1, 0, 0);
+                east.setSlot(3, BlockType.GOLD_INGOT, 4);
+                east.setSlot(4, BlockType.DIAMOND, 2);
+                container = new JoinedStorage(west, east);
+            }
+            if (System.getenv("MCCLONE_AUTOTEST_QUAD") != null) {
+                Chest east = world.getOrCreateChest(1, 0, 0);
+                Chest south = world.getOrCreateChest(0, 0, 1);
+                Chest corner = world.getOrCreateChest(1, 0, 1);
+                east.setSlot(3, BlockType.GOLD_INGOT, 4);
+                south.setSlot(4, BlockType.DIAMOND, 2);
+                corner.setSlot(5, BlockType.COAL, 9);
+                container = new JoinedStorage(
+                        new JoinedStorage(west, east),
+                        new JoinedStorage(south, corner));
+            }
+            activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, container);
+            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+        }
         // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
         // the first-person hand can be screenshotted holding something.
         if (System.getenv("MCCLONE_AUTOTEST_HELD") != null) {
@@ -564,6 +632,19 @@ public class Main {
             float dt = timer.getDeltaTime();
             timer.updateFps(dt);
             dayNightCycle.update(dt);
+            // The calendar advances with the day/night cycle, and its season
+            // feeds the cycle's daylight length back - so days grow and shrink
+            // through the year (long summer days, short winter days).
+            calendar.update(dayNightCycle.getDayIndex());
+            dayNightCycle.setDaylightFraction(calendar.daylightFraction());
+            if (world != null) {
+                TerrainGenerator.Biome playerBiome = world.getBiome(
+                        (int) Math.floor(player.getPosition().x), (int) Math.floor(player.getPosition().z));
+                climate.update(dt, playerBiome);
+                // Rain/snow falls around the player's eye, scaled by the weather.
+                Vector3f eye = player.getEyePosition();
+                weatherParticles.update(dt, eye.x, eye.y, eye.z, climate.getWeather(), climate.getWeatherStrength());
+            }
             animTime[0] += dt;
             attackCooldown[0] -= dt;
             Raycaster.Hit hit = null;
@@ -634,7 +715,8 @@ public class Main {
                                     saveWorldGenSettings(worldDir, genSettings);
                                 }
                                 world = new World(seed, genSettings, atlas, worldDir);
-                                world.setRenderDistance(settings.getRenderDistance());
+                                startCalendar(dayNightCycle, calendar, genSettings);
+                            world.setRenderDistance(settings.getRenderDistance());
                                 world.setLeavesTransparent(settings.isLeavesTransparent());
                                 for (int i = 0; i < 200; i++) world.update(0, 0);
                                 float[] spawn = findSpawn(world);
@@ -686,6 +768,7 @@ public class Main {
                                 saveWorldGenSettings(worldDir, genSettings);
                             }
                             world = new World(seed, genSettings, atlas, worldDir);
+                            startCalendar(dayNightCycle, calendar, genSettings);
                             world.setRenderDistance(settings.getRenderDistance());
                             world.setLeavesTransparent(settings.isLeavesTransparent());
                             for (int i = 0; i < 200; i++) world.update(0, 0);
@@ -1084,6 +1167,19 @@ public class Main {
                         // Right-click a crafting table to open the 3x3 crafting gui.
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, player.getInventory(), craftingGrid, null);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.CHEST) {
+                        // Right-click a chest to open its storage gui; an adjacent
+                        // chest merges into a 54-slot double chest.
+                        world.getOrCreateChest(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
+                                world.chestContainerAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.BARREL) {
+                        // Right-click a barrel to open its storage gui.
+                        world.getOrCreateBarrel(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
+                                world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         if (heldItem.isEdible() && !mode.isCreative()) {
                             if (player.eat(heldItem)) {
@@ -1177,6 +1273,12 @@ public class Main {
             chunkShader.unbind();
             }
 
+            // Rain/snow particles, drawn against the world (depth-tested) but
+            // hidden behind menus just like the crosshair and hotbar.
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+                weatherRenderer.render(lineShader, projection, view, weatherParticles);
+            }
+
             // First-person held item (Minecraft-style): drawn after the world so it
             // always sits on top, hidden while any menu/inventory is up and in
             // spectator (no hand to look at).
@@ -1204,7 +1306,7 @@ public class Main {
                 }
             }
             hud.renderMessages(messages, window.getAspectRatio());
-            if (showDebug[0]) {
+            if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();
                 float aspect = window.getAspectRatio();
                 float textSize = 0.035f;
@@ -1230,7 +1332,18 @@ public class Main {
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft("Biome: " + world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z)),
+                TerrainGenerator.Biome biome = world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z));
+                hud.drawTextLeft("Biome: " + biome,
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft("Season: " + calendar.getSeason().displayName + " - Day " + calendar.getDay()
+                                + "/" + calendar.getDaysPerSeason() + ", Year " + calendar.getYear(),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Weather: %s (%.0f%%) - next: %s in %.0fm",
+                                climate.getWeather().displayName, climate.getWeatherStrength() * 100f,
+                                climate.getNextWeather().displayName, climate.getWeatherTimeLeft() / 60f),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C, %.0f%% humidity",
+                                climate.temperatureFor(biome), climate.humidityFor(biome) * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),
@@ -1323,6 +1436,7 @@ public class Main {
         itemRenderer.destroy();
         handRenderer.destroy();
         mobRenderer.destroy();
+        weatherRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
         hudShader.destroy();

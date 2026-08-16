@@ -3,7 +3,9 @@ package com.minecraftclone.engine.gui;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
+import com.minecraftclone.player.JoinedStorage;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.Furnace;
 import org.junit.jupiter.api.Test;
 
@@ -166,5 +168,117 @@ class ContainerGuiTest {
         c.click(INPUT, false, false);
         assertEquals(BlockType.SAND, f.typeOf(Furnace.SLOT_INPUT));
         assertTrue(inv.isEmpty(0));
+    }
+
+    @Test
+    void chestGuiRoutesClicksToTheChest() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+
+        assertEquals(Inventory.SIZE + Chest.SLOT_COUNT, gui.slotCount());
+        assertTrue(gui.isContainerSlot(ContainerGui.CONTAINER_START));
+        assertTrue(gui.isContainerSlot(ContainerGui.CONTAINER_START + Chest.SLOT_COUNT - 1));
+        assertFalse(gui.isPlayerSlot(ContainerGui.CONTAINER_START));
+        assertNull(gui.currentRecipe(), "chest has no crafting grid");
+
+        inv.setSlot(0, BlockType.DIAMOND, 3);
+        c.click(0, false, false);
+        c.click(ContainerGui.CONTAINER_START + 5, false, false);
+        assertEquals(BlockType.DIAMOND, chest.typeOf(5));
+        assertEquals(3, chest.countOf(5));
+        assertTrue(inv.isEmpty(0));
+    }
+
+    @Test
+    void shiftClickSendsAnythingIntoAChest() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+
+        inv.setSlot(0, BlockType.DIRT, 10);
+        inv.setSlot(1, BlockType.IRON_INGOT, 4);
+        c.click(0, false, true);
+        c.click(1, false, true);
+        assertEquals(10, chest.getCount(BlockType.DIRT));
+        assertEquals(4, chest.getCount(BlockType.IRON_INGOT));
+        assertTrue(inv.isEmpty(0));
+        assertTrue(inv.isEmpty(1));
+    }
+
+    @Test
+    void shiftClickMovesChestStackToInventory() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        chest.setSlot(2, BlockType.APPLE, 7);
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+        c.click(ContainerGui.CONTAINER_START + 2, false, true);
+        assertEquals(7, inv.getCount(BlockType.APPLE));
+        assertTrue(chest.isEmpty(2));
+    }
+
+    @Test
+    void doubleChestGuiPresents54SlotsAcrossBothHalves() {
+        Inventory inv = new Inventory();
+        Chest west = new Chest();
+        Chest east = new Chest();
+        JoinedStorage doubleChest = new JoinedStorage(west, east);
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), doubleChest);
+        InventoryController c = new InventoryController(gui);
+
+        assertEquals(Inventory.SIZE + 54, gui.slotCount());
+        assertTrue(gui.isContainerSlot(ContainerGui.CONTAINER_START + 53));
+        assertFalse(gui.isContainerSlot(ContainerGui.CONTAINER_START + 54));
+
+        // Slot 30 lands in the east half.
+        inv.setSlot(0, BlockType.SAND, 3);
+        c.click(0, false, false);
+        c.click(ContainerGui.CONTAINER_START + 30, false, false);
+        assertEquals(BlockType.SAND, east.typeOf(30 - Chest.SLOT_COUNT));
+        assertEquals(3, east.countOf(30 - Chest.SLOT_COUNT));
+        assertTrue(inv.isEmpty(0));
+
+        // Shift-click from the inventory fills the double chest west-first.
+        inv.setSlot(1, BlockType.DIRT, 4);
+        InventoryController c2 = new InventoryController(gui);
+        c2.click(1, false, true);
+        assertEquals(4, west.getCount(BlockType.DIRT));
+        assertTrue(inv.isEmpty(1));
+    }
+
+    @Test
+    void quadChestGuiPresents108SlotsAcrossFourChests() {
+        Inventory inv = new Inventory();
+        Chest nw = new Chest(), ne = new Chest(), sw = new Chest(), se = new Chest();
+        // A 2x2 chest composes four 27-slot chests, row-major (NW, NE, SW, SE).
+        JoinedStorage quad = new JoinedStorage(
+                new JoinedStorage(nw, ne),
+                new JoinedStorage(sw, se));
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), quad);
+        InventoryController c = new InventoryController(gui);
+
+        assertEquals(Inventory.SIZE + 108, gui.slotCount());
+        assertTrue(gui.isContainerSlot(ContainerGui.CONTAINER_START + 107));
+        assertFalse(gui.isContainerSlot(ContainerGui.CONTAINER_START + 108));
+
+        // Slot 80 lands in the SE chest (row-major: NW 0-26, NE 27-53, SW 54-80... wait
+        // 54-80 is 27 slots so SW=54..80, SE=81..107). Use 100 -> SE.
+        inv.setSlot(0, BlockType.SAND, 3);
+        c.click(0, false, false);
+        c.click(ContainerGui.CONTAINER_START + 100, false, false);
+        assertEquals(BlockType.SAND, se.typeOf(100 - 3 * Chest.SLOT_COUNT));
+        assertEquals(3, se.countOf(100 - 3 * Chest.SLOT_COUNT));
+        assertTrue(inv.isEmpty(0));
+        assertTrue(nw.isEmpty(0) && ne.isEmpty(0) && sw.isEmpty(0), "only SE received the item");
+
+        // Shift-click fills the quad west-first, north row before south.
+        inv.setSlot(2, BlockType.APPLE, 9);
+        c.click(2, false, true);
+        assertEquals(9, nw.getCount(BlockType.APPLE), "NW fills first");
+        assertTrue(ne.isEmpty(0) && sw.isEmpty(0) && se.isEmpty(0));
+        assertTrue(inv.isEmpty(2));
     }
 }
