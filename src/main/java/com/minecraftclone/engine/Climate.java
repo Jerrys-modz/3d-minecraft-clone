@@ -61,9 +61,16 @@ public class Climate {
         if (dt <= 0) return;
         currentBiome = playerBiome == null ? Biome.PLAINS : playerBiome;
         if (!rolled) {
+            Weather preservedWeather = schedule[0].weather;
+            float preservedDuration = schedule[0].durationSeconds;
+            float preservedStrength = schedule[0].strength;
+            boolean wasForced = preservedDuration > 0;
             rollWeather(0);
             rollWeather(1);
             rollWeather(2);
+            if (wasForced) {
+                schedule[0] = new WeatherEvent(preservedWeather, preservedDuration, preservedStrength);
+            }
             rolled = true;
         }
         // Consume dt in slices bounded by each event's remaining duration, so a big
@@ -181,6 +188,12 @@ public class Climate {
     /** Forces the current weather (used by tests). */
     void setWeather(Weather weather, float durationSeconds, float strength) {
         schedule[0] = new WeatherEvent(weather, durationSeconds, strength);
+    }
+
+    /** Forces a weather state with sensible duration/strength - used by the autotest/screenshots. */
+    public void forceWeather(Weather weather) {
+        if (weather == null) return;
+        setWeather(weather, weather.isPrecipitation() ? 120f : 300f, weather.isPrecipitation() ? 0.8f : 0f);
     }
 
     /** A biome's baseline temperature in °C. */

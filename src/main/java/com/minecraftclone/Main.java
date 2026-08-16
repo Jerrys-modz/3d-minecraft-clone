@@ -9,6 +9,7 @@ import com.minecraftclone.engine.graphics.MobRenderer;
 import com.minecraftclone.engine.graphics.MobTextures;
 import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.engine.graphics.WeatherRenderer;
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
@@ -380,6 +381,8 @@ public class Main {
         ItemRenderer itemRenderer = new ItemRenderer();
         HandRenderer handRenderer = new HandRenderer();
         MobRenderer mobRenderer = new MobRenderer();
+        WeatherParticles weatherParticles = new WeatherParticles();
+        WeatherRenderer weatherRenderer = new WeatherRenderer();
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
         boolean[] menuOpen = {false};
@@ -443,6 +446,14 @@ public class Main {
         }
         if (System.getenv("MCCLONE_AUTOTEST_CLOUD") != null) {
             dayNightCycle.setCloudPhase(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_CLOUD")));
+        }
+        String weatherOverride = System.getenv("MCCLONE_AUTOTEST_WEATHER");
+        if (weatherOverride != null) {
+            try {
+                climate.forceWeather(Weather.valueOf(weatherOverride.toUpperCase()));
+            } catch (IllegalArgumentException ignored) {
+                // Unknown weather override - leave the random forecast alone.
+            }
         }
         if (System.getenv("MCCLONE_AUTOTEST_PITCH") != null) {
             player.getCamera().setPitch(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_PITCH")));
@@ -594,6 +605,9 @@ public class Main {
                 TerrainGenerator.Biome playerBiome = world.getBiome(
                         (int) Math.floor(player.getPosition().x), (int) Math.floor(player.getPosition().z));
                 climate.update(dt, playerBiome);
+                // Rain/snow falls around the player's eye, scaled by the weather.
+                Vector3f eye = player.getEyePosition();
+                weatherParticles.update(dt, eye.x, eye.y, eye.z, climate.getWeather(), climate.getWeatherStrength());
             }
             animTime[0] += dt;
             attackCooldown[0] -= dt;
@@ -1170,6 +1184,12 @@ public class Main {
             chunkShader.unbind();
             }
 
+            // Rain/snow particles, drawn against the world (depth-tested) but
+            // hidden behind menus just like the crosshair and hotbar.
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+                weatherRenderer.render(lineShader, projection, view, weatherParticles);
+            }
+
             // First-person held item (Minecraft-style): drawn after the world so it
             // always sits on top, hidden while any menu/inventory is up and in
             // spectator (no hand to look at).
@@ -1327,6 +1347,7 @@ public class Main {
         itemRenderer.destroy();
         handRenderer.destroy();
         mobRenderer.destroy();
+        weatherRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
         hudShader.destroy();
