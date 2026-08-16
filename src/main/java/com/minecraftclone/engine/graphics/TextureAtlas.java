@@ -113,6 +113,15 @@ public class TextureAtlas {
         paintDoor(image, 46, rnd);
         paintTrapdoor(image, 47, rnd);
 
+        // --- Nether / End dimension blocks ---
+        paintNetherrack(image, 52, rnd);
+        paintSoulSand(image, 53, rnd);
+        paintTile(image, 54, rnd, 0xF5E6A0, 0xE8CE6A, true, 0xFFF7C0, 0.5f); // glowstone (bright, yellowish)
+        paintNetherPortal(image, 55, rnd);
+        paintTile(image, 56, rnd, 0xE4E0C8, 0xCFC8A8, true);   // end stone (pale, sandy)
+        paintObsidian(image, 57, rnd);
+        paintEndPortal(image, 58, rnd);
+
         // --- Furniture / fixtures ---
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
         paintLamp(image, LAMP_TILE);
@@ -232,6 +241,41 @@ public class TextureAtlas {
                 int color = lerpColor(dark, light, n);
                 img.setRGB(ox + x, oy + y, 0xFF000000 | shade(color, faceShade(x, y)));
             }
+        }
+    }
+
+    /**
+     * Generic fbm-grain material tile between {@code dark} and {@code light}. When
+     * {@code opaque} the whole tile is painted solid; otherwise only the bright noise
+     * regions are drawn onto a transparent background (for alpha-cutout blocks).
+     */
+    private void paintTile(BufferedImage img, int index, Random rnd, int light, int dark, boolean opaque) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        float oxs = noiseOffset(rnd);
+        float oys = noiseOffset(rnd);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                float n = (fbm(x + oxs, y + oys) - 0.5f) * 0.5f + 0.5f;
+                if (!opaque && n < 0.35f) {
+                    continue;
+                }
+                int color = shade(lerpColor(dark, light, n), faceShade(x, y));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** {@link #paintTile(BufferedImage, int, Random, int, int, boolean)} plus {@code accent} speckles at {@code density} (0..1 fraction of pixels). */
+    private void paintTile(BufferedImage img, int index, Random rnd, int light, int dark, boolean opaque, int accent, float density) {
+        paintTile(img, index, rnd, light, dark, opaque);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int count = Math.round(TILE_PX * TILE_PX * density);
+        for (int i = 0; i < count; i++) {
+            int x = rnd.nextInt(TILE_PX);
+            int y = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + x, oy + y, 0xFF000000 | accent);
         }
     }
 
@@ -869,6 +913,110 @@ public class TextureAtlas {
             for (int x = 4; x < 12; x++) {
                 img.setRGB(ox + x, oy + y, 0xFF000000 | dark);
             }
+        }
+    }
+
+    /** Dark red netherrack: a speckled brick-red base with black flecks for a charred, hellish look. */
+    private void paintNetherrack(BufferedImage img, int index, Random rnd) {
+        paintTile(img, index, rnd, 0x7A3B2E, 0x5C2A20, true);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int b = 0; b < 6; b++) {
+            int cx = rnd.nextInt(TILE_PX);
+            int cy = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + cx, oy + cy, 0xFF000000 | 0x33130D);
+            if (rnd.nextBoolean()) {
+                img.setRGB(ox + (cx + 1) % TILE_PX, oy + cy, 0xFF000000 | 0x8A4634);
+            }
+        }
+    }
+
+    /** Soul sand: a dark, pitted brown - clearly NOT the overworld's pale beach sand. */
+    private void paintSoulSand(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | 0x5A4632);
+            }
+        }
+        // Mottled darker/redder patches so it reads as dim, grainy nether ground.
+        for (int i = 0; i < 40; i++) {
+            int cx = rnd.nextInt(TILE_PX);
+            int cy = rnd.nextInt(TILE_PX);
+            int color = rnd.nextFloat() < 0.5f ? 0x44351F : 0x6A4A34;
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    int px = cx + dx, py = cy + dy;
+                    if (px >= 0 && px < TILE_PX && py >= 0 && py < TILE_PX && rnd.nextFloat() < 0.6f) {
+                        img.setRGB(ox + px, oy + py, 0xFF000000 | color);
+                    }
+                }
+            }
+        }
+        // A few deep pits for the classic crumbly soul-sand look.
+        for (int i = 0; i < 6; i++) {
+            int cx = rnd.nextInt(TILE_PX);
+            int cy = rnd.nextInt(TILE_PX);
+            img.setRGB(ox + cx, oy + cy, 0xFF000000 | 0x2B2012);
+        }
+    }
+
+    /** A swirling nether portal: a dark purple vortex with a fiery orange core, on an opaque background. */
+    private void paintNetherPortal(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        double cx = TILE_PX / 2.0 - 0.5, cy = TILE_PX / 2.0 - 0.5;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                double dx = (x - cx) / 8.0, dy = (y - cy) / 8.0;
+                double d = Math.sqrt(dx * dx + dy * dy);
+                double swirl = Math.sin(Math.atan2(dy, dx) * 3 + d * 6);
+                int color = d < 0.35 ? 0xFFB84D : (swirl > 0 ? 0x7A2E8A : 0x3E1250);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** Near-black obsidian with subtle purple sheen and a few glossy streaks. */
+    private void paintObsidian(BufferedImage img, int index, Random rnd) {
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int base = rnd.nextFloat() < 0.08f ? 0x3A2A52 : 0x1A1426;
+                img.setRGB(tileX(index) + x, tileY(index) + y, 0xFF000000 | base);
+            }
+        }
+        int ox = tileX(index);
+        int oy = tileY(index);
+        for (int s = 0; s < 3; s++) {
+            int sx = rnd.nextInt(TILE_PX);
+            int sy = rnd.nextInt(TILE_PX);
+            for (int i = 0; i < 4; i++) {
+                int px = (sx + i) % TILE_PX;
+                int py = (sy + (i * 3) % 4) % TILE_PX;
+                img.setRGB(ox + px, oy + py, 0xFF000000 | 0x4A3A66);
+            }
+        }
+    }
+
+    /** A dark end portal: a near-black swirl with tiny green star-sparkles, like the void made solid. */
+    private void paintEndPortal(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        double cx = TILE_PX / 2.0 - 0.5, cy = TILE_PX / 2.0 - 0.5;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                double dx = (x - cx) / 8.0, dy = (y - cy) / 8.0;
+                double d = Math.sqrt(dx * dx + dy * dy);
+                double swirl = Math.sin(Math.atan2(dy, dx) * 4 + d * 5);
+                int color = d < 0.3 ? 0x1B6B2B : (swirl > 0 ? 0x143A1E : 0x0A1E10);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+        for (int b = 0; b < 5; b++) {
+            int sx = 1 + rnd.nextInt(TILE_PX - 2);
+            int sy = 1 + rnd.nextInt(TILE_PX - 2);
+            img.setRGB(ox + sx, oy + sy, 0xFF000000 | 0x9FE89F);
         }
     }
 

@@ -82,6 +82,17 @@ public enum BlockType {
     CHEST(87, true, false, 50, 50, 50),          // storage: right-click opens a 27-slot container GUI (54 when doubled)
     BARREL(88, true, false, 51, 51, 51),         // storage: cheaper single 27-slot container, never doubles
 
+    // Dimension blocks: Nether terrain, End terrain, and the portal blocks that
+    // link the dimensions (see DimensionType.portalDestination). Portals are
+    // non-solid glowing swirls you walk into to teleport.
+    NETHERRACK(96, true, false, 52, 52, 52),
+    SOUL_SAND(97, true, false, 53, 53, 53),
+    GLOWSTONE(98, true, false, 54, 54, 54, 0, 15), // dim self-light source
+    NETHER_PORTAL(92, false, true, 55, 55, 55, 0, 15),
+    END_STONE(93, true, false, 56, 56, 56),
+    OBSIDIAN(94, true, false, 57, 57, 57),
+    END_PORTAL(95, false, true, 58, 58, 58, 0, 15),
+
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own procedurally generated
     // texture instead, see com.minecraftclone.engine.graphics.ItemTextures.
@@ -301,6 +312,11 @@ public enum BlockType {
     /** True for any water-family block (static, source, or flow). */
     public boolean isWater() {
         return this == WATER || this == WATER_SOURCE || this == WATER_FLOW;
+    }
+
+    /** True for the portal blocks that teleport the player between dimensions. */
+    public boolean isPortal() {
+        return this == NETHER_PORTAL || this == END_PORTAL;
     }
 
     /** True for any lava-family block (static, source, or flow). */

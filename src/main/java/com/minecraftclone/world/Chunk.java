@@ -28,8 +28,11 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
     // Per-block facing hint for doors (0:+Z, 1:-Z, 2:+X, 3:-X) - only doors use it.
     private final byte[] orientations = new byte[SIZE * HEIGHT * SIZE];
-    private final Mesh mesh = new Mesh();
-    private final Mesh translucentMesh = new Mesh();
+    // Created lazily on first mesh/upload, so a Chunk can be constructed (and even
+    // fully generated) without a live GL context - e.g. from a unit test, or off
+    // the main thread later. Only the GL thread ever touches it.
+    private Mesh mesh;
+    private Mesh translucentMesh;
     // Local positions (+ light level) of every light-emitting block (torches) currently
     // in this chunk, kept incrementally up to date - see setLocal/setRawBlocks. Small and
     // rare enough that a flat list beats a spatial index; consulted by rebuildMesh to bake
@@ -453,8 +456,14 @@ public class Chunk implements ChunkStorage.PersistableChunk {
             }
         }
 
+        if (mesh == null) {
+            mesh = new Mesh();
+        }
         mesh.upload(vertices.toArray(), indices.toArray());
         hasMeshData = indices.size() > 0;
+        if (translucentMesh == null) {
+            translucentMesh = new Mesh();
+        }
         translucentMesh.upload(transVertices.toArray(), transIndices.toArray());
         hasTranslucentData = transIndices.size() > 0;
         dirty = false;
@@ -1118,20 +1127,26 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     public void render() {
-        if (hasMeshData) {
+        if (mesh != null && hasMeshData) {
             mesh.render();
         }
     }
 
     /** Renders the see-through (glass/ice) faces - the caller draws this after all opaque geometry. */
     public void renderTranslucent() {
-        if (hasTranslucentData) {
+        if (translucentMesh != null && hasTranslucentData) {
             translucentMesh.render();
         }
     }
 
     public void destroy() {
-        mesh.destroy();
-        translucentMesh.destroy();
+        if (mesh != null) {
+            mesh.destroy();
+            mesh = null;
+        }
+        if (translucentMesh != null) {
+            translucentMesh.destroy();
+            translucentMesh = null;
+        }
     }
 }

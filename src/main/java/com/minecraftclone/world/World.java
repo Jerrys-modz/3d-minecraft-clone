@@ -7,9 +7,12 @@ import com.minecraftclone.engine.Weather;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.util.AABB;
+import com.minecraftclone.world.gen.EndGenerator;
+import com.minecraftclone.world.gen.NetherGenerator;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import com.minecraftclone.world.gen.TerrainGenerator.Biome;
 import com.minecraftclone.world.gen.WorldGenSettings;
+import com.minecraftclone.world.gen.WorldGenerator;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -34,6 +37,11 @@ import static org.lwjgl.opengl.GL11.glDepthMask;
  * of how far the player has cumulatively explored. Any chunk the player has
  * edited is persisted to disk on unload (see {@link ChunkStorage}) and
  * reloaded from there instead of being regenerated, so edits are never lost.
+ * <p>
+ * Each dimension of a save is its own {@link World} instance: its own
+ * {@link WorldGenerator}, its own chunk-storage subdirectory, and the same
+ * unbounded streaming behaviour. A game holds one World per
+ * {@link DimensionType} and renders only the active one.
  */
 public class World implements BlockAccessor {
 
@@ -43,9 +51,10 @@ public class World implements BlockAccessor {
     private final Map<Long, Chunk> chunks = new HashMap<>();
     /** Per-block block entities (furnaces today, machines/chests tomorrow), keyed by {@link #blockKey}. */
     private final Map<Long, BlockEntity> blockEntities = new HashMap<>();
-    private final TerrainGenerator generator;
+    private final WorldGenerator generator;
     private final TextureAtlas atlas;
     private final ChunkStorage storage;
+    private final DimensionType dimension;
 
     private int renderDistance = 6;
     private boolean leavesTransparent = false;
@@ -142,10 +151,21 @@ public class World implements BlockAccessor {
     // Skeleton arrows. Transient - not saved.
     private final List<ArrowEntity> arrows = new ArrayList<>();
 
-    public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir) {
-        this.generator = new TerrainGenerator(seed, genSettings);
+    public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir, DimensionType dimension) {
+        this.dimension = dimension;
+        this.generator = switch (dimension) {
+            case NETHER -> new NetherGenerator(seed);
+            case END -> new EndGenerator(seed);
+            default -> new TerrainGenerator(seed, genSettings);
+        };
         this.atlas = atlas;
-        this.storage = new ChunkStorage(saveDir);
+        // Edited chunks for each dimension live in their own subdirectory, so
+        // coordinates never collide across dimensions.
+        this.storage = new ChunkStorage(saveDir.resolve(dimension.saveFolder()));
+    }
+
+    public DimensionType getDimension() {
+        return dimension;
     }
 
     /** Packs chunk-grid coordinates into a single key. {@code chunkZ} is masked so negative coordinates stay unique. */
@@ -578,14 +598,14 @@ public class World implements BlockAccessor {
         return result;
     }
 
-    /** Height of the highest non-air block at the given world column (or SEA_LEVEL if the chunk isn't loaded). */
+    /** Height of the highest non-air block at the given world column (or the generator's sea level if the chunk isn't loaded). */
     public int getSurfaceHeight(int worldX, int worldZ) {
         for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
             if (getBlock(worldX, y, worldZ) != BlockType.AIR) {
                 return y;
             }
         }
-        return generator.getSeaLevel();
+        return generator.seaLevel();
     }
 
     /** Sets the per-block facing hint (used by doors) at a world position. */
