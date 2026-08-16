@@ -1,10 +1,13 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.engine.Climate;
 import com.minecraftclone.engine.Shader;
+import com.minecraftclone.engine.Weather;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.gen.TerrainGenerator;
+import com.minecraftclone.world.gen.TerrainGenerator.Biome;
 import com.minecraftclone.world.gen.WorldGenSettings;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
@@ -75,6 +78,23 @@ public class World implements BlockAccessor {
     // this is independent of frame rate altogether.
     private static final double FLUID_TICK_SECONDS = 0.15;
     private double lastFluidTickNanos = Double.NaN;
+
+    // Seasonal surface updates (snow accumulation + water freezing) run on a
+    // fixed wall-clock cadence for the same frame-rate independence reason as
+    // the fluid tick above (see FLUID_TICK_SECONDS), and probe random columns
+    // in a radius around the player so a blizzard visibly buries the ground
+    // rather than costing a full-column sweep every tick.
+    private static final double SNOW_UPDATE_SECONDS = 0.5;
+    private static final int SNOW_RADIUS = 24;
+    /** Freezing point: water freezes and snow sticks only where it's at or below this. */
+    private static final float FREEZING_TEMP = 0f;
+    /** Thaw point: accumulated snow melts and ice thaws only above this (a little hysteresis so a column stuck near 0°C doesn't flip-flop every tick). */
+    private static final float THAW_TEMP = 1f;
+    /** How deep a snow pile may get: a light coat in ordinary snow, buried under a blizzard. */
+    private static final int SNOW_MAX_LAYERS_NORMAL = 1;
+    private static final int SNOW_MAX_LAYERS_BLIZZARD = 3;
+    private double lastSnowUpdateNanos = Double.NaN;
+    private final Random snowRandom = new Random();
 
     // Reused across frames (see render) rather than allocated fresh each call -
     // frustum culling runs every single frame regardless of whether anything
@@ -653,6 +673,163 @@ public class World implements BlockAccessor {
             Chunk c = dirty.get(i);
             c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
         }
+    }
+
+    /**
+     * Drives seasonal surface changes near the player: while it's freezing it
+     * lays real {@link BlockType#SNOW} blocks on exposed surfaces (a thin coat
+     * in ordinary snow, piled deeper and faster in a blizzard) and freezes
+     * exposed water over to ice; once the weather warms it melts the
+     * accumulated snow back away and thaws the ice. Both are gated per-column
+     * by the local temperature, so in winter the snowline creeps down into
+     * temperate biomes (and lakes freeze over) and it all retreats in spring -
+     * while naturally snowy biomes (taiga, snowy, tundra, mountains, frozen
+     * ocean) keep their snow.
+     */
+    public void updateSeasonalSurfaces(double dt, float playerX, float playerZ, Climate climate) {
+        Weather weather = climate.getWeather();
+        boolean snowing = weather == Weather.SNOW || weather == Weather.BLIZZARD;
+        boolean blizzard = weather == Weather.BLIZZARD;
+        double nowNanos = System.nanoTime();
+        if (Double.isNaN(lastSnowUpdateNanos)) {
+            lastSnowUpdateNanos = nowNanos;
+        } else if ((nowNanos - lastSnowUpdateNanos) / 1e9 < SNOW_UPDATE_SECONDS) {
+            return;
+        } else {
+            lastSnowUpdateNanos = nowNanos;
+        }
+        // Blizzards lay snow faster (and deeper), and melting works harder so
+        // the snowline retreats at a visible pace once the weather warms up.
+        int passes = snowing ? (blizzard ? 16 : 8) : 12;
+        int px = (int) Math.floor(playerX);
+        int pz = (int) Math.floor(playerZ);
+        for (int i = 0; i < passes; i++) {
+            int x = px + snowRandom.nextInt(SNOW_RADIUS * 2) - SNOW_RADIUS;
+            int z = pz + snowRandom.nextInt(SNOW_RADIUS * 2) - SNOW_RADIUS;
+            if (x == px && z == pz) continue; // never bury the player's own column
+            if (snowing) tryAddSnow(x, z, climate, blizzard);
+            else tryMeltSnow(x, z, climate);
+            // Freezing is temperature-driven (independent of precipitation), but
+            // never right around the player - a winter swim shouldn't cage you.
+            if (Math.abs(x - px) > 1 || Math.abs(z - pz) > 1) {
+                tryUpdateWater(x, z, climate);
+            }
+        }
+    }
+
+    private void tryAddSnow(int x, int z, Climate climate, boolean blizzard) {
+        if (climate.temperatureFor(getBiome(x, z)) > FREEZING_TEMP) return;
+        int y = findSurfaceY(x, z);
+        if (y < 0) return;
+        BlockType surface = getBlock(x, y, z);
+        if (surface.slab) {
+            // Cap a bottom-half slab flush with snow by swapping in a snow-capped
+            // slab (which meshes as a slab under a snow cap), so there's no
+            // half-block gap above the slab's half-height top. Melting restores
+            // the plain slab, and the block type itself remembers it - so a
+            // saved-and-reloaded snowy slab still melts back correctly.
+            if (getBlock(x, y + 1, z) != BlockType.AIR) return;
+            setBlock(x, y, z, snowCapped(surface));
+            return;
+        }
+        if (!surface.canHoldSnow()) return;
+        if (getBlock(x, y + 1, z) != BlockType.AIR) return; // something's already there
+        if (snowDepth(x, z) >= (blizzard ? SNOW_MAX_LAYERS_BLIZZARD : SNOW_MAX_LAYERS_NORMAL)) return;
+        setBlock(x, y + 1, z, BlockType.SNOW);
+    }
+
+    private void tryMeltSnow(int x, int z, Climate climate) {
+        Biome biome = getBiome(x, z);
+        if (permanentSnow(biome)) return;
+        if (climate.temperatureFor(biome) <= THAW_TEMP) return;
+        int y = findSurfaceY(x, z);
+        if (y < 0) return;
+        BlockType top = getBlock(x, y, z);
+        if (top.isSnowCappedSlab()) {
+            setBlock(x, y, z, uncapped(top)); // the snow cap melts, the slab shows again
+            return;
+        }
+        if (top == BlockType.SNOW && getBlock(x, y + 1, z) == BlockType.AIR) {
+            setBlock(x, y, z, BlockType.AIR); // peel one layer off the top of the pile
+        }
+    }
+
+    /** Freezes exposed water over to ice while it's freezing, thaws it back to water once warm. */
+    private void tryUpdateWater(int x, int z, Climate climate) {
+        float temperature = climate.temperatureFor(getBiome(x, z));
+        if (temperature <= FREEZING_TEMP) {
+            int y = findSurfaceWaterY(x, z);
+            if (y >= 0 && getBlock(x, y + 1, z) == BlockType.AIR) {
+                BlockType water = getBlock(x, y, z);
+                // Only freeze static WATER, not WATER_SOURCE - sources keep flowing
+                // even in winter so their flow field stays intact through freeze/thaw.
+                if (water == BlockType.WATER) {
+                    setBlock(x, y, z, BlockType.ICE);
+                }
+            }
+        } else if (temperature > THAW_TEMP) {
+            int y = findSurfaceY(x, z);
+            if (y >= 0 && getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
+                setBlock(x, y, z, BlockType.WATER); // the surface ice thaws back into water
+            }
+        }
+    }
+
+    /** The top-most exposed static water cell (WATER with only air above), or -1 if the column has none. */
+    private int findSurfaceWaterY(int x, int z) {
+        for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
+            BlockType b = getBlock(x, y, z);
+            if (b == BlockType.WATER) return y;
+            if (b != BlockType.AIR) return -1; // solid (ice, ground, a roof) sits above any water
+        }
+        return -1;
+    }
+
+    /** The block an exposed water cell becomes at freezing temperatures: ice, or the same block unchanged. */
+    static BlockType frozenForm(BlockType water) {
+        return (water == BlockType.WATER || water == BlockType.WATER_SOURCE) ? BlockType.ICE : water;
+    }
+
+    /** The block a surface cell becomes once it thaws: water, or the same block unchanged. */
+    static BlockType thawedForm(BlockType block) {
+        return block == BlockType.ICE ? BlockType.WATER : block;
+    }
+
+    /** The snow-capped-slab form of a plain bottom-half slab. */
+    private static BlockType snowCapped(BlockType slab) {
+        return slab == BlockType.STONE_SLAB ? BlockType.SNOWY_STONE_SLAB : BlockType.SNOWY_PLANKS_SLAB;
+    }
+
+    /** The plain bottom-half slab a snow-capped slab melts back to. */
+    private static BlockType uncapped(BlockType capped) {
+        return capped == BlockType.SNOWY_STONE_SLAB ? BlockType.STONE_SLAB : BlockType.PLANKS_SLAB;
+    }
+
+    /** The y of the top-most non-air, non-fluid block in a column, or -1 if none. */
+    private int findSurfaceY(int x, int z) {
+        for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
+            BlockType b = getBlock(x, y, z);
+            if (b != BlockType.AIR && !b.isFluid()) return y;
+        }
+        return -1;
+    }
+
+    /** How many stacked snow blocks a column's surface carries (1 = a natural snow floor). */
+    private int snowDepth(int x, int z) {
+        int y = findSurfaceY(x, z);
+        if (y < 0 || getBlock(x, y, z) != BlockType.SNOW) return 0;
+        int depth = 0;
+        while (y >= 0 && getBlock(x, y, z) == BlockType.SNOW) {
+            depth++;
+            y--;
+        }
+        return depth;
+    }
+
+    /** Biomes whose ground is naturally snow (generated as snow), so it never melts away. */
+    private static boolean permanentSnow(Biome b) {
+        return b == Biome.TAIGA || b == Biome.SNOWY || b == Biome.TUNDRA
+                || b == Biome.MOUNTAIN || b == Biome.FROZEN_OCEAN;
     }
 
     /**
