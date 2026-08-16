@@ -1084,7 +1084,13 @@ public class Main {
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                player.update(dt, input, world);
+                // Cold exposure factor: how cold the weather is this frame (snow
+                // is chilly, a blizzard is freezing). Player weighs shelter and
+                // nearby fires against it before it affects hunger/health.
+                Weather w = climate.getWeather();
+                float coldFactor = (w == Weather.SNOW ? 0.6f : w == Weather.BLIZZARD ? 1f : 0f)
+                        * climate.getWeatherStrength();
+                player.update(dt, input, world, coldFactor);
 
                 // Dimension portals: walking into a NETHER_PORTAL or END_PORTAL block
                 // teleports the player to the linked dimension (with a short cooldown
@@ -1528,6 +1534,9 @@ public class Main {
                             player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
                             Inventory.HOTBAR_SIZE, window.getAspectRatio());
                 }
+                // A frost vignette fades in over everything as you freeze outside
+                // in a storm (see Player/PlayerStats cold exposure).
+                hud.renderFrostOverlay(player.getStats().getColdness());
             }
             hud.renderMessages(messages, window.getAspectRatio());
             if (started[0] && forecastOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
@@ -1574,6 +1583,9 @@ public class Main {
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C, %.0f%% humidity",
                                 climate.temperatureFor(biome), climate.humidityFor(biome) * 100f),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Cold exposure: %.0f%%",
+                                player.getStats().getColdness() * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),

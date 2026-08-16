@@ -242,8 +242,18 @@ public class InventoryController {
             dragVisited[releaseSlot] = true;
             dragDistinct++;
         }
+        // A single, non-stackable item (a tool or an armor piece) can't be
+        // "spread" one-per-slot across several touched slots the way a stack
+        // can - there's only one of it. Minecraft just resolves that drag as
+        // a normal click on wherever the mouse released, so a swipe that
+        // merely passes over unrelated slots on the way to (say) the wrong
+        // armor slot doesn't drop the item in the first empty slot it
+        // crossed - it's still refused by the same rules a direct click on
+        // the release slot would apply (e.g. clickArmorSlot's slot match).
         if (dragDistinct <= 1) {
             click(dragStart, dragRight, false);
+        } else if (hasCursorItem() && Inventory.maxStack(cursorType) <= 1) {
+            click(releaseSlot, dragRight, false);
         } else {
             resolveDrag();
         }
