@@ -499,6 +499,9 @@ public class Main {
                 // Unknown weather override - leave the random forecast alone.
             }
         }
+        if (System.getenv("MCCLONE_AUTOTEST_TEMP") != null) {
+            climate.forceTemperature(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_TEMP")));
+        }
         if (System.getenv("MCCLONE_AUTOTEST_FORECAST") != null) {
             forecastOpen[0] = true;
         }
@@ -655,9 +658,9 @@ public class Main {
                 // Rain/snow falls around the player's eye, scaled by the weather.
                 Vector3f eye = player.getEyePosition();
                 weatherParticles.update(dt, eye.x, eye.y, eye.z, climate.getWeather(), climate.getWeatherStrength());
-                // Snow accumulates on the ground while it's snowing (piled deep by
-                // blizzards) and melts back away in warm weather - see World.updateSnow.
-                world.updateSnow(dt, player.getPosition().x, player.getPosition().z, climate);
+                // Snow accumulates on the ground and water freezes over while it's
+                // cold, melting back away when it warms - see World.updateSeasonalSurfaces.
+                world.updateSeasonalSurfaces(dt, player.getPosition().x, player.getPosition().z, climate);
                 // Weather ambience: the precipitation hiss follows the weather's
                 // intensity, and a lightning flash that just started gets its rumble.
                 audio.setWeatherAmbience(climate.isPrecipitation() ? climate.getWeatherStrength() : 0f);
