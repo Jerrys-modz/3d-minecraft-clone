@@ -85,9 +85,9 @@ public enum BlockType {
     // Dimension blocks: Nether terrain, End terrain, and the portal blocks that
     // link the dimensions (see DimensionType.portalDestination). Portals are
     // non-solid glowing swirls you walk into to teleport.
-    NETHERRACK(89, true, false, 52, 52, 52),
-    SOUL_SAND(90, true, false, 53, 53, 53),
-    GLOWSTONE(91, true, false, 54, 54, 54, 0, 15), // dim self-light source
+    NETHERRACK(96, true, false, 52, 52, 52),
+    SOUL_SAND(97, true, false, 53, 53, 53),
+    GLOWSTONE(98, true, false, 54, 54, 54, 0, 15), // dim self-light source
     NETHER_PORTAL(92, false, true, 55, 55, 55, 0, 15),
     END_STONE(93, true, false, 56, 56, 56),
     OBSIDIAN(94, true, false, 57, 57, 57),
