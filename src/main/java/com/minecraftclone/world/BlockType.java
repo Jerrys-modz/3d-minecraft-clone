@@ -126,7 +126,13 @@ public enum BlockType {
     MUTTON(67, 12),
     // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
     ROTTEN_FLESH(68, 4),
-    BONES(69, 0);
+    BONES(69, 0),
+    // Snow-capped slabs: a bottom-half slab that's been covered by accumulating
+    // snow (see World.tryAddSnow). Full-height solid blocks that MESH as a slab
+    // under a snow cap, so the snow sits flush rather than floating above the
+    // slab's half-height top. Melting restores the plain slab underneath.
+    SNOWY_STONE_SLAB(89, true, false, 12, 4, 4),
+    SNOWY_PLANKS_SLAB(90, true, false, 12, 11, 11);
 
     public final byte id;
     public final boolean solid;
@@ -308,12 +314,18 @@ public enum BlockType {
 
     /**
      * True if this block's top face can support an accumulated snow layer:
-     * a full cube that isn't see-through and isn't a cross-shaped plant, so
-     * snow piles up on ground, stone, wood, roofs, sand and snow itself, but
-     * not on leaves, glass, ice, fluids, torches or flowers.
+     * an opaque full cube (or a bottom-half slab, which snow caps flush - see
+     * {@link #isSnowCappedSlab()}) that isn't a cross-shaped plant, so snow
+     * piles up on ground, stone, wood, roofs, sand and snow itself, but not on
+     * leaves, glass, ice, fluids, torches or flowers.
      */
     public boolean canHoldSnow() {
-        return solid && !transparent && !cross && !isTranslucent() && !slab;
+        return solid && !transparent && !cross && !isTranslucent();
+    }
+
+    /** True for a bottom-half slab that's been covered by a flush snow cap (see the snowy slab entries above). */
+    public boolean isSnowCappedSlab() {
+        return this == SNOWY_STONE_SLAB || this == SNOWY_PLANKS_SLAB;
     }
 
     /** True for the placeable, flowing fluid source blocks. */
