@@ -688,8 +688,13 @@ public class World implements BlockAccessor {
         boolean snowing = weather == Weather.SNOW || weather == Weather.BLIZZARD;
         boolean blizzard = weather == Weather.BLIZZARD;
         double nowNanos = System.nanoTime();
-        if (Double.isNaN(lastSnowUpdateNanos) || (nowNanos - lastSnowUpdateNanos) / 1e9 < SNOW_UPDATE_SECONDS) return;
-        lastSnowUpdateNanos = nowNanos;
+        if (Double.isNaN(lastSnowUpdateNanos)) {
+            lastSnowUpdateNanos = nowNanos;
+        } else if ((nowNanos - lastSnowUpdateNanos) / 1e9 < SNOW_UPDATE_SECONDS) {
+            return;
+        } else {
+            lastSnowUpdateNanos = nowNanos;
+        }
         // Blizzards lay snow faster (and deeper), and melting works harder so
         // the snowline retreats at a visible pace once the weather warms up.
         int passes = snowing ? (blizzard ? 16 : 8) : 12;
