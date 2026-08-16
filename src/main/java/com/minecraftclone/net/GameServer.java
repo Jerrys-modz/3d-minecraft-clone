@@ -1,10 +1,14 @@
 package com.minecraftclone.net;
 
+import com.minecraftclone.engine.DayNightCycle;
+import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Chunk;
+import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import com.minecraftclone.world.gen.WorldGenSettings;
+import org.joml.Vector3f;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -19,6 +23,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -43,6 +48,7 @@ public class GameServer implements AutoCloseable {
 
     private static final float TICK_SECONDS = 1f / 20f; // 20 Hz server tick
     private static final float MOVE_BROADCAST_SECONDS = 1f / 20f; // relay moves at up to 20 Hz
+    private static final float MOB_BROADCAST_SECONDS = 1f / 10f; // mob states at 10 Hz
     private static final int MAX_PLAYERS = 12;
 
     /** One connected client. Written only from the tick thread; read from its own reader thread. */
@@ -79,6 +85,11 @@ public class GameServer implements AutoCloseable {
     private volatile boolean running;
     private Thread acceptThread;
     private Thread tickThread;
+    /** Server-authoritative day/night (drives hostile spawning); GL-free. */
+    private final DayNightCycle dayNightCycle = new DayNightCycle();
+    private final Random rnd = new Random();
+    /** Mob ids we've already told clients about, so natural despawns broadcast removals. */
+    private final java.util.Set<Integer> knownMobIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public GameServer(int port, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
         this.settings = settings;
@@ -91,6 +102,7 @@ public class GameServer implements AutoCloseable {
         for (int i = 0; i < 400; i++) {
             world.update(0, 0);
         }
+        world.spawnInitialMobs(rnd, 0f, 0f, 10);
         float[] spawn = findSpawn();
         this.spawnX = spawn[0];
         this.spawnZ = spawn[1];
@@ -168,6 +180,7 @@ public class GameServer implements AutoCloseable {
 
     private void tickLoop() {
         long lastMoveBroadcast = System.nanoTime();
+        long lastMobBroadcast = System.nanoTime();
         long lastTick = System.nanoTime();
         while (running) {
             long now = System.nanoTime();
@@ -176,15 +189,27 @@ public class GameServer implements AutoCloseable {
 
             processInbox();
 
+            // Server-authoritative day/night drives hostile mob spawning.
+            dayNightCycle.update(dt);
+
             // Stream chunks around every connected player (server keeps them all).
             for (Client c : clients.values()) {
                 if (c.joined) world.update(c.x, c.z);
             }
 
+            // Simulate mobs against every connected player (nearest-player targeting).
+            tickMobs(dt);
+
             // Relay player moves to everyone else at a steady cadence.
             if ((now - lastMoveBroadcast) / 1_000_000_000f >= MOVE_BROADCAST_SECONDS) {
                 lastMoveBroadcast = now;
                 broadcastMoves();
+            }
+
+            // Relay mob poses to everyone at a coarser cadence.
+            if ((now - lastMobBroadcast) / 1_000_000_000f >= MOB_BROADCAST_SECONDS) {
+                lastMobBroadcast = now;
+                broadcastMobStates();
             }
 
             // Sleep the remainder of the tick.
@@ -196,6 +221,84 @@ public class GameServer implements AutoCloseable {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
+            }
+        }
+    }
+
+    /** Advances mobs and routes damage to whichever player each mob targeted. */
+    private void tickMobs(float dt) {
+        List<Client> players = new ArrayList<>();
+        List<Vector3f> positions = new ArrayList<>();
+        List<AABB> boxes = new ArrayList<>();
+        for (Client c : clients.values()) {
+            if (!c.joined) continue;
+            players.add(c);
+            positions.add(new Vector3f(c.x, c.y, c.z));
+            boxes.add(new AABB(c.x - 0.3f, c.y, c.z - 0.3f, c.x + 0.3f, c.y + 1.8f, c.z + 0.3f));
+        }
+        if (players.isEmpty()) return;
+        float[] damage = world.updateMobsMulti(dt, positions, boxes, dayNightCycle.isNight(), rnd);
+        for (int i = 0; i < players.size(); i++) {
+            if (damage[i] > 0f) {
+                try {
+                    send(players.get(i), Packets.encodePlayerDamage(new Packets.PlayerDamage(damage[i])));
+                } catch (IOException e) {
+                    disconnect(players.get(i));
+                }
+            }
+        }
+    }
+
+    /** Sends every currently-loaded mob's pose to all connected clients, plus spawn/removal diffs. */
+    private void broadcastMobStates() {
+        if (clients.isEmpty()) return;
+        List<Mob> mobs = world.getMobs();
+        java.util.Set<Integer> live = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        for (Mob m : mobs) {
+            live.add(m.id);
+            // A mob the server just spawned but we haven't told clients about yet.
+            if (!knownMobIds.contains(m.id)) {
+                knownMobIds.add(m.id);
+                try {
+                    broadcastAll(Packets.encodeMobSpawn(new Packets.MobSpawn(
+                            m.id, (byte) m.type.ordinal(), m.position.x, m.position.y, m.position.z, m.yaw)));
+                } catch (IOException e) {
+                    continue;
+                }
+            }
+            byte[] payload;
+            try {
+                payload = Packets.encodeMobState(new Packets.MobState(
+                        m.id, m.position.x, m.position.y, m.position.z, m.yaw, 0f));
+            } catch (IOException e) {
+                continue;
+            }
+            broadcastAll(payload);
+        }
+        // A previously-known mob that vanished (despawned / despawned at dawn) without
+        // a kill packet - tell clients to remove it.
+        for (int id : List.copyOf(knownMobIds)) {
+            if (!live.contains(id)) {
+                knownMobIds.remove(id);
+                try {
+                    broadcastAll(Packets.encodeMobRemove(new Packets.MobRemove(
+                            id, (byte) 0, 0f, -1000f, 0f)));
+                } catch (IOException e) {
+                    // best-effort
+                }
+            }
+        }
+    }
+
+    /** Sends a freshly-spawned mob to a single client (used on join so they see existing mobs). */
+    private void sendMobSpawns(Client client) {
+        for (Mob m : world.getMobs()) {
+            try {
+                send(client, Packets.encodeMobSpawn(new Packets.MobSpawn(
+                        m.id, (byte) m.type.ordinal(), m.position.x, m.position.y, m.position.z, m.yaw)));
+            } catch (IOException e) {
+                disconnect(client);
+                return;
             }
         }
     }
@@ -222,6 +325,8 @@ public class GameServer implements AutoCloseable {
                     handleChat(client, chat);
                 } else if (packet instanceof Packets.ChunkRequest req) {
                     requestChunk(client, req.cx(), req.cz());
+                } else if (packet instanceof Packets.MobAttack attack) {
+                    handleMobAttack(client, attack);
                 }
             } catch (IOException e) {
                 disconnect(client);
@@ -265,6 +370,9 @@ public class GameServer implements AutoCloseable {
         // Tell everyone else the newcomer appeared.
         broadcastOthers(client, Packets.encodePlayerJoined(new Packets.PlayerJoined(
                 client.id, name, spawnX, y, spawnZ, 0f, 0f)));
+
+        // Send the newcomer every currently-loaded mob so the world isn't empty for them.
+        sendMobSpawns(client);
 
         System.out.println(name + " joined (" + getPlayerCount() + " online)");
     }
@@ -316,6 +424,22 @@ public class GameServer implements AutoCloseable {
         if (text.isEmpty()) return;
         broadcastAll(Packets.encodeChatMsg(new Packets.ChatMsg(client.id, client.name, text)));
         System.out.println("<" + client.name + "> " + text);
+    }
+
+    /**
+     * A player swung at a mob: apply the damage server-side, drop the loot if it
+     * died, and broadcast the removal so every client sees the same result.
+     */
+    private void handleMobAttack(Client client, Packets.MobAttack attack) throws IOException {
+        if (!client.joined) return;
+        Mob mob = world.mobById(attack.mobId());
+        if (mob == null) return;
+        boolean killed = world.damageMob(mob, attack.damage(), client.x, client.z, rnd);
+        if (killed) {
+            knownMobIds.remove(mob.id);
+            broadcastAll(Packets.encodeMobRemove(new Packets.MobRemove(
+                    mob.id, (byte) mob.type.ordinal(), mob.position.x, mob.position.y, mob.position.z)));
+        }
     }
 
     private void broadcastMoves() {

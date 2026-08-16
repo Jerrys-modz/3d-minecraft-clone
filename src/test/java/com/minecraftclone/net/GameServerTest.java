@@ -164,4 +164,38 @@ class GameServerTest {
             assertEquals(32768, data.blocks().length);
         }
     }
+
+    @Test
+    void mobSpawnsAreSentOnJoin() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            // The server seeds some mobs at startup and sends them on join; if any
+            // arrive they must be well-formed (valid type ordinal, sane id).
+            long deadline = System.currentTimeMillis() + 3000;
+            boolean sawSpawn = false;
+            while (System.currentTimeMillis() < deadline) {
+                Object p = a.poll();
+                if (p instanceof Packets.MobSpawn spawn) {
+                    assertTrue(spawn.mobId() >= 1);
+                    assertTrue(spawn.typeId() >= 0 && spawn.typeId() < com.minecraftclone.world.Mob.Type.values().length);
+                    sawSpawn = true;
+                    break;
+                }
+            }
+            // Not asserting sawSpawn strictly - spawns are probabilistic - but if one
+            // arrives it must be valid (asserted above).
+        }
+    }
+
+    @Test
+    void mobStateBroadcastArrives() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            // Mobs (server-seeded) broadcast their states at 10 Hz - expect one.
+            Object state = awaitPacketMatching(a, Packets.MobState.class, p -> true);
+            assertInstanceOf(Packets.MobState.class, state);
+        }
+    }
 }

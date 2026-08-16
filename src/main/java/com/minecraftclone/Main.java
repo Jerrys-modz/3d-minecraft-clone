@@ -109,6 +109,8 @@ public class Main {
     private volatile String netError;
     /** Remote players seen via the server, keyed by their server-assigned id. */
     private final Map<Integer, RemotePlayer> remotePlayers = new LinkedHashMap<>();
+    /** Remote mobs seen via the server, keyed by their server-assigned id. */
+    private final Map<Integer, Mob> remoteMobs = new LinkedHashMap<>();
     /** Draws other players' bodies; created in run() once the GL context exists. */
     private PlayerRenderer playerRenderer;
 
@@ -411,6 +413,41 @@ public class Main {
         }
     }
 
+    /** Sends a mob attack to the server (server applies the damage authoritatively). */
+    private void sendMobAttack(Mob mob, float damage) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected() || mob.id <= 0) return;
+        try {
+            client.sendMobAttack(mob.id, damage);
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /** The mob the crosshair is aimed at: local mobs, or remote players' mobs in multiplayer. */
+    private Mob raycastTargetMob(Player player, World world) {
+        Vector3f eye = player.getEyePosition();
+        Vector3f front = player.getCamera().getFront();
+        if (netClient != null && netClient.isConnected()) {
+            return raycastRemoteMobs(eye, front);
+        }
+        return world.raycastMob(eye, front, REACH_DISTANCE);
+    }
+
+    /** Raycasts against the server-relayed mob list (multiplayer) using {@code Mob.rayIntersects}. */
+    private Mob raycastRemoteMobs(Vector3f eye, Vector3f front) {
+        Mob best = null;
+        float bestT = REACH_DISTANCE;
+        for (Mob m : remoteMobs.values()) {
+            float t = Mob.rayIntersects(eye, front, bestT, m.getAABB());
+            if (t >= 0f) {
+                bestT = t;
+                best = m;
+            }
+        }
+        return best;
+    }
+
     /** Tears down the multiplayer session and returns to the main menu. */
     private void leaveMultiplayer() {
         if (hostServer != null) {
@@ -422,6 +459,7 @@ public class Main {
             netClient = null;
         }
         remotePlayers.clear();
+        remoteMobs.clear();
         netError = null;
     }
 
@@ -436,7 +474,7 @@ public class Main {
                                     WorldGenSettings genSettings,
                                     DayNightCycle dayNightCycle, Calendar calendar, boolean[] started,
                                     boolean[] mainMenuOpen, boolean[] multiplayerOpen, boolean[] mpConnecting,
-                                    Window window, Input input, List<Hud.Message> messages) {
+                                    Window window, Input input, List<Hud.Message> messages, AudioEngine audio) {
         World created = null;
         Object packet;
         while ((packet = client.poll()) != null) {
@@ -524,6 +562,41 @@ public class Main {
             } else if (packet instanceof Packets.Reject reject) {
                 showMessage(messages, reject.reason(), new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
                 netError = reject.reason();
+            } else if (packet instanceof Packets.MobSpawn spawn) {
+                if (world != null && remoteMobs != null && !remoteMobs.containsKey(spawn.mobId())) {
+                    Mob.Type type = spawn.typeId() >= 0 && spawn.typeId() < Mob.Type.values().length
+                            ? Mob.Type.values()[spawn.typeId()] : Mob.Type.PIG;
+                    Mob mob = new Mob(type, spawn.x(), spawn.y(), spawn.z());
+                    mob.id = spawn.mobId();
+                    mob.yaw = spawn.yaw();
+                    mob.target.set(spawn.x(), spawn.y(), spawn.z());
+                    mob.targetYaw = spawn.yaw();
+                    remoteMobs.put(spawn.mobId(), mob);
+                }
+            } else if (packet instanceof Packets.MobState state) {
+                if (world != null && remoteMobs != null) {
+                    Mob mob = remoteMobs.get(state.mobId());
+                    if (mob != null) {
+                        mob.target.set(state.x(), state.y(), state.z());
+                        mob.targetYaw = state.yaw();
+                    }
+                }
+            } else if (packet instanceof Packets.MobRemove remove) {
+                if (remoteMobs != null) {
+                    Mob gone = remoteMobs.remove(remove.mobId());
+                    // Drop the mob's loot where it died (unless it just despawned - y == -1000).
+                    if (world != null && gone != null && remove.y() > -500f) {
+                        BlockType drop = gone.dropType();
+                        int count = 1 + (int) (Math.random() * (gone.type == Mob.Type.SHEEP ? 2 : 3));
+                        world.spawnItem((int) Math.floor(remove.x()), (int) Math.floor(remove.y()),
+                                (int) Math.floor(remove.z()), drop, count, new Random());
+                    }
+                }
+            } else if (packet instanceof Packets.PlayerDamage dmg) {
+                if (world != null && player != null) {
+                    player.getStats().damage(dmg.amount());
+                    audio.play(SoundEvent.HURT);
+                }
             }
         }
         if (created != null) {
@@ -1026,7 +1099,7 @@ public class Main {
                 } else {
                     World newWorld = processNetPackets(netClient, world, player, atlas, settings, saveRoot,
                             genSettings, dayNightCycle, calendar, started, mainMenuOpen, multiplayerOpen,
-                            mpConnecting, window, input, messages);
+                            mpConnecting, window, input, messages, audio);
                     if (newWorld != null) world = newWorld;
                     // Send the local player's pose to the server at ~20 Hz.
                     if (started[0] && netMoveTimer[0] >= 0.05f) {
@@ -1457,6 +1530,10 @@ public class Main {
                 for (RemotePlayer rp : remotePlayers.values()) {
                     rp.tick(dt);
                 }
+                // Same for remote mobs.
+                for (Mob rm : remoteMobs.values()) {
+                    rm.tickRemote(dt);
+                }
 
                 if (player.hasJustJumped()) audio.play(SoundEvent.JUMP);
                 if (player.hasJustLanded()) audio.play(SoundEvent.LAND);
@@ -1586,7 +1663,7 @@ public class Main {
 
                 // What the crosshair is aimed at: a mob takes priority over the block
                 // behind it, so swinging at a pig doesn't dig up the ground behind it.
-                Mob targetedMob = world.raycastMob(player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
+                Mob targetedMob = raycastTargetMob(player, world);
                 targetedMobRef[0] = targetedMob;
 
                 // Attacking: holding left-click hits the targeted mob on a short cooldown
@@ -1596,9 +1673,15 @@ public class Main {
                     // Creative kills in one hit; survival/adventure deal tool damage
                     // (a sword hits harder than a bare-handed punch).
                     float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldItem);
-                    boolean killed = world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
-                    audio.playAt(killed ? SoundEvent.MOB_DEATH : SoundEvent.ATTACK,
-                            targetedMob.position.x, targetedMob.position.y, targetedMob.position.z, 1f);
+                    if (netClient != null && netClient.isConnected()) {
+                        // Server-authoritative: send the swing; the server applies
+                        // damage and broadcasts death/loot.
+                        sendMobAttack(targetedMob, damage);
+                    } else {
+                        boolean killed = world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
+                        audio.playAt(killed ? SoundEvent.MOB_DEATH : SoundEvent.ATTACK,
+                                targetedMob.position.x, targetedMob.position.y, targetedMob.position.z, 1f);
+                    }
                     attackCooldown[0] = 0.45f;
                     // Swords wear out with use (creative tools never break).
                     if (!mode.isCreative() && Mining.isSword(heldItem) && player.getDurability().use(heldItem)) {
@@ -1793,7 +1876,9 @@ public class Main {
             atlas.bind();
             world.render(chunkShader, projection, view);
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
-            mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
+            List<Mob> renderMobs = new ArrayList<>(world.getMobs());
+            renderMobs.addAll(remoteMobs.values());
+            mobRenderer.render(mobTextures, renderMobs, world.getArrows());
             if (!remotePlayers.isEmpty()) {
                 playerRenderer.render(mobTextures, List.copyOf(remotePlayers.values()));
             }
@@ -1883,10 +1968,11 @@ public class Main {
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format(Locale.ROOT, "Entities: %d mobs, %d items", world.getMobs().size(), world.getItems().size()),
+                hud.drawTextLeft(String.format(Locale.ROOT, "Entities: %d mobs, %d items",
+                                world.getMobs().size() + remoteMobs.size(), world.getItems().size()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 if (netClient != null) {
-                    hud.drawTextLeft("Multiplayer: " + remotePlayers.size() + " other player(s)",
+                    hud.drawTextLeft("Multiplayer: " + remotePlayers.size() + " other player(s), " + remoteMobs.size() + " shared mob(s)",
                             -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 }
                 Runtime rt = Runtime.getRuntime();

@@ -91,6 +91,10 @@ public class NetClient implements AutoCloseable {
         send(Packets.encodeChunkRequest(cx, cz));
     }
 
+    public void sendMobAttack(int mobId, float damage) throws IOException {
+        send(Packets.encodeMobAttack(new Packets.MobAttack(mobId, damage)));
+    }
+
     private void send(byte[] payload) throws IOException {
         if (disconnected) throw new IOException("Not connected.");
         synchronized (out) {

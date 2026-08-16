@@ -117,6 +117,8 @@ public class World implements BlockAccessor {
 
     // Passive animals wandering the surface. Transient - not saved.
     private final List<Mob> mobs = new ArrayList<>();
+    /** Next id for a newly spawned mob - lets a multiplayer server address mobs by id. */
+    private int nextMobId = 1;
     private static final int MAX_MOBS = 32;                    // loaded at once
     private static final float MOB_SPAWN_RADIUS = 40f;         // spawn within this many blocks
     private static final float MOB_DESPAWN_RADIUS = 72f;       // despawn beyond this
@@ -933,6 +935,113 @@ public class World implements BlockAccessor {
         return damage;
     }
 
+    /**
+     * Multiplayer variant of {@link #updateMobs}: advances every mob with the
+     * *nearest* of several players as its target, spawns around each player up
+     * to the same global caps, and returns the damage each player took (indexed
+     * like {@code playerPositions}) - melee hits, arrow hits, and fallback
+     * damage all routed to the right player. Call once per server tick.
+     */
+    public float[] updateMobsMulti(float dt, List<Vector3f> playerPositions, List<AABB> playerBoxes, boolean night, Random rnd) {
+        int count = playerPositions.size();
+        float[] damage = new float[count];
+        float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
+
+        for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
+            Mob mob = it.next();
+            int nearest = nearestPlayerIndex(mob.position, playerPositions);
+            Vector3f target = playerPositions.get(nearest);
+            float dx = mob.position.x - target.x;
+            float dz = mob.position.z - target.z;
+            boolean gone = mob.isHostile() && !night;
+            if (gone || dx * dx + dz * dz > despawnSq || mob.position.y < -64f) {
+                it.remove();
+                continue;
+            }
+            mob.update(dt, this, rnd, target);
+            damage[nearest] += mob.getMeleeRequest();
+            if (mob.wantsToShoot()) {
+                spawnArrow(mob, target, rnd);
+            }
+        }
+
+        if (night && hostileCount() < MAX_HOSTILES && rnd.nextInt(HOSTILE_SPAWN_ODDS) == 0) {
+            int p = rnd.nextInt(count);
+            trySpawnHostile(rnd, playerPositions.get(p).x, playerPositions.get(p).z);
+        }
+        if (mobs.size() < MAX_MOBS && rnd.nextInt(MOB_SPAWN_ODDS) == 0) {
+            int p = rnd.nextInt(count);
+            trySpawnMob(rnd, playerPositions.get(p).x, playerPositions.get(p).z);
+        }
+
+        float[] arrowDamage = updateArrowsMulti(dt, playerBoxes);
+        for (int i = 0; i < count; i++) {
+            damage[i] += arrowDamage[i];
+        }
+        return damage;
+    }
+
+    /** Index of the closest player to {@code pos} (mob AI targets the nearest, like Minecraft). */
+    private static int nearestPlayerIndex(Vector3f pos, List<Vector3f> playerPositions) {
+        int best = 0;
+        float bestSq = Float.MAX_VALUE;
+        for (int i = 0; i < playerPositions.size(); i++) {
+            Vector3f p = playerPositions.get(i);
+            float dx = pos.x - p.x, dz = pos.z - p.z;
+            float sq = dx * dx + dz * dz;
+            if (sq < bestSq) {
+                bestSq = sq;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /** Advances arrows against several players, returning per-player damage (indexed like {@code boxes}). */
+    private float[] updateArrowsMulti(float dt, List<AABB> playerBoxes) {
+        float[] damage = new float[playerBoxes.size()];
+        for (Iterator<ArrowEntity> it = arrows.iterator(); it.hasNext(); ) {
+            ArrowEntity a = it.next();
+            a.age += dt;
+            if (a.age > ArrowEntity.LIFETIME || a.position.y < -32f || a.stuck) {
+                it.remove();
+                continue;
+            }
+            a.velocity.y -= 20f * dt;
+
+            float speed = (float) Math.sqrt(a.velocity.x * a.velocity.x + a.velocity.y * a.velocity.y + a.velocity.z * a.velocity.z);
+            float move = speed * dt;
+            if (move <= 0f) continue;
+            int steps = Math.max(1, (int) Math.ceil(move / 0.2f));
+            float sub = dt / steps;
+            boolean consumed = false;
+            for (int s = 0; s < steps && !consumed; s++) {
+                a.position.x += a.velocity.x * sub;
+                a.position.y += a.velocity.y * sub;
+                a.position.z += a.velocity.z * sub;
+
+                AABB arrowBox = new AABB(a.position.x - 0.1f, a.position.y - 0.1f, a.position.z - 0.1f,
+                        a.position.x + 0.1f, a.position.y + 0.1f, a.position.z + 0.1f);
+                for (int i = 0; i < playerBoxes.size(); i++) {
+                    if (playerBoxes.get(i).intersects(arrowBox)) {
+                        damage[i] += ARROW_DAMAGE;
+                        consumed = true;
+                        break;
+                    }
+                }
+                if (getBlock((int) Math.floor(a.position.x), (int) Math.floor(a.position.y),
+                        (int) Math.floor(a.position.z)).isCollidable()) {
+                    a.stuck = true;
+                    break;
+                }
+            }
+            if (consumed) {
+                it.remove();
+            }
+        }
+        return damage;
+    }
+
     /** Advances skeleton arrows (gravity, block/player collisions) and returns player damage taken. */
     private float updateArrows(float dt, AABB playerBox) {
         float damage = 0f;
@@ -1005,7 +1114,7 @@ public class World implements BlockAccessor {
             if (!getBlock(x, y, z).isCollidable()) continue;
             if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
             Mob.Type type = rnd.nextBoolean() ? Mob.Type.ZOMBIE : Mob.Type.SKELETON;
-            mobs.add(new Mob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
+            mobs.add(newMob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
             return;
         }
     }
@@ -1037,9 +1146,24 @@ public class World implements BlockAccessor {
             if (getBlock(x, y, z) != BlockType.GRASS) continue;
             if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
             Mob.Type type = Mob.Type.values()[rnd.nextInt(Mob.Type.values().length)];
-            mobs.add(new Mob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
+            mobs.add(newMob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
             return;
         }
+    }
+
+    /** Creates a mob with the next server id, ready to be added to {@link #mobs}. */
+    private Mob newMob(Mob.Type type, float x, float y, float z) {
+        Mob mob = new Mob(type, x, y, z);
+        mob.id = nextMobId++;
+        return mob;
+    }
+
+    /** The mob with the given id, or null (multiplayer attacks reference mobs by id). */
+    public Mob mobById(int id) {
+        for (Mob m : mobs) {
+            if (m.id == id) return m;
+        }
+        return null;
     }
 
     /**

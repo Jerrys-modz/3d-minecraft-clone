@@ -28,6 +28,7 @@ class PacketsTest {
         else if (packet instanceof Packets.BreakBlock p) payload = Packets.encodeBreakBlock(p);
         else if (packet instanceof Packets.Chat p) payload = Packets.encodeChat(p.text());
         else if (packet instanceof Packets.ChunkRequest p) payload = Packets.encodeChunkRequest(p.cx(), p.cz());
+        else if (packet instanceof Packets.MobAttack p) payload = Packets.encodeMobAttack(p);
         else if (packet instanceof Packets.Welcome p) payload = Packets.encodeWelcome(p);
         else if (packet instanceof Packets.PlayerJoined p) payload = Packets.encodePlayerJoined(p);
         else if (packet instanceof Packets.PlayerLeft p) payload = Packets.encodePlayerLeft(p);
@@ -36,6 +37,10 @@ class PacketsTest {
         else if (packet instanceof Packets.ChunkData p) payload = Packets.encodeChunkData(p);
         else if (packet instanceof Packets.ChunkAck p) payload = Packets.encodeChunkAck(p.cx(), p.cz());
         else if (packet instanceof Packets.ChatMsg p) payload = Packets.encodeChatMsg(p);
+        else if (packet instanceof Packets.MobSpawn p) payload = Packets.encodeMobSpawn(p);
+        else if (packet instanceof Packets.MobState p) payload = Packets.encodeMobState(p);
+        else if (packet instanceof Packets.MobRemove p) payload = Packets.encodeMobRemove(p);
+        else if (packet instanceof Packets.PlayerDamage p) payload = Packets.encodePlayerDamage(p);
         else if (packet instanceof Packets.Ready) payload = Packets.opcodeOnly(Packets.OP_READY);
         else throw new IllegalArgumentException("No encoder for " + packet);
         // Frame it like the real socket path does, then read it back.
@@ -203,6 +208,55 @@ class PacketsTest {
     @Test
     void readyRoundTrips() throws Exception {
         assertInstanceOf(Packets.Ready.class, roundTrip(new Packets.Ready()));
+    }
+
+    @Test
+    void mobAttackRoundTrips() throws Exception {
+        Packets.MobAttack in = new Packets.MobAttack(7, 4f);
+        Packets.MobAttack out = assertInstanceOf(Packets.MobAttack.class, roundTrip(in));
+        assertEquals(7, out.mobId());
+        assertEquals(4f, out.damage());
+    }
+
+    @Test
+    void mobSpawnRoundTrips() throws Exception {
+        Packets.MobSpawn in = new Packets.MobSpawn(3, (byte) 1, 1f, 64f, 2f, 0.5f);
+        Packets.MobSpawn out = assertInstanceOf(Packets.MobSpawn.class, roundTrip(in));
+        assertEquals(3, out.mobId());
+        assertEquals(1, out.typeId());
+        assertEquals(1f, out.x());
+        assertEquals(64f, out.y());
+        assertEquals(2f, out.z());
+        assertEquals(0.5f, out.yaw());
+    }
+
+    @Test
+    void mobStateRoundTrips() throws Exception {
+        Packets.MobState in = new Packets.MobState(4, 10f, 70f, 20f, 1.2f, 0f);
+        Packets.MobState out = assertInstanceOf(Packets.MobState.class, roundTrip(in));
+        assertEquals(4, out.mobId());
+        assertEquals(10f, out.x());
+        assertEquals(70f, out.y());
+        assertEquals(20f, out.z());
+        assertEquals(1.2f, out.yaw());
+    }
+
+    @Test
+    void mobRemoveRoundTrips() throws Exception {
+        Packets.MobRemove in = new Packets.MobRemove(2, (byte) 0, 5f, 64f, 5f);
+        Packets.MobRemove out = assertInstanceOf(Packets.MobRemove.class, roundTrip(in));
+        assertEquals(2, out.mobId());
+        assertEquals(0, out.typeId());
+        assertEquals(5f, out.x());
+        assertEquals(64f, out.y());
+        assertEquals(5f, out.z());
+    }
+
+    @Test
+    void playerDamageRoundTrips() throws Exception {
+        Packets.PlayerDamage in = new Packets.PlayerDamage(3.5f);
+        Packets.PlayerDamage out = assertInstanceOf(Packets.PlayerDamage.class, roundTrip(in));
+        assertEquals(3.5f, out.amount());
     }
 
     @Test

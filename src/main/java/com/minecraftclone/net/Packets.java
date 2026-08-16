@@ -39,6 +39,7 @@ public final class Packets {
     public static final byte OP_CHAT = 5;           // C->S: chat message
     public static final byte OP_READY = 6;          // C->S: client finished loading, requests spawn + chunks
     public static final byte OP_CHUNK_REQUEST = 7;  // C->S: ask for a chunk's authoritative contents
+    public static final byte OP_MOB_ATTACK = 8;     // C->S: swing at a mob (id + damage)
 
     public static final byte OP_WELCOME = 11;       // S->C: join accepted, world identity + spawn
     public static final byte OP_REJECT = 12;        // S->C: join rejected (e.g. server full)
@@ -49,6 +50,10 @@ public final class Packets {
     public static final byte OP_CHUNK_DATA = 17;    // S->C: full chunk contents
     public static final byte OP_CHUNK_ACK = 18;     // S->C: chunk exists (vanilla, matches seed) - no payload needed
     public static final byte OP_CHAT_MSG = 19;      // S->C: chat message from a player
+    public static final byte OP_MOB_SPAWN = 20;     // S->C: a mob appeared
+    public static final byte OP_MOB_STATE = 21;     // S->C: a mob's position/look/health
+    public static final byte OP_MOB_REMOVE = 22;    // S->C: a mob died or despawned
+    public static final byte OP_PLAYER_DAMAGE = 23; // S->C: a mob hurt you
 
     // ---------------------------------------------------------------
     // Shared encode/decode helpers
@@ -107,6 +112,21 @@ public final class Packets {
     }
 
     public record ChunkRequest(int cx, int cz) {
+    }
+
+    public record MobAttack(int mobId, float damage) {
+    }
+
+    public record MobSpawn(int mobId, byte typeId, float x, float y, float z, float yaw) {
+    }
+
+    public record MobState(int mobId, float x, float y, float z, float yaw, float health) {
+    }
+
+    public record MobRemove(int mobId, byte typeId, float x, float y, float z) {
+    }
+
+    public record PlayerDamage(float amount) {
     }
 
     public record Welcome(int selfId, long seed, int worldType, boolean structures,
@@ -203,6 +223,16 @@ public final class Packets {
         out.writeByte(OP_CHUNK_REQUEST);
         out.writeInt(cx);
         out.writeInt(cz);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeMobAttack(MobAttack attack) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_MOB_ATTACK);
+        out.writeInt(attack.mobId());
+        out.writeFloat(attack.damage());
         out.close();
         return buf.toByteArray();
     }
@@ -338,6 +368,56 @@ public final class Packets {
         return buf.toByteArray();
     }
 
+    public static byte[] encodeMobSpawn(MobSpawn spawn) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_MOB_SPAWN);
+        out.writeInt(spawn.mobId());
+        out.writeByte(spawn.typeId());
+        out.writeFloat(spawn.x());
+        out.writeFloat(spawn.y());
+        out.writeFloat(spawn.z());
+        out.writeFloat(spawn.yaw());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeMobState(MobState state) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_MOB_STATE);
+        out.writeInt(state.mobId());
+        out.writeFloat(state.x());
+        out.writeFloat(state.y());
+        out.writeFloat(state.z());
+        out.writeFloat(state.yaw());
+        out.writeFloat(state.health());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeMobRemove(MobRemove remove) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_MOB_REMOVE);
+        out.writeInt(remove.mobId());
+        out.writeByte(remove.typeId());
+        out.writeFloat(remove.x());
+        out.writeFloat(remove.y());
+        out.writeFloat(remove.z());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodePlayerDamage(PlayerDamage damage) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_PLAYER_DAMAGE);
+        out.writeFloat(damage.amount());
+        out.close();
+        return buf.toByteArray();
+    }
+
     // ---------------------------------------------------------------
     // Decoders (return null for unsupported opcodes)
     // ---------------------------------------------------------------
@@ -354,6 +434,7 @@ public final class Packets {
             case OP_BREAK_BLOCK -> new BreakBlock(in.readInt(), in.readInt(), in.readInt(), in.readBoolean());
             case OP_CHAT -> new Chat(in.readUTF());
             case OP_CHUNK_REQUEST -> new ChunkRequest(in.readInt(), in.readInt());
+            case OP_MOB_ATTACK -> new MobAttack(in.readInt(), in.readFloat());
             case OP_READY -> new Ready();
             case OP_WELCOME -> new Welcome(in.readInt(), in.readLong(), in.readInt(), in.readBoolean(),
                     in.readInt(), in.readInt(), in.readInt(), in.readFloat(), in.readFloat(), in.readFloat());
@@ -379,6 +460,10 @@ public final class Packets {
             }
             case OP_CHUNK_ACK -> new ChunkAck(in.readInt(), in.readInt());
             case OP_CHAT_MSG -> new ChatMsg(in.readInt(), in.readUTF(), in.readUTF());
+            case OP_MOB_SPAWN -> new MobSpawn(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat());
+            case OP_MOB_STATE -> new MobState(in.readInt(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat());
+            case OP_MOB_REMOVE -> new MobRemove(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat());
+            case OP_PLAYER_DAMAGE -> new PlayerDamage(in.readFloat());
             default -> throw new IOException("Unknown opcode: " + op);
         };
     }
