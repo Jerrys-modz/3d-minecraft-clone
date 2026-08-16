@@ -51,6 +51,8 @@ public class TextureAtlas {
     public static final int CHEST_TILE = 50;
     /** Tile index of the barrel's face. */
     public static final int BARREL_TILE = 51;
+    /** Tile index of the lightning-lit fire cross. */
+    public static final int FIRE_TILE = 52;
 
     private int textureId;
 
@@ -130,6 +132,7 @@ public class TextureAtlas {
         paintBarrel(image, BARREL_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
+        paintFire(image, FIRE_TILE, rnd);
 
         return image;
     }
@@ -1142,6 +1145,24 @@ public class TextureAtlas {
                 if (d <= 3.2) {
                     int color = d <= 1.4 ? 0xFFE066 : (d <= 2.4 ? 0xF2A93B : 0xD9601A);
                     img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                }
+            }
+        }
+    }
+
+    /** A taller, wispier flame than the torch's, with translucent edges - the lightning-struck fire. */
+    private void paintFire(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        double cx = 7.5, cy = 5.5;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 2; x <= 13; x++) {
+                double d = Math.hypot(x - cx, (y - cy) * 0.9);
+                double wobble = 0.5 * Math.sin(x * 1.7 + y * 2.3 + rnd.nextInt(4));
+                if (d + wobble <= 5.2) {
+                    int color = d <= 1.6 ? 0xFFF2A0 : (d <= 3.0 ? 0xF2A93B : 0xC73B12);
+                    int alpha = d <= 4.0 ? 0xFF000000 : 0x99000000;
+                    img.setRGB(ox + x, oy + y, alpha | color);
                 }
             }
         }

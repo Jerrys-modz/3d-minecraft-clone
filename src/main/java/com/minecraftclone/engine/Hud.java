@@ -3,6 +3,7 @@ package com.minecraftclone.engine;
 import com.minecraftclone.Settings;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.GuiTextures;
 import com.minecraftclone.engine.graphics.IconMesh;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.LineMesh;
@@ -58,6 +59,8 @@ public class Hud {
     private static final float INV_SLOT = 0.082f;
     private static final float INV_GAP = 0.012f;
     private static final float INV_STEP = INV_SLOT + INV_GAP;
+    /** Width of a Minecraft-style 9-slice panel's border (logical units). */
+    private static final float GUI_BORDER = 0.018f;
     private static final float INV_GRID_CENTER_X = 0.12f;   // horizontal center of the 9-wide inventory grid
     private static final float INV_TOP_ROW_Y = 0.16f;       // center y of the inventory's top row
     private static final float CRAFT_LEFT_X = -0.86f + INV_SLOT / 2f; // center x of the crafting grid's left column
@@ -137,6 +140,12 @@ public class Hud {
     private final LineMesh tooltipPanel = new LineMesh(GL_TRIANGLES);
     private final LineMesh settingsTrack = new LineMesh(GL_TRIANGLES);
     private final LineMesh settingsFill = new LineMesh(GL_TRIANGLES);
+    /** Textured GUI art (9-slice panels + slots, light/dark theme). */
+    private GuiTextures guiTextures;
+    private boolean darkGui = false;
+    private final IconMesh guiQuadMesh = new IconMesh();
+    private final FloatArray guiVerts = new FloatArray(512);
+    private final IntArray guiInds = new IntArray(256);
 
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
@@ -160,6 +169,12 @@ public class Hud {
         this.text = new TextRenderer(font, hudShader);
         buildCrosshair();
         buildCubeOutline();
+    }
+
+    /** Provides the GUI art (must be generated before any screen is drawn) and the current light/dark theme. */
+    public void setGuiTextures(GuiTextures guiTextures, boolean darkGui) {
+        this.guiTextures = guiTextures;
+        this.darkGui = darkGui;
     }
 
     private void buildCrosshair() {
@@ -594,24 +609,31 @@ public class Hud {
         float left = -panelW / 2f;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
 
-        // Semi-transparent panel background.
-        float[] panel = {
-                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y - panelH / 2f, 0,
-                left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
-                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
-                left, SETTINGS_CENTER_Y + panelH / 2f, 0,
-        };
-        settingsPanel.upload(panel);
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.55f));
-        settingsPanel.render();
-        lineShader.unbind();
+        // Minecraft-style textured panel background (9-slice) when GUI art is available.
+        if (guiTextures != null) {
+            guiVerts.clear();
+            guiInds.clear();
+            renderGuiPanel(left, SETTINGS_CENTER_Y - panelH / 2f, left + panelW, SETTINGS_CENTER_Y + panelH / 2f);
+            flushGuiQuads();
+        } else {
+            float[] panel = {
+                    left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y - panelH / 2f, 0,
+                    left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                    left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                    left, SETTINGS_CENTER_Y + panelH / 2f, 0,
+            };
+            settingsPanel.upload(panel);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.55f));
+            settingsPanel.render();
+            lineShader.unbind();
+        }
 
         // Title, centered near the top of the panel.
-        drawCenteredText("Settings", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
+        drawCenteredTextShadowed("Settings", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
 
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
@@ -778,7 +800,37 @@ public class Hud {
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
         Vector4f dim = new Vector4f(0.62f, 0.62f, 0.62f, 1f);
-        drawCenteredText("Select World", 0f, 0.5f, 0.07f, WHITE);
+
+        int rows = worldNames.size() + 1; // worlds + Create New World
+        float panelW = 0.95f;
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * 0.07f;
+        float left = -panelW / 2f;
+        float top = 0.5f + panelH / 2f;
+
+        // Minecraft-style textured panel background (9-slice) when GUI art is available.
+        if (guiTextures != null) {
+            guiVerts.clear();
+            guiInds.clear();
+            renderGuiPanel(left, 0.5f - panelH / 2f, left + panelW, 0.5f + panelH / 2f);
+            flushGuiQuads();
+        } else {
+            float[] panel = {
+                    left, 0.5f - panelH / 2f, 0, left + panelW, 0.5f - panelH / 2f, 0,
+                    left + panelW, 0.5f + panelH / 2f, 0,
+                    left, 0.5f - panelH / 2f, 0, left + panelW, 0.5f + panelH / 2f, 0,
+                    left, 0.5f + panelH / 2f, 0,
+            };
+            settingsPanel.upload(panel);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.6f));
+            settingsPanel.render();
+            lineShader.unbind();
+        }
+
+        drawCenteredTextShadowed("Select World", 0f, top - SETTINGS_PAD - 0.04f, 0.07f, WHITE);
 
         float y = 0.3f;
         int shown = 0;
@@ -829,22 +881,30 @@ public class Hud {
         float left = -panelW / 2f;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
 
-        float[] panel = {
-                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y - panelH / 2f, 0,
-                left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
-                left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
-                left, SETTINGS_CENTER_Y + panelH / 2f, 0,
-        };
-        settingsPanel.upload(panel);
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.6f));
-        settingsPanel.render();
-        lineShader.unbind();
+        // Minecraft-style textured panel background (9-slice) when GUI art is available.
+        if (guiTextures != null) {
+            guiVerts.clear();
+            guiInds.clear();
+            renderGuiPanel(left, SETTINGS_CENTER_Y - panelH / 2f, left + panelW, SETTINGS_CENTER_Y + panelH / 2f);
+            flushGuiQuads();
+        } else {
+            float[] panel = {
+                    left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y - panelH / 2f, 0,
+                    left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                    left, SETTINGS_CENTER_Y - panelH / 2f, 0, left + panelW, SETTINGS_CENTER_Y + panelH / 2f, 0,
+                    left, SETTINGS_CENTER_Y + panelH / 2f, 0,
+            };
+            settingsPanel.upload(panel);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.6f));
+            settingsPanel.render();
+            lineShader.unbind();
+        }
 
-        drawCenteredText("World Generation", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
+        drawCenteredTextShadowed("World Generation", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
 
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
@@ -1019,6 +1079,17 @@ public class Hud {
         text.render(hudTransform, color);
     }
 
+    /** Like {@link #drawCenteredText} but with a dark drop shadow, so light text stays readable on the light GUI theme. */
+    private void drawCenteredTextShadowed(String value, float centerX, float bottomY, float size, Vector4f color) {
+        float shadowOffset = size * 0.06f;
+        text.begin();
+        text.add(value, centerX - text.measure(value, size) / 2f + shadowOffset, bottomY - shadowOffset, size);
+        text.render(hudTransform, new Vector4f(0f, 0f, 0f, darkGui ? 0.9f : 0.45f));
+        text.begin();
+        text.add(value, centerX - text.measure(value, size) / 2f, bottomY, size);
+        text.render(hudTransform, color);
+    }
+
     private void addQuad(float minX, float minY, float maxX, float maxY, float[] uv) {
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
         int base = blockVertexCounter;
@@ -1187,6 +1258,55 @@ public class Hud {
         return Math.abs(logicalX - cx) <= HOTBAR_SLOT_SIZE / 2f && Math.abs(logicalY - cy) <= HOTBAR_SLOT_SIZE / 2f;
     }
 
+    // --- Textured GUI helpers (Minecraft-style panels and slots) ---
+
+    /** Adds one textured quad (x, y, u, v) to the batch for {@link #flushGuiQuads}. */
+    private void addGuiQuad(float minX, float minY, float maxX, float maxY, float[] uv) {
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        int base = guiVerts.size() / 4;
+        guiVerts.add(minX); guiVerts.add(minY); guiVerts.add(u0); guiVerts.add(v1);
+        guiVerts.add(maxX); guiVerts.add(minY); guiVerts.add(u1); guiVerts.add(v1);
+        guiVerts.add(maxX); guiVerts.add(maxY); guiVerts.add(u1); guiVerts.add(v0);
+        guiVerts.add(minX); guiVerts.add(maxY); guiVerts.add(u0); guiVerts.add(v0);
+        guiInds.add(base); guiInds.add(base + 1); guiInds.add(base + 2);
+        guiInds.add(base); guiInds.add(base + 2); guiInds.add(base + 3);
+    }
+
+    /** Draws a 9-slice panel from {@code left},{@code bottom} to {@code right},{@code top}, with a fixed border. */
+    private void renderGuiPanel(float left, float bottom, float right, float top) {
+        float b = GUI_BORDER;
+        // 9-slice: four corners fixed, four edges stretched, center stretched.
+        addGuiQuad(left, bottom, left + b, bottom + b, guiTextures.panelUV(0, 2, darkGui));
+        addGuiQuad(left + b, bottom, right - b, bottom + b, guiTextures.panelUV(1, 2, darkGui));
+        addGuiQuad(right - b, bottom, right, bottom + b, guiTextures.panelUV(2, 2, darkGui));
+        addGuiQuad(left, bottom + b, left + b, top - b, guiTextures.panelUV(0, 1, darkGui));
+        addGuiQuad(left + b, bottom + b, right - b, top - b, guiTextures.panelUV(1, 1, darkGui));
+        addGuiQuad(right - b, bottom + b, right, top - b, guiTextures.panelUV(2, 1, darkGui));
+        addGuiQuad(left, top - b, left + b, top, guiTextures.panelUV(0, 0, darkGui));
+        addGuiQuad(left + b, top - b, right - b, top, guiTextures.panelUV(1, 0, darkGui));
+        addGuiQuad(right - b, top - b, right, top, guiTextures.panelUV(2, 0, darkGui));
+    }
+
+    /** Draws one textured slot cell centred at ({@code cx}, {@code cy}) with half-size {@code half}. */
+    private void renderGuiSlot(float cx, float cy, float half) {
+        addGuiQuad(cx - half, cy - half, cx + half, cy + half, guiTextures.slotUV(darkGui));
+    }
+
+    /** Uploads and draws the accumulated GUI-textured quads (panels + slots) in one pass. */
+    private void flushGuiQuads() {
+        if (guiInds.isEmpty()) return;
+        guiQuadMesh.upload(guiVerts.toArray(), guiInds.toArray());
+        hudShader.bind();
+        hudShader.setUniform("transform", hudTransform);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", WHITE);
+        guiTextures.bind();
+        guiQuadMesh.render();
+        hudShader.unbind();
+        guiVerts.clear();
+        guiInds.clear();
+    }
+
     /**
      * Draws any full-screen container gui: the 36-slot inventory grid (with the
      * hotbar as its bottom row) plus the open container's slots - the 3x3
@@ -1220,57 +1340,54 @@ public class Hud {
                 ? chestTopRowY(gui) + INV_SLOT / 2f + 0.055f - shift
                 : INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
         float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f - shift;
-        float[] panel = {
-                panelLeft, panelBottom, 0, panelRight, panelBottom, 0, panelRight, panelTop, 0,
-                panelLeft, panelBottom, 0, panelRight, panelTop, 0, panelLeft, panelTop, 0,
-        };
-        inventoryPanel.upload(panel);
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        lineShader.setUniform("color", new Vector4f(0.78f, 0.78f, 0.78f, 0.35f));
-        inventoryPanel.render();
+
+        // Minecraft-style textured panel (9-slice) behind the whole screen.
+        if (guiTextures != null) {
+            guiVerts.clear();
+            guiInds.clear();
+            renderGuiPanel(panelLeft, panelBottom, panelRight, panelTop);
+            // Slot cells for every interactive slot.
+            float half = INV_SLOT / 2f - 0.004f;
+            for (int id = 0; id < gui.slotCount(); id++) {
+                float[] c = slotCenter(gui, id);
+                if (c != null) renderGuiSlot(c[0], c[1], half);
+            }
+            flushGuiQuads();
+        } else {
+            // Fallback (no GUI art): translucent flat panel + dark slot squares.
+            float[] panel = {
+                    panelLeft, panelBottom, 0, panelRight, panelBottom, 0, panelRight, panelTop, 0,
+                    panelLeft, panelBottom, 0, panelRight, panelTop, 0, panelLeft, panelTop, 0,
+            };
+            inventoryPanel.upload(panel);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0.78f, 0.78f, 0.78f, 0.35f));
+            inventoryPanel.render();
+            lineShader.unbind();
+
+            slotBgVerts.clear();
+            float half = INV_SLOT / 2f - 0.004f;
+            for (int id = 0; id < gui.slotCount(); id++) {
+                float[] c = slotCenter(gui, id);
+                if (c != null) addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
+            }
+            inventorySlotBg.upload(slotBgVerts.toArray());
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.45f));
+            inventorySlotBg.render();
+            lineShader.unbind();
+        }
 
         // Furnace decorations (flame + arrow) behind the slot icons.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
             renderFurnaceProgress(gui.furnace());
         }
-
-        // Slot backgrounds (dark squares) for every interactive slot. The open
-        // container's own slots are tinted differently from the player's so it's
-        // obvious which grid belongs to what (a chest's 3x9/6x9 grid vs the
-        // player's inventory below it).
-        float half = INV_SLOT / 2f - 0.004f;
-
-        // The player inventory's slots first.
-        slotBgVerts.clear();
-        for (int id = 0; id < Inventory.SIZE; id++) {
-            float[] c = slotCenter(gui, id);
-            addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
-        }
-        inventorySlotBg.upload(slotBgVerts.toArray());
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.35f));
-        inventorySlotBg.render();
-
-        // The open container's slots (crafting grid, furnace, chest...).
-        slotBgVerts.clear();
-        for (int id = 0; id < gui.slotCount(); id++) {
-            if (gui.isPlayerSlot(id)) continue;
-            float[] c = slotCenter(gui, id);
-            if (c != null) addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
-        }
-        inventorySlotBg.upload(slotBgVerts.toArray());
-        // Chest slots get a warmer tint to read as "the container's own space".
-        lineShader.setUniform("color", chest
-                ? new Vector4f(0.22f, 0.13f, 0.04f, 0.5f)
-                : new Vector4f(0f, 0f, 0f, 0.45f));
-        inventorySlotBg.render();
-        lineShader.unbind();
 
         // A solid divider band between the chest's grid and the player's
         // inventory, so the two spaces read as separate sections at a glance.
@@ -1289,7 +1406,9 @@ public class Hud {
             lineShader.setUniform("projection", identity);
             lineShader.setUniform("view", identity);
             lineShader.setUniform("model", hudTransform);
-            lineShader.setUniform("color", new Vector4f(0.1f, 0.1f, 0.1f, 0.6f));
+            lineShader.setUniform("color", darkGui
+                    ? new Vector4f(0.7f, 0.7f, 0.7f, 0.25f)
+                    : new Vector4f(0.1f, 0.1f, 0.1f, 0.35f));
             inventoryPanel.render();
             lineShader.unbind();
         }
@@ -1345,8 +1464,9 @@ public class Hud {
             renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
         }
 
-        // Title + hint line.
-        drawCenteredText(gui.title(), 0f, panelTop - 0.05f, 0.045f, WHITE);
+        // Title + hint line. The title gets a shadow so it stays legible on the
+        // bright light-theme panel.
+        drawCenteredTextShadowed(gui.title(), 0f, panelTop - 0.05f, 0.045f, WHITE);
         drawCenteredText("Left: take/place stack    Right: one item    Shift-click: move    Drag: spread    Esc: close",
                 0f, panelBottom - 0.04f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
@@ -1511,6 +1631,7 @@ public class Hud {
         lineShader.setUniform("model", hudTransform);
         lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.62f));
         inventoryPanel.render();
+        lineShader.unbind();
 
         // Tabs: a highlight behind the selected tab, labels for all.
         int tabCount = CreativeCatalog.TABS.length;
@@ -1525,31 +1646,73 @@ public class Hud {
                         cx - TAB_W / 2f, TAB_CENTER_Y + TAB_H / 2f, 0,
                 };
                 inventorySlotBg.upload(bg);
+                lineShader.bind();
+                lineShader.setUniform("projection", identity);
+                lineShader.setUniform("view", identity);
+                lineShader.setUniform("model", hudTransform);
                 lineShader.setUniform("color", new Vector4f(0.35f, 0.35f, 0.35f, 0.95f));
                 inventorySlotBg.render();
+                lineShader.unbind();
             }
             drawCenteredText(CreativeCatalog.TABS[i].label(), cx, TAB_CENTER_Y - 0.022f, 0.026f,
                     selected ? WHITE : new Vector4f(0.72f, 0.72f, 0.72f, 1f));
         }
-        lineShader.unbind();
 
-        // Catalog slot backgrounds + icons for the selected tab.
+        // Textured slot cells for the catalog grid and the hotbar + destroy slot.
+        float centerY = slotCenterY();
+        float dx = destroySlotX();
+        if (guiTextures != null) {
+            guiVerts.clear();
+            guiInds.clear();
+            float half = CAT_SLOT / 2f - 0.005f;
+            BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
+            for (int i = 0; i < items.length; i++) {
+                float[] c = catalogItemCenter(i);
+                renderGuiSlot(c[0], c[1], half);
+            }
+            for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
+                float cx = slotCenterX(i, Inventory.HOTBAR_SIZE);
+                renderGuiSlot(cx, centerY, HOTBAR_SLOT_SIZE / 2f - 0.005f);
+            }
+            renderGuiSlot(dx, centerY, HOTBAR_SLOT_SIZE / 2f - 0.005f);
+            flushGuiQuads();
+        } else {
+            // Fallback: flat dark slot squares.
+            BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
+            float half = CAT_SLOT / 2f - 0.005f;
+            slotBgVerts.clear();
+            for (int i = 0; i < items.length; i++) {
+                float[] c = catalogItemCenter(i);
+                addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
+            }
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            inventorySlotBg.upload(slotBgVerts.toArray());
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.35f));
+            inventorySlotBg.render();
+            lineShader.unbind();
+
+            slotBgVerts.clear();
+            for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
+                float cx = slotCenterX(i, Inventory.HOTBAR_SIZE);
+                addQuad3(slotBgVerts, cx - half, centerY - half, cx + half, centerY + half);
+            }
+            addQuad3(slotBgVerts, dx - half, centerY - half, dx + half, centerY + half);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            inventorySlotBg.upload(slotBgVerts.toArray());
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.45f));
+            inventorySlotBg.render();
+            lineShader.unbind();
+        }
+
+        // Catalog item icons.
         BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
         float half = CAT_SLOT / 2f - 0.005f;
-        slotBgVerts.clear();
-        for (int i = 0; i < items.length; i++) {
-            float[] c = catalogItemCenter(i);
-            addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
-        }
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        inventorySlotBg.upload(slotBgVerts.toArray());
-        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.35f));
-        inventorySlotBg.render();
-        lineShader.unbind();
-
         beginSlotBatch();
         for (int i = 0; i < items.length; i++) {
             float[] c = catalogItemCenter(i);
@@ -1572,24 +1735,6 @@ public class Hud {
             inventoryHover.render();
             lineShader.unbind();
         }
-
-        // Hotbar slot backgrounds + the destroy slot, then their icons.
-        float centerY = slotCenterY();
-        slotBgVerts.clear();
-        for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
-            float cx = slotCenterX(i, Inventory.HOTBAR_SIZE);
-            addQuad3(slotBgVerts, cx - half, centerY - half, cx + half, centerY + half);
-        }
-        float dx = destroySlotX();
-        addQuad3(slotBgVerts, dx - half, centerY - half, dx + half, centerY + half);
-        lineShader.bind();
-        lineShader.setUniform("projection", identity);
-        lineShader.setUniform("view", identity);
-        lineShader.setUniform("model", hudTransform);
-        inventorySlotBg.upload(slotBgVerts.toArray());
-        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.45f));
-        inventorySlotBg.render();
-        lineShader.unbind();
 
         beginSlotBatch();
         float hotbarHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
@@ -1681,5 +1826,6 @@ public class Hud {
         tooltipPanel.destroy();
         settingsTrack.destroy();
         settingsFill.destroy();
+        guiQuadMesh.destroy();
     }
 }

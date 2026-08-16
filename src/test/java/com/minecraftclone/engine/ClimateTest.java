@@ -4,6 +4,7 @@ import com.minecraftclone.world.gen.TerrainGenerator.Biome;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -82,10 +83,35 @@ class ClimateTest {
         Climate climate = rolledClimate(0);
         Weather live = climate.getWeather();
         assertNotNull(live);
-        assertTrue(live == Weather.CLEAR || live == Weather.RAIN || live == Weather.SNOW);
         // The current hour's forecast is exact (now is known) - the climate runs at
         // noon in the tests, so today's hour 12 matches the live weather.
         assertEquals(live, climate.getHourlyForecast()[12].weather());
+    }
+
+    @Test
+    void overcastReflectsTheWeather() {
+        Climate climate = rolledClimate(0);
+        climate.forceWeather(Weather.CLEAR);
+        assertEquals(0f, climate.getOvercast(), 0.0001f);
+        climate.forceWeather(Weather.FOG);
+        assertTrue(climate.getOvercast() > 0f, "fog dims the sky");
+        climate.forceWeather(Weather.RAIN);
+        float rain = climate.getOvercast();
+        assertTrue(rain > 0f);
+        climate.forceWeather(Weather.THUNDERSTORM);
+        assertTrue(climate.getOvercast() > rain, "thunderstorm is darker than plain rain");
+        climate.forceWeather(Weather.BLIZZARD);
+        assertTrue(climate.getOvercast() >= 0.8f, "blizzard nearly blacks out the sky");
+    }
+
+    @Test
+    void severeWeatherIsHeavy() {
+        Climate climate = rolledClimate(0);
+        climate.forceWeather(Weather.THUNDERSTORM);
+        assertEquals(Weather.THUNDERSTORM, climate.getWeather());
+        assertTrue(climate.isPrecipitation());
+        assertTrue(climate.getWeatherStrength() >= 0.75f);
+        assertEquals(0f, climate.getFlashIntensity(), "no flash before any time passes");
     }
 
     @Test
@@ -148,5 +174,18 @@ class ClimateTest {
             assertEquals(before[h].weather(), after[h].weather(),
                     "forcing the live weather must not change the already-rolled forecast");
         }
+    }
+
+    @Test
+    void forcedTemperatureShortCircuitsTheNaturalClimate() {
+        Climate climate = rolledClimate(0);
+        float natural = climate.temperatureFor(Biome.PLAINS);
+        climate.forceTemperature(-12f);
+        assertEquals(-12f, climate.temperatureFor(Biome.PLAINS), 0.001f);
+        assertEquals(-12f, climate.temperatureFor(Biome.DESERT), 0.001f);
+        assertTrue(climate.hasForcedTemperature());
+        climate.forceTemperature(null);
+        assertEquals(natural, climate.temperatureFor(Biome.PLAINS), 0.001f);
+        assertFalse(climate.hasForcedTemperature());
     }
 }

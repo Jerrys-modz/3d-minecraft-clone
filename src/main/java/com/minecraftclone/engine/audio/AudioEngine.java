@@ -52,6 +52,8 @@ public class AudioEngine {
     private int[] sources = new int[0];
     private int nextSource = 0;
     private float masterVolume = 1f;
+    /** A dedicated looping source for the precipitation hiss (rain/snow/storms). */
+    private int weatherAmbientSource = 0;
 
     public AudioEngine() {
         for (SoundCategory category : SoundCategory.values()) {
@@ -81,6 +83,7 @@ public class AudioEngine {
             for (int i = 0; i < MAX_SOURCES; i++) {
                 sources[i] = AL10.alGenSources();
             }
+            weatherAmbientSource = AL10.alGenSources();
 
             for (SoundEvent e : SoundEvent.values()) {
                 fixedBuffers.put(e, upload(sounds.get(e)));
@@ -212,12 +215,39 @@ public class AudioEngine {
         }
     }
 
+    /**
+     * Drives the looping precipitation hiss (the {@link SoundEvent#RAIN} buffer):
+     * a non-zero {@code amount} (0..1) starts/continues the loop at that volume,
+     * zero stops it. Called every frame with the current weather's intensity, so
+     * the loop follows the weather and the ambient volume slider live.
+     */
+    public void setWeatherAmbience(float amount) {
+        if (!enabled || weatherAmbientSource == 0) return;
+        if (amount <= 0f) {
+            AL10.alSourceStop(weatherAmbientSource);
+            return;
+        }
+        Integer buffer = fixedBuffers.get(SoundEvent.RAIN);
+        AL10.alSourcei(weatherAmbientSource, AL10.AL_SOURCE_RELATIVE, AL10.AL_TRUE);
+        AL10.alSource3f(weatherAmbientSource, AL10.AL_POSITION, 0f, 0f, 0f);
+        AL10.alSourcef(weatherAmbientSource, AL10.AL_GAIN, clampVolume(amount) * categoryVolume(SoundCategory.AMBIENT));
+        if (buffer != null) {
+            AL10.alSourcei(weatherAmbientSource, AL10.AL_BUFFER, buffer);
+        }
+        AL10.alSourcei(weatherAmbientSource, AL10.AL_LOOPING, AL10.AL_TRUE);
+        AL10.alSourcePlay(weatherAmbientSource);
+    }
+
     /** Idempotent cleanup: releases all OpenAL resources and resets state. Safe to call even if init failed partway. */
     private void cleanup() {
         if (sources.length > 0) {
             for (int source : sources) {
                 if (source != 0) AL10.alDeleteSources(source);
             }
+        }
+        if (weatherAmbientSource != 0) {
+            AL10.alDeleteSources(weatherAmbientSource);
+            weatherAmbientSource = 0;
         }
         for (int buffer : allBuffers) {
             AL10.alDeleteBuffers(buffer);
