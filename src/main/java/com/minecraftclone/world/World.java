@@ -765,7 +765,11 @@ public class World implements BlockAccessor {
         } else if (temperature > THAW_TEMP) {
             int y = findSurfaceY(x, z);
             if (y >= 0 && getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
-                setBlock(x, y, z, BlockType.WATER); // the surface ice thaws back into water
+                // Restore ice to the appropriate water type: sources for still water (lakes/oceans),
+                // plain WATER otherwise. A source sits above solid ground or more fluid.
+                BlockType below = (y > 0) ? getBlock(x, y - 1, z) : BlockType.BEDROCK;
+                boolean wasSource = !below.isFluid() || below.isFluidSource();
+                setBlock(x, y, z, wasSource ? BlockType.WATER_SOURCE : BlockType.WATER);
             }
         }
     }
