@@ -257,4 +257,37 @@ class InventoryControllerTest {
         assertEquals(BlockType.DIAMOND_CHESTPLATE, c.cursorType(), "chestplate can't be dragged into helmet slot");
         assertNull(inv.armorType(Inventory.ARMOR_SLOT_HELMET));
     }
+
+    @Test
+    void dragStartingOnABaggedArmorPieceRejectsAMismatchedSlot() {
+        // Regression: a drag that *starts* on an inventory slot holding armor (not
+        // already on the cursor) must not resolve via a plain click(dragStart, ...) -
+        // that would trigger the bag's auto-equip shortcut and jump the piece into its
+        // own matching slot, ignoring wherever the drag actually released.
+        Inventory inv = new Inventory();
+        inv.setSlot(10, BlockType.DIAMOND_CHESTPLATE, 1);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        int helmetSlot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_HELMET;
+        c.beginDrag(10, false);
+        c.continueDrag(helmetSlot);
+        c.endDrag(helmetSlot);
+        assertEquals(BlockType.DIAMOND_CHESTPLATE, c.cursorType(), "still on the cursor, not auto-equipped");
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_HELMET));
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_CHESTPLATE), "never auto-equipped into its own slot either");
+    }
+
+    @Test
+    void dragStartingOnABaggedArmorPieceEquipsItsMatchingSlot() {
+        // The same starting gesture, but released on the *correct* slot: should equip.
+        Inventory inv = new Inventory();
+        inv.setSlot(10, BlockType.DIAMOND_CHESTPLATE, 1);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        int chestplateSlot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_CHESTPLATE;
+        c.beginDrag(10, false);
+        c.continueDrag(chestplateSlot);
+        c.endDrag(chestplateSlot);
+        assertFalse(c.hasCursorItem());
+        assertEquals(BlockType.DIAMOND_CHESTPLATE, inv.armorType(Inventory.ARMOR_SLOT_CHESTPLATE));
+        assertTrue(inv.isEmpty(10));
+    }
 }

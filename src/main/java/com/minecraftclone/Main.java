@@ -724,7 +724,7 @@ public class Main {
                     if (world != null) {
                         float lightningDamage = lightningStrike(world, player, bolts, lightningRnd);
                         if (lightningDamage > 0f) {
-                            player.getStats().damage(lightningDamage);
+                            player.takeDamage(lightningDamage);
                         }
                     }
                 }
@@ -747,7 +747,7 @@ public class Main {
                         bolts.add(result.bolt());
                         audio.play(SoundEvent.THUNDER, 0.8f);
                         if (result.playerDamage() > 0f) {
-                            player.getStats().damage(result.playerDamage());
+                            player.takeDamage(result.playerDamage());
                         }
                         System.out.println("Autotest lightning strike at frame " + frameCount);
                     } else {
@@ -1204,6 +1204,12 @@ public class Main {
                 player.takeDamage(mobDamage);
                 audio.play(SoundEvent.HURT);
             }
+            // Every damage source for this frame (environmental hazards inside
+            // player.update(), lightning and mob hits via takeDamage() above/below it)
+            // has now had its chance to run - wear armor for the frame's total and
+            // clear the accumulator, once, here. See Player.finalizeDamage's javadoc
+            // for why this can't just live inside player.update() itself.
+            player.finalizeDamage();
 
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
             for (int i = messages.size() - 1; i >= 0; i--) {

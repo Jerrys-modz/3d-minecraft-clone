@@ -41,4 +41,45 @@ class PlayerStatsTest {
         assertEquals(0f, stats.getColdness());
         assertTrue(stats.getHunger() < PlayerStats.MAX_HUNGER, "the normal passive drain still applies");
     }
+
+    @Test
+    void damageAccumulatesForArmorWearAndClearsOnDemand() {
+        PlayerStats stats = new PlayerStats();
+        stats.damage(10f);
+        stats.damage(6f);
+        assertEquals(16f, stats.frameDamageAccumulator(), 0.001f, "multiple hits in a frame all accumulate");
+        stats.clearFrameDamage();
+        assertEquals(0f, stats.frameDamageAccumulator(), 0.001f);
+    }
+
+    @Test
+    void armorMultiplierScalesDamageDealtAndAccumulated() {
+        PlayerStats stats = new PlayerStats();
+        stats.setArmorMultiplier(0.5f); // half damage gets through
+        stats.damage(10f);
+        assertEquals(PlayerStats.MAX_HEALTH - 5f, stats.getHealth(), 0.001f);
+        assertEquals(5f, stats.frameDamageAccumulator(), 0.001f, "the accumulator tracks post-mitigation damage");
+    }
+
+    @Test
+    void resetAndForceFullClearArmorTransientState() {
+        // Regression: a stray hit's accumulated damage (and a non-default armor
+        // multiplier) must not linger across a reset/game-mode switch and later
+        // get wrongly applied to whatever armor is equipped by then.
+        PlayerStats reset = new PlayerStats();
+        reset.setArmorMultiplier(0.3f);
+        reset.damage(10f);
+        reset.reset();
+        assertEquals(0f, reset.frameDamageAccumulator(), 0.001f);
+        reset.damage(10f);
+        assertEquals(PlayerStats.MAX_HEALTH - 10f, reset.getHealth(), 0.001f, "multiplier reset to 1 (full damage)");
+
+        PlayerStats forceFull = new PlayerStats();
+        forceFull.setArmorMultiplier(0.3f);
+        forceFull.damage(10f);
+        forceFull.forceFull();
+        assertEquals(0f, forceFull.frameDamageAccumulator(), 0.001f);
+        forceFull.damage(10f);
+        assertEquals(PlayerStats.MAX_HEALTH - 10f, forceFull.getHealth(), 0.001f, "multiplier reset to 1 (full damage)");
+    }
 }

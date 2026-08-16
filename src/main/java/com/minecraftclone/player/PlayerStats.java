@@ -86,6 +86,8 @@ public class PlayerStats {
         coldness = 0f;
         staminaExhausted = false;
         dead = false;
+        armorMultiplier = 1f;
+        frameDamageAccumulator = 0f;
     }
 
     /** Keeps every stat topped up and the player alive - used in creative/spectator modes. */
@@ -97,6 +99,12 @@ public class PlayerStats {
         coldness = 0f;
         staminaExhausted = false;
         dead = false;
+        // Also drop any damage a stray hit accumulated right before switching into an
+        // invulnerable mode - otherwise it lingers unconsumed (this branch skips
+        // Player.finalizeDamage's wear step) and gets wrongly applied to whatever armor
+        // is equipped much later, if the player switches back to a mortal mode.
+        armorMultiplier = 1f;
+        frameDamageAccumulator = 0f;
     }
 
     public boolean canSprint() {

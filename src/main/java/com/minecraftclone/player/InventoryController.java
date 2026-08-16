@@ -250,9 +250,23 @@ public class InventoryController {
         // armor slot doesn't drop the item in the first empty slot it
         // crossed - it's still refused by the same rules a direct click on
         // the release slot would apply (e.g. clickArmorSlot's slot match).
+        // The item can already be on the cursor, or still sitting in
+        // dragStart (a press-and-drag starting on a filled slot) - either
+        // way it's the same non-spreadable case.
+        BlockType dragType = hasCursorItem() ? cursorType
+                : (gui.isOutputSlot(dragStart) ? null : slotType(dragStart));
         if (dragDistinct <= 1) {
             click(dragStart, dragRight, false);
-        } else if (hasCursorItem() && Inventory.maxStack(cursorType) <= 1) {
+        } else if (dragType != null && Inventory.maxStack(dragType) <= 1) {
+            if (!hasCursorItem()) {
+                // Lift it directly rather than via click(dragStart, ...): clicking a
+                // bagged armor piece with an empty cursor auto-equips it into its
+                // matching armor slot (see click()'s auto-equip shortcut), which would
+                // ignore wherever this drag actually released.
+                cursorType = dragType;
+                cursorCount = 1;
+                setSlot(dragStart, null, 0);
+            }
             click(releaseSlot, dragRight, false);
         } else {
             resolveDrag();

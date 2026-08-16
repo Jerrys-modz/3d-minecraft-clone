@@ -181,12 +181,33 @@ public class Player {
 
     /**
      * Applies {@code amount} damage to the player, mitigated by armor and accumulated
-     * for armor wear. Use this for external damage sources (mobs, etc.) so they route
-     * through the same armor-mitigation and armor-wear path as environmental hazards.
+     * for armor wear. Use this for external damage sources (mobs, lightning, etc.) so
+     * they route through the same armor-mitigation and armor-wear path as environmental
+     * hazards - and so they respect the invulnerability check, which a direct
+     * {@code getStats().damage(...)} call would silently skip.
+     * <p>
+     * Refreshes the armor multiplier from the current inventory first: callers may run
+     * before or after {@link #update}, so this can't rely on that frame's {@code update}
+     * having already refreshed it.
      */
     public void takeDamage(float amount) {
         if (gameMode.isInvulnerable()) return;
+        stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
         stats.damage(amount);
+    }
+
+    /**
+     * Wears equipped armor by whatever damage has accumulated this frame and clears the
+     * accumulator. Called once per frame from {@code Main}, after every damage source for
+     * the frame (environmental hazards inside {@link #update}, plus mob/lightning hits via
+     * {@link #takeDamage} which can happen before or after it) has had a chance to run -
+     * consuming the accumulator from inside {@code update} itself would miss damage from
+     * calls made later in the same frame, deferring their wear to the next frame instead
+     * (and, worse, applying it to whatever armor happens to be equipped by then).
+     */
+    public void finalizeDamage() {
+        wearArmor(stats.frameDamageAccumulator());
+        stats.clearFrameDamage();
     }
 
     /**
@@ -235,8 +256,6 @@ public class Player {
             if (hasRoofAbove(world)) coldness *= 0.15f;
             if (fireNearby(world)) coldness *= 0.15f;
             stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness);
-            wearArmor(stats.frameDamageAccumulator());
-            stats.clearFrameDamage();
         }
         lastFallImpactSpeed = 0f;
     }
