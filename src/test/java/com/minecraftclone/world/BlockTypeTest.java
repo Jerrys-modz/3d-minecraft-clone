@@ -65,4 +65,25 @@ class BlockTypeTest {
         assertFalse(BlockType.FIRE.solid, "fire never collides");
         assertEquals(14, BlockType.FIRE.lightLevel, "a lightning-lit flame glows brightly");
     }
+
+    /**
+     * Regression test for a constructor bug: the plain full-cube delegate used
+     * to pass its own sideTile (atlas tile index) into the foodValue slot
+     * instead of 0, so isEdible() (foodValue > 0) came back true for nearly
+     * every ordinary block. In survival, right-clicking one of these then ran
+     * Main's eat-branch instead of the place-branch - the item vanished from
+     * the hotbar via Player.eat() and no block ever appeared in the world.
+     */
+    @Test
+    void ordinaryCubeBlocksAreNotEdible() {
+        assertFalse(BlockType.DIRT.isEdible());
+        assertFalse(BlockType.STONE.isEdible());
+        assertFalse(BlockType.PLANKS.isEdible());
+        assertFalse(BlockType.GRASS.isEdible());
+        assertFalse(BlockType.SAND.isEdible());
+        assertEquals(0, BlockType.DIRT.foodValue);
+        assertEquals(0, BlockType.STONE.foodValue);
+        // Real food still works - foraged items keep their nonzero value.
+        assertTrue(BlockType.APPLE.isEdible());
+    }
 }

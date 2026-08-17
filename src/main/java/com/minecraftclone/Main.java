@@ -639,6 +639,42 @@ public class Main {
                 System.err.println("MCCLONE_AUTOTEST_PLACE: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE"));
             }
         }
+        // Diagnostic autotest hook: unlike MCCLONE_AUTOTEST_PLACE above (which
+        // places directly via world.setBlock, bypassing the player entirely),
+        // this drives the exact same placeOrEatHeldItem() a real right-click
+        // calls - survival inventory consumption included - via a real
+        // raycast from the camera. Logs inventory/world state before and
+        // after so a "block vanishes from the hotbar but never appears"
+        // report can be confirmed or ruled out headlessly.
+        if (System.getenv("MCCLONE_AUTOTEST_PLACE_SURVIVAL") != null && started[0]) {
+            try {
+                BlockType toPlace = BlockType.valueOf(System.getenv("MCCLONE_AUTOTEST_PLACE_SURVIVAL"));
+                player.setGameMode(GameMode.SURVIVAL);
+                player.getInventory().add(toPlace, 1);
+                int before = player.getInventory().getCount(toPlace);
+                Raycaster.Hit testHit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
+                if (testHit != null) {
+                    BlockType worldBefore = world.getBlock(testHit.placePos.x, testHit.placePos.y, testHit.placePos.z);
+                    placeOrEatHeldItem(world, player, GameMode.SURVIVAL, toPlace, testHit, audio, handRenderer);
+                    int after = player.getInventory().getCount(toPlace);
+                    BlockType worldAfter = world.getBlock(testHit.placePos.x, testHit.placePos.y, testHit.placePos.z);
+                    // Differential check: try a raw world.setBlock at the exact same
+                    // coordinates right after, to tell "the chunk there wasn't loaded
+                    // yet" apart from "placeOrEatHeldItem's own logic didn't place it".
+                    world.setBlock(testHit.placePos.x, testHit.placePos.y, testHit.placePos.z, BlockType.STONE);
+                    BlockType worldAfterRawSet = world.getBlock(testHit.placePos.x, testHit.placePos.y, testHit.placePos.z);
+                    System.out.println("AUTOTEST_PLACE_SURVIVAL: held=" + toPlace
+                            + " invBefore=" + before + " invAfter=" + after
+                            + " worldAfterRawSet=" + worldAfterRawSet
+                            + " placePos=" + testHit.placePos.x + "," + testHit.placePos.y + "," + testHit.placePos.z
+                            + " worldBefore=" + worldBefore + " worldAfter=" + worldAfter);
+                } else {
+                    System.out.println("AUTOTEST_PLACE_SURVIVAL: no raycast hit within reach");
+                }
+            } catch (IllegalArgumentException ignored) {
+                System.err.println("MCCLONE_AUTOTEST_PLACE_SURVIVAL: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE_SURVIVAL"));
+            }
+        }
         // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
         // the container screen can be screenshotted. MCCLONE_AUTOTEST_DOUBLE
         // merges a second chest beside it to screenshot a 54-slot double chest;
@@ -1421,54 +1457,7 @@ public class Main {
                                 world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
-                        if (heldItem.isEdible() && !mode.isCreative()) {
-                            if (player.eat(heldItem)) {
-                                audio.play(SoundEvent.EAT);
-                                handRenderer.triggerSwing();
-                            }
-                        } else if (!heldItem.isItem) {
-                            // Pure inventory items (tools, and any future non-edible item)
-                            // have no world tile and can never be placed as a block.
-                            Vector3i p = hit.placePos;
-                            // A submersible decoration (seaweed) placed where a fluid
-                            // already is grows inside it instead of replacing it - the
-                            // same rule world-gen follows (see TerrainGenerator). If that
-                            // cell's overlay slot is already taken, there's simply nowhere
-                            // to put it - skip placing rather than fall through and
-                            // overwrite the fluid it would have grown inside.
-                            boolean targetIsFluid = world.getBlock(p.x, p.y, p.z).isFluid();
-                            boolean overlayFull = world.getOverlay(p.x, p.y, p.z) != BlockType.AIR;
-                            boolean blocked = heldItem.isSubmersible() ? (targetIsFluid && overlayFull) : false;
-                            boolean intoFluid = heldItem.isSubmersible() && targetIsFluid && !overlayFull;
-                            if (!blocked && !intersectsPlayer(player, p)) {
-                                boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
-                                if (placed) {
-                                    handRenderer.triggerSwing();
-                                    if (intoFluid) {
-                                        world.setOverlay(p.x, p.y, p.z, heldItem);
-                                    } else {
-                                        world.setBlock(p.x, p.y, p.z, heldItem);
-                                    }
-                                    audio.playBlockSound(SoundMaterial.of(heldItem), BlockAction.PLACE, p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
-                                    // Doors, trapdoors, and other directional blocks
-                                    // (e.g. a furnace) face the player: the front sits
-                                    // on the side of the block nearest to them (opposite
-                                    // the look direction).
-                                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
-                                        Vector3f front = player.getCamera().getFront();
-                                        byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
-                                                ? (front.x >= 0 ? 3 : 2)
-                                                : (front.z >= 0 ? 1 : 0));
-                                        world.setBlockOrientation(p.x, p.y, p.z, facing);
-                                        // A door is 2 blocks tall: also place the top half.
-                                        if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
-                                            world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
-                                            world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        placeOrEatHeldItem(world, player, mode, heldItem, hit, audio, handRenderer);
                     }
                 }
             }
@@ -1968,6 +1957,69 @@ public class Main {
         } catch (IOException | NumberFormatException e) {
             System.err.println("Could not read/write seed file (" + e.getMessage() + "), using a fresh in-memory seed.");
             return System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * Right-click with a held item that isn't a door/trapdoor/GUI block: eats
+     * it if it's food, otherwise places it as a world block (or, for a
+     * submersible decoration like seaweed, into the target cell's overlay
+     * slot instead of replacing the fluid there). Shared by the real
+     * mouse-click handler and the {@code MCCLONE_AUTOTEST_PLACE_SURVIVAL}
+     * headless verification hook, so both exercise the exact same logic a
+     * player's right-click does - including the inventory consumption in
+     * survival, which the older direct-{@code world.setBlock} autotest hook
+     * bypasses entirely.
+     */
+    private void placeOrEatHeldItem(World world, Player player, GameMode mode, BlockType heldItem,
+                                     Raycaster.Hit hit, AudioEngine audio, HandRenderer handRenderer) {
+        if (heldItem.isEdible() && !mode.isCreative()) {
+            if (player.eat(heldItem)) {
+                audio.play(SoundEvent.EAT);
+                handRenderer.triggerSwing();
+            }
+        } else if (!heldItem.isItem) {
+            // Pure inventory items (tools, and any future non-edible item)
+            // have no world tile and can never be placed as a block.
+            Vector3i p = hit.placePos;
+            // A submersible decoration (seaweed) placed where a fluid
+            // already is grows inside it instead of replacing it - the
+            // same rule world-gen follows (see TerrainGenerator). If that
+            // cell's overlay slot is already taken, there's simply nowhere
+            // to put it - skip placing rather than fall through and
+            // overwrite the fluid it would have grown inside.
+            boolean targetIsFluid = world.getBlock(p.x, p.y, p.z).isFluid();
+            boolean overlayFull = world.getOverlay(p.x, p.y, p.z) != BlockType.AIR;
+            boolean blocked = heldItem.isSubmersible() ? (targetIsFluid && overlayFull) : false;
+            boolean intoFluid = heldItem.isSubmersible() && targetIsFluid && !overlayFull;
+            if (!blocked && !intersectsPlayer(player, p)) {
+                boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
+                if (placed) {
+                    handRenderer.triggerSwing();
+                    if (intoFluid) {
+                        world.setOverlay(p.x, p.y, p.z, heldItem);
+                    } else {
+                        world.setBlock(p.x, p.y, p.z, heldItem);
+                    }
+                    audio.playBlockSound(SoundMaterial.of(heldItem), BlockAction.PLACE, p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
+                    // Doors, trapdoors, and other directional blocks
+                    // (e.g. a furnace) face the player: the front sits
+                    // on the side of the block nearest to them (opposite
+                    // the look direction).
+                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
+                        Vector3f front = player.getCamera().getFront();
+                        byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
+                                ? (front.x >= 0 ? 3 : 2)
+                                : (front.z >= 0 ? 1 : 0));
+                        world.setBlockOrientation(p.x, p.y, p.z, facing);
+                        // A door is 2 blocks tall: also place the top half.
+                        if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
+                            world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
+                            world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
+                        }
+                    }
+                }
+            }
         }
     }
 

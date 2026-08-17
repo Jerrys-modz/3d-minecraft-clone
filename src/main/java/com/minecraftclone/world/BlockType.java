@@ -214,7 +214,12 @@ public enum BlockType {
 
     /** Full-cube block: distinct top/side/bottom textures, collides with the player. */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile) {
-        this(id, solid, transparent, topTile, sideTile, bottomTile, sideTile);
+        // Not sideTile - that accidentally landed in the foodValue slot below,
+        // making isEdible() (foodValue > 0) true for nearly every ordinary
+        // cube block (its own atlas tile index is almost always positive).
+        // Right-clicking one in survival then "ate" it via Player.eat()
+        // instead of placing it: consumed from the hotbar, no block appeared.
+        this(id, solid, transparent, topTile, sideTile, bottomTile, 0);
     }
 
     /** Full-cube block with a food value (not currently used - cubes aren't eaten - but kept symmetric). */
