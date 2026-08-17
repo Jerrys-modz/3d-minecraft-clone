@@ -971,32 +971,32 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
         // Bottom face: drawn unless a full-height block sits directly below.
         BlockType below = world.getBlock(wx, wy - 1, wz);
-        if (below == BlockType.AIR || below.cross || below.slab) {
+        if (below == BlockType.AIR || below.cross || below.slab || below.isStair() || below.isFence() || below.isWater() || below.isTranslucent() || below.isDoor() || below.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
                     uvs, LIGHT_BOTTOM, blockLight);
         }
 
         BlockType east = world.getBlock(wx + 1, wy, wz);
-        if (east == BlockType.AIR || east.cross) {
+        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}},
                     uvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType west = world.getBlock(wx - 1, wy, wz);
-        if (west == BlockType.AIR || west.cross) {
+        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}},
                     uvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType south = world.getBlock(wx, wy, wz + 1);
-        if (south == BlockType.AIR || south.cross) {
+        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
         }
         BlockType north = world.getBlock(wx, wy, wz - 1);
-        if (north == BlockType.AIR || north.cross) {
+        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
@@ -1054,7 +1054,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
         // Bottom face: drawn unless a full-height block sits below.
         BlockType below = world.getBlock(bx0, (int) y0 - 1, bz0);
-        if (below == BlockType.AIR || below.cross || below.slab || below.isStair()) {
+        if (below == BlockType.AIR || below.cross || below.slab || below.isStair() || below.isFence() || below.isWater() || below.isTranslucent() || below.isDoor() || below.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
                     uvs, LIGHT_BOTTOM, blockLight);
@@ -1065,34 +1065,34 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         // against the lower step (solid), so it gets culled - clean.
         int ex = (int) x1, wx2 = bx0 - 1, sz = (int) z1, nz = bz0 - 1;
         BlockType east = world.getBlock(ex, (int) y0, bz0);
-        if (east == BlockType.AIR || east.cross || east.isStair()) {
+        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}},
                     uvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType west = world.getBlock(wx2, (int) y0, bz0);
-        if (west == BlockType.AIR || west.cross || west.isStair()) {
+        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}},
                     uvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType south = world.getBlock(bx0, (int) y0, sz);
-        if (south == BlockType.AIR || south.cross || south.isStair()) {
+        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
         }
         BlockType north = world.getBlock(bx0, (int) y0, nz);
-        if (north == BlockType.AIR || north.cross || north.isStair()) {
+        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor()) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
         }
     }
 
-    /** True if the neighbour {@code t} connects a fence to it (another fence or any full solid block). */
+    /** True if the neighbour {@code t} connects a fence to it (another fence or any full solid block, excluding partial blocks). */
     private static boolean fenceConnects(BlockType t) {
-        return t != null && !t.isPassThrough() && (t.isFence() || t.solid);
+        return t != null && !t.isPassThrough() && (t.isFence() || (t.solid && !t.slab && !t.isStair() && !t.isDoor() && !t.isTrapdoor() && !t.isSnowCappedSlab()));
     }
 
     /**

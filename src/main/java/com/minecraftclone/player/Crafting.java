@@ -108,8 +108,8 @@ public final class Crafting {
         // Stairs: a 6-material "K.. / KK. / KKK" wedge -> 4 stairs.
         shaped("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);
         shaped("P..", "PP.", "PPP", BlockType.PLANKS_STAIRS, 4);
-        // Fence: 4 planks + 2 sticks in two columns -> 3 fence posts.
-        shaped("PS.", "PS.", "PS.", BlockType.WOODEN_FENCE, 3);
+        // Fence: 4 planks + 2 sticks (PSP / PSP / ...) -> 3 fence posts.
+        shaped("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);
 
         // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
         // itself is made by quenching a lava source with a water source (see

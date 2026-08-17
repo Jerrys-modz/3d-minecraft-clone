@@ -640,14 +640,32 @@ public class Main {
                     ? (front.x >= 0 ? 3 : 2)
                     : (front.z >= 0 ? 1 : 0));
             if (mode.equals("stairs")) {
+                // Each stair advances along its facing direction and climbs (increases Y).
                 for (int i = 0; i < 4; i++) {
-                    world.setBlock(px + i, py, pz, BlockType.STONE_STAIRS);
-                    world.setBlockOrientation(px + i, py, pz, facing);
+                    int stepX = px;
+                    int stepZ = pz;
+                    // Advance along the facing direction: facing 0=north(-Z), 1=south(+Z), 2=west(-X), 3=east(+X)
+                    switch (facing) {
+                        case 0 -> stepZ = pz - i;  // north
+                        case 1 -> stepZ = pz + i;  // south
+                        case 2 -> stepX = px - i;  // west
+                        case 3 -> stepX = px + i;  // east
+                    }
+                    world.setBlock(stepX, py + i, stepZ, BlockType.STONE_STAIRS);
+                    world.setBlockOrientation(stepX, py + i, stepZ, facing);
                 }
                 for (int i = 0; i < 4; i++) {
-                    System.out.println("Stair[" + i + "] = " + world.getBlock(px + i, py, pz));
+                    int stepX = px;
+                    int stepZ = pz;
+                    switch (facing) {
+                        case 0 -> stepZ = pz - i;
+                        case 1 -> stepZ = pz + i;
+                        case 2 -> stepX = px - i;
+                        case 3 -> stepX = px + i;
+                    }
+                    System.out.println("Stair[" + i + "] = " + world.getBlock(stepX, py + i, stepZ));
                 }
-                System.out.println("Placed 4 stone stairs facing " + facing);
+                System.out.println("Placed 4 stone stairs facing " + facing + " in a climbing run");
             } else if (mode.equals("fence")) {
                 for (int i = 0; i < 3; i++) {
                     world.setBlock(px + i, py, pz, BlockType.WOODEN_FENCE);

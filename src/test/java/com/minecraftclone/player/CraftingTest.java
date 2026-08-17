@@ -223,14 +223,14 @@ class CraftingTest {
 
     @Test
     void fenceCraftsFromPlanksAndSticks() {
-        // Fence: "PS. / PS. / PS." (4 planks + 2 sticks) -> 3 posts.
+        // Fence: "PSP / PSP / ..." (4 planks + 2 sticks) -> 3 posts.
         BlockType[] grid = new BlockType[9];
         grid[0] = BlockType.PLANKS;
         grid[1] = BlockType.STICK;
+        grid[2] = BlockType.PLANKS;
         grid[3] = BlockType.PLANKS;
         grid[4] = BlockType.STICK;
-        grid[6] = BlockType.PLANKS;
-        grid[7] = BlockType.STICK;
+        grid[5] = BlockType.PLANKS;
         Crafting.Recipe r = Crafting.match(grid);
         assertNotNull(r);
         assertEquals(BlockType.WOODEN_FENCE, r.output());
