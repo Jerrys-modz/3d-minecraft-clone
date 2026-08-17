@@ -1,6 +1,7 @@
 package com.minecraftclone.world;
 
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.util.AABB;
 
 /**
  * All placeable/generatable block types. Each entry defines which tile of
@@ -189,7 +190,22 @@ public enum BlockType {
     BEAR_HELMET(126, 0),
     BEAR_CHESTPLATE(127, 0),
     BEAR_LEGGINGS(128, 0),
-    BEAR_BOOTS(129, 0);
+    BEAR_BOOTS(129, 0),
+
+    // Stairs: partial-cube blocks with a stepped profile, facing the direction
+    // they were placed (their orientation byte). Stone and planks match their
+    // Stairs: partial-cube blocks with a stepped profile, facing the direction
+    // they were placed (their orientation byte). Stone and planks match their
+    // full-cube materials' tiles. Collision is stepped: the low front step and
+    // the raised back step each get their own box, so a player can walk up
+    // stairs block by block.
+    STONE_STAIRS(130, 4, true, false, 1.0f),
+    PLANKS_STAIRS(131, 11, true, false, 1.0f),
+    // Fences: thin posts with rails that auto-connect to neighbouring fences
+    // and solid blocks. One tile (planks) for the whole mesh. Collision is a
+    // 1.5-block-tall box (the post is taller than a block), so neither the
+    // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
+    WOODEN_FENCE(132, 11, false, true, 1.5f);
 
     public final byte id;
     public final boolean solid;
@@ -209,6 +225,10 @@ public enum BlockType {
     public final int lightLevel;
     /** True if this block is a bottom-half slab (partial cube), which meshes and collides at half height. */
     public final boolean slab;
+    /** True for a stepped stair block - meshed with a stair profile and collides like a full cell. */
+    public final boolean stair;
+    /** True for a fence - a thin post with auto-connecting rails, meshed and colliding as a fence. */
+    public final boolean fence;
     /** Vertical extent of this block's collision box in blocks (1.0 for full cubes, 0.5 for slabs). */
     public final float collisionHeight;
 
@@ -239,6 +259,8 @@ public enum BlockType {
         this.transparent = transparent;
         this.cross = false;
         this.slab = false;
+        this.stair = false;
+        this.fence = false;
         this.topTile = topTile;
         this.sideTile = sideTile;
         this.bottomTile = bottomTile;
@@ -262,6 +284,8 @@ public enum BlockType {
         this.transparent = transparent;
         this.cross = false;
         this.slab = slab;
+        this.stair = false;
+        this.fence = false;
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
@@ -271,6 +295,26 @@ public enum BlockType {
         this.isItem = false;
         this.lightLevel = 0;
         this.collisionHeight = slab ? 0.5f : 1.0f;
+    }
+
+    /** Stairs or fence: a partial-cube block with custom meshing and custom collision boxes. */
+    BlockType(int id, int tile, boolean stair, boolean fence, float collisionHeight) {
+        this.id = (byte) id;
+        this.solid = true;
+        this.transparent = false;
+        this.cross = false;
+        this.slab = false;
+        this.stair = stair;
+        this.fence = fence;
+        this.topTile = tile;
+        this.sideTile = tile;
+        this.bottomTile = tile;
+        this.frontTile = tile;
+        this.litFrontTile = tile;
+        this.foodValue = 0;
+        this.isItem = false;
+        this.lightLevel = 0;
+        this.collisionHeight = collisionHeight;
     }
 
     /** Cross-shaped (billboard-X) world decoration block, e.g. grass/flowers/berry bush: one atlas tile, never collides. */
@@ -285,6 +329,8 @@ public enum BlockType {
         this.transparent = transparent;
         this.cross = true;
         this.slab = false;
+        this.stair = false;
+        this.fence = false;
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
@@ -303,6 +349,8 @@ public enum BlockType {
         this.transparent = true;
         this.cross = false;
         this.slab = false;
+        this.stair = false;
+        this.fence = false;
         this.topTile = -1;
         this.sideTile = -1;
         this.bottomTile = -1;
@@ -360,9 +408,7 @@ public enum BlockType {
     /** True for any water-family block (static, source, or flow). */
     public boolean isWater() {
         return this == WATER || this == WATER_SOURCE || this == WATER_FLOW;
-    }
-
-    /** True for the portal blocks that teleport the player between dimensions. */
+    }    /** True for the portal blocks that teleport the player between dimensions. */
     public boolean isPortal() {
         return this == NETHER_PORTAL || this == END_PORTAL;
     }
@@ -456,6 +502,45 @@ public enum BlockType {
     /** True for a functional trapdoor (closed solid panel, or open walk-through). */
     public boolean isTrapdoor() {
         return this == TRAPDOOR || this == TRAPDOOR_OPEN;
+    }
+
+    /** True for a stepped stair block (stone or planks). */
+    public boolean isStair() {
+        return stair;
+    }
+
+    /** True for a fence (thin post with auto-connecting rails). */
+    public boolean isFence() {
+        return fence;
+    }
+
+    /** True for any partial-cube block that needs its own meshing (stairs, fences). */
+    public boolean isPartialCube() {
+        return stair || fence;
+    }
+
+    /**
+     * The collision boxes of this block occupying the cell at {@code (x,y,z)},
+     * given its {@code orientation} byte. Full cubes and slabs return a single
+     * box sized by {@link #collisionHeight}; stairs return two stepped boxes
+     * (a full-width low step and a raised back-half step, matching their mesh)
+     * so a player can climb them; a fence returns a single 1.5-block-tall box
+     * so nothing can jump over it.
+     */
+    public AABB[] collisionBoxes(int x, int y, int z, byte orientation) {
+        if (stair) {
+            // The raised (back) half sits opposite the facing, same as the mesh.
+            float loX = x, hiX = x + 1, loZ = z, hiZ = z + 1;
+            if (orientation == 2) hiX = x + 0.5f;        // facing +X: raised on -X half
+            else if (orientation == 3) loX = x + 0.5f;   // facing -X: raised on +X half
+            else if (orientation == 0) hiZ = z + 0.5f;   // facing +Z: raised on -Z half
+            else if (orientation == 1) loZ = z + 0.5f;   // facing -Z: raised on +Z half
+            return new AABB[]{
+                    new AABB(x, y, z, x + 1, y + 0.5f, z + 1),        // low step
+                    new AABB(loX, y + 0.5f, loZ, hiX, y + 1, hiZ),    // raised step
+            };
+        }
+        return new AABB[]{new AABB(x, y, z, x + 1, y + collisionHeight, z + 1)};
     }
 
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */
