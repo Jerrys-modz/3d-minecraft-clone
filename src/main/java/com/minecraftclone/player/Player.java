@@ -383,12 +383,6 @@ public class Player {
     }
 
     /**
-     * Steps the space-warmth accumulator: a sealed space warms toward 1 over
-     * {@link #SPACE_WARM_UP_SECONDS}, and a breached/outdoor space cools toward 0
-     * over {@link #SPACE_COOL_SECONDS} (slower, so a house holds its heat a while
-     * after a door is opened).
-     */
-    /**
      * Steps a cell's stored warmth: it rises toward 1 while the space is sealed
      * AND being heated (a fire/torch/lamp/furnace/lava inside), and falls toward
      * 0 once it's breached or its heat source goes out.
@@ -744,13 +738,22 @@ public class Player {
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
-                    BlockType type = world.getBlock(x, y, z);
-                    if (type.isCollidable()) {
-                        AABB blockBox = new AABB(x, y, z, x + 1, y + type.collisionHeight, z + 1);
-                        if (box.intersects(blockBox)) return true;
-                    }
+                    if (blockCollides(world, box, x, y, z)) return true;
+                    // A tall block (a fence's 1.5-high box) extends up into this
+                    // cell from the one below - check the block beneath too.
+                    if (blockCollides(world, box, x, y - 1, z)) return true;
                 }
             }
+        }
+        return false;
+    }
+
+    /** True if the collidable block at ({@code x},{@code y},{@code z}) overlaps {@code box}. */
+    private static boolean blockCollides(World world, AABB box, int x, int y, int z) {
+        BlockType type = world.getBlock(x, y, z);
+        if (!type.isCollidable()) return false;
+        for (AABB blockBox : type.collisionBoxes(x, y, z, world.getBlockOrientation(x, y, z))) {
+            if (box.intersects(blockBox)) return true;
         }
         return false;
     }
@@ -788,6 +791,9 @@ public class Player {
             return;
         }
 
+        // Whether we're grounded going into this move - gates auto-step-up so
+        // the player climbs stairs by walking, not by mid-air flailing.
+        boolean grounded = onGround;
         onGround = false;
 
         // Y axis
@@ -811,11 +817,13 @@ public class Player {
             position.y += dy;
         }
 
-        // X axis
+        // X axis - if blocked, try stepping up onto a stair's low step instead.
         box = aabbAt(position);
         AABB movedX = box.offset(dx, 0, 0);
         if (collidesAt(world, movedX)) {
-            velocity.x = 0;
+            if (!stepUp(world, dx, 0, grounded)) {
+                velocity.x = 0;
+            }
         } else {
             position.x += dx;
         }
@@ -824,7 +832,9 @@ public class Player {
         box = aabbAt(position);
         AABB movedZ = box.offset(0, 0, dz);
         if (collidesAt(world, movedZ)) {
-            velocity.z = 0;
+            if (!stepUp(world, 0, dz, grounded)) {
+                velocity.z = 0;
+            }
         } else {
             position.z += dz;
         }
@@ -834,5 +844,27 @@ public class Player {
             velocity.set(0, 0, 0);
             position.y = 96;
         }
+    }
+
+    /**
+     * Minecraft-style auto-step-up: when a horizontal move is blocked, tries
+     * climbing a half-block step (a stair's low step, or a slab) instead of
+     * stopping. Only attempted while on the ground, and only if there's room to
+     * stand on the raised position with the horizontal move completing - so a
+     * full block still stops you, but stairs and slabs are walkable without
+     * jumping. Returns true if the move completed via the step.
+     */
+    private boolean stepUp(World world, float dx, float dz, boolean grounded) {
+        if (!grounded) return false;
+        float step = 0.5f;
+        AABB raised = aabbAt(position).offset(0, step, 0);
+        if (collidesAt(world, raised)) return false;                    // no headroom above
+        AABB raisedMoved = raised.offset(dx, 0, dz);
+        if (collidesAt(world, raisedMoved)) return false;               // still blocked up there
+        position.y += step;
+        position.x += dx;
+        position.z += dz;
+        onGround = true;
+        return true;
     }
 }

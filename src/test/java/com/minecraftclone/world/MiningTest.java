@@ -72,4 +72,17 @@ class MiningTest {
         assertFalse(Mining.isHammer(BlockType.WOOD_SHOVEL));
         assertFalse(Mining.isHammer(null));
     }
+
+    @Test
+    void stairsMineLikeTheirMaterial() {
+        // Stone stairs break with a hammer at stone's speed; planks/fence with a broadaxe.
+        assertTrue(Mining.breakTimeSeconds(BlockType.STONE_STAIRS, BlockType.IRON_HAMMER)
+                < Mining.breakTimeSeconds(BlockType.STONE_STAIRS, null));
+        assertEquals(Mining.breakTimeSeconds(BlockType.STONE, BlockType.IRON_HAMMER),
+                Mining.breakTimeSeconds(BlockType.STONE_STAIRS, BlockType.IRON_HAMMER), 0.0001f);
+        assertTrue(Mining.breakTimeSeconds(BlockType.PLANKS_STAIRS, BlockType.IRON_BROADAXE)
+                < Mining.breakTimeSeconds(BlockType.PLANKS_STAIRS, null));
+        assertTrue(Mining.breakTimeSeconds(BlockType.WOODEN_FENCE, BlockType.IRON_BROADAXE)
+                < Mining.breakTimeSeconds(BlockType.WOODEN_FENCE, null));
+    }
 }

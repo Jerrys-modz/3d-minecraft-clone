@@ -191,4 +191,49 @@ class CraftingTest {
         assertNotNull(rb);
         assertEquals(BlockType.STONE_BOOTS, rb.output());
     }
+
+    @Test
+    void stairsCraftFromSixMaterialInAWedge() {
+        // Stone stairs: "K.. / KK. / KKK" -> 4 stairs.
+        BlockType[] stone = new BlockType[9];
+        stone[0] = BlockType.STONE;
+        stone[3] = BlockType.STONE;
+        stone[4] = BlockType.STONE;
+        stone[6] = BlockType.STONE;
+        stone[7] = BlockType.STONE;
+        stone[8] = BlockType.STONE;
+        Crafting.Recipe rs = Crafting.match(stone);
+        assertNotNull(rs);
+        assertEquals(BlockType.STONE_STAIRS, rs.output());
+        assertEquals(4, rs.outputAmount());
+
+        // Planks stairs use the same wedge of planks.
+        BlockType[] planks = new BlockType[9];
+        planks[0] = BlockType.PLANKS;
+        planks[3] = BlockType.PLANKS;
+        planks[4] = BlockType.PLANKS;
+        planks[6] = BlockType.PLANKS;
+        planks[7] = BlockType.PLANKS;
+        planks[8] = BlockType.PLANKS;
+        Crafting.Recipe rp = Crafting.match(planks);
+        assertNotNull(rp);
+        assertEquals(BlockType.PLANKS_STAIRS, rp.output());
+        assertEquals(4, rp.outputAmount());
+    }
+
+    @Test
+    void fenceCraftsFromPlanksAndSticks() {
+        // Fence: "PSP / PSP / ..." (4 planks + 2 sticks) -> 3 posts.
+        BlockType[] grid = new BlockType[9];
+        grid[0] = BlockType.PLANKS;
+        grid[1] = BlockType.STICK;
+        grid[2] = BlockType.PLANKS;
+        grid[3] = BlockType.PLANKS;
+        grid[4] = BlockType.STICK;
+        grid[5] = BlockType.PLANKS;
+        Crafting.Recipe r = Crafting.match(grid);
+        assertNotNull(r);
+        assertEquals(BlockType.WOODEN_FENCE, r.output());
+        assertEquals(3, r.outputAmount());
+    }
 }
