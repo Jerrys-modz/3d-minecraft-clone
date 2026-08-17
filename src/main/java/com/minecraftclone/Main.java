@@ -1716,27 +1716,30 @@ public class Main {
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted.isBed()) {
                         // Right-click a bed to sleep in it (if it's night and not in nether/end)
-                        if (currentDim[0] == DimensionType.OVERWORLD) {
-                            if (dayNightCycle.isNight() || mode.isCreative()) {
-                                if (!player.isSleeping()) {
-                                    player.setSleeping(true);
-                                    showMessage(messages, "Sleeping...", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1f);
-                                    handRenderer.triggerSwing();
-                                    // Mark bed as occupied (both halves)
-                                    Bed.setOccupied(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
-                                    // Skip time to morning
-                                    dayNightCycle.skipToMorning();
-                                    // Wake up immediately (simplified - instant skip)
-                                    player.setSleeping(false);
-                                    // Mark bed as unoccupied (both halves)
-                                    Bed.setOccupied(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, false);
-                                    showMessage(messages, "Good morning!", new Vector4f(0.9f, 0.9f, 0.5f, 1f), 2f);
+                        // Spectators cannot interact with beds (no world mutation or time advancement).
+                        if (!mode.isSpectator()) {
+                            if (currentDim[0] == DimensionType.OVERWORLD) {
+                                if (dayNightCycle.isNight() || mode.isCreative()) {
+                                    if (!player.isSleeping()) {
+                                        player.setSleeping(true);
+                                        showMessage(messages, "Sleeping...", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1f);
+                                        handRenderer.triggerSwing();
+                                        // Mark bed as occupied (both halves)
+                                        Bed.setOccupied(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
+                                        // Skip time to morning
+                                        dayNightCycle.skipToMorning();
+                                        // Wake up immediately (simplified - instant skip)
+                                        player.setSleeping(false);
+                                        // Mark bed as unoccupied (both halves)
+                                        Bed.setOccupied(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, false);
+                                        showMessage(messages, "Good morning!", new Vector4f(0.9f, 0.9f, 0.5f, 1f), 2f);
+                                    }
+                                } else {
+                                    showMessage(messages, "You can only sleep at night", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 2f);
                                 }
                             } else {
-                                showMessage(messages, "You can only sleep at night", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 2f);
+                                showMessage(messages, "Cannot sleep here", new Vector4f(0.8f, 0.3f, 0.3f, 1f), 2f);
                             }
-                        } else {
-                            showMessage(messages, "Cannot sleep here", new Vector4f(0.8f, 0.3f, 0.3f, 1f), 2f);
                         }
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         placeOrEatHeldItem(world, player, mode, heldItem, hit, audio, handRenderer);
