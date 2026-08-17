@@ -1215,6 +1215,13 @@ public class World implements BlockAccessor {
                 continue;
             }
             mob.update(dt, this, rnd, targetPos);
+            // Remove dead mobs immediately after update completes, using the same
+            // removal path as combat deaths, so a mob killed by drowning doesn't
+            // continue rendering or attacking on subsequent frames.
+            if (mob.isDead()) {
+                it.remove();
+                continue;
+            }
             damage += mob.getMeleeRequest();
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, playerPos, rnd);
@@ -1288,6 +1295,13 @@ public class World implements BlockAccessor {
     public void spawnInitialMobs(Random rnd, float playerWorldX, float playerWorldZ, int count) {
         for (int i = 0; i < count && mobs.size() < MAX_MOBS; i++) {
             trySpawnMob(rnd, playerWorldX, playerWorldZ);
+        }
+    }
+
+    /** Adds a specific mob at a world position - used by autotest screenshots (e.g. one floating in water). */
+    public void spawnMobAt(Mob.Type type, float x, float y, float z) {
+        if (mobs.size() < MAX_MOBS) {
+            mobs.add(new Mob(type, x, y, z));
         }
     }
 

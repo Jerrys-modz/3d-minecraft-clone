@@ -724,6 +724,57 @@ public class Main {
             }
             for (int i = 0; i < 5; i++) world.update(player.getPosition().x, player.getPosition().z);
         }
+        // Opt-in autotest hook: carve a small water pool in front of the player and
+        // drop a pig into it, so mob swimming (floating at the surface) can be
+        // screenshotted. MCCLONE_AUTOTEST_MOB_SWIM_DROWN=1 caps the pool with a
+        // ceiling so the pig stays submerged long enough to drown instead. Named
+        // distinctly from MCCLONE_AUTOTEST_SWIM below (that one submerges the
+        // player, not a mob) - sharing a name used to fire both hooks together,
+        // with the second one's pool/teleport stomping the first's setup.
+        if (System.getenv("MCCLONE_AUTOTEST_MOB_SWIM") != null && started[0]) {
+            Vector3f front = player.getCamera().getFront();
+            int px = (int) Math.floor(player.getPosition().x + front.x * 3f);
+            int pz = (int) Math.floor(player.getPosition().z + front.z * 3f);
+            // Derive pool base Y from the local terrain surface rather than hardcoding it.
+            int surfaceY = -1;
+            for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
+                BlockType b = world.getBlock(px, y, pz);
+                if (b != BlockType.AIR && !b.isFluid()) {
+                    surfaceY = y;
+                    break;
+                }
+            }
+            if (surfaceY < 0) surfaceY = 0; // fallback if no solid surface found
+            int poolBaseY = surfaceY;
+            for (int x = px - 2; x <= px + 2; x++) {
+                for (int z = pz - 2; z <= pz + 2; z++) {
+                    for (int y = poolBaseY; y <= poolBaseY + 3; y++) {
+                        world.setBlock(x, y, z, y == poolBaseY ? BlockType.STONE : BlockType.WATER);
+                    }
+                }
+            }
+            boolean drown = System.getenv("MCCLONE_AUTOTEST_MOB_SWIM_DROWN") != null;
+            if (drown) {
+                for (int x = px - 2; x <= px + 2; x++) {
+                    for (int z = pz - 2; z <= pz + 2; z++) {
+                        world.setBlock(x, poolBaseY + 4, z, BlockType.STONE); // ceiling so it can't surface
+                    }
+                }
+            }
+            float pigY = poolBaseY + 2f;
+            world.spawnMobAt(Mob.Type.PIG, px + 0.5f, pigY, pz + 0.5f);
+            System.out.println("Spawned a pig in water at " + (px + 0.5f) + "," + pigY + "," + (pz + 0.5f) + " (surface at Y=" + surfaceY + ")");
+            // Advance the mob simulation for sufficient time to observe swimming or drowning.
+            // The grace period is 15 seconds, so run for 20 seconds to demonstrate drowning if the pool is capped.
+            float totalTime = drown ? 20f : 2f;
+            int steps = (int)(totalTime / 0.1f); // 0.1s per step
+            Vector3f autotestPos = player.getPosition();
+            AABB autotestBox = new AABB(autotestPos.x - 0.3f, autotestPos.y, autotestPos.z - 0.3f,
+                    autotestPos.x + 0.3f, autotestPos.y + 1.8f, autotestPos.z + 0.3f);
+            for (int i = 0; i < steps; i++) {
+                world.updateMobs(0.1f, autotestPos, autotestBox, false, new java.util.Random(), true);
+            }
+        }
         // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
         // the container screen can be screenshotted. MCCLONE_AUTOTEST_DOUBLE
         // merges a second chest beside it to screenshot a 54-slot double chest;
@@ -755,8 +806,10 @@ public class Main {
             openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
         }
         // Opt-in autotest hook: carve a deep pool of water around the player and
-        // drop them in the middle of it, so swim physics (buoyancy, no onGround)
-        // can be screenshotted with the F3 "Swimming" debug line on.
+        // drop them in the middle of it, so the player's own swim physics
+        // (buoyancy, no onGround) can be screenshotted with the F3 "Swimming"
+        // debug line on - distinct from MCCLONE_AUTOTEST_MOB_SWIM above, which
+        // submerges a mob instead.
         if (System.getenv("MCCLONE_AUTOTEST_SWIM") != null && started[0]) {
             Vector3f p = player.getPosition();
             int cx = (int) Math.floor(p.x);

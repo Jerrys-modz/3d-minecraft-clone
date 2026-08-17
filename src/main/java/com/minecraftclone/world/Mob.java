@@ -64,6 +64,17 @@ public class Mob {
     private static final float PANIC_TIME = 4f;        // how long a hit passive runs away for
     private static final float PANIC_SPEED_MULT = 1.6f; // flee faster than it walks
 
+    // Swimming/drowning: a mob submerged in water floats and paddles instead of
+    // sinking under full gravity, and drowns if it stays fully underwater too
+    // long - the same buoyancy the player gets, so mobs can cross (and perish
+    // in) water instead of just sinking.
+    private static final float WATER_GRAVITY = 5f;      // buoyancy: gentle sink, not free-fall
+    private static final float WATER_SINK_SPEED = -0.8f;// terminal sink while paddling
+    private static final float SWIM_RISE_ACCEL = 6f;     // paddle acceleration while the head is under water
+    private static final float SWIM_SURFACE_SPEED = 1.6f; // rise speed cap while paddling up
+    private static final float DROWN_GRACE_SECONDS = 15f;  // how long a mob can hold its breath
+    private static final float DROWN_DAMAGE_PER_SECOND = 5f;
+
     private static final float HOSTILE_DETECT_RANGE = 20f; // notice the player within this many blocks
     private static final float HOSTILE_MELEE_REACH = 1.4f; // adjacent enough to land a melee hit
     private static final float SKELETON_MIN_SHOOT = 3f;    // skeletons back off rather than shoot at point-blank
@@ -92,6 +103,8 @@ public class Mob {
     private float repathTimer;  // hostiles re-route to the moving player on this interval
     private float meleeRequest; // damage this mob wants to deal the player this frame (0 = none)
     private boolean shootRequest; // true: fire a projectile at the player this frame (skeletons)
+    private float submergedTime; // how long the mob's body has been fully under water (drowning)
+    private boolean swimming;    // this frame: in water and not standing on the bottom
 
     public Mob(Type type, float x, float y, float z) {
         this.type = type;
@@ -178,6 +191,16 @@ public class Mob {
     }
 
     /**
+     * Applies drowning damage without the knockback/panic of {@link #damage} - a
+     * submerged mob just loses health (and dies at zero) rather than thrashing
+     * as if it were being hit. Returns true if it drowned.
+     */
+    public boolean drown(float amount) {
+        health -= amount;
+        return isDead();
+    }
+
+    /**
      * The t at which the ray (origin, dir) first enters {@code box}, clamped to
      * {@code maxDist}, or -1 if it misses. Slab method; the origin being inside
      * the box counts as a hit at t=0. Used to aim attacks at mobs.
@@ -256,9 +279,35 @@ public class Mob {
             followPath();
         }
 
-        velocity.y -= GRAVITY * dt;
-        if (velocity.y < TERMINAL_VELOCITY) {
-            velocity.y = TERMINAL_VELOCITY;
+        // Swimming: a mob whose body overlaps water and isn't standing on the
+        // bottom floats and paddles (buoyancy) rather than sinking under full
+        // gravity, so it can cross water and surface to breathe. Flying hostiles
+        // and creatures on the bottom just walk through the water as before.
+        swimming = !onGround && overlapsWater(world, box());
+
+        if (swimming) {
+            if (fullySubmerged(world, box())) {
+                // Head under water: accelerate up toward the surface, capped at a
+                // fixed paddle speed - accelerating into the cap (rather than
+                // snapping straight to it) means a mob that crosses back out of
+                // "fully submerged" mid-stroke loses its rise speed gradually
+                // instead of the sign flipping instantly, which is what made
+                // every mob visibly judder at the surface (was reported as
+                // "mobs walk on water bouncing").
+                velocity.y = Math.min(velocity.y + SWIM_RISE_ACCEL * dt, SWIM_SURFACE_SPEED);
+            } else {
+                // Already at/near the surface: gentle buoyant sink capped at a
+                // slow terminal speed, not the full paddle rate - unconditionally
+                // forcing SWIM_SURFACE_SPEED here (regardless of depth) used to
+                // relaunch every mob clean out of the water the instant any part
+                // of it touched the surface, so it never settled.
+                velocity.y = Math.max(velocity.y - WATER_GRAVITY * dt, WATER_SINK_SPEED);
+            }
+        } else {
+            velocity.y -= GRAVITY * dt;
+            if (velocity.y < TERMINAL_VELOCITY) {
+                velocity.y = TERMINAL_VELOCITY;
+            }
         }
 
         boolean blocked = moveAndCollide(world, velocity.x * dt, velocity.y * dt, velocity.z * dt);
@@ -277,12 +326,72 @@ public class Mob {
             stuckTimer = 0f;
         }
 
+        // Drowning: a mob that stays fully underwater (its whole body submerged)
+        // runs out of breath after a grace period and takes damage until it
+        // surfaces or dies. A surfaced swimmer (head out of water) doesn't
+        // accumulate breath - the mob surfaced to breathe.
+        boolean fullySubmerged = fullySubmerged(world, box());
+        if (fullySubmerged) {
+            float submergedBefore = submergedTime;
+            submergedTime += dt;
+            // Damage only the portion of this dt that's actually past the grace
+            // period - the update straddling the boundary (submergedBefore below
+            // it, submergedTime past it) would otherwise get charged for the
+            // *entire* dt, not just the fraction of it spent drowning.
+            float drowningSeconds = submergedTime - Math.max(submergedBefore, DROWN_GRACE_SECONDS);
+            if (drowningSeconds > 0f) {
+                drown(DROWN_DAMAGE_PER_SECOND * drowningSeconds);
+            }
+        } else {
+            submergedTime = 0f;
+        }
+
         // Face the way we're going (smooth turn, so it doesn't snap around).
         float hSpeed = (float) Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         if (hSpeed > 0.1f) {
             float target = (float) Math.atan2(velocity.x, velocity.z);
             yaw = turnToward(yaw, target, 12f * dt);
         }
+    }
+
+    /** True if {@code box} overlaps any water block. */
+    private static boolean overlapsWater(BlockAccessor world, AABB box) {
+        return overlaps(world, box, BlockType::isWater);
+    }
+
+    /** True if {@code box} is entirely inside water (fully submerged - head too). */
+    private static boolean fullySubmerged(BlockAccessor world, AABB box) {
+        int minX = (int) Math.floor(box.minX), maxX = (int) Math.floor(box.maxX - 1e-4f);
+        int minY = (int) Math.floor(box.minY), maxY = (int) Math.floor(box.maxY - 1e-4f);
+        int minZ = (int) Math.floor(box.minZ), maxZ = (int) Math.floor(box.maxZ - 1e-4f);
+        // The whole body is underwater if every cell it spans is water (the head
+        // cell at maxY is water, so the creature can't breathe).
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    if (!world.getBlock(x, y, z).isWater()) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** True if any block matching {@code predicate} overlaps {@code box}. */
+    private static boolean overlaps(BlockAccessor world, AABB box, java.util.function.Predicate<BlockType> predicate) {
+        int minX = (int) Math.floor(box.minX), maxX = (int) Math.floor(box.maxX - 1e-4f);
+        int minY = (int) Math.floor(box.minY), maxY = (int) Math.floor(box.maxY - 1e-4f);
+        int minZ = (int) Math.floor(box.minZ), maxZ = (int) Math.floor(box.maxZ - 1e-4f);
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    if (predicate.test(world.getBlock(x, y, z))) {
+                        AABB blockBox = new AABB(x, y, z, x + 1, y + 1, z + 1);
+                        if (box.intersects(blockBox)) return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /** Hostile AI: notice and chase the player, attacking on contact (or at range for skeletons). */
