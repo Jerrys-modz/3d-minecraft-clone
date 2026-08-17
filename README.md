@@ -172,6 +172,8 @@ Deliberately **not shared yet** (each player keeps their own):
 
 A disconnect (server closed, connection lost) returns you to the main menu with a message; Host & Play's embedded server shuts down when you leave.
 
+**Multiplayer & dimensions**: the server currently hosts the **Overworld** only - its world, blocks and mobs are fully shared, but the Nether and End portals are a single-player feature for now. A multiplayer client mirrors the server's overworld, so while you can build Nether/End portal blocks together, teleporting between dimensions is still being wired up for shared play.
+
 ## Textures
 
 Two different asset strategies, chosen per what actually benefits from each:
