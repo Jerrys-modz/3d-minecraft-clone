@@ -1744,7 +1744,8 @@ public class Main {
                                 showMessage(messages, "Cannot sleep here", new Vector4f(0.8f, 0.3f, 0.3f, 1f), 2f);
                             }
                         }
-                    } else if (noMob && mode.canPlace() && heldItem != null) {
+                    } else if (noMob && mode.canPlace() && heldItem != null && !targeted.isBed()) {
+                        // Don't place a bed item if clicking on an existing bed (sleep instead)
                         placeOrEatHeldItem(world, player, mode, heldItem, hit, audio, handRenderer);
                     }
                 }
