@@ -111,7 +111,7 @@ class GameServerTest {
             a.sendJoin("Alice");
             assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
             // Place a block; the server echoes the authoritative change back.
-            a.sendPlaceBlock(new Packets.PlaceBlock(5, 64, 5, BlockType.STONE.id, (byte) 0, false));
+            a.sendPlaceBlock(new Packets.PlaceBlock((byte) 0, 5, 64, 5, BlockType.STONE.id, (byte) 0, false));
             Packets.BlockChange change = assertInstanceOf(Packets.BlockChange.class,
                     awaitPacket(a, Packets.BlockChange.class));
             assertEquals(5, change.x());
@@ -141,7 +141,7 @@ class GameServerTest {
         try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
             a.sendJoin("Alice");
             assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
-            a.sendChunkRequest(0, 0); // never edited -> vanilla ack
+            a.sendChunkRequest((byte) 0, 0, 0); // never edited -> vanilla ack
             Packets.ChunkAck ack = assertInstanceOf(Packets.ChunkAck.class, awaitPacket(a, Packets.ChunkAck.class));
             assertEquals(0, ack.cx());
             assertEquals(0, ack.cz());
@@ -155,9 +155,9 @@ class GameServerTest {
             assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
             // Edit a block in chunk (0,0), then request that chunk - the server
             // should now send its full raw contents rather than a vanilla ack.
-            a.sendPlaceBlock(new Packets.PlaceBlock(5, 64, 5, BlockType.STONE.id, (byte) 0, false));
+            a.sendPlaceBlock(new Packets.PlaceBlock((byte) 0, 5, 64, 5, BlockType.STONE.id, (byte) 0, false));
             assertInstanceOf(Packets.BlockChange.class, awaitPacket(a, Packets.BlockChange.class));
-            a.sendChunkRequest(0, 0);
+            a.sendChunkRequest((byte) 0, 0, 0);
             Packets.ChunkData data = assertInstanceOf(Packets.ChunkData.class, awaitPacket(a, Packets.ChunkData.class));
             assertEquals(0, data.cx());
             assertEquals(0, data.cz());
@@ -196,6 +196,45 @@ class GameServerTest {
             // Mobs (server-seeded) broadcast their states at 10 Hz - expect one.
             Object state = awaitPacketMatching(a, Packets.MobState.class, p -> true);
             assertInstanceOf(Packets.MobState.class, state);
+        }
+    }
+
+    @Test
+    void timeSyncBroadcastArrives() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            // The server broadcasts its authoritative time once a second.
+            Packets.TimeSync sync = assertInstanceOf(Packets.TimeSync.class,
+                    awaitPacketMatching(a, Packets.TimeSync.class, p -> true));
+            assertTrue(sync.timeOfDay() >= 0f && sync.timeOfDay() < 1f);
+        }
+    }
+
+    @Test
+    void portalUseTeleportsToNether() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            // Walking into a nether portal should come back as a DimensionChange.
+            a.sendPortalUse((byte) 0, BlockType.NETHER_PORTAL.id);
+            Packets.DimensionChange change = assertInstanceOf(Packets.DimensionChange.class,
+                    awaitPacketMatching(a, Packets.DimensionChange.class, p -> true));
+            assertEquals(1, change.dimension()); // NETHER ordinal
+        }
+    }
+
+    @Test
+    void chunkRequestIsDimensionAware() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            a.sendChunkRequest((byte) 1, 0, 0); // request nether chunk (0,0), never edited
+            Packets.ChunkAck ack = assertInstanceOf(Packets.ChunkAck.class,
+                    awaitPacketMatching(a, Packets.ChunkAck.class, p -> ((Packets.ChunkAck) p).dimension() == 1));
+            assertEquals(1, ack.dimension());
+            assertEquals(0, ack.cx());
+            assertEquals(0, ack.cz());
         }
     }
 }

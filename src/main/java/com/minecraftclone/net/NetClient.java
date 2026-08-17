@@ -87,12 +87,20 @@ public class NetClient implements AutoCloseable {
         send(Packets.encodeChat(text));
     }
 
-    public void sendChunkRequest(int cx, int cz) throws IOException {
-        send(Packets.encodeChunkRequest(cx, cz));
+    public void sendChunkRequest(byte dimension, int cx, int cz) throws IOException {
+        send(Packets.encodeChunkRequest(dimension, cx, cz));
     }
 
     public void sendMobAttack(int mobId, float damage) throws IOException {
         send(Packets.encodeMobAttack(new Packets.MobAttack(mobId, damage)));
+    }
+
+    public void sendPortalUse(byte dimension, byte blockId) throws IOException {
+        send(Packets.encodePortalUse(dimension, blockId));
+    }
+
+    public void sendRespawn() throws IOException {
+        send(Packets.encodeRespawn());
     }
 
     private void send(byte[] payload) throws IOException {

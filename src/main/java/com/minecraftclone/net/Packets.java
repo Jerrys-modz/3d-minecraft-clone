@@ -40,6 +40,8 @@ public final class Packets {
     public static final byte OP_READY = 6;          // C->S: client finished loading, requests spawn + chunks
     public static final byte OP_CHUNK_REQUEST = 7;  // C->S: ask for a chunk's authoritative contents
     public static final byte OP_MOB_ATTACK = 8;     // C->S: swing at a mob (id + damage)
+    public static final byte OP_PORTAL_USE = 9;     // C->S: standing in a portal block - server teleports us
+    public static final byte OP_RESPAWN = 10;       // C->S: died - server sends us back to overworld spawn
 
     public static final byte OP_WELCOME = 11;       // S->C: join accepted, world identity + spawn
     public static final byte OP_REJECT = 12;        // S->C: join rejected (e.g. server full)
@@ -54,6 +56,9 @@ public final class Packets {
     public static final byte OP_MOB_STATE = 21;     // S->C: a mob's position/look/health
     public static final byte OP_MOB_REMOVE = 22;    // S->C: a mob died or despawned
     public static final byte OP_PLAYER_DAMAGE = 23; // S->C: a mob hurt you
+    public static final byte OP_DIMENSION_CHANGE = 24; // S->C: teleported to another dimension at a position
+    public static final byte OP_TIME_SYNC = 25;     // S->C: server-authoritative time of day
+    public static final byte OP_PLAYER_DEATH = 26;  // S->C: another player died (respawned to overworld)
 
     // ---------------------------------------------------------------
     // Shared encode/decode helpers
@@ -102,16 +107,16 @@ public final class Packets {
     public record Move(float x, float y, float z, float yaw, float pitch, boolean onGround, boolean flying, boolean sprinting) {
     }
 
-    public record PlaceBlock(int x, int y, int z, byte blockId, byte orientation, boolean overlay) {
+    public record PlaceBlock(byte dimension, int x, int y, int z, byte blockId, byte orientation, boolean overlay) {
     }
 
-    public record BreakBlock(int x, int y, int z, boolean overlay) {
+    public record BreakBlock(byte dimension, int x, int y, int z, boolean overlay) {
     }
 
     public record Chat(String text) {
     }
 
-    public record ChunkRequest(int cx, int cz) {
+    public record ChunkRequest(byte dimension, int cx, int cz) {
     }
 
     public record MobAttack(int mobId, float damage) {
@@ -129,28 +134,46 @@ public final class Packets {
     public record PlayerDamage(float amount) {
     }
 
+    public record PortalUse(byte dimension, byte blockId) {
+    }
+
+    public record Respawn() {
+    }
+
     public record Welcome(int selfId, long seed, int worldType, boolean structures,
                           int seaLevelIndex, int terrainSizeIndex, int weeksPerMonth,
                           float spawnX, float spawnY, float spawnZ) {
     }
 
-    public record PlayerJoined(int id, String name, float x, float y, float z, float yaw, float pitch) {
+    public record PlayerJoined(int id, String name, byte dimension, float x, float y, float z, float yaw, float pitch) {
     }
 
     public record PlayerLeft(int id) {
     }
 
-    public record PlayerState(int id, float x, float y, float z, float yaw, float pitch,
+    public record PlayerState(int id, byte dimension, float x, float y, float z, float yaw, float pitch,
                               boolean onGround, boolean flying, boolean sprinting) {
     }
 
-    public record BlockChange(int x, int y, int z, byte blockId, byte orientation, boolean overlay) {
+    public record BlockChange(byte dimension, int x, int y, int z, byte blockId, byte orientation, boolean overlay) {
     }
 
-    public record ChunkData(int cx, int cz, byte[] blocks, byte[] overlays, byte[] orientations) {
+    public record ChunkData(byte dimension, int cx, int cz, byte[] blocks, byte[] overlays, byte[] orientations) {
+    }
+
+    public record ChunkAck(byte dimension, int cx, int cz) {
     }
 
     public record ChatMsg(int id, String name, String text) {
+    }
+
+    public record DimensionChange(byte dimension, float x, float y, float z) {
+    }
+
+    public record TimeSync(float timeOfDay, int dayIndex) {
+    }
+
+    public record PlayerDeath(int id) {
     }
 
     // ---------------------------------------------------------------
@@ -186,6 +209,7 @@ public final class Packets {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_PLACE_BLOCK);
+        out.writeByte(place.dimension());
         out.writeInt(place.x());
         out.writeInt(place.y());
         out.writeInt(place.z());
@@ -200,6 +224,7 @@ public final class Packets {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_BREAK_BLOCK);
+        out.writeByte(brk.dimension());
         out.writeInt(brk.x());
         out.writeInt(brk.y());
         out.writeInt(brk.z());
@@ -217,12 +242,31 @@ public final class Packets {
         return buf.toByteArray();
     }
 
-    public static byte[] encodeChunkRequest(int cx, int cz) throws IOException {
+    public static byte[] encodeChunkRequest(byte dimension, int cx, int cz) throws IOException {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_CHUNK_REQUEST);
+        out.writeByte(dimension);
         out.writeInt(cx);
         out.writeInt(cz);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodePortalUse(byte dimension, byte blockId) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_PORTAL_USE);
+        out.writeByte(dimension);
+        out.writeByte(blockId);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeRespawn() throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_RESPAWN);
         out.close();
         return buf.toByteArray();
     }
@@ -282,6 +326,7 @@ public final class Packets {
         out.writeByte(OP_PLAYER_JOINED);
         out.writeInt(joined.id());
         out.writeUTF(joined.name());
+        out.writeByte(joined.dimension());
         out.writeFloat(joined.x());
         out.writeFloat(joined.y());
         out.writeFloat(joined.z());
@@ -305,6 +350,7 @@ public final class Packets {
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_PLAYER_STATE);
         out.writeInt(state.id());
+        out.writeByte(state.dimension());
         out.writeFloat(state.x());
         out.writeFloat(state.y());
         out.writeFloat(state.z());
@@ -321,6 +367,7 @@ public final class Packets {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_BLOCK_CHANGE);
+        out.writeByte(change.dimension());
         out.writeInt(change.x());
         out.writeInt(change.y());
         out.writeInt(change.z());
@@ -335,6 +382,7 @@ public final class Packets {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_CHUNK_DATA);
+        out.writeByte(data.dimension());
         out.writeInt(data.cx());
         out.writeInt(data.cz());
         out.writeInt(data.blocks().length);
@@ -347,12 +395,44 @@ public final class Packets {
         return buf.toByteArray();
     }
 
-    public static byte[] encodeChunkAck(int cx, int cz) throws IOException {
+    public static byte[] encodeChunkAck(byte dimension, int cx, int cz) throws IOException {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_CHUNK_ACK);
+        out.writeByte(dimension);
         out.writeInt(cx);
         out.writeInt(cz);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeDimensionChange(DimensionChange change) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_DIMENSION_CHANGE);
+        out.writeByte(change.dimension());
+        out.writeFloat(change.x());
+        out.writeFloat(change.y());
+        out.writeFloat(change.z());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeTimeSync(TimeSync sync) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_TIME_SYNC);
+        out.writeFloat(sync.timeOfDay());
+        out.writeInt(sync.dayIndex());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodePlayerDeath(PlayerDeath death) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_PLAYER_DEATH);
+        out.writeInt(death.id());
         out.close();
         return buf.toByteArray();
     }
@@ -430,22 +510,25 @@ public final class Packets {
             case OP_JOIN -> new Join(in.readUTF());
             case OP_MOVE -> new Move(in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(),
                     in.readBoolean(), in.readBoolean(), in.readBoolean());
-            case OP_PLACE_BLOCK -> new PlaceBlock(in.readInt(), in.readInt(), in.readInt(), in.readByte(), in.readByte(), in.readBoolean());
-            case OP_BREAK_BLOCK -> new BreakBlock(in.readInt(), in.readInt(), in.readInt(), in.readBoolean());
+            case OP_PLACE_BLOCK -> new PlaceBlock(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readByte(), in.readByte(), in.readBoolean());
+            case OP_BREAK_BLOCK -> new BreakBlock(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readBoolean());
             case OP_CHAT -> new Chat(in.readUTF());
-            case OP_CHUNK_REQUEST -> new ChunkRequest(in.readInt(), in.readInt());
+            case OP_CHUNK_REQUEST -> new ChunkRequest(in.readByte(), in.readInt(), in.readInt());
             case OP_MOB_ATTACK -> new MobAttack(in.readInt(), in.readFloat());
+            case OP_PORTAL_USE -> new PortalUse(in.readByte(), in.readByte());
+            case OP_RESPAWN -> new Respawn();
             case OP_READY -> new Ready();
             case OP_WELCOME -> new Welcome(in.readInt(), in.readLong(), in.readInt(), in.readBoolean(),
                     in.readInt(), in.readInt(), in.readInt(), in.readFloat(), in.readFloat(), in.readFloat());
             case OP_REJECT -> new Reject(in.readUTF());
-            case OP_PLAYER_JOINED -> new PlayerJoined(in.readInt(), in.readUTF(), in.readFloat(), in.readFloat(),
+            case OP_PLAYER_JOINED -> new PlayerJoined(in.readInt(), in.readUTF(), in.readByte(), in.readFloat(), in.readFloat(),
                     in.readFloat(), in.readFloat(), in.readFloat());
             case OP_PLAYER_LEFT -> new PlayerLeft(in.readInt());
-            case OP_PLAYER_STATE -> new PlayerState(in.readInt(), in.readFloat(), in.readFloat(), in.readFloat(),
+            case OP_PLAYER_STATE -> new PlayerState(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat(),
                     in.readFloat(), in.readFloat(), in.readBoolean(), in.readBoolean(), in.readBoolean());
-            case OP_BLOCK_CHANGE -> new BlockChange(in.readInt(), in.readInt(), in.readInt(), in.readByte(), in.readByte(), in.readBoolean());
+            case OP_BLOCK_CHANGE -> new BlockChange(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readByte(), in.readByte(), in.readBoolean());
             case OP_CHUNK_DATA -> {
+                byte dim = in.readByte();
                 int cx = in.readInt(), cz = in.readInt();
                 int blockLen = in.readInt();
                 byte[] blocks = new byte[blockLen];
@@ -456,22 +539,22 @@ public final class Packets {
                 int orientLen = in.readInt();
                 byte[] orientations = new byte[orientLen];
                 in.readFully(orientations);
-                yield new ChunkData(cx, cz, blocks, overlays, orientations);
+                yield new ChunkData(dim, cx, cz, blocks, overlays, orientations);
             }
-            case OP_CHUNK_ACK -> new ChunkAck(in.readInt(), in.readInt());
+            case OP_CHUNK_ACK -> new ChunkAck(in.readByte(), in.readInt(), in.readInt());
             case OP_CHAT_MSG -> new ChatMsg(in.readInt(), in.readUTF(), in.readUTF());
             case OP_MOB_SPAWN -> new MobSpawn(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat());
             case OP_MOB_STATE -> new MobState(in.readInt(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat());
             case OP_MOB_REMOVE -> new MobRemove(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat());
             case OP_PLAYER_DAMAGE -> new PlayerDamage(in.readFloat());
+            case OP_DIMENSION_CHANGE -> new DimensionChange(in.readByte(), in.readFloat(), in.readFloat(), in.readFloat());
+            case OP_TIME_SYNC -> new TimeSync(in.readFloat(), in.readInt());
+            case OP_PLAYER_DEATH -> new PlayerDeath(in.readInt());
             default -> throw new IOException("Unknown opcode: " + op);
         };
     }
 
     public record Reject(String reason) {
-    }
-
-    public record ChunkAck(int cx, int cz) {
     }
 
     public record Ready() {

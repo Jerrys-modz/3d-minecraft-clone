@@ -50,6 +50,8 @@ public class GameServer implements AutoCloseable {
     private static final float TICK_SECONDS = 1f / 20f; // 20 Hz server tick
     private static final float MOVE_BROADCAST_SECONDS = 1f / 20f; // relay moves at up to 20 Hz
     private static final float MOB_BROADCAST_SECONDS = 1f / 10f; // mob states at 10 Hz
+    private static final float TIME_SYNC_SECONDS = 1f; // server time of day, once a second
+    private static final float NETHER_SCALE = 8f; // Overworld <-> Nether coordinate mapping
     private static final int MAX_PLAYERS = 12;
 
     /** One connected client. Written only from the tick thread; read from its own reader thread. */
@@ -60,6 +62,7 @@ public class GameServer implements AutoCloseable {
         volatile String name = "";
         volatile float x, y, z, yaw, pitch;
         volatile boolean onGround, flying, sprinting;
+        volatile byte dimension = 0; // DimensionType ordinal
         volatile boolean joined;
         volatile boolean disconnected;
 
@@ -74,7 +77,8 @@ public class GameServer implements AutoCloseable {
     }
 
     private final ServerSocket serverSocket;
-    private final World world;
+    /** One authoritative world per dimension (Overworld/Nether/End). */
+    private final World[] worlds;
     private final WorldGenSettings settings;
     private final long seed;
     private final float spawnX;
@@ -91,13 +95,26 @@ public class GameServer implements AutoCloseable {
     private final Random rnd = new Random();
     /** Mob ids we've already told clients about, so natural despawns broadcast removals. */
     private final java.util.Set<Integer> knownMobIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private long lastTimeSync = System.nanoTime();
+
+    /** The authoritative world for a client's current dimension. */
+    private World worldOf(Client c) {
+        int dim = c.dimension;
+        if (dim < 0 || dim >= worlds.length) dim = DimensionType.OVERWORLD.ordinal();
+        return worlds[dim];
+    }
 
     public GameServer(int port, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
         this.settings = settings;
         this.seed = seed;
-        this.world = new World(seed, settings, null, saveDir, DimensionType.OVERWORLD, true);
-        world.setKeepChunks(true);
-        world.setRenderDistance(8);
+        this.worlds = new World[DimensionType.values().length];
+        for (DimensionType dim : DimensionType.values()) {
+            World w = new World(seed, settings, null, saveDir, dim, true);
+            w.setKeepChunks(true);
+            w.setRenderDistance(8);
+            worlds[dim.ordinal()] = w;
+        }
+        World world = worlds[DimensionType.OVERWORLD.ordinal()];
         // Generate a starting area around the origin so chunk requests near
         // spawn can be answered immediately and mob/block state is ready.
         for (int i = 0; i < 400; i++) {
@@ -193,12 +210,13 @@ public class GameServer implements AutoCloseable {
             // Server-authoritative day/night drives hostile mob spawning.
             dayNightCycle.update(dt);
 
-            // Stream chunks around every connected player (server keeps them all).
+            // Stream chunks around every connected player in their current dimension
+            // (the server keeps every dimension's chunks).
             for (Client c : clients.values()) {
-                if (c.joined) world.update(c.x, c.z);
+                if (c.joined) worldOf(c).update(c.x, c.z);
             }
 
-            // Simulate mobs against every connected player (nearest-player targeting).
+            // Simulate overworld mobs against every connected player (nearest-player targeting).
             tickMobs(dt);
 
             // Relay player moves to everyone else at a steady cadence.
@@ -211,6 +229,12 @@ public class GameServer implements AutoCloseable {
             if ((now - lastMobBroadcast) / 1_000_000_000f >= MOB_BROADCAST_SECONDS) {
                 lastMobBroadcast = now;
                 broadcastMobStates();
+            }
+
+            // Relay the server's authoritative time of day so every client shares the same sky.
+            if ((now - lastTimeSync) / 1_000_000_000f >= TIME_SYNC_SECONDS) {
+                lastTimeSync = now;
+                broadcastTime();
             }
 
             // Sleep the remainder of the tick.
@@ -226,8 +250,9 @@ public class GameServer implements AutoCloseable {
         }
     }
 
-    /** Advances mobs and routes damage to whichever player each mob targeted. */
+    /** Advances overworld mobs and routes damage to whichever player each mob targeted. */
     private void tickMobs(float dt) {
+        World world = worlds[DimensionType.OVERWORLD.ordinal()];
         List<Client> players = new ArrayList<>();
         List<Vector3f> positions = new ArrayList<>();
         List<AABB> boxes = new ArrayList<>();
@@ -250,9 +275,10 @@ public class GameServer implements AutoCloseable {
         }
     }
 
-    /** Sends every currently-loaded mob's pose to all connected clients, plus spawn/removal diffs. */
+    /** Sends every currently-loaded overworld mob's pose to all clients, plus spawn/removal diffs. */
     private void broadcastMobStates() {
         if (clients.isEmpty()) return;
+        World world = worlds[DimensionType.OVERWORLD.ordinal()];
         List<Mob> mobs = world.getMobs();
         java.util.Set<Integer> live = java.util.concurrent.ConcurrentHashMap.newKeySet();
         for (Mob m : mobs) {
@@ -291,8 +317,9 @@ public class GameServer implements AutoCloseable {
         }
     }
 
-    /** Sends a freshly-spawned mob to a single client (used on join so they see existing mobs). */
+    /** Sends a freshly-spawned overworld mob to a single client (used on join so they see existing mobs). */
     private void sendMobSpawns(Client client) {
+        World world = worlds[DimensionType.OVERWORLD.ordinal()];
         for (Mob m : world.getMobs()) {
             try {
                 send(client, Packets.encodeMobSpawn(new Packets.MobSpawn(
@@ -325,9 +352,13 @@ public class GameServer implements AutoCloseable {
                 } else if (packet instanceof Packets.Chat chat) {
                     handleChat(client, chat);
                 } else if (packet instanceof Packets.ChunkRequest req) {
-                    requestChunk(client, req.cx(), req.cz());
+                    requestChunk(client, req.dimension(), req.cx(), req.cz());
                 } else if (packet instanceof Packets.MobAttack attack) {
                     handleMobAttack(client, attack);
+                } else if (packet instanceof Packets.PortalUse portal) {
+                    handlePortalUse(client, portal);
+                } else if (packet instanceof Packets.Respawn) {
+                    handleRespawn(client);
                 }
             } catch (IOException e) {
                 disconnect(client);
@@ -348,7 +379,10 @@ public class GameServer implements AutoCloseable {
         client.id = nextId++;
         client.name = name;
         client.joined = true;
+        client.dimension = (byte) DimensionType.OVERWORLD.ordinal();
         clients.put(client.id, client);
+
+        World world = worldOf(client);
 
         // Spawn them a little above the surface so they fall in gently.
         float y = world.getSurfaceHeight((int) Math.floor(spawnX), (int) Math.floor(spawnZ)) + 2f;
@@ -365,14 +399,14 @@ public class GameServer implements AutoCloseable {
         for (Client other : clients.values()) {
             if (other != client && other.joined) {
                 send(client, Packets.encodePlayerJoined(new Packets.PlayerJoined(
-                        other.id, other.name, other.x, other.y, other.z, other.yaw, other.pitch)));
+                        other.id, other.name, other.dimension, other.x, other.y, other.z, other.yaw, other.pitch)));
             }
         }
         // Tell everyone else the newcomer appeared.
         broadcastOthers(client, Packets.encodePlayerJoined(new Packets.PlayerJoined(
-                client.id, name, spawnX, y, spawnZ, 0f, 0f)));
+                client.id, name, client.dimension, spawnX, y, spawnZ, 0f, 0f)));
 
-        // Send the newcomer every currently-loaded mob so the world isn't empty for them.
+        // Send the newcomer every currently-loaded overworld mob so the world isn't empty for them.
         sendMobSpawns(client);
 
         System.out.println(name + " joined (" + getPlayerCount() + " online)");
@@ -394,6 +428,7 @@ public class GameServer implements AutoCloseable {
         if (!client.joined) return;
         BlockType type = place.blockId() < 0 ? null : BlockType.byId(place.blockId());
         if (type == null || type.isItem || place.y() < 0 || place.y() >= Chunk.HEIGHT) return;
+        World world = worldOf(client);
         world.ensureChunk(World.worldToChunk(place.x()), World.worldToChunk(place.z()));
         if (place.overlay()) {
             world.setOverlay(place.x(), place.y(), place.z(), type);
@@ -404,11 +439,12 @@ public class GameServer implements AutoCloseable {
             }
         }
         broadcastAll(Packets.encodeBlockChange(new Packets.BlockChange(
-                place.x(), place.y(), place.z(), type.id, place.orientation(), place.overlay())));
+                client.dimension, place.x(), place.y(), place.z(), type.id, place.orientation(), place.overlay())));
     }
 
     private void handleBreak(Client client, Packets.BreakBlock brk) throws IOException {
         if (!client.joined) return;
+        World world = worldOf(client);
         world.ensureChunk(World.worldToChunk(brk.x()), World.worldToChunk(brk.z()));
         if (brk.overlay()) {
             world.setOverlay(brk.x(), brk.y(), brk.z(), BlockType.AIR);
@@ -416,7 +452,7 @@ public class GameServer implements AutoCloseable {
             world.setBlock(brk.x(), brk.y(), brk.z(), BlockType.AIR);
         }
         broadcastAll(Packets.encodeBlockChange(new Packets.BlockChange(
-                brk.x(), brk.y(), brk.z(), BlockType.AIR.id, (byte) 0, brk.overlay())));
+                client.dimension, brk.x(), brk.y(), brk.z(), BlockType.AIR.id, (byte) 0, brk.overlay())));
     }
 
     private void handleChat(Client client, Packets.Chat chat) throws IOException {
@@ -433,6 +469,7 @@ public class GameServer implements AutoCloseable {
      */
     private void handleMobAttack(Client client, Packets.MobAttack attack) throws IOException {
         if (!client.joined) return;
+        World world = worlds[DimensionType.OVERWORLD.ordinal()];
         Mob mob = world.mobById(attack.mobId());
         if (mob == null) return;
         boolean killed = world.damageMob(mob, attack.damage(), client.x, client.z, rnd);
@@ -443,12 +480,103 @@ public class GameServer implements AutoCloseable {
         }
     }
 
+    /**
+     * A player stepped into a portal block: teleport them to the linked dimension,
+     * server-authoritative (nether coords scale 1:8, the End drops you on its central
+     * island), and broadcast the move + dimension change so every client agrees.
+     */
+    private void handlePortalUse(Client client, Packets.PortalUse portal) throws IOException {
+        if (!client.joined) return;
+        DimensionType from = DimensionType.values()[portal.dimension() & 0xFF];
+        BlockType portalBlock = BlockType.byId(portal.blockId());
+        DimensionType to = DimensionType.portalDestination(portalBlock, from);
+        World target = worlds[to.ordinal()];
+        Vector3f pos = new Vector3f(client.x, client.y, client.z);
+
+        float x, z;
+        if (to == DimensionType.END) {
+            x = 0.5f;
+            z = 0.5f;
+        } else if (from == DimensionType.OVERWORLD && to == DimensionType.NETHER) {
+            x = pos.x / NETHER_SCALE;
+            z = pos.z / NETHER_SCALE;
+        } else if (from == DimensionType.NETHER && to == DimensionType.OVERWORLD) {
+            x = pos.x * NETHER_SCALE;
+            z = pos.z * NETHER_SCALE;
+        } else {
+            x = pos.x;
+            z = pos.z;
+        }
+
+        // Generate the arrival area so the player has solid ground under them.
+        for (int i = 0; i < 100; i++) {
+            target.update(x, z);
+        }
+        int fx = (int) Math.floor(x);
+        int fz = (int) Math.floor(z);
+        int surfaceY = landingSurfaceY(target, fx, fz);
+
+        // Spawn a matching return portal right at the landing spot (Minecraft does the
+        // same), then nudge the player clear of it so they don't step straight back.
+        if (to != DimensionType.OVERWORLD) {
+            BlockType returnPortal = to == DimensionType.NETHER ? BlockType.NETHER_PORTAL : BlockType.END_PORTAL;
+            target.setBlock(fx, surfaceY + 1, fz, returnPortal);
+            x += 2.5f;
+            fx = (int) Math.floor(x);
+            int offsetY = landingSurfaceY(target, fx, fz);
+            if (offsetY > 1) {
+                surfaceY = offsetY;
+            }
+        }
+
+        client.dimension = (byte) to.ordinal();
+        client.x = x;
+        client.y = surfaceY + 2f;
+        client.z = z;
+        send(client, Packets.encodeDimensionChange(new Packets.DimensionChange(client.dimension, client.x, client.y, client.z)));
+        System.out.println(client.name + " teleported to " + to.displayName());
+    }
+
+    /** A player died: respawn them at the overworld world spawn, exactly like single player. */
+    private void handleRespawn(Client client) throws IOException {
+        if (!client.joined) return;
+        client.dimension = (byte) DimensionType.OVERWORLD.ordinal();
+        client.x = spawnX;
+        client.z = spawnZ;
+        World world = worldOf(client);
+        client.y = world.getSurfaceHeight((int) Math.floor(spawnX), (int) Math.floor(spawnZ)) + 2f;
+        client.yaw = 0f;
+        client.pitch = 0f;
+        send(client, Packets.encodeDimensionChange(new Packets.DimensionChange(client.dimension, client.x, client.y, client.z)));
+        broadcastOthers(client, Packets.encodePlayerDeath(new Packets.PlayerDeath(client.id)));
+    }
+
+    /** Broadcasts the server-authoritative time of day so every client shares the same sky. */
+    private void broadcastTime() {
+        try {
+            broadcastAll(Packets.encodeTimeSync(new Packets.TimeSync(
+                    dayNightCycle.getTime(), dayNightCycle.getDayIndex())));
+        } catch (IOException e) {
+            // best-effort; next tick retries
+        }
+    }
+
+    /** Highest non-air block in the given column of a world (like single-player landing logic). */
+    private static int landingSurfaceY(World world, int x, int z) {
+        for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
+            if (world.getBlock(x, y, z) != BlockType.AIR) {
+                return y;
+            }
+        }
+        return 1;
+    }
+
     private void broadcastMoves() {
         for (Client c : clients.values()) {
             if (!c.joined) continue;
             try {
                 broadcastOthers(c, Packets.encodePlayerState(new Packets.PlayerState(
-                        c.id, c.x, c.y, c.z, c.yaw, c.pitch, c.onGround, c.flying, c.sprinting)));
+                        c.id, c.dimension, c.x, c.y, c.z, c.yaw, c.pitch, c.onGround, c.flying, c.sprinting)));
             } catch (IOException e) {
                 disconnect(c);
             }
@@ -497,6 +625,7 @@ public class GameServer implements AutoCloseable {
 
     /** Finds a spawn column: a non-ocean/non-mountain biome as close to the origin as possible. */
     private float[] findSpawn() {
+        World world = worlds[DimensionType.OVERWORLD.ordinal()];
         for (int r = 0; r <= 50; r++) {
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
@@ -512,19 +641,20 @@ public class GameServer implements AutoCloseable {
     }
 
     /** Sends a chunk to a client: full data if a player edited it, otherwise a vanilla ack. */
-    private void requestChunk(Client client, int cx, int cz) throws IOException {
+    private void requestChunk(Client client, byte dimension, int cx, int cz) throws IOException {
         if (client == null || !client.joined) return;
+        World world = worlds[dimension >= 0 && dimension < worlds.length ? dimension : client.dimension];
         world.ensureChunk(cx, cz);
         if (world.isChunkModifiedByPlayer(cx, cz)) {
             byte[] blocks = world.getChunkRawBlocks(cx, cz);
             byte[] overlays = world.getChunkRawOverlays(cx, cz);
             byte[] orientations = world.getChunkRawOrientations(cx, cz);
             if (blocks != null) {
-                send(client, Packets.encodeChunkData(new Packets.ChunkData(cx, cz, blocks, overlays, orientations)));
+                send(client, Packets.encodeChunkData(new Packets.ChunkData(dimension, cx, cz, blocks, overlays, orientations)));
                 return;
             }
         }
-        send(client, Packets.encodeChunkAck(cx, cz));
+        send(client, Packets.encodeChunkAck(dimension, cx, cz));
     }
 
     @Override
@@ -543,7 +673,9 @@ public class GameServer implements AutoCloseable {
             serverSocket.close();
         } catch (IOException ignored) {
         }
-        world.saveAllModified();
+        for (World w : worlds) {
+            w.saveAllModified();
+        }
     }
 
     /** The list of online player names (for the HUD / server info). */

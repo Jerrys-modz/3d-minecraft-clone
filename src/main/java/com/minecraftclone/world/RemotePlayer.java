@@ -13,6 +13,8 @@ public class RemotePlayer {
 
     public final int id;
     public final String name;
+    /** Dimension ordinal the server last reported for this player - only render same-dimension players. */
+    public byte dimension;
     /** Rendered feet position (bottom-center), interpolated toward the target. */
     public final Vector3f position = new Vector3f();
     /** The raw position as last reported by the server. */
@@ -32,8 +34,9 @@ public class RemotePlayer {
         this.name = name;
     }
 
-    public void update(float x, float y, float z, float yaw, float pitch,
+    public void update(byte dimension, float x, float y, float z, float yaw, float pitch,
                        boolean onGround, boolean flying, boolean sprinting) {
+        this.dimension = dimension;
         this.target.set(x, y, z);
         this.yawDegrees = yaw;
         this.pitchDegrees = pitch;

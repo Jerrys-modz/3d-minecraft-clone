@@ -165,17 +165,17 @@ Two ways to play with others:
 The server is authoritative for the world. It uses a fresh random seed each launch (the embedded Host & Play and dedicated server are throwaway worlds; the client always mirrors whatever the server picks). On join you receive the seed + worldgen settings, so your client regenerates untouched terrain locally and only asks the server for chunks a player has edited - keeping bandwidth to the deltas. Everything shared:
 
 - **Terrain and blocks** - a place or break anywhere is validated by the server and broadcast to every client, so everyone sees the same world (including door toggles and directional facing).
+- **Dimensions** - the server hosts all three dimensions (Overworld / Nether / End). Walking into a portal block teleports you through the server (Nether coords map 1:8, the End drops you on its central island), a return portal spawns at the landing spot, and everyone sees you switch dimension. Players only see other players in the same dimension, like Minecraft.
+- **Time of day** - the server's clock is authoritative and broadcast to everyone, so every client shares the same sky (day/night, sunrise/sunset, and mob spawns all line up).
 - **Mobs** - the server simulates every mob (passive and hostile) with its own day/night clock, so animals wander and zombies hunt the *nearest* player; everyone sees the same mobs in the same places. Attacks are sent to the server, which applies damage and drops the loot for everyone. Mobs despawn at dawn / far away just like single player.
-- **Players** - every connected player appears as a blocky humanoid figure (procedurally painted skin) that moves smoothly via server-relayed position/look updates at ~20 Hz, with a name above its head. Join/leave messages appear on screen.
+- **Players** - every connected player appears as a blocky humanoid figure (procedurally painted skin) that moves smoothly via server-relayed position/look updates at ~20 Hz, with a name above its head. Join/leave and death messages appear on screen.
 - **Chat** - press **T**, type, Enter to send; the line appears above the hotbar and everyone sees it.
 
 Deliberately **not shared yet** (each player keeps their own):
 
-- **Inventory, health/hunger, item drops** - these stay client-side per player for now (mob deaths drop loot for each player's own world, and a mob's hits damage only the player it was chasing).
+- **Inventory, health/hunger, item drops** - these stay client-side per player for now (mob deaths drop loot for each player's own world, and a mob's hits damage only the player it was chasing). Dying still respawns you at the overworld spawn - but through the server, so your dimension + position come back consistent for everyone.
 
 A disconnect (server closed, connection lost) returns you to the main menu with a message; Host & Play's embedded server shuts down when you leave.
-
-**Multiplayer & dimensions**: the server currently hosts the **Overworld** only - its world, blocks and mobs are fully shared, but the Nether and End portals are a single-player feature for now. A multiplayer client mirrors the server's overworld, so while you can build Nether/End portal blocks together, teleporting between dimensions is still being wired up for shared play.
 
 ## Textures
 

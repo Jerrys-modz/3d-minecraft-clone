@@ -135,6 +135,10 @@ public class Main {
     private final Map<Integer, Mob> remoteMobs = new LinkedHashMap<>();
     /** Draws other players' bodies; created in run() once the GL context exists. */
     private PlayerRenderer playerRenderer;
+    /** The dimension the local player is currently in (shared with multiplayer helpers). */
+    private final DimensionType[] currentDim = {DimensionType.OVERWORLD};
+    /** The per-dimension mirror worlds created by a multiplayer WELCOME, handed to run(). */
+    private World[] returnMirrorWorlds;
 
 
     /** Queues a transient on-screen message (rendered via {@link Hud#renderMessages}). */
@@ -391,14 +395,14 @@ public class Main {
     }
 
     /** Broadcasts a block change to the server (break/place intent). */
-    private void sendBlockChange(int x, int y, int z, BlockType type, byte orientation, boolean overlay) {
+    private void sendBlockChange(byte dimension, int x, int y, int z, BlockType type, byte orientation, boolean overlay) {
         NetClient client = netClient;
         if (client == null || !client.isConnected()) return;
         try {
             if (type == BlockType.AIR) {
-                client.sendBreakBlock(new Packets.BreakBlock(x, y, z, overlay));
+                client.sendBreakBlock(new Packets.BreakBlock(dimension, x, y, z, overlay));
             } else {
-                client.sendPlaceBlock(new Packets.PlaceBlock(x, y, z, type.id, orientation, overlay));
+                client.sendPlaceBlock(new Packets.PlaceBlock(dimension, x, y, z, type.id, orientation, overlay));
             }
         } catch (IOException e) {
             netError = e.getMessage();
@@ -406,25 +410,25 @@ public class Main {
     }
 
     /** Sends a cell's current state to the server (used after local edits like door toggles). */
-    private void syncBlockToServer(World world, int x, int y, int z, boolean force) {
+    private void syncBlockToServer(byte dimension, World world, int x, int y, int z, boolean force) {
         NetClient client = netClient;
         if (client == null || !client.isConnected()) return;
         BlockType block = world.getBlock(x, y, z);
         if (block == BlockType.AIR) {
-            if (force) sendBlockChange(x, y, z, BlockType.AIR, (byte) 0, false);
+            if (force) sendBlockChange(dimension, x, y, z, BlockType.AIR, (byte) 0, false);
             return;
         }
-        sendBlockChange(x, y, z, block, world.getOrientation(x, y, z), false);
+        sendBlockChange(dimension, x, y, z, block, world.getOrientation(x, y, z), false);
     }
 
     /** Sends both halves of a door column to the server after a toggle. */
-    private void syncDoorToServer(World world, int x, int y, int z) {
+    private void syncDoorToServer(byte dimension, World world, int x, int y, int z) {
         NetClient client = netClient;
         if (client == null || !client.isConnected()) return;
         int bottom = Door.bottomHalf(world, x, y, z);
         for (int yy = bottom; yy <= bottom + 1; yy++) {
             BlockType block = world.getBlock(x, yy, z);
-            sendBlockChange(x, yy, z, block, world.getOrientation(x, yy, z), false);
+            sendBlockChange(dimension, x, yy, z, block, world.getOrientation(x, yy, z), false);
         }
     }
 
@@ -495,7 +499,7 @@ public class Main {
      * up this frame (the caller assigns it to its {@code world} variable),
      * otherwise null. Runs entirely on the main thread.
      */
-    private World processNetPackets(NetClient client, World world, Player player, TextureAtlas atlas,
+    private World processNetPackets(NetClient client, World world, World[] worlds, Player player, TextureAtlas atlas,
                                     Settings settings, Path saveRoot,
                                     WorldGenSettings genSettings,
                                     DayNightCycle dayNightCycle, Calendar calendar, boolean[] started,
@@ -525,20 +529,29 @@ public class Main {
                             ? saveRoot.resolve("multiplayer_client").resolve(Long.toString(System.nanoTime()))
                             : Paths.get("multiplayer_client");
                 }
-                World w = new World(welcome.seed(), remoteSettings, atlas, clientSaveDir, DimensionType.OVERWORLD);
-                w.setRenderDistance(settings.getRenderDistance());
-                w.setLeavesTransparent(settings.isLeavesTransparent());
-                // When the client generates a chunk from the seed, ask the server whether
-                // a player has edited it; the server replies with full data or a vanilla ack.
-                w.setChunkListener((cx, cz) -> {
-                    try {
-                        if (netClient != null && netClient.isConnected()) {
-                            netClient.sendChunkRequest(cx, cz);
+                // The client mirrors every dimension the server hosts (Overworld /
+                // Nether / End), each regenerated from the seed and synced over the wire.
+                World[] mirrorWorlds = new World[DimensionType.values().length];
+                for (DimensionType dim : DimensionType.values()) {
+                    World w = new World(welcome.seed(), remoteSettings, atlas, clientSaveDir, dim);
+                    w.setRenderDistance(settings.getRenderDistance());
+                    w.setLeavesTransparent(settings.isLeavesTransparent());
+                    byte dimId = (byte) dim.ordinal();
+                    // When the client generates a chunk from the seed, ask the server
+                    // whether a player has edited it; the server replies with full data
+                    // or a vanilla ack.
+                    w.setChunkListener((cx, cz) -> {
+                        try {
+                            if (netClient != null && netClient.isConnected()) {
+                                netClient.sendChunkRequest(dimId, cx, cz);
+                            }
+                        } catch (IOException e) {
+                            netError = e.getMessage();
                         }
-                    } catch (IOException e) {
-                        netError = e.getMessage();
-                    }
-                });
+                    });
+                    mirrorWorlds[dim.ordinal()] = w;
+                }
+                World w = mirrorWorlds[DimensionType.OVERWORLD.ordinal()];
                 for (int i = 0; i < 200; i++) w.update(0, 0);
                 player.teleport(welcome.spawnX(), welcome.spawnY(), welcome.spawnZ());
                 for (int i = 0; i < 80; i++) w.update(player.getPosition().x, player.getPosition().z);
@@ -546,6 +559,10 @@ public class Main {
                 System.out.println("Joined server (seed " + welcome.seed() + ", spawn " + welcome.spawnX() + "," + welcome.spawnY() + "," + welcome.spawnZ() + ")");
                 created = w;
                 world = w;
+                currentDim[0] = DimensionType.OVERWORLD;
+                // Hand the mirror worlds back to the caller so the dimension array and
+                // the game loop's world switching stay consistent.
+                returnMirrorWorlds = mirrorWorlds;
                 try {
                     client.sendReady();
                 } catch (IOException e) {
@@ -553,7 +570,7 @@ public class Main {
                 }
             } else if (packet instanceof Packets.PlayerJoined joined) {
                 RemotePlayer rp = new RemotePlayer(joined.id(), joined.name());
-                rp.update(joined.x(), joined.y(), joined.z(), joined.yaw(), joined.pitch(), false, false, false);
+                rp.update(joined.dimension(), joined.x(), joined.y(), joined.z(), joined.yaw(), joined.pitch(), false, false, false);
                 rp.tick(1f); // snap the render pose to the join position
                 remotePlayers.put(joined.id(), rp);
                 showMessage(messages, joined.name() + " joined", new Vector4f(0.7f, 0.9f, 0.7f, 1f), 3f);
@@ -565,21 +582,25 @@ public class Main {
             } else if (packet instanceof Packets.PlayerState state) {
                 RemotePlayer rp = remotePlayers.get(state.id());
                 if (rp != null) {
-                    rp.update(state.x(), state.y(), state.z(), state.yaw(), state.pitch(),
+                    rp.update(state.dimension(), state.x(), state.y(), state.z(), state.yaw(), state.pitch(),
                             state.onGround(), state.flying(), state.sprinting());
                 }
             } else if (packet instanceof Packets.BlockChange change) {
-                if (world != null) {
+                World target = (worlds != null && change.dimension() >= 0 && change.dimension() < worlds.length)
+                        ? worlds[change.dimension()] : world;
+                if (target != null) {
                     if (change.overlay()) {
-                        world.setOverlay(change.x(), change.y(), change.z(), BlockType.byId(change.blockId()));
+                        target.setOverlay(change.x(), change.y(), change.z(), BlockType.byId(change.blockId()));
                     } else {
-                        world.setBlock(change.x(), change.y(), change.z(), BlockType.byId(change.blockId()));
-                        world.setBlockOrientation(change.x(), change.y(), change.z(), change.orientation());
+                        target.setBlock(change.x(), change.y(), change.z(), BlockType.byId(change.blockId()));
+                        target.setBlockOrientation(change.x(), change.y(), change.z(), change.orientation());
                     }
                 }
             } else if (packet instanceof Packets.ChunkData data) {
-                if (world != null) {
-                    world.applyRemoteChunkData(data.cx(), data.cz(), data.blocks(), data.overlays(), data.orientations());
+                World target = (worlds != null && data.dimension() >= 0 && data.dimension() < worlds.length)
+                        ? worlds[data.dimension()] : world;
+                if (target != null) {
+                    target.applyRemoteChunkData(data.cx(), data.cz(), data.blocks(), data.overlays(), data.orientations());
                 }
             } else if (packet instanceof Packets.ChunkAck ack) {
                 // Chunk matches the seed - the client's own generation already has it.
@@ -588,6 +609,23 @@ public class Main {
             } else if (packet instanceof Packets.Reject reject) {
                 showMessage(messages, reject.reason(), new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
                 netError = reject.reason();
+            } else if (packet instanceof Packets.DimensionChange change) {
+                // Server moved us to another dimension - switch the active world.
+                if (worlds != null && change.dimension() >= 0 && change.dimension() < worlds.length) {
+                    currentDim[0] = DimensionType.values()[change.dimension()];
+                    player.teleport(change.x(), change.y(), change.z());
+                    World target = worlds[currentDim[0].ordinal()];
+                    for (int i = 0; i < 80; i++) target.update(player.getPosition().x, player.getPosition().z);
+                    world = target;
+                    showMessage(messages, "Welcome to " + currentDim[0].displayName(),
+                            new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
+                }
+            } else if (packet instanceof Packets.TimeSync sync) {
+                dayNightCycle.setTime(sync.timeOfDay());
+            } else if (packet instanceof Packets.PlayerDeath death) {
+                RemotePlayer dead = remotePlayers.get(death.id());
+                showMessage(messages, (dead != null ? dead.name : "A player") + " died",
+                        new Vector4f(0.9f, 0.3f, 0.3f, 1f), 3f);
             } else if (packet instanceof Packets.MobSpawn spawn) {
                 if (world != null && remoteMobs != null && !remoteMobs.containsKey(spawn.mobId())) {
                     Mob.Type type = spawn.typeId() >= 0 && spawn.typeId() < Mob.Type.values().length
@@ -664,14 +702,15 @@ public class Main {
         // Tell the server about the change so other players see it too (a door
         // clears both halves; an overlay clears only the decoration).
         if (netClient != null && netClient.isConnected()) {
+            byte dim = (byte) currentDim[0].ordinal();
             if (Door.isDoor(targetType)) {
                 int bottom = Door.bottomHalf(world, bx, by, bz);
-                sendBlockChange(bx, bottom, bz, BlockType.AIR, (byte) 0, false);
-                sendBlockChange(bx, bottom + 1, bz, BlockType.AIR, (byte) 0, false);
+                sendBlockChange(dim, bx, bottom, bz, BlockType.AIR, (byte) 0, false);
+                sendBlockChange(dim, bx, bottom + 1, bz, BlockType.AIR, (byte) 0, false);
             } else if (targetingOverlay) {
-                sendBlockChange(bx, by, bz, BlockType.AIR, (byte) 0, true);
+                sendBlockChange(dim, bx, by, bz, BlockType.AIR, (byte) 0, true);
             } else {
-                sendBlockChange(bx, by, bz, BlockType.AIR, (byte) 0, false);
+                sendBlockChange(dim, bx, by, bz, BlockType.AIR, (byte) 0, false);
             }
         }
 
@@ -826,7 +865,7 @@ public class Main {
         // The world is created lazily when the player picks a world or creates one.
         World world = null;
         World[] worlds = null;
-        DimensionType[] currentDim = {DimensionType.OVERWORLD};
+        currentDim[0] = DimensionType.OVERWORLD;
         boolean[] started = {false};
         List<String> worldNames = new ArrayList<>();
 
@@ -1195,18 +1234,23 @@ public class Main {
                     if (started[0]) {
                         showMessage(messages, "Disconnected: " + reason, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
                         started[0] = false;
-                        // The world was a throwaway multiplayer mirror - release its
+                        // The worlds were throwaway multiplayer mirrors - release their
                         // chunks (and GL meshes) rather than leaving them resident.
-                        if (world != null) {
-                            world.saveAllModified();
-                            world.destroy();
-                            world = null;
-                        }
                         if (worlds != null) {
+                            for (World w : worlds) {
+                                if (w != null) {
+                                    w.saveAllModified();
+                                    w.destroy();
+                                }
+                            }
                             for (int i = 0; i < worlds.length; i++) {
                                 worlds[i] = null;
                             }
                         }
+                        if (world != null) {
+                            world = null;
+                        }
+                        returnMirrorWorlds = null;
                     } else if (mpConnecting[0]) {
                         showMessage(messages, "Could not connect: " + reason, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
                     }
@@ -1217,16 +1261,15 @@ public class Main {
                     window.setCursorCaptured(false);
                     input.resetMouseDelta();
                 } else {
-                    World newWorld = processNetPackets(netClient, world, player, atlas, settings, saveRoot,
+                    World newWorld = processNetPackets(netClient, world, worlds, player, atlas, settings, saveRoot,
                             genSettings, dayNightCycle, calendar, started, mainMenuOpen, multiplayerOpen,
                             mpConnecting, window, input, messages, audio);
                     if (newWorld != null) {
                         world = newWorld;
-                        // Multiplayer mirrors the server's single overworld - set up
-                        // the dimension array so the rest of the game (sky, portals)
-                        // sees a consistent single-world setup.
-                        worlds = new World[DimensionType.values().length];
-                        worlds[DimensionType.OVERWORLD.ordinal()] = newWorld;
+                        // Multiplayer mirrors every dimension the server hosts - the
+                        // WELCOME handler built them all; wire them into the dimension
+                        // array so sky/portals/block-change routing stay consistent.
+                        worlds = returnMirrorWorlds;
                         currentDim[0] = DimensionType.OVERWORLD;
                     }
                     // Send the local player's pose to the server at ~20 Hz.
@@ -1686,7 +1729,9 @@ public class Main {
 
                 // Dimension portals: walking into a NETHER_PORTAL or END_PORTAL block
                 // teleports the player to the linked dimension (with a short cooldown
-                // so they don't instantly bounce back through the arrival portal).
+                // so they don't instantly bounce back through the arrival portal). In
+                // multiplayer the server is authoritative and sends a DimensionChange
+                // back; single player teleports locally.
                 teleportCooldown[0] = Math.max(0f, teleportCooldown[0] - dt);
                 if (teleportCooldown[0] <= 0f) {
                     Vector3f p = player.getPosition();
@@ -1695,11 +1740,19 @@ public class Main {
                         portal = world.getBlock((int) Math.floor(p.x), (int) Math.floor(p.y + 1.5f), (int) Math.floor(p.z));
                     }
                     if (portal.isPortal()) {
-                        teleportThroughPortal(player, worlds, currentDim, portal);
-                        world = worlds[currentDim[0].ordinal()];
+                        if (netClient != null && netClient.isConnected()) {
+                            try {
+                                netClient.sendPortalUse((byte) currentDim[0].ordinal(), portal.id);
+                            } catch (IOException e) {
+                                netError = e.getMessage();
+                            }
+                        } else {
+                            teleportThroughPortal(player, worlds, currentDim, portal);
+                            world = worlds[currentDim[0].ordinal()];
+                            showMessage(messages, "Welcome to " + currentDim[0].displayName(),
+                                    new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
+                        }
                         teleportCooldown[0] = PORTAL_COOLDOWN_SECONDS;
-                        showMessage(messages, "Welcome to " + currentDim[0].displayName(),
-                                new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
                     }
                 }
 
@@ -1781,15 +1834,25 @@ public class Main {
                 player.getInventory().clear();
                 player.getInventory().clearArmor();
                 player.getDurability().reset();
-                // Respawn back in the overworld, wherever you died.
-                if (currentDim[0] != DimensionType.OVERWORLD) {
-                    currentDim[0] = DimensionType.OVERWORLD;
-                    world = worlds[currentDim[0].ordinal()];
-                    for (int i = 0; i < 80; i++) {
-                        world.update(0, 0);
+                if (netClient != null && netClient.isConnected()) {
+                    // Server-authoritative respawn: it moves us to overworld spawn and
+                    // replies with a DimensionChange that switches world + position.
+                    try {
+                        netClient.sendRespawn();
+                    } catch (IOException e) {
+                        netError = e.getMessage();
                     }
+                } else {
+                    // Respawn back in the overworld, wherever you died.
+                    if (currentDim[0] != DimensionType.OVERWORLD) {
+                        currentDim[0] = DimensionType.OVERWORLD;
+                        world = worlds[currentDim[0].ordinal()];
+                        for (int i = 0; i < 80; i++) {
+                            world.update(0, 0);
+                        }
+                    }
+                    player.respawn(world, 0.5f, 0.5f);
                 }
-                player.respawn(world, 0.5f, 0.5f);
             }
 
             // Item-entity physics + pickup.
@@ -1951,14 +2014,14 @@ public class Main {
                             Door.toggle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                             audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
                             handRenderer.triggerSwing();
-                            syncDoorToServer(world, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            syncDoorToServer((byte) currentDim[0].ordinal(), world, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         }
                     } else if (Door.isTrapdoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                             audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
                             handRenderer.triggerSwing();
-                            syncBlockToServer(world, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
+                            syncBlockToServer((byte) currentDim[0].ordinal(), world, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
                         }
                     } else if (noMob && targeted == BlockType.FURNACE) {
                         // Right-click a furnace to open its smelting gui.
@@ -2027,10 +2090,11 @@ public class Main {
                                     }
                                     // Tell the server so every other client places it too.
                                     if (netClient != null && netClient.isConnected()) {
-                                        sendBlockChange(p.x, p.y, p.z, intoFluid ? world.getOverlay(p.x, p.y, p.z) : heldItem,
+                                        byte dim = (byte) currentDim[0].ordinal();
+                                        sendBlockChange(dim, p.x, p.y, p.z, intoFluid ? world.getOverlay(p.x, p.y, p.z) : heldItem,
                                                 intoFluid ? (byte) 0 : facing, intoFluid);
                                         if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.DOOR) {
-                                            sendBlockChange(p.x, p.y + 1, p.z, BlockType.DOOR, facing, false);
+                                            sendBlockChange(dim, p.x, p.y + 1, p.z, BlockType.DOOR, facing, false);
                                         }
                                     }
                                 }
@@ -2136,7 +2200,15 @@ public class Main {
             renderMobs.addAll(remoteMobs.values());
             mobRenderer.render(mobTextures, renderMobs, world.getArrows());
             if (!remotePlayers.isEmpty()) {
-                playerRenderer.render(mobTextures, List.copyOf(remotePlayers.values()));
+                // Only players in the same dimension are visible, like Minecraft.
+                List<RemotePlayer> visible = new ArrayList<>();
+                byte myDim = (byte) currentDim[0].ordinal();
+                for (RemotePlayer rp : remotePlayers.values()) {
+                    if (rp.dimension == myDim) visible.add(rp);
+                }
+                if (!visible.isEmpty()) {
+                    playerRenderer.render(mobTextures, visible);
+                }
             }
             chunkShader.unbind();
             }
