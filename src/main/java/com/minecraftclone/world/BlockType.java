@@ -139,6 +139,9 @@ public enum BlockType {
     // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
     ROTTEN_FLESH(68, 4),
     BONES(69, 0),
+    // Wool - sheared from sheep (see World.damageMob). The material fur armor is
+    // made from, and a warm clothing resource in its own right.
+    WOOL(115, 0),
     // Snow-capped slabs: a bottom-half slab that's been covered by accumulating
     // snow (see World.tryAddSnow). Full-height solid blocks that MESH as a slab
     // under a snow cap, so the snow sits flush rather than floating above the
@@ -165,16 +168,38 @@ public enum BlockType {
     DIAMOND_CHESTPLATE(112, 0),
     DIAMOND_LEGGINGS(113, 0),
     DIAMOND_BOOTS(114, 0),
+    // Fur armor - the warmest tier (see Armor.java warmth), crafted from wool
+    // (sheep). The least defensive but by far the best against the cold, so
+    // winter survival wants a set even though combat prefers metal.
+    FUR_HELMET(116, 0),
+    FUR_CHESTPLATE(117, 0),
+    FUR_LEGGINGS(118, 0),
+    FUR_BOOTS(119, 0),
+    // Wolf-pelt armor - the second fur tier (see Armor.java warmth), from the
+    // hostile wolves that stalk forests. Warmer and tougher than sheep wool.
+    WOLF_PELT(120, 0),
+    WOLF_HELMET(121, 0),
+    WOLF_CHESTPLATE(122, 0),
+    WOLF_LEGGINGS(123, 0),
+    WOLF_BOOTS(124, 0),
+    // Polar-bear armor - the rarest, warmest, toughest fur tier, from the huge
+    // hostile bears that roam the frozen wastes. A full set is warm enough to
+    // shrug off even the deepest blizzard.
+    BEAR_HIDE(125, 0),
+    BEAR_HELMET(126, 0),
+    BEAR_CHESTPLATE(127, 0),
+    BEAR_LEGGINGS(128, 0),
+    BEAR_BOOTS(129, 0),
 
     // Stairs: partial-cube blocks with a stepped profile, facing the direction
     // they were placed (their orientation byte). Stone and planks match their
     // full-cube materials' tiles; collision is the full cell (walk-up stepping
     // is not modelled - see Notes & Simplifications).
-    STONE_STAIRS(115, 4, true, false),
-    PLANKS_STAIRS(116, 11, true, false),
+    STONE_STAIRS(130, 4, true, false),
+    PLANKS_STAIRS(131, 11, true, false),
     // Fences: thin posts with rails that auto-connect to neighbouring fences
     // and solid blocks. One tile (planks) for the whole mesh.
-    WOODEN_FENCE(117, 11, false, true);
+    WOODEN_FENCE(132, 11, false, true);
 
     public final byte id;
     public final boolean solid;
@@ -326,31 +351,29 @@ public enum BlockType {
         this.collisionHeight = 1.0f;
     }
 
-    // Sparse id lookup: sized to the largest id rather than values().length, so
-    // ids don't have to be a dense 0..N-1 range (e.g. slabs use 44/45 while
-    // other features may take 39-43). byId guards against out-of-range anyway.
+    // Sparse id lookup over the whole unsigned-byte range (0-255). Block ids are
+    // persisted as raw bytes, so ids above 127 wrap negative as Java bytes but
+    // recover cleanly via the & 0xFF mask here (both when building the table and
+    // when reading one back). ids don't have to be a dense 0..N-1 range (e.g.
+    // slabs use 44/45 while other features may take 39-43); unused slots stay null.
     private static final BlockType[] BY_ID;
 
     static {
-        int maxId = 0;
+        BY_ID = new BlockType[256];
         for (BlockType t : values()) {
-            maxId = Math.max(maxId, t.id);
-        }
-        BY_ID = new BlockType[maxId + 1];
-        for (BlockType t : values()) {
-            if (BY_ID[t.id] != null) {
+            int idx = t.id & 0xFF;
+            if (BY_ID[idx] != null) {
                 // Fail fast on a duplicate id - a re-used id would silently corrupt save files.
-                throw new IllegalStateException("Duplicate block id " + t.id + ": " + t + " and " + BY_ID[t.id]);
+                throw new IllegalStateException("Duplicate block id " + t.id + ": " + t + " and " + BY_ID[idx]);
             }
-            BY_ID[t.id] = t;
+            BY_ID[idx] = t;
         }
     }
 
     public static BlockType byId(byte id) {
-        if (id < 0 || id >= BY_ID.length) {
-            return AIR;
-        }
-        return BY_ID[id];
+        int idx = id & 0xFF;
+        BlockType type = idx < BY_ID.length ? BY_ID[idx] : null;
+        return type == null ? AIR : type;
     }
 
     /** True if this block stops the player / blocks a raycast. */

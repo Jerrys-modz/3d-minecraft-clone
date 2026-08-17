@@ -17,6 +17,7 @@ import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.engine.graphics.WeatherRenderer;
 import com.minecraftclone.engine.gui.ContainerGui;
+import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
@@ -1670,6 +1671,10 @@ public class Main {
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Cold exposure: %.0f%%",
                                 player.getStats().getColdness() * 100f),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Armor: %d pts defense, %.0f%% warmth",
+                                player.getInventory().armorDefense(),
+                                player.getInventory().totalArmorWarmth() / Armor.WARMTH_CAP * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 if (player.isSubmerged()) {
                     hud.drawTextLeft(String.format(Locale.ROOT, "Breath: %.1fs / %.0fs",

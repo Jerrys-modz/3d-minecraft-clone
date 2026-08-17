@@ -64,6 +64,12 @@ public class Inventory implements StorageContainer {
                 armor[ARMOR_SLOT_LEGGINGS], armor[ARMOR_SLOT_BOOTS]);
     }
 
+    /** Total warmth from the equipped armor (how well it insulates against the cold), capped. */
+    public float totalArmorWarmth() {
+        return Armor.totalWarmth(armor[ARMOR_SLOT_HELMET], armor[ARMOR_SLOT_CHESTPLATE],
+                armor[ARMOR_SLOT_LEGGINGS], armor[ARMOR_SLOT_BOOTS]);
+    }
+
     /** Clears every armor slot - the death penalty, alongside {@link #clear()}. */
     public void clearArmor() {
         for (int i = 0; i < ARMOR_SLOT_COUNT; i++) armor[i] = null;
