@@ -94,6 +94,7 @@ public class Player {
     private boolean invertMouseY = false;
     private boolean viewBobbing = true;
     private float bobPhase = 0f;
+    private boolean sleeping = false;
 
     public void setKeyBinds(KeyBindings keyBinds) {
         this.keyBinds = keyBinds;
@@ -274,6 +275,11 @@ public class Player {
      */
     public void update(float dt, Input input, World world, float coldFactor) {
         updateLook(input);
+        // Skip movement while sleeping - player is in bed, time is being skipped
+        if (sleeping) {
+            lastFallImpactSpeed = 0f;
+            return;
+        }
         if (gameMode.isSpectator()) {
             flying = true; // always in no-clip flight
         } else if (gameMode.isCreative()) {
@@ -530,6 +536,16 @@ public class Player {
     /** Whether the player is currently swimming *and* moving horizontally - drives the stroke sound. */
     public boolean isSwimmingAndMoving() {
         return swimmingAndMoving;
+    }
+
+    /** True while the player is sleeping in a bed (time is being skipped). */
+    public boolean isSleeping() {
+        return sleeping;
+    }
+
+    /** Sets the player's sleeping state (true = sleeping in bed, false = awake). */
+    public void setSleeping(boolean sleeping) {
+        this.sleeping = sleeping;
     }
 
     /** The block directly under the player's feet - what a footstep sound should sound like. */

@@ -1711,6 +1711,29 @@ public class Main {
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted.isBed()) {
+                        // Right-click a bed to sleep in it (if it's night and not in nether/end)
+                        if (currentDim[0] == DimensionType.OVERWORLD) {
+                            if (dayNightCycle.isNight() || mode.isCreative()) {
+                                if (!player.isSleeping()) {
+                                    // Mark bed as occupied
+                                    world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.BED_OCCUPIED);
+                                    player.setSleeping(true);
+                                    showMessage(messages, "Sleeping...", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1f);
+                                    handRenderer.triggerSwing();
+                                    // Skip time to morning
+                                    dayNightCycle.skipToMorning();
+                                    // Wake up immediately (simplified - instant skip)
+                                    player.setSleeping(false);
+                                    world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.BED);
+                                    showMessage(messages, "Good morning!", new Vector4f(0.9f, 0.9f, 0.5f, 1f), 2f);
+                                }
+                            } else {
+                                showMessage(messages, "You can only sleep at night", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 2f);
+                            }
+                        } else {
+                            showMessage(messages, "Cannot sleep here", new Vector4f(0.8f, 0.3f, 0.3f, 1f), 2f);
+                        }
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         placeOrEatHeldItem(world, player, mode, heldItem, hit, audio, handRenderer);
                     }

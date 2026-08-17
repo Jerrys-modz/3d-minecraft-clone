@@ -110,6 +110,8 @@ public final class Crafting {
         shaped("P..", "PP.", "PPP", BlockType.PLANKS_STAIRS, 4);
         // Fence: 4 planks + 2 sticks (PSP / PSP / ...) -> 3 fence posts.
         shaped("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);
+        // Bed: 3 wool on top, 2 planks below -> 1 bed
+        shaped("UUU", "PPP", "...", BlockType.BED, 1);
 
         // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
         // itself is made by quenching a lava source with a water source (see

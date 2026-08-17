@@ -122,6 +122,7 @@ public class TextureAtlas {
         paintTile(image, 56, rnd, 0xE4E0C8, 0xCFC8A8, true);   // end stone (pale, sandy)
         paintObsidian(image, 57, rnd);
         paintEndPortal(image, 58, rnd);
+        paintBed(image, 59, rnd);
 
         // --- Furniture / fixtures ---
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
@@ -1095,6 +1096,26 @@ public class TextureAtlas {
             }
         }
         img.setRGB(ox + 8, oy + 8, 0xFF000000 | lock);
+    }
+
+    /** A red bed: a wool top with a darker foot-end panel and pillow area. */
+    private void paintBed(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Base wool texture (red)
+        paintNoiseTile(img, index, 0xC0392B, 0x922B21, 0.45f, rnd);
+        // Darker foot-end panel (right side)
+        for (int x = 10; x < TILE_PX; x++) {
+            for (int y = 0; y < TILE_PX; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0x7B241C, faceShade(x, y)));
+            }
+        }
+        // Pillow area (lighter, left side)
+        for (int x = 0; x < 5; x++) {
+            for (int y = 0; y < TILE_PX; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0xE74C3C, faceShade(x, y)));
+            }
+        }
     }
 
     /** A wooden barrel: vertical stave planks with a metal band across the middle and a bung. */
