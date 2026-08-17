@@ -1187,6 +1187,11 @@ public class Main {
                 splashCooldown[0] = Math.max(0f, splashCooldown[0] - dt);
                 if (player.isSubmerged() != wasSubmerged[0]) {
                     wasSubmerged[0] = player.isSubmerged();
+                    // Diving in (or surfacing) is a splash either way - even when the
+                    // cooldown below suppresses the sound itself (a flicker burst),
+                    // the stroke timer still needs resetting so the periodic stroke
+                    // splash further down doesn't immediately double up on it.
+                    swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
                     // Cooldown-gated: see SPLASH_COOLDOWN_SECONDS - the raw signal
                     // can flicker several times a frame-group near a surface
                     // boundary, but the actual splash sound should only fire for
@@ -1194,10 +1199,6 @@ public class Main {
                     if (splashCooldown[0] <= 0f) {
                         audio.play(SoundEvent.SPLASH);
                         splashCooldown[0] = SPLASH_COOLDOWN_SECONDS;
-                        // Diving in (or surfacing) already just played a splash this frame -
-                        // without this, swimStrokeTimer sitting at 0 (reset while not
-                        // swimming) would immediately fire a second, redundant one below.
-                        swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
                     }
                 }
                 // A footstep every FOOTSTEP_INTERVAL seconds while walking/
@@ -1224,9 +1225,14 @@ public class Main {
                 // dedicated stroke effect.
                 if (player.isSwimmingAndMoving()) {
                     swimStrokeTimer[0] -= dt;
-                    if (swimStrokeTimer[0] <= 0f) {
+                    // Same cooldown as the transition splash above - both play
+                    // SoundEvent.SPLASH, so without sharing the gate a stroke landing
+                    // right after a transition (or another stroke) could still
+                    // double up on it.
+                    if (swimStrokeTimer[0] <= 0f && splashCooldown[0] <= 0f) {
                         swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
                         audio.play(SoundEvent.SPLASH, 0.5f);
+                        splashCooldown[0] = SPLASH_COOLDOWN_SECONDS;
                     }
                 } else {
                     swimStrokeTimer[0] = 0f;
@@ -1535,6 +1541,7 @@ public class Main {
                     Math.min(1.5f, clouds + (currentDim[0] == DimensionType.OVERWORLD ? overcast * 0.9f : 0f)),
                     0.5f + settings.getCloudSpeed() * 0.5f,
                     currentDim[0] == DimensionType.OVERWORLD ? stars * (1f - overcast) : stars,
+                    currentDim[0] == DimensionType.OVERWORLD ? overcast : 0f,
                     zenithColor, horizonColor, nightZenith, sunColor, moonColor);
             glEnable(GL_DEPTH_TEST);
 
