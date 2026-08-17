@@ -1399,7 +1399,11 @@ public class Main {
             Vector3f playerPos = player.getPosition();
             AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
                     playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
-            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
+            // Creative/spectator are invulnerable (see GameMode#isInvulnerable) - mobs
+            // couldn't land a hit either way, so don't have them chase/attack a player
+            // they can never actually hurt; they just wander like passives instead.
+            boolean playerTargetable = !settings.getGameMode().isInvulnerable();
+            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot, playerTargetable);
             if (mobDamage > 0f) {
                 player.takeDamage(mobDamage);
                 audio.play(SoundEvent.HURT);

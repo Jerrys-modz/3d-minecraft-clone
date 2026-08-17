@@ -1162,9 +1162,18 @@ public class World implements BlockAccessor {
      * map. Hostile mobs spawn only at night, out of sight, and melt away at dawn;
      * their melee hits and arrows damage the player, whose total damage taken
      * this frame is returned. Call once per frame from the main thread.
+     *
+     * @param targetable whether hostiles are allowed to notice/chase/attack the
+     *                   player this frame - false in creative/spectator (see
+     *                   GameMode#isInvulnerable), where mobs already can't land a
+     *                   hit and so should just ignore the player and wander like
+     *                   passives, rather than uselessly stalking someone they can
+     *                   never actually hurt. Spawning/despawning around the
+     *                   player's position still happens either way.
      */
-    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd) {
+    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd, boolean targetable) {
         float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
+        Vector3f targetPos = targetable ? playerPos : null;
         float damage = 0f;
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
             Mob mob = it.next();
@@ -1178,7 +1187,7 @@ public class World implements BlockAccessor {
                 it.remove();
                 continue;
             }
-            mob.update(dt, this, rnd, playerPos);
+            mob.update(dt, this, rnd, targetPos);
             damage += mob.getMeleeRequest();
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, playerPos, rnd);
