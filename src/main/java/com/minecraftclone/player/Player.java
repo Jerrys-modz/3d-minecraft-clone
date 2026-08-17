@@ -5,9 +5,13 @@ import com.minecraftclone.engine.Camera;
 import com.minecraftclone.engine.Input;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.util.AABB;
+import com.minecraftclone.world.BlockAccessor;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.World;
 import org.joml.Vector3f;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * First-person player controller: walking/flying physics, AABB-vs-voxel
@@ -24,6 +28,32 @@ public class Player {
     private static final int COLD_ROOF_CHECK = 8;
     /** Horizontal radius (blocks) in which a burning fire warms you against the cold. */
     private static final int COLD_FIRE_RADIUS = 3;
+    /** Horizontal radius (blocks) in which a heat source heats the sealed space around you. */
+    private static final int COLD_HEAT_RADIUS = 6;
+    /** Seconds of staying sealed to fully heat the space around you. */
+    private static final float SPACE_WARM_UP_SECONDS = 25f;
+    /** Seconds of being breached/outside for the space's stored heat to fully leak away. */
+    private static final float SPACE_COOL_SECONDS = 45f;
+    /** Coarse grid cell (in blocks) that stores space heat, so a whole small house is one cell. */
+    private static final int SPACE_HEAT_CELL = 8;
+    /** Most heat cells to remember before evicting the coldest (bounds memory across a long playthrough). */
+    private static final int SPACE_HEAT_CELL_LIMIT = 128;
+    /**
+     * Stored heat per coarse cell (key = column cell), so a house keeps its
+     * warmth after you step out: the value at the player's current cell rises
+     * while the space is sealed and leaks while breached, and the others persist
+     * (and slowly age) rather than resetting when the player moves away.
+     */
+    private final Map<Long, Float> spaceHeat = new HashMap<>();
+
+    private static long spaceHeatCell(int x, int z) {
+        return ((long) (x >> 3) << 32) | (z >> 3 & 0xFFFFFFFFL);
+    }
+
+    /** How warm the enclosed space around the player is right now (0..1) - drives the cold exposure and F3 readout. */
+    public float getSpaceWarmth() {
+        return spaceHeat.getOrDefault(spaceHeatCell((int) Math.floor(position.x), (int) Math.floor(position.z)), 0f);
+    }
 
     private static final float WALK_SPEED = 4.3f;
     private static final float SPRINT_SPEED = 6.6f;
@@ -268,17 +298,139 @@ public class Player {
             stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
-            // Cold exposure: weather strength, cut down by a roof overhead, nearly
-            // eliminated next to a fire (a lightning-struck tree, or any fire you
-            // huddle beside), and scaled by how warm your armor is. Insulating
-            // fur/wool armor keeps you warm; bare metal armor doesn't.
+            // Cold exposure: how cold the local temperature is, cut down by how
+            // sheltered the space around you is and how warm your armor is. A
+            // sealed space (walls all around, a roof, solid ground) only warms
+            // up if it contains a HEAT SOURCE - a fire, torch, lamp, burning
+            // furnace or lava - and the HOUSE keeps that warmth: the value is
+            // stored per 8x8 cell, so it cools only while you're standing in it
+            // and the space is breached (a door opening or a wall block breaking
+            // lets the cold in - a closed door counts as a wall, an open one
+            // doesn't) or its fire goes out. A nearby fire warms you almost
+            // completely either way.
             float coldness = coldFactor;
-            if (hasRoofAbove(world)) coldness *= 0.15f;
+            boolean heating = isEnclosed(world) && hasHeatSource(world);
+            long cell = spaceHeatCell((int) Math.floor(position.x), (int) Math.floor(position.z));
+            float spaceWarmth = updateSpaceHeat(spaceHeat, cell, heating, dt);
+            ageStoredHeat(dt);
+            if (heating) {
+                // Sealed and heated: the space holds heat, so the cold barely reaches you.
+                coldness *= 1f - 0.9f * spaceWarmth;
+            } else {
+                // Not fully sealed: a roof alone still breaks the wind a little.
+                if (hasRoofAbove(world, (int) Math.floor(position.x), (int) Math.floor(position.z),
+                        (int) Math.floor(position.y + EYE_HEIGHT))) {
+                    coldness *= 0.5f;
+                }
+            }
             if (fireNearby(world)) coldness *= 0.15f;
             coldness *= Armor.coldMultiplier(inventory.totalArmorWarmth());
             stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness);
         }
         lastFallImpactSpeed = 0f;
+    }
+
+    /**
+     * True if the space around the player is fully enclosed: a solid block in
+     * every cardinal direction at body height, a roof overhead, and solid ground
+     * underfoot. A closed door/trapdoor is solid and seals a room; the moment it
+     * opens - or a wall/roof block breaks - the space is open to the elements
+     * again.
+     */
+    private boolean isEnclosed(World world) {
+        return isEnclosedAt(world, position.x, position.y, position.z);
+    }
+
+    /**
+     * The pure enclosure test for the space around a position, split out so the
+     * rules (walls on all sides, a roof overhead, solid ground) are unit-testable
+     * headlessly against a fake {@link BlockAccessor}.
+     */
+    static boolean isEnclosedAt(BlockAccessor world, float x, float y, float z) {
+        int ix = (int) Math.floor(x);
+        int iz = (int) Math.floor(z);
+        int waist = (int) Math.floor(y + 0.6f);
+        int head = (int) Math.floor(y + 1.2f);
+        return wallsOnAllSides(world, ix, iz, waist, head)
+                && hasRoofAbove(world, ix, iz, head)
+                && solidBelow(world, ix, iz, y);
+    }
+
+    private static boolean wallsOnAllSides(BlockAccessor world, int x, int z, int waist, int head) {
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] d : dirs) {
+            int nx = x + d[0], nz = z + d[1];
+            boolean wall = world.getBlock(nx, waist, nz).solid || world.getBlock(nx, head, nz).solid;
+            if (!wall) return false;
+        }
+        return true;
+    }
+
+    private static boolean solidBelow(BlockAccessor world, int x, int z, float y) {
+        int by = (int) Math.floor(y - 0.6f);
+        return by >= 0 && by < com.minecraftclone.world.Chunk.HEIGHT && world.getBlock(x, by, z).solid;
+    }
+
+    /** True if a solid block sits within {@link #COLD_ROOF_CHECK} blocks overhead - basic shelter. */
+    private static boolean hasRoofAbove(BlockAccessor world, int x, int z, int y) {
+        for (int i = 1; i <= COLD_ROOF_CHECK; i++) {
+            if (y + i >= 0 && y + i < com.minecraftclone.world.Chunk.HEIGHT) {
+                BlockType b = world.getBlock(x, y + i, z);
+                if (b.solid) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Steps a cell's stored warmth: it rises toward 1 while the space is sealed
+     * AND being heated (a fire/torch/lamp/furnace/lava inside), and falls toward
+     * 0 once it's breached or its heat source goes out.
+     */
+    static float stepSpaceWarmth(float current, boolean heating, float dt) {
+        if (heating) {
+            return Math.min(1f, current + dt / SPACE_WARM_UP_SECONDS);
+        }
+        return Math.max(0f, current - dt / SPACE_COOL_SECONDS);
+    }
+
+    /**
+     * Advances one heat cell's stored warmth and writes it back into {@code heat}
+     * (removing it once it cools to zero). Split out so the "house holds its
+     * temperature" behavior - a cell keeps its value while you're elsewhere - is
+     * unit-testable headlessly.
+     */
+    static float updateSpaceHeat(Map<Long, Float> heat, long cell, boolean heating, float dt) {
+        float value = stepSpaceWarmth(heat.getOrDefault(cell, 0f), heating, dt);
+        if (value <= 0f) {
+            heat.remove(cell);
+        } else {
+            heat.put(cell, value);
+        }
+        return value;
+    }
+
+    /**
+     * Slowly ages every remembered heat cell so an abandoned house eventually
+     * cools (over ~5 minutes), and evicts the coldest cell once too many have
+     * been remembered so memory stays bounded across a long playthrough.
+     */
+    private void ageStoredHeat(float dt) {
+        if (spaceHeat.size() < SPACE_HEAT_CELL_LIMIT) {
+            for (Map.Entry<Long, Float> e : spaceHeat.entrySet()) {
+                e.setValue(Math.max(0f, e.getValue() - dt / 300f));
+            }
+        } else {
+            long coldestKey = -1;
+            float coldest = Float.MAX_VALUE;
+            for (Map.Entry<Long, Float> e : spaceHeat.entrySet()) {
+                if (e.getValue() < coldest) {
+                    coldest = e.getValue();
+                    coldestKey = e.getKey();
+                }
+            }
+            if (coldestKey != -1) spaceHeat.remove(coldestKey);
+        }
     }
 
     /**
@@ -297,21 +449,9 @@ public class Player {
         }
     }
 
-    /** True if a solid block sits within {@link #COLD_ROOF_CHECK} blocks overhead - basic shelter. */
-    private boolean hasRoofAbove(World world) {
-        int x = (int) Math.floor(position.x);
-        int z = (int) Math.floor(position.z);
-        int y = (int) Math.floor(position.y + EYE_HEIGHT);
-        for (int i = 1; i <= COLD_ROOF_CHECK; i++) {
-            if (y + i >= 0 && y + i < com.minecraftclone.world.Chunk.HEIGHT) {
-                BlockType b = world.getBlock(x, y + i, z);
-                if (b.solid) return true;
-            }
-        }
-        return false;
-    }
-
-    /** True if a burning fire is within {@link #COLD_FIRE_RADIUS} blocks - huddling close warms you. */
+    /**
+     * True if a burning fire is within {@link #COLD_FIRE_RADIUS} blocks - huddling close warms you.
+     */
     private boolean fireNearby(World world) {
         int cx = (int) Math.floor(position.x);
         int cy = (int) Math.floor(position.y);
@@ -320,6 +460,29 @@ public class Player {
             for (int dz = -COLD_FIRE_RADIUS; dz <= COLD_FIRE_RADIUS; dz++) {
                 for (int dy = -1; dy <= 2; dy++) {
                     if (world.getBlock(cx + dx, cy + dy, cz + dz) == BlockType.FIRE) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True if a heat source (fire, torch, lamp, an actively-burning furnace, or
+     * lava) is within {@link #COLD_HEAT_RADIUS} blocks - what makes a sealed
+     * house actually heat up. A plain sealed room with nothing burning in it
+     * stays cold inside; an unlit furnace is just cold stone.
+     */
+    private boolean hasHeatSource(World world) {
+        int cx = (int) Math.floor(position.x);
+        int cy = (int) Math.floor(position.y);
+        int cz = (int) Math.floor(position.z);
+        for (int dx = -COLD_HEAT_RADIUS; dx <= COLD_HEAT_RADIUS; dx++) {
+            for (int dz = -COLD_HEAT_RADIUS; dz <= COLD_HEAT_RADIUS; dz++) {
+                for (int dy = -2; dy <= 3; dy++) {
+                    int bx = cx + dx, by = cy + dy, bz = cz + dz;
+                    BlockType block = world.getBlock(bx, by, bz);
+                    if (block.isHeatSource()) return true;
+                    if (block == BlockType.FURNACE && world.isBlockActive(bx, by, bz)) return true;
                 }
             }
         }

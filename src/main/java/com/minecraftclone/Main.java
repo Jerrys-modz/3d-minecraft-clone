@@ -1157,12 +1157,20 @@ public class Main {
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                // Cold exposure factor: how cold the weather is this frame (snow
-                // is chilly, a blizzard is freezing). Player weighs shelter and
-                // nearby fires against it before it affects hunger/health.
-                Weather w = climate.getWeather();
-                float coldFactor = (w == Weather.SNOW ? 0.6f : w == Weather.BLIZZARD ? 1f : 0f)
-                        * climate.getWeatherStrength();
+                // Cold exposure factor, driven by the LOCAL temperature at the
+                // player's position (which already folds in the biome, season,
+                // night, weather, altitude and underground depth - so a deep cave
+                // stays comfortable while the surface blizzards, and a mountain
+                // peak is harsher than its foothills). Ramps 0 above ~2°C to 1
+                // at ~-20°C. Player then weighs shelter, fires and armor warmth.
+                // The underground reference is the GENERATED terrain height (not
+                // the current surface) so a player-built roof doesn't fool the
+                // depth model into thinking a cave is at the surface.
+                float px = player.getPosition().x, pz = player.getPosition().z;
+                float playerY = player.getPosition().y;
+                TerrainGenerator.Biome pBiome = world.getBiome((int) Math.floor(px), (int) Math.floor(pz));
+                float localTemp = climate.temperatureFor(pBiome, playerY, world.getTerrainHeight((int) Math.floor(px), (int) Math.floor(pz)));
+                float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
                 player.update(dt, input, world, coldFactor);
 
                 // Dimension portals: walking into a NETHER_PORTAL or END_PORTAL block
@@ -1684,14 +1692,15 @@ public class Main {
                                 climate.getWeather().displayName, climate.getWeatherStrength() * 100f,
                                 climate.nextWeatherChange().displayName, climate.hoursUntilChange()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C, %.0f%% humidity",
-                                climate.temperatureFor(biome), climate.humidityFor(biome) * 100f),
+                hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C at %.0f, %.0f%% humidity",
+                                climate.temperatureFor(biome, pos.y, world.getTerrainHeight((int) Math.floor(pos.x), (int) Math.floor(pos.z))),
+                                pos.y, climate.humidityFor(biome) * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Cold exposure: %.0f%%",
                                 player.getStats().getColdness() * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format(Locale.ROOT, "Armor: %d pts defense, %.0f%% warmth",
-                                player.getInventory().armorDefense(),
+                hud.drawTextLeft(String.format(Locale.ROOT, "Shelter: space %.0f%% warm, armor %.0f%% warmth",
+                                player.getSpaceWarmth() * 100f,
                                 player.getInventory().totalArmorWarmth() / Armor.WARMTH_CAP * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 if (player.isSubmerged()) {

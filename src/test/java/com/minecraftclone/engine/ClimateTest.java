@@ -188,4 +188,34 @@ class ClimateTest {
         assertEquals(natural, climate.temperatureFor(Biome.PLAINS), 0.001f);
         assertFalse(climate.hasForcedTemperature());
     }
+
+    @Test
+    void mountainsGetColderWithAltitude() {
+        Climate climate = climateAtDay(0); // spring, noon
+        float seaLevel = climate.temperatureFor(Biome.MOUNTAIN, 42f, 42f);
+        float summit = climate.temperatureFor(Biome.MOUNTAIN, 100f, 100f);
+        assertTrue(summit < seaLevel, "a mountain summit is colder than its base");
+        assertTrue(seaLevel - summit > 5f, "the lapse is meaningful over ~60 blocks of altitude");
+    }
+
+    @Test
+    void cavesAreWarmerThanAFrozenSurfaceInWinter() {
+        // Mid-winter, noon: the surface is well below freezing...
+        Climate winter = climateAtDay(3 * new Calendar().getDaysPerSeason() + 10);
+        float surface = winter.temperatureFor(Biome.SNOWY, 42f, 42f);
+        assertTrue(surface < 0f, "a snowy surface in winter should be frozen: " + surface);
+        // ...but 12 blocks underground the temperature is stable at the biome's
+        // baseline - far warmer than the frozen surface above.
+        float cave = winter.temperatureFor(Biome.SNOWY, 30f, 42f);
+        assertTrue(cave > surface + 10f, "a deep cave stays much warmer than the frozen surface");
+        assertEquals(-4f, cave, 1f, "a snowy cave hovers around the biome's annual mean");
+    }
+
+    @Test
+    void cavesAreCoolerThanAHotSurfaceInSummer() {
+        Climate summer = climateAtDay(new Calendar().getDaysPerSeason() * 1 + 5); // mid-summer
+        float surface = summer.temperatureFor(Biome.DESERT, 42f, 42f);
+        float cave = summer.temperatureFor(Biome.DESERT, 30f, 42f);
+        assertTrue(cave < surface, "a desert cave is cooler than the summer surface");
+    }
 }
