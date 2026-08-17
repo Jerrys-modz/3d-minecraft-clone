@@ -381,8 +381,11 @@ public class Main {
                 world.spawnItem(bx, by, bz, BlockType.COAL, 1, loot);
             } else {
                 // An open door/trapdoor drops the closed item.
+                // Any bed variant (head/foot, occupied/unoccupied) drops the base BED item.
                 BlockType drop = targetType == BlockType.DOOR_OPEN ? BlockType.DOOR
-                        : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR : targetType;
+                        : targetType == BlockType.TRAPDOOR_OPEN ? BlockType.TRAPDOOR
+                        : Bed.isBed(targetType) ? BlockType.BED
+                        : targetType;
                 world.spawnItem(bx, by, bz, drop, 1, loot);
                 if (targetType == BlockType.FURNACE) {
                     // A broken furnace spills whatever it was smelting or burning.

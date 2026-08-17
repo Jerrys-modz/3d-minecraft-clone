@@ -39,13 +39,18 @@ public final class Bed {
      * Returns the position of the head given foot position, or vice versa.
      */
     public static int[] getOtherHalf(BlockAccessor world, int x, int y, int z, byte orientation) {
+        // Determine direction based on whether this is the head or foot.
+        // The foot is placed first, then the head is placed adjacent in the opposite direction of facing.
+        // So if we're at the foot, we go in the opposite direction of facing to find the head.
+        // If we're at the head, we go in the facing direction to find the foot.
+        boolean isHead = world != null && isHead(world.getBlock(x, y, z));
         // orientation: 0=+Z, 1=-Z, 2=+X, 3=-X (same as doors)
         switch (orientation) {
-            case 0: return new int[]{x, y, z + 1};  // +Z
-            case 1: return new int[]{x, y, z - 1};  // -Z
-            case 2: return new int[]{x + 1, y, z};  // +X
-            case 3: return new int[]{x - 1, y, z};  // -X
-            default: return new int[]{x, y, z + 1};
+            case 0: return new int[]{x, y, isHead ? z + 1 : z - 1};  // facing +Z: head at z-1, foot at z+1 from head
+            case 1: return new int[]{x, y, isHead ? z - 1 : z + 1};  // facing -Z: head at z+1, foot at z-1 from head
+            case 2: return new int[]{x + (isHead ? 1 : -1), y, z};   // facing +X: head at x-1, foot at x+1 from head
+            case 3: return new int[]{x + (isHead ? -1 : 1), y, z};   // facing -X: head at x+1, foot at x-1 from head
+            default: return new int[]{x, y, isHead ? z + 1 : z - 1};
         }
     }
 
@@ -87,17 +92,26 @@ public final class Bed {
     public static void setOccupied(BlockAccessor get, BlockSetter set, int x, int y, int z, boolean occupied) {
         BlockType cur = get.getBlock(x, y, z);
         if (!isBed(cur)) return;
-        
+
         byte orientation = get.getBlockOrientation(x, y, z);
         int[] other = getOtherHalf(get, x, y, z, orientation);
-        
+
         BlockType foot = occupied ? BlockType.BED_OCCUPIED : BlockType.BED;
         BlockType head = occupied ? BlockType.BED_HEAD_OCCUPIED : BlockType.BED_HEAD;
-        
-        set.set(x, y, z, foot);
-        set.setOrientation(x, y, z, orientation);
-        set.set(other[0], other[1], other[2], head);
-        set.setOrientation(other[0], other[1], other[2], orientation);
+
+        // Determine which position is the foot and which is the head
+        boolean curIsHead = isHead(cur);
+        if (curIsHead) {
+            set.set(x, y, z, head);
+            set.setOrientation(x, y, z, orientation);
+            set.set(other[0], other[1], other[2], foot);
+            set.setOrientation(other[0], other[1], other[2], orientation);
+        } else {
+            set.set(x, y, z, foot);
+            set.setOrientation(x, y, z, orientation);
+            set.set(other[0], other[1], other[2], head);
+            set.setOrientation(other[0], other[1], other[2], orientation);
+        }
     }
 
     /** A block writer - implemented by {@link World#setBlock} in the game. */
