@@ -685,10 +685,21 @@ public class Main {
             Vector3f front = player.getCamera().getFront();
             int px = (int) Math.floor(player.getPosition().x + front.x * 3f);
             int pz = (int) Math.floor(player.getPosition().z + front.z * 3f);
+            // Derive pool base Y from the local terrain surface rather than hardcoding it.
+            int surfaceY = -1;
+            for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
+                BlockType b = world.getBlock(px, y, pz);
+                if (b != BlockType.AIR && !b.isFluid()) {
+                    surfaceY = y;
+                    break;
+                }
+            }
+            if (surfaceY < 0) surfaceY = 0; // fallback if no solid surface found
+            int poolBaseY = surfaceY;
             for (int x = px - 2; x <= px + 2; x++) {
                 for (int z = pz - 2; z <= pz + 2; z++) {
-                    for (int y = 0; y <= 3; y++) {
-                        world.setBlock(x, y, z, y == 0 ? BlockType.STONE : BlockType.WATER);
+                    for (int y = poolBaseY; y <= poolBaseY + 3; y++) {
+                        world.setBlock(x, y, z, y == poolBaseY ? BlockType.STONE : BlockType.WATER);
                     }
                 }
             }
@@ -696,13 +707,20 @@ public class Main {
             if (drown) {
                 for (int x = px - 2; x <= px + 2; x++) {
                     for (int z = pz - 2; z <= pz + 2; z++) {
-                        world.setBlock(x, 4, z, BlockType.STONE); // ceiling so it can't surface
+                        world.setBlock(x, poolBaseY + 4, z, BlockType.STONE); // ceiling so it can't surface
                     }
                 }
             }
-            world.spawnMobAt(Mob.Type.PIG, px + 0.5f, 2f, pz + 0.5f);
-            System.out.println("Spawned a pig in water at " + (px + 0.5f) + "," + 2f + "," + (pz + 0.5f));
-            for (int i = 0; i < 10; i++) world.update(player.getPosition().x, player.getPosition().z);
+            float pigY = poolBaseY + 2f;
+            world.spawnMobAt(Mob.Type.PIG, px + 0.5f, pigY, pz + 0.5f);
+            System.out.println("Spawned a pig in water at " + (px + 0.5f) + "," + pigY + "," + (pz + 0.5f) + " (surface at Y=" + surfaceY + ")");
+            // Advance the mob simulation for sufficient time to observe swimming or drowning.
+            // The grace period is 15 seconds, so run for 20 seconds to demonstrate drowning if the pool is capped.
+            float totalTime = drown ? 20f : 2f;
+            int steps = (int)(totalTime / 0.1f); // 0.1s per step
+            for (int i = 0; i < steps; i++) {
+                world.updateMobs(0.1f, player.getPosition(), player.getAABB(), false, new java.util.Random());
+            }
         }
         // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
         // the container screen can be screenshotted. MCCLONE_AUTOTEST_DOUBLE

@@ -1187,6 +1187,13 @@ public class World implements BlockAccessor {
                 continue;
             }
             mob.update(dt, this, rnd, playerPos);
+            // Remove dead mobs immediately after update completes, using the same
+            // removal path as combat deaths, so a mob killed by drowning doesn't
+            // continue rendering or attacking on subsequent frames.
+            if (mob.isDead()) {
+                it.remove();
+                continue;
+            }
             damage += mob.getMeleeRequest();
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, playerPos, rnd);

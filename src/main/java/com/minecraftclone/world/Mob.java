@@ -318,9 +318,15 @@ public class Mob {
         // accumulate breath - the mob surfaced to breathe.
         boolean fullySubmerged = fullySubmerged(world, box());
         if (fullySubmerged) {
+            float submergedBefore = submergedTime;
             submergedTime += dt;
-            if (submergedTime > DROWN_GRACE_SECONDS) {
-                drown(DROWN_DAMAGE_PER_SECOND * dt);
+            // Damage only the portion of this dt that's actually past the grace
+            // period - the update straddling the boundary (submergedBefore below
+            // it, submergedTime past it) would otherwise get charged for the
+            // *entire* dt, not just the fraction of it spent drowning.
+            float drowningSeconds = submergedTime - Math.max(submergedBefore, DROWN_GRACE_SECONDS);
+            if (drowningSeconds > 0f) {
+                drown(DROWN_DAMAGE_PER_SECOND * drowningSeconds);
             }
         } else {
             submergedTime = 0f;
