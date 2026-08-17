@@ -94,7 +94,9 @@ public final class Mining {
         put(BlockType.TRAPDOOR, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.TRAPDOOR_OPEN, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.BED, 1.0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.BED_HEAD, 1.0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.BED_OCCUPIED, 1.0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.BED_HEAD_OCCUPIED, 1.0f, ToolKind.NONE, TIER_HAND);
 
         // Biome surface blocks - a shovel helps, nothing required.
         put(BlockType.SWAMP_GRASS, 0.6f, ToolKind.SHOVEL, TIER_HAND);

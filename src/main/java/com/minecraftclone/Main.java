@@ -36,6 +36,7 @@ import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Chunk;
 import com.minecraftclone.world.DimensionType;
 import com.minecraftclone.world.Door;
+import com.minecraftclone.world.Bed;
 import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.Mob;
@@ -357,6 +358,8 @@ public class Main {
 
         if (Door.isDoor(targetType)) {
             Door.breakDoor(world, world::setBlock, bx, by, bz); // remove both halves
+        } else if (Bed.isBed(targetType)) {
+            Bed.breakBed(world, world::setBlock, bx, by, bz); // remove both halves
         } else if (targetingOverlay) {
             // Clear just the decoration - the water (or whatever else) it was
             // sitting inside is untouched.
@@ -1716,16 +1719,17 @@ public class Main {
                         if (currentDim[0] == DimensionType.OVERWORLD) {
                             if (dayNightCycle.isNight() || mode.isCreative()) {
                                 if (!player.isSleeping()) {
-                                    // Mark bed as occupied
-                                    world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.BED_OCCUPIED);
                                     player.setSleeping(true);
                                     showMessage(messages, "Sleeping...", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1f);
                                     handRenderer.triggerSwing();
+                                    // Mark bed as occupied (both halves)
+                                    Bed.setOccupied(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
                                     // Skip time to morning
                                     dayNightCycle.skipToMorning();
                                     // Wake up immediately (simplified - instant skip)
                                     player.setSleeping(false);
-                                    world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.BED);
+                                    // Mark bed as unoccupied (both halves)
+                                    Bed.setOccupied(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, false);
                                     showMessage(messages, "Good morning!", new Vector4f(0.9f, 0.9f, 0.5f, 1f), 2f);
                                 }
                             } else {
@@ -2316,7 +2320,7 @@ public class Main {
                     // on the side of the block nearest to them (opposite
                     // the look direction). Stairs also store a facing so
                     // their stepped mesh rises away from the player.
-                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR || heldItem.isStair()) {
+                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR || heldItem.isStair() || heldItem == BlockType.BED) {
                         Vector3f front = player.getCamera().getFront();
                         byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
                                 ? (front.x >= 0 ? 3 : 2)
@@ -2327,6 +2331,24 @@ public class Main {
                         if (heldItem == BlockType.DOOR) {
                             world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
                             world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
+                        }
+                        // A bed is 1x2 horizontal: place the head half adjacent based on facing.
+                        if (heldItem == BlockType.BED) {
+                            int headX = p.x, headZ = p.z;
+                            // Head goes in the direction the player is looking (opposite of facing)
+                            switch (facing) {
+                                case 0: headZ = p.z - 1; break;  // facing -Z, head goes +Z
+                                case 1: headZ = p.z + 1; break;  // facing +Z, head goes -Z
+                                case 2: headX = p.x - 1; break;  // facing -X, head goes +X
+                                case 3: headX = p.x + 1; break;  // facing +X, head goes -X
+                            }
+                            // Validate head position
+                            if (headX >= p.x - 1 && headX <= p.x + 1 && headZ >= p.z - 1 && headZ <= p.z + 1) {
+                                if (world.getBlock(headX, p.y, headZ) == BlockType.AIR && !intersectsPlayer(player, new Vector3i(headX, p.y, headZ))) {
+                                    world.setBlock(headX, p.y, headZ, BlockType.BED_HEAD);
+                                    world.setBlockOrientation(headX, p.y, headZ, facing);
+                                }
+                            }
                         }
                     }
                 }
