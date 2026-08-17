@@ -35,4 +35,26 @@ class SoundsTest {
             }
         }
     }
+
+    /**
+     * Regression test: SPLASH (entering/leaving water, and the periodic swim
+     * stroke - see Main's swimStrokeTimer) used to be built from two noise-
+     * only layers close enough in both duration and brightness to a sand
+     * footstep tap that it was reported as "sounds like walking on sand".
+     * A real splash needs to be unmistakably longer than any single footstep
+     * tap - a lingering wash/foam tail, not one more dry crunch (it also now
+     * carries a pitch-swept tone() layer no break/place/footstep sound has
+     * at all - see the synthesis recipe in Sounds - though that's a
+     * perceptual property this test doesn't try to detect from raw PCM).
+     */
+    @Test
+    void splashIsClearlyLongerThanAFootstepTap() {
+        Sounds sounds = new Sounds();
+        short[] splash = sounds.get(SoundEvent.SPLASH);
+        short[] sandStep = sounds.get(SoundMaterial.SAND, BlockAction.STEP);
+
+        assertTrue(splash.length > sandStep.length * 3,
+                "splash (" + splash.length + " samples) should run well longer than a footstep tap ("
+                        + sandStep.length + " samples), not read as one more dry crunch");
+    }
 }

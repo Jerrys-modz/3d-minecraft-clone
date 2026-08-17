@@ -47,10 +47,55 @@ public class Climate {
     private static final float UNDERGROUND_BLEND_BLOCKS = 10f;
     /** The most unreliable the forecast gets (the far end of the 7-day range). */
     private static final float MAX_FORECAST_ERROR = 0.45f;
+    /**
+     * Chance an already-precipitating hour's storm continues into the next
+     * one, instead of the schedule re-rolling from scratch every single
+     * hour. Real storms last several hours, not one at a time with clear
+     * skies possibly right before and after - rolling every hour
+     * independently made the schedule flicker rain on and off constantly,
+     * which read as "it rains all the time" even when the actual fraction of
+     * precipitating hours was reasonable. 0.6 averages out to a storm
+     * lasting about 2.5 hours.
+     */
+    private static final float STORM_CONTINUE_CHANCE = 0.6f;
+    // Precipitation odds for an hour that starts out dry: a small base
+    // chance plus a humidity-scaled term, weighted by how much the season
+    // favors wet weather relative to a "neutral" mid-season bias (so
+    // seasonBias's own 0.35-0.55 range only ever nudges the chance up or
+    // down a bit, not multiplies it outright).
+    // <p>
+    // These are the odds of a *fresh* storm starting, not the overall
+    // fraction of precipitating hours - STORM_CONTINUE_CHANCE compounds on
+    // top of them (a Markov chain's steady state is
+    // start / (start + (1 - continue)), so a ~2.5h average storm roughly
+    // triples the fresh-start chance's own weight in the long run). Backed
+    // out from that formula to land the *overall* precipitating fraction
+    // around 4% for a desert, ~12% for plains, ~17-21% for a rainforest/
+    // swamp in an average season - the previous formula (up to 0.85
+    // chance/hour, every hour re-rolled independently) made rain the common
+    // case rather than the exception almost everywhere.
+    private static final float BASE_PRECIPITATION_CHANCE = 0.01f;
+    private static final float HUMIDITY_PRECIPITATION_WEIGHT = 0.10f;
+    private static final float NEUTRAL_SEASON_BIAS = 0.45f; // Season.AUTUMN's precipitationBias
+    private static final float MAX_PRECIPITATION_CHANCE = 0.25f;
+    /** Loosest a precipitating hour's strength can roll - see {@link #rollHour}. */
+    private static final float MIN_STRENGTH = 0.15f;
     /** Chance per second that a thunderstorm throws a lightning flash. */
     private static final float FLASH_CHANCE_PER_SECOND = 0.06f;
     /** How long a lightning flash brightens the sky (seconds). */
     private static final float FLASH_DURATION = 0.3f;
+    /**
+     * How long, in real seconds, a storm takes to roll fully in (or clear
+     * fully out) - see {@link #displayedWeather}/{@link #displayedStrength}.
+     * The schedule itself still changes hour by hour (an in-game hour is
+     * ~25 real seconds at the default day length), but what's actually
+     * rendered/heard/felt eases toward that target instead of snapping to it,
+     * so a storm visibly builds (or fades) rather than switching on like a
+     * light. A different weather type first fades the outgoing one out
+     * before the incoming one starts ramping up, rather than cross-fading
+     * rain straight into snow.
+     */
+    private static final float WEATHER_TRANSITION_SECONDS = 20f;
 
     private final Calendar calendar;
     private final DayNightCycle dayNightCycle;
@@ -67,6 +112,10 @@ public class Climate {
     private int startHour = -1;
     /** Counts down a lightning flash during a thunderstorm; 0 = no flash. */
     private float flashTimer;
+    /** What {@link #getWeather()} actually reports right now - eases toward the schedule's target, see {@link #advanceWeatherTransition}. */
+    private Weather displayedWeather = Weather.CLEAR;
+    /** What {@link #getWeatherStrength()} actually reports right now - eases toward the schedule's target. */
+    private float displayedStrength = 0f;
 
     public Climate(Calendar calendar, DayNightCycle dayNightCycle) {
         this.calendar = calendar;
@@ -96,6 +145,7 @@ public class Climate {
                 rollHour(FORECAST_HOURS - 1, startHour + FORECAST_HOURS - 1);
             }
         }
+        advanceWeatherTransition(dt);
         Weather live = getWeather();
         if (live.isPrecipitation()) {
             wetness = Math.min(1f, wetness + dt * WETNESS_RISE_PER_SECOND);
@@ -114,7 +164,14 @@ public class Climate {
         }
     }
 
-    /** Rolls the live weather for the given absolute in-game hour, from the local climate. */
+    /**
+     * Rolls the live weather for the given absolute in-game hour, from the
+     * local climate. A precipitating previous hour has a good chance of
+     * simply continuing (see {@link #STORM_CONTINUE_CHANCE}) - real storms
+     * span several hours, not one at a time with the schedule re-rolling
+     * fresh odds every single hour - so precipitation clusters into a handful
+     * of multi-hour systems instead of flickering on and off constantly.
+     */
     private void rollHour(int index, int absoluteHour) {
         int dayIndex = Math.floorDiv(absoluteHour, HOURS_PER_DAY);
         int hourOfDay = Math.floorMod(absoluteHour, HOURS_PER_DAY);
@@ -122,7 +179,8 @@ public class Climate {
         float temperature = forecastTemperature(dayIndex, hourOfDay);
         float humidity = baseHumidity(currentBiome);
         float seasonBias = calendar.seasonAt(dayIndex).precipitationBias;
-        float precipitationChance = Math.min(0.85f, 0.10f + humidity * 0.35f * (seasonBias * 2f));
+        boolean stormContinuing = index > 0 && hourly[index - 1].isPrecipitation();
+        float precipitationChance = precipitationChance(humidity, seasonBias, stormContinuing);
         if (r.nextFloat() < precipitationChance) {
             // Precipitation: snow below freezing, otherwise rain - with a chance
             // of upgrading to the severe storm (blizzard / thunderstorm) form.
@@ -134,7 +192,16 @@ public class Climate {
                 boolean thunder = r.nextFloat() < 0.25f;
                 hourly[index] = thunder ? Weather.THUNDERSTORM : Weather.RAIN;
             }
-            strength[index] = 0.3f + r.nextFloat() * 0.7f;
+            if (stormContinuing) {
+                // Drift from the previous hour's strength (a storm gradually
+                // building or tapering) rather than re-rolling independently,
+                // so a multi-hour system reads as one coherent event instead
+                // of a random walk between light and heavy every hour.
+                float drift = (r.nextFloat() * 2f - 1f) * 0.25f;
+                strength[index] = Math.max(MIN_STRENGTH, clamp01(strength[index - 1] + drift));
+            } else {
+                strength[index] = MIN_STRENGTH + r.nextFloat() * (1f - MIN_STRENGTH);
+            }
             if (hourly[index].isSevere()) {
                 strength[index] = Math.max(strength[index], 0.75f); // storms are always heavy
             }
@@ -144,6 +211,19 @@ public class Climate {
             hourly[index] = fog ? Weather.FOG : Weather.CLEAR;
             strength[index] = 0f;
         }
+    }
+
+    /**
+     * The odds a given hour precipitates - pulled out as a pure function for
+     * direct testing (see {@link #rollHour}). {@code stormContinuing} short-
+     * circuits straight to {@link #STORM_CONTINUE_CHANCE}, ignoring humidity/
+     * season entirely: once a storm is already going, whether it keeps going
+     * doesn't depend on the odds that started it.
+     */
+    static float precipitationChance(float humidity, float seasonBias, boolean stormContinuing) {
+        if (stormContinuing) return STORM_CONTINUE_CHANCE;
+        return Math.min(MAX_PRECIPITATION_CHANCE, BASE_PRECIPITATION_CHANCE
+                + humidity * HUMIDITY_PRECIPITATION_WEIGHT * (seasonBias / NEUTRAL_SEASON_BIAS));
     }
 
     /** The temperature a future hour would see (base + season + nightly dip, before weather). */
@@ -161,16 +241,64 @@ public class Climate {
         return (int) (dayNightCycle.getTime() * HOURS_PER_DAY);
     }
 
-    /** The weather right now (what is actually happening). */
-    public Weather getWeather() {
-        if (forcedWeather != null) return forcedWeather;
-        return startHour < 0 ? Weather.CLEAR : hourly[currentHourOfDay()];
+    /**
+     * Eases {@link #displayedWeather}/{@link #displayedStrength} toward the
+     * schedule's current-hour target by up to {@code dt / WEATHER_TRANSITION_SECONDS}.
+     * While the displayed and target weather match, strength eases directly
+     * toward the target (a storm building or a lull easing within the same
+     * weather type). When they differ, the <em>displayed</em> weather's
+     * strength eases toward zero first; only once it actually reaches zero
+     * does the display switch to the new weather (at zero strength, to then
+     * ramp up itself next frame) - so, say, rain visibly tapers off before
+     * snow starts falling, instead of the two cross-fading into each other.
+     */
+    private void advanceWeatherTransition(float dt) {
+        if (forcedWeather != null) return; // forced weather is instantaneous - see getWeather()/getWeatherStrength()
+        Weather target = startHour < 0 ? Weather.CLEAR : hourly[currentHourOfDay()];
+        float targetStrength = startHour < 0 ? 0f : strength[currentHourOfDay()];
+        TransitionState next = stepWeatherTransition(displayedWeather, displayedStrength,
+                target, targetStrength, dt / WEATHER_TRANSITION_SECONDS);
+        displayedWeather = next.weather();
+        displayedStrength = next.strength();
     }
 
-    /** How heavy the current weather is, 0..1 (0 for clear). */
+    /** {@link #displayedWeather}/{@link #displayedStrength} after one transition step - see {@link #advanceWeatherTransition}. */
+    record TransitionState(Weather weather, float strength) {
+    }
+
+    /**
+     * One step of the weather-transition state machine, pulled out as a pure
+     * function so it's directly testable without driving the whole schedule.
+     * Strength eases toward {@code targetStrength} by up to {@code maxDelta}
+     * while the displayed and target weather match; when they differ, the
+     * displayed weather's strength eases toward zero first, and only once it
+     * actually reaches zero does the displayed weather switch to the target
+     * (at zero strength, left to ramp up on a later step).
+     */
+    static TransitionState stepWeatherTransition(Weather displayedWeather, float displayedStrength,
+                                                  Weather target, float targetStrength, float maxDelta) {
+        if (target == displayedWeather) {
+            return new TransitionState(displayedWeather, moveToward(displayedStrength, targetStrength, maxDelta));
+        }
+        float eased = moveToward(displayedStrength, 0f, maxDelta);
+        return eased <= 0f ? new TransitionState(target, 0f) : new TransitionState(displayedWeather, eased);
+    }
+
+    private static float moveToward(float current, float target, float maxDelta) {
+        if (Math.abs(target - current) <= maxDelta) return target;
+        return current + Math.signum(target - current) * maxDelta;
+    }
+
+    /** The weather right now (what is actually happening) - eases toward the schedule's target, see {@link #advanceWeatherTransition}. */
+    public Weather getWeather() {
+        if (forcedWeather != null) return forcedWeather;
+        return startHour < 0 ? Weather.CLEAR : displayedWeather;
+    }
+
+    /** How heavy the current weather is, 0..1 (0 for clear) - eases toward the schedule's target, see {@link #advanceWeatherTransition}. */
     public float getWeatherStrength() {
         if (forcedWeather != null) return forcedWeather.isPrecipitation() ? 0.8f : 0f;
-        return startHour < 0 ? 0f : strength[currentHourOfDay()];
+        return startHour < 0 ? 0f : displayedStrength;
     }
 
     public boolean isPrecipitation() {

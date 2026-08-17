@@ -66,6 +66,52 @@ class BlockTypeTest {
         assertEquals(14, BlockType.FIRE.lightLevel, "a lightning-lit flame glows brightly");
     }
 
+    /**
+     * Regression test for a constructor bug: the plain full-cube delegate used
+     * to pass its own sideTile (atlas tile index) into the foodValue slot
+     * instead of 0, so isEdible() (foodValue > 0) came back true for nearly
+     * every ordinary block. In survival, right-clicking one of these then ran
+     * Main's eat-branch instead of the place-branch - the item vanished from
+     * the hotbar via Player.eat() and no block ever appeared in the world.
+     */
+    @Test
+    void ordinaryCubeBlocksAreNotEdible() {
+        assertFalse(BlockType.DIRT.isEdible());
+        assertFalse(BlockType.STONE.isEdible());
+        assertFalse(BlockType.PLANKS.isEdible());
+        assertFalse(BlockType.GRASS.isEdible());
+        assertFalse(BlockType.SAND.isEdible());
+        assertEquals(0, BlockType.DIRT.foodValue);
+        assertEquals(0, BlockType.STONE.foodValue);
+        // Real food still works - foraged items keep their nonzero value.
+        assertTrue(BlockType.APPLE.isEdible());
+    }
+
+    /**
+     * Regression test: isPassThrough() used to list WATER and WATER_FLOW but
+     * not WATER_SOURCE (or LAVA/LAVA_SOURCE, only LAVA_FLOW) - despite all
+     * three water variants (and all three lava variants) being rendered
+     * identically (same tile, same non-solid/translucent flags, same
+     * Chunk#emitFluid mesh path). Breaking a block next to natural ocean
+     * water promotes the boundary cell from WATER to WATER_SOURCE (see
+     * World#promoteIfStaticFluid) - extremely common near any player-touched
+     * shoreline - so swimming through one of those cells made Raycaster.cast
+     * treat the camera's own eye position as "embedded in solid" every
+     * frame, aiming the block-outline highlight at the camera itself: a
+     * glitchy wireframe-in-the-water "x-ray" look.
+     */
+    @Test
+    void everyFluidVariantIsPassThroughLikeItsSiblings() {
+        assertTrue(BlockType.WATER.isPassThrough());
+        assertTrue(BlockType.WATER_SOURCE.isPassThrough());
+        assertTrue(BlockType.WATER_FLOW.isPassThrough());
+        assertTrue(BlockType.LAVA.isPassThrough());
+        assertTrue(BlockType.LAVA_SOURCE.isPassThrough());
+        assertTrue(BlockType.LAVA_FLOW.isPassThrough());
+        assertTrue(BlockType.AIR.isPassThrough());
+        assertFalse(BlockType.STONE.isPassThrough());
+    }
+
     @Test
     void heatSourcesAreFireLampsTorchesAndLava() {
         assertTrue(BlockType.FIRE.isHeatSource());

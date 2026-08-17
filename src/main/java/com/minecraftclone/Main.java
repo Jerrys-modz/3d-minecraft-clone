@@ -98,6 +98,16 @@ public class Main {
 
     private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
     private static final float SWIM_STROKE_INTERVAL = 0.55f; // seconds between stroke sounds while swimming and moving
+    // Minimum time between two splash sounds. isInWater() samples the whole
+    // body hitbox against water, so standing/floating with the hitbox edge
+    // sitting almost exactly on a water surface's block boundary - e.g. right
+    // after breaking the block that was keeping you just above it, or
+    // treading water at the surface - lets ordinary per-frame physics noise
+    // walk that sample back and forth across the boundary every frame. Without
+    // a cooldown, each flicker fired its own splash, which sounded like a
+    // continuous harsh clicking rather than the occasional in/out splash it
+    // was meant to be.
+    private static final float SPLASH_COOLDOWN_SECONDS = 0.25f;
 
     /** Procedurally-generated GUI art (light/dark panels and slots), shared by every screen. */
     private GuiTextures guiTextures;
@@ -498,7 +508,8 @@ public class Main {
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
         float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
         float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
-        boolean[] wasSubmerged = {false}; // last frame's Player#isSubmerged(), to fire a splash sound only on the change
+        boolean[] wasInWater = {false}; // last frame's Player#isInWater(), to fire a splash sound only on the change
+        float[] splashCooldown = {0f}; // time until another splash sound is allowed - see SPLASH_COOLDOWN_SECONDS
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
         System.out.println("          F to fly (double-tap W also takes off in creative and boosts speed");
@@ -628,6 +639,42 @@ public class Main {
                 System.err.println("MCCLONE_AUTOTEST_PLACE: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE"));
             }
         }
+        // Diagnostic autotest hook: unlike MCCLONE_AUTOTEST_PLACE above (which
+        // places directly via world.setBlock, bypassing the player entirely),
+        // this drives the exact same placeOrEatHeldItem() a real right-click
+        // calls - survival inventory consumption included - via a real
+        // raycast from the camera. Logs inventory/world state before and
+        // after so a "block vanishes from the hotbar but never appears"
+        // report can be confirmed or ruled out headlessly.
+        if (System.getenv("MCCLONE_AUTOTEST_PLACE_SURVIVAL") != null && started[0]) {
+            try {
+                BlockType toPlace = BlockType.valueOf(System.getenv("MCCLONE_AUTOTEST_PLACE_SURVIVAL"));
+                player.setGameMode(GameMode.SURVIVAL);
+                player.getInventory().add(toPlace, 1);
+                int before = player.getInventory().getCount(toPlace);
+                Raycaster.Hit testHit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
+                if (testHit != null) {
+                    BlockType worldBefore = world.getBlock(testHit.placePos.x, testHit.placePos.y, testHit.placePos.z);
+                    placeOrEatHeldItem(world, player, GameMode.SURVIVAL, toPlace, testHit, audio, handRenderer);
+                    int after = player.getInventory().getCount(toPlace);
+                    BlockType worldAfter = world.getBlock(testHit.placePos.x, testHit.placePos.y, testHit.placePos.z);
+                    // Differential check: try a raw world.setBlock at the exact same
+                    // coordinates right after, to tell "the chunk there wasn't loaded
+                    // yet" apart from "placeOrEatHeldItem's own logic didn't place it".
+                    world.setBlock(testHit.placePos.x, testHit.placePos.y, testHit.placePos.z, BlockType.STONE);
+                    BlockType worldAfterRawSet = world.getBlock(testHit.placePos.x, testHit.placePos.y, testHit.placePos.z);
+                    System.out.println("AUTOTEST_PLACE_SURVIVAL: held=" + toPlace
+                            + " invBefore=" + before + " invAfter=" + after
+                            + " worldAfterRawSet=" + worldAfterRawSet
+                            + " placePos=" + testHit.placePos.x + "," + testHit.placePos.y + "," + testHit.placePos.z
+                            + " worldBefore=" + worldBefore + " worldAfter=" + worldAfter);
+                } else {
+                    System.out.println("AUTOTEST_PLACE_SURVIVAL: no raycast hit within reach");
+                }
+            } catch (IllegalArgumentException ignored) {
+                System.err.println("MCCLONE_AUTOTEST_PLACE_SURVIVAL: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE_SURVIVAL"));
+            }
+        }
         // Opt-in autotest hook: lay a short run of stairs (stepping up away from
         // the camera) or a row of fences (so their rails connect), for screenshots.
         if (System.getenv("MCCLONE_AUTOTEST_PARTIAL") != null && started[0]) {
@@ -727,6 +774,100 @@ public class Main {
             for (int i = 0; i < 5; i++) world.update(p.x, p.z);
             player.teleportTo(cx + 0.5f, poolTop - 2f, cz + 0.5f);
             System.out.println("Autotest swim pool: y " + poolBottom + " to " + poolTop + ", player at y " + (poolTop - 2));
+        }
+        // Opt-in autotest hook: carve two adjacent water bodies of different
+        // total heights (a tall deep pool next to a shorter shallow one) and
+        // submerge the player on the deep side, level with the shallow side's
+        // own surface, looking across the boundary - exactly the underwater
+        // ledge shape that used to paint a phantom water-surface face midway
+        // through the deep side (see Chunk#emitFluid's sealedByFluidAbove
+        // check: a submerged cell's corner gets pulled down by averaging with
+        // the shorter neighbor's own surface at that same Y, which used to be
+        // (mis)read as "this corner needs its own top face too").
+        if (System.getenv("MCCLONE_AUTOTEST_UNDERWATER_LEDGE") != null && started[0]) {
+            Vector3f p = player.getPosition();
+            int cx = (int) Math.floor(p.x);
+            int cz = (int) Math.floor(p.z);
+            int surfaceY = world.getSurfaceHeight(cx, cz);
+            int bottom = surfaceY - 6;
+            int deepTop = surfaceY + 3;
+            int shallowTop = surfaceY - 1; // several blocks shorter than the deep side
+            for (int x = cx - 4; x <= cx + 4; x++) {
+                for (int z = cz - 2; z <= cz + 2; z++) {
+                    int top = x < cx ? deepTop : shallowTop;
+                    for (int y = bottom; y <= top; y++) {
+                        world.setBlock(x, y, z, BlockType.WATER_SOURCE);
+                    }
+                }
+            }
+            for (int i = 0; i < 5; i++) world.update(p.x, p.z);
+            // Deep side, right up against the step, level with the shallow
+            // side's own surface (where its corner-averaging pull-down would
+            // show up), facing across it (+X, toward the shallow side).
+            player.teleportTo(cx - 1.5f, shallowTop - 1f, cz + 0.5f);
+            player.getCamera().setYaw(0f);
+            player.getCamera().setPitch(10f);
+            System.out.println("Autotest underwater ledge: deep top " + deepTop + ", shallow top " + shallowTop
+                    + ", bottom " + bottom + ", player at y " + shallowTop);
+        }
+        // Diagnostic autotest hook: scans outward from spawn for the deepest
+        // nearby ocean floor point (and, as a tiebreaker, the steepest
+        // neighboring drop), and dives the player down to it, facing the
+        // slope - a general-purpose way to screenshot real generated ocean
+        // floor/cliff terrain headlessly, without hand-carving a scene.
+        if (System.getenv("MCCLONE_AUTOTEST_FIND_OCEAN_CLIFF") != null && started[0]) {
+            int seaLevel = TerrainGenerator.DEFAULT_SEA_LEVEL;
+            // getSurfaceHeight only reads already-loaded chunks (falling back to
+            // sea level otherwise), so stream a wide area around spawn in first.
+            for (int i = 0; i < 400; i++) world.update(player.getPosition().x, player.getPosition().z);
+            int bestX = 0, bestZ = 0, bestDeep = seaLevel, bestShallow = 0, bestDrop = -1;
+            int oceanTiles = 0, minHeightSeen = seaLevel;
+            for (int x = -90; x <= 90; x += 2) {
+                for (int z = -90; z <= 90; z += 2) {
+                    if (world.getBiome(x, z) != TerrainGenerator.Biome.OCEAN) continue;
+                    // Skip columns whose chunk isn't actually loaded/generated yet
+                    // (an ungenerated column reads all-AIR, which floorHeight would
+                    // otherwise misreport as a dramatic "floor at bedrock").
+                    if (world.getBlock(x, seaLevel, z) != BlockType.WATER) continue;
+                    if (world.getBlock(x + 2, seaLevel, z) == BlockType.AIR) continue;
+                    oceanTiles++;
+                    int h = floorHeight(world, x, z, seaLevel);
+                    minHeightSeen = Math.min(minHeightSeen, h);
+                    int hE = floorHeight(world, x + 2, z, seaLevel);
+                    int drop = hE - h;
+                    // Rank by depth first (dive at the deepest point found), tie
+                    // broken by whichever also has the steepest neighboring drop.
+                    if (h < bestDeep || (h == bestDeep && drop > bestDrop)) {
+                        bestDrop = drop;
+                        bestX = x;
+                        bestZ = z;
+                        bestDeep = h;
+                        bestShallow = hE;
+                    }
+                }
+            }
+            System.out.println("Autotest ocean cliff scan: oceanTiles=" + oceanTiles + " minHeightSeen=" + minHeightSeen);
+            for (int i = 0; i < 8; i++) world.update(bestX, bestZ);
+            player.teleportTo(bestX + 0.5f, bestDeep + 1.5f, bestZ + 0.5f);
+            player.getCamera().setYaw(0f);
+            player.getCamera().setPitch(0f);
+            System.out.println("Autotest ocean cliff: deep(" + bestX + "," + bestZ + ")=" + bestDeep
+                    + " shallow(" + (bestX + 2) + "," + bestZ + ")=" + bestShallow
+                    + " drop=" + (bestShallow - bestDeep) + ", player at y " + (bestDeep + 1.5f));
+        }
+        // Opt-in autotest hook: open a furnace mid-smelt (partially burned fuel,
+        // partway through smelting) so the flame/progress-arrow decorations can
+        // be screenshotted in the actual container GUI screen - regression
+        // coverage for Hud#renderFurnaceProgress silently no-op'ing when it ran
+        // right after the textured-GUI panel path left no shader bound.
+        if (System.getenv("MCCLONE_AUTOTEST_FURNACE_GUI") != null && started[0]) {
+            Furnace furnace = world.getOrCreateFurnace(0, 5, 0);
+            furnace.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 8);
+            furnace.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 8);
+            furnace.tick(4f);
+            activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, furnace);
+            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+            System.out.println("Autotest furnace GUI: burn=" + furnace.burnFraction() + " progress=" + furnace.progressFraction());
         }
         // Opt-in autotest hook: open the player's own inventory screen, equipping a
         // full iron set (plus a couple of bag items) so the armor column renders.
@@ -1194,13 +1335,26 @@ public class Main {
 
                 if (player.hasJustJumped()) audio.play(SoundEvent.JUMP);
                 if (player.hasJustLanded()) audio.play(SoundEvent.LAND);
-                if (player.isSubmerged() != wasSubmerged[0]) {
-                    audio.play(SoundEvent.SPLASH);
-                    wasSubmerged[0] = player.isSubmerged();
-                    // Diving in (or surfacing) already just played a splash this frame -
-                    // without this, swimStrokeTimer sitting at 0 (reset while not
-                    // swimming) would immediately fire a second, redundant one below.
+                splashCooldown[0] = Math.max(0f, splashCooldown[0] - dt);
+                // isInWater() (whole-body hitbox) rather than isSubmerged() (eye point
+                // only) - a jump into a shallow pool that never reaches eye height, or
+                // wading in up to your knees, is still an entry that should splash.
+                // isSubmerged() alone stayed silent for exactly that case.
+                if (player.isInWater() != wasInWater[0]) {
+                    wasInWater[0] = player.isInWater();
+                    // Diving in (or surfacing) is a splash either way - even when the
+                    // cooldown below suppresses the sound itself (a flicker burst),
+                    // the stroke timer still needs resetting so the periodic stroke
+                    // splash further down doesn't immediately double up on it.
                     swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
+                    // Cooldown-gated: see SPLASH_COOLDOWN_SECONDS - the raw signal
+                    // can flicker several times a frame-group near a surface
+                    // boundary, but the actual splash sound should only fire for
+                    // the first crossing in a burst.
+                    if (splashCooldown[0] <= 0f) {
+                        audio.play(SoundEvent.SPLASH);
+                        splashCooldown[0] = SPLASH_COOLDOWN_SECONDS;
+                    }
                 }
                 // A footstep every FOOTSTEP_INTERVAL seconds while walking/
                 // sprinting on the ground - timed off a countdown rather than a
@@ -1226,9 +1380,14 @@ public class Main {
                 // dedicated stroke effect.
                 if (player.isSwimmingAndMoving()) {
                     swimStrokeTimer[0] -= dt;
-                    if (swimStrokeTimer[0] <= 0f) {
+                    // Same cooldown as the transition splash above - both play
+                    // SoundEvent.SPLASH, so without sharing the gate a stroke landing
+                    // right after a transition (or another stroke) could still
+                    // double up on it.
+                    if (swimStrokeTimer[0] <= 0f && splashCooldown[0] <= 0f) {
                         swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
                         audio.play(SoundEvent.SPLASH, 0.5f);
+                        splashCooldown[0] = SPLASH_COOLDOWN_SECONDS;
                     }
                 } else {
                     swimStrokeTimer[0] = 0f;
@@ -1297,7 +1456,11 @@ public class Main {
             Vector3f playerPos = player.getPosition();
             AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
                     playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
-            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
+            // Creative/spectator are invulnerable (see GameMode#isInvulnerable) - mobs
+            // couldn't land a hit either way, so don't have them chase/attack a player
+            // they can never actually hurt; they just wander like passives instead.
+            boolean playerTargetable = !settings.getGameMode().isInvulnerable();
+            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot, playerTargetable);
             if (mobDamage > 0f) {
                 player.takeDamage(mobDamage);
                 audio.play(SoundEvent.HURT);
@@ -1459,55 +1622,7 @@ public class Main {
                                 world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
-                        if (heldItem.isEdible() && !mode.isCreative()) {
-                            if (player.eat(heldItem)) {
-                                audio.play(SoundEvent.EAT);
-                                handRenderer.triggerSwing();
-                            }
-                        } else if (!heldItem.isItem) {
-                            // Pure inventory items (tools, and any future non-edible item)
-                            // have no world tile and can never be placed as a block.
-                            Vector3i p = hit.placePos;
-                            // A submersible decoration (seaweed) placed where a fluid
-                            // already is grows inside it instead of replacing it - the
-                            // same rule world-gen follows (see TerrainGenerator). If that
-                            // cell's overlay slot is already taken, there's simply nowhere
-                            // to put it - skip placing rather than fall through and
-                            // overwrite the fluid it would have grown inside.
-                            boolean targetIsFluid = world.getBlock(p.x, p.y, p.z).isFluid();
-                            boolean overlayFull = world.getOverlay(p.x, p.y, p.z) != BlockType.AIR;
-                            boolean blocked = heldItem.isSubmersible() ? (targetIsFluid && overlayFull) : false;
-                            boolean intoFluid = heldItem.isSubmersible() && targetIsFluid && !overlayFull;
-                            if (!blocked && !intersectsPlayer(player, p)) {
-                                boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
-                                if (placed) {
-                                    handRenderer.triggerSwing();
-                                    if (intoFluid) {
-                                        world.setOverlay(p.x, p.y, p.z, heldItem);
-                                    } else {
-                                        world.setBlock(p.x, p.y, p.z, heldItem);
-                                    }
-                                    audio.playBlockSound(SoundMaterial.of(heldItem), BlockAction.PLACE, p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
-                                    // Doors, trapdoors, and other directional blocks
-                                    // (e.g. a furnace) face the player: the front sits
-                                    // on the side of the block nearest to them (opposite
-                                    // the look direction). Stairs also store a facing so
-                                    // their stepped mesh rises away from the player.
-                                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR || heldItem.isStair()) {
-                                        Vector3f front = player.getCamera().getFront();
-                                        byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
-                                                ? (front.x >= 0 ? 3 : 2)
-                                                : (front.z >= 0 ? 1 : 0));
-                                        world.setBlockOrientation(p.x, p.y, p.z, facing);
-                                        // A door is 2 blocks tall: also place the top half.
-                                        if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
-                                            world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
-                                            world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        placeOrEatHeldItem(world, player, mode, heldItem, hit, audio, handRenderer);
                     }
                 }
             }
@@ -1585,6 +1700,7 @@ public class Main {
                     Math.min(1.5f, clouds + (currentDim[0] == DimensionType.OVERWORLD ? overcast * 0.9f : 0f)),
                     0.5f + settings.getCloudSpeed() * 0.5f,
                     currentDim[0] == DimensionType.OVERWORLD ? stars * (1f - overcast) : stars,
+                    currentDim[0] == DimensionType.OVERWORLD ? overcast : 0f,
                     zenithColor, horizonColor, nightZenith, sunColor, moonColor);
             glEnable(GL_DEPTH_TEST);
 
@@ -1625,7 +1741,18 @@ public class Main {
             }
 
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                if (hit != null && targetedMobRef[0] == null) {
+                // Raycaster.cast() reports a degenerate hit (point == origin,
+                // blockPos == the eye's own cell) when the eye's own cell holds
+                // an overlay decoration (e.g. seaweed) - intentional, so seaweed
+                // right at your feet can still be targeted/broken - but drawing
+                // a wireframe cube around a block the camera is literally inside
+                // of has nowhere sane to project to: its edges radiate out to
+                // the screen corners, a glitchy "x-ray" wireframe look. Skip the
+                // outline specifically for that degenerate case; breaking/
+                // placing against hit.blockPos is unaffected.
+                boolean degenerateHit = hit != null
+                        && hit.point.distanceSquared(player.getEyePosition()) < 0.0025f;
+                if (hit != null && targetedMobRef[0] == null && !degenerateHit) {
                     float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
                     hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
                 }
@@ -1641,6 +1768,10 @@ public class Main {
                             player.isSubmerged(),
                             Inventory.HOTBAR_SIZE, window.getAspectRatio());
                 }
+                // A blue tint washes over the screen while your eyes are
+                // underwater, drawn before the frost vignette so a freezing
+                // dip under icy water still layers both.
+                hud.renderUnderwaterOverlay(player.isSubmerged());
                 // A frost vignette fades in over everything as you freeze outside
                 // in a storm (see Player/PlayerStats cold exposure).
                 hud.renderFrostOverlay(player.getStats().getColdness());
@@ -2009,6 +2140,96 @@ public class Main {
             System.err.println("Could not read/write seed file (" + e.getMessage() + "), using a fresh in-memory seed.");
             return System.currentTimeMillis();
         }
+    }
+
+    /**
+     * Right-click with a held item that isn't a door/trapdoor/GUI block: eats
+     * it if it's food, otherwise places it as a world block (or, for a
+     * submersible decoration like seaweed, into the target cell's overlay
+     * slot instead of replacing the fluid there). Shared by the real
+     * mouse-click handler and the {@code MCCLONE_AUTOTEST_PLACE_SURVIVAL}
+     * headless verification hook, so both exercise the exact same logic a
+     * player's right-click does - including the inventory consumption in
+     * survival, which the older direct-{@code world.setBlock} autotest hook
+     * bypasses entirely.
+     */
+    private void placeOrEatHeldItem(World world, Player player, GameMode mode, BlockType heldItem,
+                                     Raycaster.Hit hit, AudioEngine audio, HandRenderer handRenderer) {
+        if (heldItem.isEdible() && !mode.isCreative()) {
+            if (player.eat(heldItem)) {
+                audio.play(SoundEvent.EAT);
+                handRenderer.triggerSwing();
+            }
+        } else if (!heldItem.isItem) {
+            // Pure inventory items (tools, and any future non-edible item)
+            // have no world tile and can never be placed as a block.
+            Vector3i p = hit.placePos;
+            // A submersible decoration (seaweed) placed where a fluid
+            // already is grows inside it instead of replacing it - the
+            // same rule world-gen follows (see TerrainGenerator). If that
+            // cell's overlay slot is already taken, there's simply nowhere
+            // to put it - skip placing rather than fall through and
+            // overwrite the fluid it would have grown inside.
+            boolean targetIsFluid = world.getBlock(p.x, p.y, p.z).isFluid();
+            boolean overlayFull = world.getOverlay(p.x, p.y, p.z) != BlockType.AIR;
+            boolean blocked = heldItem.isSubmersible() ? (targetIsFluid && overlayFull) : false;
+            boolean intoFluid = heldItem.isSubmersible() && targetIsFluid && !overlayFull;
+            // For doors, validate the upper cell before consuming the item.
+            if (heldItem == BlockType.DOOR && !blocked && !intersectsPlayer(player, p)) {
+                if (p.y + 1 >= Chunk.HEIGHT) {
+                    blocked = true;
+                } else if (world.getBlock(p.x, p.y + 1, p.z) != BlockType.AIR) {
+                    blocked = true;
+                } else if (intersectsPlayer(player, new Vector3i(p.x, p.y + 1, p.z))) {
+                    blocked = true;
+                }
+            }
+            if (!blocked && !intersectsPlayer(player, p)) {
+                boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
+                if (placed) {
+                    handRenderer.triggerSwing();
+                    if (intoFluid) {
+                        world.setOverlay(p.x, p.y, p.z, heldItem);
+                    } else {
+                        world.setBlock(p.x, p.y, p.z, heldItem);
+                    }
+                    audio.playBlockSound(SoundMaterial.of(heldItem), BlockAction.PLACE, p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
+                    // Doors, trapdoors, and other directional blocks
+                    // (e.g. a furnace) face the player: the front sits
+                    // on the side of the block nearest to them (opposite
+                    // the look direction). Stairs also store a facing so
+                    // their stepped mesh rises away from the player.
+                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR || heldItem.isStair()) {
+                        Vector3f front = player.getCamera().getFront();
+                        byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
+                                ? (front.x >= 0 ? 3 : 2)
+                                : (front.z >= 0 ? 1 : 0));
+                        world.setBlockOrientation(p.x, p.y, p.z, facing);
+                        // A door is 2 blocks tall: place the top half unconditionally
+                        // (validation already ensured it's safe).
+                        if (heldItem == BlockType.DOOR) {
+                            world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
+                            world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The Y of the first solid (non-air, non-fluid) block scanning down from
+     * {@code fromY} - unlike {@link World#getSurfaceHeight}, which treats
+     * water as "non-air" and so just returns the water's own top surface,
+     * this actually finds the sea/lake floor underneath it. Diagnostic-only
+     * (see {@code MCCLONE_AUTOTEST_FIND_OCEAN_CLIFF}).
+     */
+    private static int floorHeight(World world, int x, int z, int fromY) {
+        for (int y = fromY; y >= 0; y--) {
+            BlockType t = world.getBlock(x, y, z);
+            if (t != BlockType.AIR && !t.isFluid()) return y;
+        }
+        return 0;
     }
 
     private boolean intersectsPlayer(Player player, Vector3i blockPos) {
