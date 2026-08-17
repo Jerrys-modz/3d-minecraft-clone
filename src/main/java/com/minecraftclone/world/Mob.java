@@ -476,13 +476,22 @@ public class Mob {
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
-                    BlockType t = world.getBlock(x, y, z);
-                    if (t.isCollidable()) {
-                        AABB blockBox = new AABB(x, y, z, x + 1, y + t.collisionHeight, z + 1);
-                        if (box.intersects(blockBox)) return true;
-                    }
+                    if (blockCollides(world, box, x, y, z)) return true;
+                    // A tall block (a fence's 1.5-high box) extends up into this
+                    // cell from the one below - check the block beneath too.
+                    if (blockCollides(world, box, x, y - 1, z)) return true;
                 }
             }
+        }
+        return false;
+    }
+
+    /** True if the collidable block at ({@code x},{@code y},{@code z}) overlaps {@code box}. */
+    private static boolean blockCollides(BlockAccessor world, AABB box, int x, int y, int z) {
+        BlockType t = world.getBlock(x, y, z);
+        if (!t.isCollidable()) return false;
+        for (AABB blockBox : t.collisionBoxes(x, y, z, world.getBlockOrientation(x, y, z))) {
+            if (box.intersects(blockBox)) return true;
         }
         return false;
     }

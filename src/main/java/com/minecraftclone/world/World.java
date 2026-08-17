@@ -727,6 +727,14 @@ public class World implements BlockAccessor {
         chunk.setOrientation(Math.floorMod(worldX, Chunk.SIZE), worldY, Math.floorMod(worldZ, Chunk.SIZE), orientation);
     }
 
+    /** The per-block facing hint at a world position (0 if unset) - used for stair/fence collision. */
+    public byte getBlockOrientation(int worldX, int worldY, int worldZ) {
+        int cx = worldToChunk(worldX), cz = worldToChunk(worldZ);
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk == null) return 0;
+        return chunk.getOrientation(Math.floorMod(worldX, Chunk.SIZE), worldY, Math.floorMod(worldZ, Chunk.SIZE));
+    }
+
     /** The biome at a world column, recomputed deterministically - used by the F3 debug overlay. */
     public TerrainGenerator.Biome getBiome(int worldX, int worldZ) {
         return generator.biomeAtWorld(worldX, worldZ);
