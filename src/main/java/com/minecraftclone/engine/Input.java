@@ -197,6 +197,7 @@ public class Input {
             moveCursor(rightX, rightY, dt);
             mergeMouseButton(GLFW_MOUSE_BUTTON_LEFT, gamepadDown(GLFW_GAMEPAD_BUTTON_A));
             mergeMouseButton(GLFW_MOUSE_BUTTON_RIGHT, gamepadDown(GLFW_GAMEPAD_BUTTON_X));
+            mergeKey(keyBinds.get(KeyBindings.INVENTORY), gamepadJustPressed(GLFW_GAMEPAD_BUTTON_Y));
             mergeKey(GLFW_KEY_ESCAPE, gamepadJustPressed(GLFW_GAMEPAD_BUTTON_B) || gamepadJustPressed(GLFW_GAMEPAD_BUTTON_START));
         }
 
@@ -252,6 +253,8 @@ public class Input {
         mouseX = clamp(mouseX + dx * CURSOR_SPEED_PX_PER_SEC * dt, 0, w[0]);
         mouseY = clamp(mouseY + dy * CURSOR_SPEED_PX_PER_SEC * dt, 0, h[0]);
         glfwSetCursorPos(windowHandle, mouseX, mouseY);
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
     }
 
     private static double clamp(double v, double lo, double hi) {
