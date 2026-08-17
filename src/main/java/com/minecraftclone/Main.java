@@ -965,6 +965,11 @@ public class Main {
             }
 
             float dt = timer.getDeltaTime();
+            // Controller support (e.g. Steam Deck): folds the first connected
+            // gamepad's sticks/buttons/triggers into this frame's keyboard/mouse
+            // state - see Input#updateGamepad for the full mapping. A no-op with
+            // nothing connected, so this is safe to call unconditionally every frame.
+            input.updateGamepad(dt, settings.getKeyBinds());
             timer.updateFps(dt);
             dayNightCycle.update(dt);
             // The calendar advances with the day/night cycle, and its season
@@ -1858,6 +1863,10 @@ public class Main {
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 if (player.isSwimming()) {
                     hud.drawTextLeft("Swimming" + (player.isSubmerged() ? " (submerged)" : ""),
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
+                if (input.isGamepadConnected()) {
+                    hud.drawTextLeft("Gamepad: " + input.getGamepadName(),
                             -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 }
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);

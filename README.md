@@ -119,6 +119,26 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 
 You start with an empty inventory - break blocks to collect them (they show up with a count on the hotbar) before you can place them elsewhere. Bedrock can't be broken.
 
+### Controller support (Steam Deck and other gamepads)
+
+Plug in (or dock) any GLFW-recognized gamepad - including the Steam Deck's built-in controls - and it works immediately, no setup: keyboard/mouse and controller can both be used interchangeably, even within the same session. The first connected gamepad is polled every frame and folded into the same input the keyboard/mouse drive, so it reaches every screen in the game, not just movement - the inventory, settings, crafting/chest/furnace GUIs all work from a pad too, via a virtual cursor.
+
+| Input | Action |
+|---|---|
+| Left stick | Move (gameplay) |
+| Right stick | Look around (gameplay) / move the cursor (any menu or GUI) |
+| `A` | Jump / fly up (gameplay) / click (menus) |
+| `X` | Toggle flight - creative only (gameplay) / right-click, e.g. armor slots (menus) |
+| `Y` | Open/close the inventory (gameplay) |
+| `B` | Fly down / swim down (gameplay) / back-out, closes the open menu (menus) |
+| Left trigger | Mine the targeted block |
+| Right trigger | Place the selected block / eat / open a furnace or crafting table |
+| Left stick click | Sprint |
+| Bumpers or d-pad left/right | Cycle the selected hotbar slot |
+| `Start` | Open/close the settings menu |
+
+A "Gamepad: <name>" line appears on the `F3` debug overlay whenever one's connected, as a quick check that it's been detected. There's no separate rebinding UI for the controller yet - the mapping above is fixed, though movement/jump/sprint/fly/inventory route through whatever keys are currently bound in Settings > Controls, so rebinding those also changes what the controller triggers under the hood.
+
 ## Survival
 
 - **Health** (red bar) drops from fall damage (landing too hard - a couple of blocks is safe), standing in lava, staying underwater past your ~6-second breath limit, or starving. It regenerates slowly on its own whenever hunger is above half and you aren't actively taking damage that same instant. At 0 you die: your inventory is scattered on the ground as item drops and you respawn at world spawn with everything reset.
