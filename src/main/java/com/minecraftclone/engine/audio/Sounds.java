@@ -51,9 +51,22 @@ public final class Sounds {
                 SoundSynth.noise(102, 0.14f, 0.6f, 0f, 0.18f),
                 SoundSynth.tone(130, 80, 0.12f, 0.35f, 0f)));
 
+        // Layered to give a splash its own signature that no other sound in
+        // the game shares: a short, brighter slap where the surface actually
+        // breaks, then a much longer, duller wash/foam tail (long enough
+        // alone that it can't be mistaken for a ~0.065s footstep tap - an
+        // earlier version was too close to one and got reported as "sounds
+        // like walking on sand"), a quick downward "plop" pitch sweep, and -
+        // the piece that was still missing after that fix - a handful of
+        // SoundSynth.bubbles() chirps scattered across the tail. Noise and a
+        // tone sweep alone read as "impact", not specifically "liquid"; the
+        // gurgling bubble cluster is what actually makes something sound wet
+        // rather than just percussive.
         fixed.put(SoundEvent.SPLASH, SoundSynth.mix(
-                SoundSynth.noise(103, 0.28f, 0.55f, 0f, 0.5f),
-                SoundSynth.noise(104, 0.1f, 0.35f, 0f, 0.85f)));
+                SoundSynth.noise(103, 0.09f, 0.6f, 0f, 0.5f),
+                SoundSynth.noise(104, 0.4f, 0.35f, 0f, 0.14f),
+                SoundSynth.tone(650, 140, 0.16f, 0.3f, 0f),
+                SoundSynth.bubbles(105, 0.4f, 7, 0.4f)));
 
         fixed.put(SoundEvent.EAT, SoundSynth.concat(
                 SoundSynth.noise(105, 0.06f, 0.5f, 0f, 0.3f), SoundSynth.silence(0.03f),

@@ -602,19 +602,24 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         return FLOW_TOP_NEAR - t * (FLOW_TOP_NEAR - FLOW_TOP_FAR);
     }
 
+    /** A gentle, fixed "current" direction for fluid that has no real away-from-source gradient - see {@link #fluidFlowDir}. */
+    private static final float[] IDLE_FLOW_DIR = {0.7f, 0.7f};
+
     /**
      * The direction (in tile-UV space) the flow's <em>top</em> surface
      * animation should travel, so the water texture visibly creeps away
      * from its source instead of always scrolling straight down. The cell
      * flows away from its neighbor with the lowest stored level (nearest
-     * the source); a source or a cell with no lower neighbor is still, so
-     * it returns (0,0) and doesn't animate. Side faces don't use this - a
-     * vertical wall has no horizontal "away from source" direction to
-     * follow, so they always just scroll straight down instead (see
-     * {@link #emitFluidSide}).
+     * the source); a source or a cell with no lower neighbor has no such
+     * gradient to follow, but still isn't perfectly frozen - it drifts
+     * along a fixed idle direction instead, so a calm lake or ocean has
+     * some life to its surface rather than looking like a static image (see
+     * {@link #IDLE_FLOW_DIR}). Side faces don't use this - a vertical wall
+     * has no horizontal "away from source" direction to follow, so they
+     * always just scroll straight down instead (see {@link #emitFluidSide}).
      */
     private static float[] fluidFlowDir(BlockAccessor world, int wx, int wy, int wz, BlockType block) {
-        if (block.isFluidSource()) return new float[]{0f, 0f};
+        if (block.isFluidSource()) return IDLE_FLOW_DIR;
         int level = world.getFluidLevel(wx, wy, wz);
         int minLevel = level;
         float dirX = 0f, dirZ = 0f;
@@ -630,7 +635,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                 }
             }
         }
-        return minLevel < level ? new float[]{dirX, dirZ} : new float[]{0f, 0f};
+        return minLevel < level ? new float[]{dirX, dirZ} : IDLE_FLOW_DIR;
     }
 
     /** True for two blocks of the same fluid family (both water-ish, or both lava-ish) - see {@link #fluidCornerTop}. */
@@ -694,8 +699,11 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         float[] uv = atlas.getUV(block.topTile);
         float[][] uvs = {{uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]}, {uv[0], uv[1]}};
         float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, z1 = wz + 1;
-        // Only the transient flowing kind animates - a still source/static body doesn't.
-        float flow = block.isFluidFlow() ? 1f : 0f;
+        // Every fluid animates its surface now, transient flow or a calm
+        // source/terrain body alike - see fluidFlowDir's IDLE_FLOW_DIR for
+        // what a body with no real flow gradient drifts along instead of
+        // sitting frozen.
+        float flow = 1f;
         // The top surface scrolls along the actual flow direction (away from the
         // source) rather than always straight down.
         float[] flowDir = fluidFlowDir(world, wx, wy, wz, block);
@@ -709,15 +717,28 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         // isFaceVisible's water branch treats "fluid above" as fully hiding this
         // top face - true when every corner is already at full height, but a
         // corner pulled down by a shorter neighbor doesn't actually touch the
-        // cell above it even when that cell is also fluid (its own geometry
+        // cell above it when that neighbor *isn't* fluid (its own geometry
         // only ever starts at this cell's ceiling, y+1, never lower). Skipping
         // the face there left a real gap - looking down through it showed
         // whatever was below (e.g. the floor a waterfall just landed on)
-        // instead of this cell's own water surface. All 4 corners already at
-        // the ceiling is the one case the general culling still correctly
-        // applies - two full cells stacked really do hide the seam.
+        // instead of this cell's own water surface.
+        //
+        // But when the cell directly above *is* the same fluid family, this
+        // cell is genuinely submerged - fluidTop already gives a submerged
+        // cell full height (1f) for itself, so any corner dip here only ever
+        // comes from a shallower same-family neighbor at this same Y level
+        // (an underwater ledge/step), not a real hole: that neighbor draws
+        // its own top face to cover its own surface, and this cell stays
+        // sealed above by more fluid either way. Drawing a top face here too
+        // used to paint a spurious, wrongly-angled water surface partway
+        // through open water - exactly what you'd see swimming past an
+        // underwater ledge, a seam floating in the middle of the lake.
+        boolean sealedByFluidAbove = sameFluidFamily(world.getBlock(wx, wy + 1, wz), block);
         float minCorner = Math.min(Math.min(yNW, yNE), Math.min(ySE, ySW));
-        if (minCorner < wy + 1f || isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block)) {
+        boolean topVisible = sealedByFluidAbove
+                ? false
+                : (minCorner < wy + 1f || isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block));
+        if (topVisible) {
             // A quad with 4 independently-graded corners usually isn't flat, so
             // splitting it into 2 triangles always bends it a little along
             // whichever diagonal gets picked - the two triangles meet there at

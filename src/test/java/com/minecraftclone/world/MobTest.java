@@ -234,6 +234,23 @@ class MobTest {
     }
 
     @Test
+    void hostileNeverAttacksWithANullTarget() {
+        // World passes null instead of the real player position when the player is
+        // invulnerable (creative/spectator - see World#updateMobs), so a hostile
+        // should never register an attack even standing right on top of where the
+        // player would be (regression: "mobs still target you in creative mode").
+        StubWorld w = flatGround(10);
+        Mob zombie = new Mob(Mob.Type.ZOMBIE, 1f, 1f + Mob.Type.ZOMBIE.height / 2f, 0f);
+        Random rnd = new Random(4);
+        zombie.update(DT, w, rnd, null); // would be adjacent to (1,0.9,0) if targeted
+        assertEquals(0f, zombie.getMeleeRequest(), 0.001f, "no target means no attack request");
+
+        Mob skeleton = new Mob(Mob.Type.SKELETON, 6f, 1f + Mob.Type.SKELETON.height / 2f, 0f);
+        skeleton.update(DT, w, rnd, null); // would be in shoot range of (6,0.9,0) if targeted
+        assertFalse(skeleton.wantsToShoot(), "no target means no shot request either");
+    }
+
+    @Test
     void hostileKeepsChasingAfterBeingHit() {
         StubWorld w = flatGround(20);
         Mob zombie = new Mob(Mob.Type.ZOMBIE, 0f, 1f + Mob.Type.ZOMBIE.height / 2f, 0f);
@@ -274,6 +291,33 @@ class MobTest {
         }
         float feet = pig.position.y - pig.type.height / 2f;
         assertTrue(feet > 1.5f, "a swimming mob should float up, not rest on the bed: feet=" + feet);
+    }
+
+    @Test
+    void mobDoesNotBounceOutOfTheWaterOnceAtTheSurface() {
+        // Regression: the swim velocity used to be clamped to at least
+        // SWIM_SURFACE_SPEED unconditionally, regardless of depth - since that's
+        // faster than the buoyancy decay ever settles to, it won every frame a
+        // mob was even partly in water, snapping its vertical velocity straight
+        // from the full paddle-up speed to a hard sink and back within a single
+        // frame right at the surface - a visible judder, reported as "mobs walk
+        // on water bouncing". Once floating, per-frame velocity swings should be
+        // smooth (bounded acceleration), not an instant sign-flipping snap.
+        StubWorld w = waterPool(20);
+        Mob pig = new Mob(Mob.Type.PIG, 0f, 2.5f, 0f);
+        Random rnd = new Random(2);
+        for (int i = 0; i < 300; i++) {
+            pig.update(DT, w, rnd); // let it rise and settle at the surface first
+        }
+        float maxJump = 0f;
+        float lastVy = pig.velocity.y;
+        for (int i = 0; i < 300; i++) {
+            pig.update(DT, w, rnd);
+            maxJump = Math.max(maxJump, Math.abs(pig.velocity.y - lastVy));
+            lastVy = pig.velocity.y;
+        }
+        assertTrue(maxJump < 1f,
+                "a floating mob's vertical velocity shouldn't snap between frames: maxJump=" + maxJump);
     }
 
     @Test

@@ -70,7 +70,8 @@ public class Mob {
     // in) water instead of just sinking.
     private static final float WATER_GRAVITY = 5f;      // buoyancy: gentle sink, not free-fall
     private static final float WATER_SINK_SPEED = -0.8f;// terminal sink while paddling
-    private static final float SWIM_SURFACE_SPEED = 1.6f; // how fast a submerged mob rises toward the surface
+    private static final float SWIM_RISE_ACCEL = 6f;     // paddle acceleration while the head is under water
+    private static final float SWIM_SURFACE_SPEED = 1.6f; // rise speed cap while paddling up
     private static final float DROWN_GRACE_SECONDS = 15f;  // how long a mob can hold its breath
     private static final float DROWN_DAMAGE_PER_SECOND = 5f;
 
@@ -285,10 +286,23 @@ public class Mob {
         swimming = !onGround && overlapsWater(world, box());
 
         if (swimming) {
-            // Slow sink under buoyancy, plus a steady paddle upward toward the
-            // surface - a submerged mob rises instead of thrashing on the bed.
-            float sink = Math.max(velocity.y - WATER_GRAVITY * dt, WATER_SINK_SPEED);
-            velocity.y = Math.max(sink, SWIM_SURFACE_SPEED);
+            if (fullySubmerged(world, box())) {
+                // Head under water: accelerate up toward the surface, capped at a
+                // fixed paddle speed - accelerating into the cap (rather than
+                // snapping straight to it) means a mob that crosses back out of
+                // "fully submerged" mid-stroke loses its rise speed gradually
+                // instead of the sign flipping instantly, which is what made
+                // every mob visibly judder at the surface (was reported as
+                // "mobs walk on water bouncing").
+                velocity.y = Math.min(velocity.y + SWIM_RISE_ACCEL * dt, SWIM_SURFACE_SPEED);
+            } else {
+                // Already at/near the surface: gentle buoyant sink capped at a
+                // slow terminal speed, not the full paddle rate - unconditionally
+                // forcing SWIM_SURFACE_SPEED here (regardless of depth) used to
+                // relaunch every mob clean out of the water the instant any part
+                // of it touched the surface, so it never settled.
+                velocity.y = Math.max(velocity.y - WATER_GRAVITY * dt, WATER_SINK_SPEED);
+            }
         } else {
             velocity.y -= GRAVITY * dt;
             if (velocity.y < TERMINAL_VELOCITY) {

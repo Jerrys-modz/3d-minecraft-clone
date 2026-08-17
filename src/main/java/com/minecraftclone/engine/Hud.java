@@ -252,6 +252,24 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    /**
+     * A translucent blue tint over the whole screen while the camera's eyes
+     * are underwater - the same fullscreen-quad technique as {@link #renderFrostOverlay},
+     * reusing its NDC quad (it just fills the same full screen either way).
+     */
+    public void renderUnderwaterOverlay(boolean submerged) {
+        if (!submerged) return;
+        glDisable(GL_DEPTH_TEST);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", modelMatrix.identity());
+        lineShader.setUniform("color", new Vector4f(0.1f, 0.35f, 0.65f, 0.35f));
+        frostOverlay.render();
+        lineShader.unbind();
+        glEnable(GL_DEPTH_TEST);
+    }
+
     /** @param breakFraction 0 (just looking at it) to 1 (about to break) - tints the outline red and thickens it as it climbs. */
     public void renderBlockOutline(Matrix4f projection, Matrix4f view, Vector3i blockPos, float breakFraction, float height) {
         lineShader.bind();
@@ -602,7 +620,7 @@ public class Hud {
         for (int h = now; count < 8 && h < now + 24; h += 3) {
             Climate.ForecastSlot slot = h < 24 ? today[h] : tomorrow[h - 24];
             if (count > 0) hourly.append(", ");
-            hourly.append(h % 24).append("h ").append(slot.weather().displayName);
+            hourly.append(h % 24).append("h ").append(forecastLabel(slot.weather(), slot.strength()));
             count++;
         }
         drawTextAt(hourly.toString(), x, y, 0.022f, WHITE);
@@ -673,7 +691,7 @@ public class Hud {
         }
 
         // Title, centered near the top of the panel.
-        drawCenteredTextShadowed("Settings", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
+        drawCenteredText("Settings", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
 
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
@@ -870,7 +888,7 @@ public class Hud {
             lineShader.unbind();
         }
 
-        drawCenteredTextShadowed("Select World", 0f, top - SETTINGS_PAD - 0.04f, 0.07f, WHITE);
+        drawCenteredText("Select World", 0f, top - SETTINGS_PAD - 0.04f, 0.07f, WHITE);
 
         float y = 0.3f;
         int shown = 0;
@@ -944,7 +962,7 @@ public class Hud {
             lineShader.unbind();
         }
 
-        drawCenteredTextShadowed("World Generation", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
+        drawCenteredText("World Generation", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
 
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
@@ -1105,22 +1123,29 @@ public class Hud {
         return Math.max(0f, Math.min(1f, (logicalX - cx[0]) / (cx[1] - cx[0])));
     }
 
-    /** Draws one line of text left-aligned at (bottomLeftX, bottomY), assuming {@link #hudTransform} is already set up. */
+    /**
+     * Draws one line of text left-aligned at (bottomLeftX, bottomY), with a
+     * dark drop shadow behind it, assuming {@link #hudTransform} is already
+     * set up. Every panel/menu screen's body text (settings rows, forecast,
+     * container GUI labels, ...) goes through this - the light GUI theme's
+     * panel fill is a pale gray, and most of this text's own colors (near-
+     * white idle/dim grays, plain white) sit close enough to that gray to be
+     * hard to read without the shadow; the shadow's own alpha still eases
+     * off on the dark theme (see {@code darkGui} below) since its darker
+     * panel already gives white text plenty of contrast on its own.
+     */
     private void drawTextAt(String value, float bottomLeftX, float bottomY, float size, Vector4f color) {
+        float shadowOffset = size * 0.06f;
+        text.begin();
+        text.add(value, bottomLeftX + shadowOffset, bottomY - shadowOffset, size);
+        text.render(hudTransform, new Vector4f(0f, 0f, 0f, darkGui ? 0.9f : 0.45f));
         text.begin();
         text.add(value, bottomLeftX, bottomY, size);
         text.render(hudTransform, color);
     }
 
-    /** Draws one line of text horizontally centered on {@code centerX}, assuming {@link #hudTransform} is already set up. */
+    /** Draws one line of text horizontally centered on {@code centerX}, with the same drop shadow as {@link #drawTextAt}. */
     private void drawCenteredText(String value, float centerX, float bottomY, float size, Vector4f color) {
-        text.begin();
-        text.add(value, centerX - text.measure(value, size) / 2f, bottomY, size);
-        text.render(hudTransform, color);
-    }
-
-    /** Like {@link #drawCenteredText} but with a dark drop shadow, so light text stays readable on the light GUI theme. */
-    private void drawCenteredTextShadowed(String value, float centerX, float bottomY, float size, Vector4f color) {
         float shadowOffset = size * 0.06f;
         text.begin();
         text.add(value, centerX - text.measure(value, size) / 2f + shadowOffset, bottomY - shadowOffset, size);
@@ -1513,15 +1538,28 @@ public class Hud {
 
         // Title + hint line. The title gets a shadow so it stays legible on the
         // bright light-theme panel.
-        drawCenteredTextShadowed(gui.title(), 0f, panelTop - 0.05f, 0.045f, WHITE);
+        drawCenteredText(gui.title(), 0f, panelTop - 0.05f, 0.045f, WHITE);
         drawCenteredText("Left: take/place stack    Right: one item    Shift-click: move    Drag: spread    Esc: close",
                 0f, panelBottom - 0.04f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
         glEnable(GL_DEPTH_TEST);
     }
 
-    /** Draws the furnace's burn flame and smelting progress arrow (both driven by the furnace state). */
+    /**
+     * Draws the furnace's burn flame and smelting progress arrow (both driven
+     * by the furnace state). Binds {@link #lineShader} itself rather than
+     * assuming it's already active - the textured-GUI panel path (see
+     * {@link #flushGuiQuads}) explicitly unbinds whatever shader it used
+     * right before this runs, so without this the color/quad uniform calls
+     * below landed on no program at all and the flame/arrow silently stopped
+     * drawing.
+     */
     private void renderFurnaceProgress(Furnace furnace) {
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
         // Flame track behind the flame itself.
         furnaceDeco.clear();
         float flameHalf = 0.0225f;
@@ -1559,6 +1597,8 @@ public class Hud {
             lineShader.setUniform("color", new Vector4f(0.95f, 0.95f, 0.95f, 1f));
             inventoryPanel.render();
         }
+
+        lineShader.unbind();
     }
 
     /** Draws the cursor stack (icon + count) at the given logical position, above everything else. */

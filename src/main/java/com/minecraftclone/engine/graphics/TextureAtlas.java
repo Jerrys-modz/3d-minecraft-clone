@@ -71,7 +71,7 @@ public class TextureAtlas {
         paintDirt(image, 3, rnd);
         paintStone(image, 4, rnd);
         paintSand(image, 5, rnd);
-        paintFluidTile(image, 6, rnd, 0x6FB4E8, 0x1F4A96, 195, 0xEAFBFF); // water
+        paintFluidTile(image, 6, rnd, 0x4FCBE0, 0x0C3D73, 195, 0xE0FBFF); // water (richer teal-blue, was a flatter grey-blue)
         paintLogSide(image, 7, rnd);
         paintLogTop(image, 8, rnd);
         paintLeaves(image, 9, rnd);
@@ -564,37 +564,31 @@ public class TextureAtlas {
     // ---------------------------------------------------------------------
 
     /**
-     * Paints a translucent fluid tile as soft, gently wavy bands between a
-     * light and dark shade, plus a few bright sparkle pixels for glints off
-     * the surface - water/lava's flowing translucent surface. Each band's
-     * edge is smoothly interpolated rather than a hard stripe boundary, and
-     * a small per-column phase shift bends the bands into a wave instead of
-     * dead-straight horizontal lines. The band period (8) divides the tile size
-     * (16) evenly, and the per-column wave shift repeats every tile width, so
-     * the flowing-fluid scroll animation (see chunk.frag) wraps with no visible
-     * seam in either direction - which is what lets it scroll along the actual
-     * flow direction instead of always straight down.
+     * Paints a translucent fluid tile as two overlapping ripple waves between
+     * a light and dark shade, plus a few bright sparkle pixels for glints off
+     * the surface - water/lava's flowing translucent surface. Both waves run
+     * an integer number of cycles across the tile (2 and 3), so the pattern
+     * tiles - and the flowing-fluid scroll animation (see chunk.frag) wraps
+     * with no visible seam - in either direction, the same guarantee the
+     * previous single-band version had. Continuous sinusoids (rather than a
+     * discrete per-column row shift feeding a hard triangle wave) read as
+     * soft, organic ripples instead of a repeating zigzag/arrow motif, and
+     * the second, finer wave crossing the first breaks it up the way real
+     * overlapping wavelets do instead of one clean set of parallel bands.
      */
     private void paintFluidTile(BufferedImage img, int index, Random rnd, int lightColor, int darkColor, int alpha, int sparkleColor) {
         int ox = tileX(index);
         int oy = tileY(index);
-        int period = 8; // divides TILE_PX (16) evenly - see the seam note above
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
-                // One full sine cycle across the tile width (period 16), so the
-                // wave shift repeats exactly at the tile's horizontal seam too -
-                // otherwise scrolling the texture along the flow direction would
-                // hit a seam at every tile boundary.
-                int waveShift = Math.round(1.5f * (float) Math.sin(x * (Math.PI / 8)));
-                int phase = Math.floorMod(y + waveShift, period);
-                // Triangle wave 0..1..0 across the period: a soft gradient
-                // band instead of a hard edge between shades.
-                float t = phase < period / 2f ? phase / (period / 2f) : (period - phase) / (period / 2f);
-                float n = fbm(x * 1.3f, y * 1.3f) * 0.25f;
-                img.setRGB(ox + x, oy + y, (alpha << 24) | lerpColor(darkColor, lightColor, t + n));
+                double primary = Math.sin(2 * Math.PI * (2.0 * y / TILE_PX + 0.18 * Math.sin(2 * Math.PI * x / TILE_PX)));
+                double cross = Math.sin(2 * Math.PI * (3.0 * x / TILE_PX + 2.0 * y / TILE_PX));
+                float t = 0.5f + 0.32f * (float) primary + 0.13f * (float) cross;
+                t = Math.max(0f, Math.min(1f, t));
+                img.setRGB(ox + x, oy + y, (alpha << 24) | lerpColor(darkColor, lightColor, t));
             }
         }
-        int sparkles = 3 + rnd.nextInt(3);
+        int sparkles = 4 + rnd.nextInt(3);
         for (int i = 0; i < sparkles; i++) {
             int sx = rnd.nextInt(TILE_PX);
             int sy = rnd.nextInt(TILE_PX);

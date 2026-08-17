@@ -14,6 +14,7 @@ uniform float cloudTime;    // drifting cloud phase (noise units), advances with
 uniform float cloudDensity; // 0..1 cloud amount (0 = no clouds)
 uniform float cloudSpeed;   // cloud drift speed multiplier
 uniform float stars;        // 1 = stars on, 0 = off
+uniform float overcast;     // 0..1 how stormy the weather is right now (0 = clear/dry)
 uniform vec3 zenithColor;   // sky at the top of the sky
 uniform vec3 horizonColor;  // sky at the horizon
 uniform vec3 nightColor;    // night sky at the top
@@ -80,10 +81,19 @@ void main() {
     // Clouds: an organic field of domain-warped fbm that drifts with cloudTime
     // and changes its amount of cover from day to day (per-day hash). Thick
     // centers shade bright white and thin edges soft gray for a puffy,
-    // lit-from-above look, and clouds thin out toward the zenith. Density is a
-    // settings-controlled threshold: 0 = off, higher = more/fuller clouds.
-    if (daylight > 0.1 && cloudDensity > 0.0) {
-        float fade = smoothstep(0.0, 0.04, dir.y) * (1.0 - smoothstep(0.5, 0.85, dir.y));
+    // lit-from-above look. Ordinarily they thin out well below the zenith and
+    // leave gaps for a partly-cloudy look, but overcast (rain/snow/storms)
+    // pushes both the vertical band and the coverage threshold toward "blanket
+    // the whole sky" - it shouldn't be possible to see blue directly overhead
+    // while it's raining.
+    if (cloudDensity > 0.0 || overcast > 0.0) {
+        float ov = clamp(overcast, 0.0, 1.0);
+        // The clear-sky band fades out well before the zenith (0.5-0.85); a
+        // fully overcast sky pushes that fade-out point past straight up
+        // (1.0-1.05) so there's no altitude left for blue to show through.
+        float fadeOutStart = mix(0.5, 1.0, ov);
+        float fadeOutEnd = mix(0.85, 1.05, ov);
+        float fade = smoothstep(0.0, 0.04, dir.y) * (1.0 - smoothstep(fadeOutStart, fadeOutEnd, dir.y));
         if (fade > 0.0) {
             float dayIndex = floor(cloudTime / 30.0);
             float dayCover = hash(vec3(dayIndex, 0.0, 0.0));
@@ -92,11 +102,21 @@ void main() {
             vec2 q = vec2(fbm(p), fbm(p + vec2(7.3, 3.1)));
             float cloud = fbm(p + 1.1 * q);
 
-            float threshold = 0.62 - 0.20 * cloudDensity + 0.12 * dayCover;
-            float cover = smoothstep(threshold, threshold + 0.18, cloud) * fade * daylight;
+            // Threshold drops as either the cloud-amount setting or the
+            // weather's overcast level rises; overcast pulls much harder so a
+            // storm saturates to near-total coverage (the noise floor rarely
+            // dips low enough to leave a gap) rather than just a denser
+            // partly-cloudy pattern.
+            float threshold = 0.62 - 0.20 * cloudDensity - 0.55 * ov + 0.12 * dayCover;
+            float cover = smoothstep(threshold, threshold + 0.18, cloud) * fade;
+            // Clouds stay visible after dark instead of vanishing outright -
+            // only their brightness follows daylight, so an overcast night
+            // sky still reads as overcast instead of reverting to starry.
+            cover *= mix(0.35, 1.0, daylight);
 
             vec3 cloudColor = mix(vec3(0.62, 0.66, 0.71), vec3(1.0, 0.99, 0.97),
                                   smoothstep(0.32, 0.8, cloud));
+            cloudColor *= mix(0.45, 1.0, daylight);
             sky = mix(sky, cloudColor, cover * 0.85);
         }
     }

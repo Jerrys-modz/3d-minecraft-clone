@@ -38,6 +38,11 @@ public class NetherGenerator implements WorldGenerator {
     }
 
     @Override
+    public int terrainHeight(int wx, int wz) {
+        return LAVA_LEVEL;
+    }
+
+    @Override
     public TerrainGenerator.Biome biomeAtWorld(int wx, int wz) {
         return TerrainGenerator.Biome.NETHER;
     }

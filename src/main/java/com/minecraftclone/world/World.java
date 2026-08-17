@@ -608,6 +608,16 @@ public class World implements BlockAccessor {
         return generator.seaLevel();
     }
 
+    /**
+     * The natural terrain height at the given world column - the surface the
+     * generator produced, ignoring any blocks the player has placed or removed.
+     * Used as the climate's underground/surface reference so a player-built roof
+     * doesn't fool the temperature model into thinking a cave is at the surface.
+     */
+    public int getTerrainHeight(int worldX, int worldZ) {
+        return generator.terrainHeight(worldX, worldZ);
+    }
+
     /** Sets the per-block facing hint (used by doors) at a world position. */
     public void setBlockOrientation(int worldX, int worldY, int worldZ, byte orientation) {
         int cx = worldToChunk(worldX), cz = worldToChunk(worldZ);
@@ -771,9 +781,11 @@ public class World implements BlockAccessor {
     }
 
     private void tryAddSnow(int x, int z, Climate climate, boolean blizzard) {
-        if (climate.temperatureFor(getBiome(x, z)) > FREEZING_TEMP) return;
         int y = findSurfaceY(x, z);
         if (y < 0) return;
+        // Altitude-aware surface temperature: high mountain ledges freeze (and
+        // snow) even when their foothills are above freezing.
+        if (climate.temperatureFor(getBiome(x, z), y, y) > FREEZING_TEMP) return;
         BlockType surface = getBlock(x, y, z);
         if (surface.slab) {
             // Cap a bottom-half slab flush with snow by swapping in a snow-capped
@@ -794,9 +806,10 @@ public class World implements BlockAccessor {
     private void tryMeltSnow(int x, int z, Climate climate) {
         Biome biome = getBiome(x, z);
         if (permanentSnow(biome)) return;
-        if (climate.temperatureFor(biome) <= THAW_TEMP) return;
         int y = findSurfaceY(x, z);
         if (y < 0) return;
+        // Altitude-aware: the top of a high mountain stays frozen past the thaw.
+        if (climate.temperatureFor(biome, y, y) <= THAW_TEMP) return;
         BlockType top = getBlock(x, y, z);
         if (top.isSnowCappedSlab()) {
             setBlock(x, y, z, uncapped(top)); // the snow cap melts, the slab shows again
@@ -809,10 +822,12 @@ public class World implements BlockAccessor {
 
     /** Freezes exposed water over to ice while it's freezing, thaws it back to water once warm. */
     private void tryUpdateWater(int x, int z, Climate climate) {
-        float temperature = climate.temperatureFor(getBiome(x, z));
+        int y = findSurfaceWaterY(x, z);
+        if (y < 0) return;
+        // Altitude-aware: high mountain lakes freeze earlier and thaw later.
+        float temperature = climate.temperatureFor(getBiome(x, z), y, y);
         if (temperature <= FREEZING_TEMP) {
-            int y = findSurfaceWaterY(x, z);
-            if (y >= 0 && getBlock(x, y + 1, z) == BlockType.AIR) {
+            if (getBlock(x, y + 1, z) == BlockType.AIR) {
                 BlockType water = getBlock(x, y, z);
                 // Only freeze static WATER, not WATER_SOURCE - sources keep flowing
                 // even in winter so their flow field stays intact through freeze/thaw.
@@ -821,19 +836,23 @@ public class World implements BlockAccessor {
                 }
             }
         } else if (temperature > THAW_TEMP) {
-            int y = findSurfaceY(x, z);
-            if (y >= 0 && getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
+            if (getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
                 setBlock(x, y, z, BlockType.WATER); // the surface ice thaws back into water
             }
         }
     }
 
-    /** The top-most exposed static water cell (WATER with only air above), or -1 if the column has none. */
+    /**
+     * The top-most exposed water-surface cell (WATER, or ICE when the lake is
+     * frozen over - both with only air above), or -1 if the column has none.
+     * Returning ice too is what lets the thaw branch actually reach a frozen
+     * surface once it warms up.
+     */
     private int findSurfaceWaterY(int x, int z) {
         for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
             BlockType b = getBlock(x, y, z);
-            if (b == BlockType.WATER) return y;
-            if (b != BlockType.AIR) return -1; // solid (ice, ground, a roof) sits above any water
+            if (b == BlockType.WATER || b == BlockType.ICE) return y;
+            if (b != BlockType.AIR) return -1; // solid (ground, a roof) sits above any water
         }
         return -1;
     }
@@ -1170,9 +1189,18 @@ public class World implements BlockAccessor {
      * map. Hostile mobs spawn only at night, out of sight, and melt away at dawn;
      * their melee hits and arrows damage the player, whose total damage taken
      * this frame is returned. Call once per frame from the main thread.
+     *
+     * @param targetable whether hostiles are allowed to notice/chase/attack the
+     *                   player this frame - false in creative/spectator (see
+     *                   GameMode#isInvulnerable), where mobs already can't land a
+     *                   hit and so should just ignore the player and wander like
+     *                   passives, rather than uselessly stalking someone they can
+     *                   never actually hurt. Spawning/despawning around the
+     *                   player's position still happens either way.
      */
-    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd) {
+    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd, boolean targetable) {
         float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
+        Vector3f targetPos = targetable ? playerPos : null;
         float damage = 0f;
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
             Mob mob = it.next();
@@ -1186,7 +1214,7 @@ public class World implements BlockAccessor {
                 it.remove();
                 continue;
             }
-            mob.update(dt, this, rnd, playerPos);
+            mob.update(dt, this, rnd, targetPos);
             // Remove dead mobs immediately after update completes, using the same
             // removal path as combat deaths, so a mob killed by drowning doesn't
             // continue rendering or attacking on subsequent frames.

@@ -30,7 +30,7 @@ void main() {
         float tileSize = 1.0 / atlasGrid;
         vec2 tileUV0 = floor(fragUv / tileSize) * tileSize;
         vec2 local = fragUv - tileUV0;
-        vec2 scrolled = mod(local - time * 0.12 * tileSize * fragFlowDir, tileSize);
+        vec2 scrolled = mod(local - time * 0.2 * tileSize * fragFlowDir, tileSize);
         uv = tileUV0 + scrolled;
     }
 
