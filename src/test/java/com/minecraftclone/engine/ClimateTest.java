@@ -176,6 +176,74 @@ class ClimateTest {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Weather transitions (storms roll in/out over WEATHER_TRANSITION_SECONDS
+    // instead of snapping the instant the schedule's hour changes) - see
+    // Climate.stepWeatherTransition, exercised directly since forceWeather()
+    // (used by every other test above) deliberately bypasses this smoothing
+    // for instantaneous, deterministic screenshots/tests.
+    // ------------------------------------------------------------------
+
+    @Test
+    void sameWeatherStrengthEasesTowardTheTargetByAtMostMaxDelta() {
+        Climate.TransitionState next = Climate.stepWeatherTransition(
+                Weather.RAIN, 0.2f, Weather.RAIN, 0.8f, 0.1f);
+        assertEquals(Weather.RAIN, next.weather());
+        assertEquals(0.3f, next.strength(), 0.0001f, "capped at maxDelta, doesn't jump straight to the target");
+    }
+
+    @Test
+    void strengthSnapsToTheTargetOnceWithinMaxDelta() {
+        Climate.TransitionState next = Climate.stepWeatherTransition(
+                Weather.RAIN, 0.75f, Weather.RAIN, 0.8f, 0.5f);
+        assertEquals(Weather.RAIN, next.weather());
+        assertEquals(0.8f, next.strength(), 0.0001f, "doesn't overshoot past the target");
+    }
+
+    @Test
+    void aDifferentIncomingWeatherFadesTheOutgoingOneOutFirst() {
+        // Snow is arriving, but rain is still showing at 0.5 strength - it
+        // should fade toward zero rather than cross-fading straight to snow.
+        Climate.TransitionState next = Climate.stepWeatherTransition(
+                Weather.RAIN, 0.5f, Weather.SNOW, 0.9f, 0.2f);
+        assertEquals(Weather.RAIN, next.weather(), "still showing the outgoing weather");
+        assertEquals(0.3f, next.strength(), 0.0001f);
+    }
+
+    @Test
+    void weatherSwitchesOnlyOnceTheOutgoingStrengthHitsZero() {
+        // Close enough to zero that this step reaches it exactly.
+        Climate.TransitionState next = Climate.stepWeatherTransition(
+                Weather.RAIN, 0.15f, Weather.SNOW, 0.9f, 0.2f);
+        assertEquals(Weather.SNOW, next.weather(), "switches once the outgoing weather has fully faded");
+        assertEquals(0f, next.strength(), 0.0001f, "the incoming weather starts from zero, to ramp up on a later step");
+    }
+
+    @Test
+    void liveWeatherOnASchedulePrecipitatingRightAwayBuildsUpFromZero() {
+        // A fresh climate always starts displaying CLEAR/0 - even if the very
+        // first rolled hour turns out to already be precipitating, the very
+        // first update() only has a tiny dt to work with, so strength must
+        // still start at (or very near) zero rather than jumping straight to
+        // that hour's full intensity.
+        Climate climate = climateAtDay(0);
+        climate.update(0.001f, Biome.PLAINS);
+        assertTrue(climate.getWeatherStrength() < 0.05f,
+                "strength ramps up from zero even when the first hour is already precipitating");
+    }
+
+    @Test
+    void forcedWeatherIsInstantAndSkipsTheRampEntirely() {
+        // forceWeather() is the autotest/screenshot-verification override -
+        // it must stay instantaneous, or every prior MCCLONE_AUTOTEST_WEATHER
+        // screenshot (which reads getOvercast()/getWeatherStrength() a few
+        // frames after forcing) would show a still-ramping-up sky.
+        Climate climate = rolledClimate(0);
+        climate.forceWeather(Weather.THUNDERSTORM);
+        assertEquals(Weather.THUNDERSTORM, climate.getWeather());
+        assertTrue(climate.getWeatherStrength() >= 0.75f, "full strength immediately, no ramp");
+    }
+
     @Test
     void forcedTemperatureShortCircuitsTheNaturalClimate() {
         Climate climate = rolledClimate(0);
