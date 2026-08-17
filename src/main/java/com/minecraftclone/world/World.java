@@ -1263,6 +1263,13 @@ public class World implements BlockAccessor {
         }
     }
 
+    /** Adds a specific mob at a world position - used by autotest screenshots (e.g. one floating in water). */
+    public void spawnMobAt(Mob.Type type, float x, float y, float z) {
+        if (mobs.size() < MAX_MOBS) {
+            mobs.add(new Mob(type, x, y, z));
+        }
+    }
+
     /** Spawns one hostile on solid ground just out of sight; does nothing if no spot qualifies. */
     private void trySpawnHostile(Random rnd, float playerWorldX, float playerWorldZ) {
         for (int attempt = 0; attempt < 8; attempt++) {

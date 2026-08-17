@@ -247,4 +247,62 @@ class MobTest {
         assertTrue(zombie.position.x > startX + 0.5f,
                 "a hurt hostile keeps coming, not fleeing: dx=" + (zombie.position.x - startX));
     }
+
+    /** A pool of water at ground level (y=1..4 of water over a solid floor at y=0). */
+    private static StubWorld waterPool(int size) {
+        StubWorld w = new StubWorld();
+        for (int x = -size; x <= size; x++) {
+            for (int z = -size; z <= size; z++) {
+                w.set(x, 0, z, BlockType.STONE);
+                for (int y = 1; y <= 4; y++) {
+                    w.set(x, y, z, BlockType.WATER);
+                }
+            }
+        }
+        return w;
+    }
+
+    @Test
+    void mobSwimsInsteadOfSinkingToTheBottom() {
+        StubWorld w = waterPool(20);
+        // Drop a pig mid-water: it should float near the surface, not rest on
+        // the pool bed (y=1). Its feet should rise well above the bed.
+        Mob pig = new Mob(Mob.Type.PIG, 0f, 2.5f, 0f);
+        Random rnd = new Random(2);
+        for (int i = 0; i < 300; i++) {
+            pig.update(DT, w, rnd);
+        }
+        float feet = pig.position.y - pig.type.height / 2f;
+        assertTrue(feet > 1.5f, "a swimming mob should float up, not rest on the bed: feet=" + feet);
+    }
+
+    @Test
+    void mobDrownsAfterStayingFullySubmerged() {
+        // A pool with a solid ceiling just under the water surface, so a mob in
+        // it can't swim up to breathe - it stays fully submerged and drowns.
+        StubWorld w = waterPool(20);
+        for (int x = -20; x <= 20; x++) {
+            for (int z = -20; z <= 20; z++) {
+                w.set(x, 3, z, BlockType.STONE); // ceiling just above the water floor
+            }
+        }
+        Mob cow = new Mob(Mob.Type.COW, 0f, 2.0f, 0f);
+        float startHealth = cow.getHealth();
+        Random rnd = new Random(8);
+        for (int i = 0; i < 1200; i++) {
+            cow.update(DT, w, rnd);
+        }
+        assertTrue(cow.isDead(), "a mob fully underwater for a long time should drown");
+        assertTrue(cow.getHealth() < startHealth, "drowning should have dealt damage");
+    }
+
+    @Test
+    void drownedMobTakesDamageWithoutPanicKnockback() {
+        Mob pig = new Mob(Mob.Type.PIG, 0f, 0f, 0f);
+        float x = pig.position.x;
+        pig.drown(3f);
+        assertEquals(pig.getMaxHealth() - 3f, pig.getHealth(), 0.001f);
+        // No knockback from drowning - the mob doesn't jump away.
+        assertEquals(x, pig.position.x, 0.001f);
+    }
 }

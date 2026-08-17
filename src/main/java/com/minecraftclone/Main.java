@@ -677,6 +677,33 @@ public class Main {
             }
             for (int i = 0; i < 5; i++) world.update(player.getPosition().x, player.getPosition().z);
         }
+        // Opt-in autotest hook: carve a small water pool in front of the player and
+        // drop a pig into it, so mob swimming (floating at the surface) can be
+        // screenshotted. MCCLONE_AUTOTEST_SWIM_DROWN=1 caps the pool with a ceiling
+        // so the pig stays submerged long enough to drown instead.
+        if (System.getenv("MCCLONE_AUTOTEST_SWIM") != null && started[0]) {
+            Vector3f front = player.getCamera().getFront();
+            int px = (int) Math.floor(player.getPosition().x + front.x * 3f);
+            int pz = (int) Math.floor(player.getPosition().z + front.z * 3f);
+            for (int x = px - 2; x <= px + 2; x++) {
+                for (int z = pz - 2; z <= pz + 2; z++) {
+                    for (int y = 0; y <= 3; y++) {
+                        world.setBlock(x, y, z, y == 0 ? BlockType.STONE : BlockType.WATER);
+                    }
+                }
+            }
+            boolean drown = System.getenv("MCCLONE_AUTOTEST_SWIM_DROWN") != null;
+            if (drown) {
+                for (int x = px - 2; x <= px + 2; x++) {
+                    for (int z = pz - 2; z <= pz + 2; z++) {
+                        world.setBlock(x, 4, z, BlockType.STONE); // ceiling so it can't surface
+                    }
+                }
+            }
+            world.spawnMobAt(Mob.Type.PIG, px + 0.5f, 2f, pz + 0.5f);
+            System.out.println("Spawned a pig in water at " + (px + 0.5f) + "," + 2f + "," + (pz + 0.5f));
+            for (int i = 0; i < 10; i++) world.update(player.getPosition().x, player.getPosition().z);
+        }
         // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
         // the container screen can be screenshotted. MCCLONE_AUTOTEST_DOUBLE
         // merges a second chest beside it to screenshot a 54-slot double chest;
