@@ -452,9 +452,15 @@ public class Hud {
 
     private static final int[] QUAD_INDICES = {0, 1, 2, 0, 2, 3};
 
-    /** Health (red), hunger (orange) and stamina (yellow) bars, stacked above the hotbar. */
+    /**
+     * Health (red), hunger (orange) and stamina (yellow) bars, stacked above the
+     * hotbar - plus a breath (cyan) bar on top, Minecraft-bubbles-style, but only
+     * while {@code submerged}: it's meaningless (and always full) on dry land, so
+     * showing it constantly would just be visual noise for a bar that never moves.
+     */
     public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
-                                  float stamina, float maxStamina, int hotbarSlotCount, float aspectRatio) {
+                                  float stamina, float maxStamina, float breath, float maxBreath,
+                                  boolean submerged, int hotbarSlotCount, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
@@ -468,10 +474,15 @@ public class Hud {
         float maxX = width / 2f;
         float y = hotbarPanelTopY() + STAT_BAR_STACK_MARGIN;
 
-        // Bottom to top: stamina, hunger, health - health ends up on top, most prominent.
+        // Bottom to top: stamina, hunger, health, (breath) - health ends up on top
+        // of the always-shown bars, most prominent; breath appears above even that
+        // while it's relevant, same as bubbles float above Minecraft's other bars.
         y = renderStatBar(minX, maxX, y, stamina / maxStamina, new Vector4f(0.92f, 0.80f, 0.15f, 0.95f));
         y = renderStatBar(minX, maxX, y, hunger / maxHunger, new Vector4f(0.85f, 0.55f, 0.15f, 0.95f));
-        renderStatBar(minX, maxX, y, health / maxHealth, new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
+        y = renderStatBar(minX, maxX, y, health / maxHealth, new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
+        if (submerged) {
+            renderStatBar(minX, maxX, y, breath / maxBreath, new Vector4f(0.25f, 0.65f, 0.85f, 0.95f));
+        }
 
         lineShader.unbind();
         glEnable(GL_DEPTH_TEST);

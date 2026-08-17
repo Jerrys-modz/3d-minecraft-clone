@@ -1578,6 +1578,8 @@ public class Main {
                             player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
                             player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
                             player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
+                            player.getStats().getBreath(), PlayerStats.MAX_BREATH,
+                            player.isSubmerged(),
                             Inventory.HOTBAR_SIZE, window.getAspectRatio());
                 }
                 // A frost vignette fades in over everything as you freeze outside
@@ -1637,6 +1639,11 @@ public class Main {
                 hud.drawTextLeft(String.format(Locale.ROOT, "Cold exposure: %.0f%%",
                                 player.getStats().getColdness() * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                if (player.isSubmerged()) {
+                    hud.drawTextLeft(String.format(Locale.ROOT, "Breath: %.1fs / %.0fs",
+                                    player.getStats().getBreath(), PlayerStats.MAX_BREATH),
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);

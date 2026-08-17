@@ -43,6 +43,50 @@ class PlayerStatsTest {
     }
 
     @Test
+    void breathStartsFullAndCountsDownOnlyWhileSubmerged() {
+        PlayerStats stats = new PlayerStats();
+        assertEquals(PlayerStats.MAX_BREATH, stats.getBreath(), 0.001f, "full breath on dry land");
+
+        stats.update(1f, false, false, true, false, 0f, 0f); // 1s submerged
+        assertEquals(PlayerStats.MAX_BREATH - 1f, stats.getBreath(), 0.001f);
+
+        stats.update(2f, false, false, false, false, 0f, 0f); // surfaced - resets, doesn't just stop draining
+        assertEquals(PlayerStats.MAX_BREATH, stats.getBreath(), 0.001f, "resurfacing refills breath immediately");
+    }
+
+    @Test
+    void breathNeverGoesNegativeAndDrowningStartsOnlyOnceItRunsOut() {
+        PlayerStats stats = new PlayerStats();
+        float health = stats.getHealth();
+
+        // Still within the grace period: no damage yet, breath clamped at 0 (not negative).
+        stats.update(PlayerStats.MAX_BREATH - 0.5f, false, false, true, false, 0f, 0f);
+        assertTrue(stats.getBreath() > 0f, "still holding breath: " + stats.getBreath());
+        assertEquals(health, stats.getHealth(), 0.001f, "no drowning damage yet");
+
+        // Push well past the grace period in one go.
+        stats.update(5f, false, false, true, false, 0f, 0f);
+        assertEquals(0f, stats.getBreath(), 0.001f, "breath is clamped at zero, never negative");
+        assertTrue(stats.getHealth() < health, "drowning damage kicks in once breath runs out: " + stats.getHealth());
+    }
+
+    @Test
+    void drowningDamageOnlyCoversTheTimePastTheGraceBoundary() {
+        // Regression: an update straddling the grace boundary must only be
+        // charged for the fraction of dt actually spent drowning, not the whole
+        // dt - otherwise a single coarse update (or a stutter) overcharges.
+        PlayerStats stats = new PlayerStats();
+        float health = stats.getHealth();
+
+        stats.update(PlayerStats.MAX_BREATH - 0.5f, false, false, true, false, 0f, 0f); // 5.5s submerged
+        assertEquals(health, stats.getHealth(), 0.001f, "still within the grace period");
+
+        stats.update(1f, false, false, true, false, 0f, 0f); // crosses the 6s boundary by 0.5s
+        assertEquals(health - 2.5f, stats.getHealth(), 0.001f,
+                "only the 0.5s past the boundary should count, not the full 1s step");
+    }
+
+    @Test
     void damageAccumulatesForArmorWearAndClearsOnDemand() {
         PlayerStats stats = new PlayerStats();
         stats.damage(10f);
