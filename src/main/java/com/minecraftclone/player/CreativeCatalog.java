@@ -52,6 +52,7 @@ public final class CreativeCatalog {
                     BlockType.WOOD_CHESTPLATE, BlockType.STONE_CHESTPLATE, BlockType.IRON_CHESTPLATE, BlockType.DIAMOND_CHESTPLATE,
                     BlockType.WOOD_LEGGINGS, BlockType.STONE_LEGGINGS, BlockType.IRON_LEGGINGS, BlockType.DIAMOND_LEGGINGS,
                     BlockType.WOOD_BOOTS, BlockType.STONE_BOOTS, BlockType.IRON_BOOTS, BlockType.DIAMOND_BOOTS,
+                    BlockType.FUR_HELMET, BlockType.FUR_CHESTPLATE, BlockType.FUR_LEGGINGS, BlockType.FUR_BOOTS,
             }),
             new Tab("Food", new BlockType[]{
                     BlockType.APPLE, BlockType.BERRIES,

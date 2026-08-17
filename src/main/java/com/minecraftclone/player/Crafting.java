@@ -68,6 +68,7 @@ public final class Crafting {
         CHARS.put('D', BlockType.DIAMOND);
         CHARS.put('O', BlockType.OBSIDIAN);
         CHARS.put('L', BlockType.GLOWSTONE);
+        CHARS.put('U', BlockType.WOOL);
 
         // --- Shaped recipes: three 3-character rows ('.' = empty). ---
         shaped("W..", "...", "...", BlockType.PLANKS, 4);        // log -> planks
@@ -98,6 +99,7 @@ public final class Crafting {
         armor('K', BlockType.STONE_HELMET, BlockType.STONE_CHESTPLATE, BlockType.STONE_LEGGINGS, BlockType.STONE_BOOTS);
         armor('I', BlockType.IRON_HELMET, BlockType.IRON_CHESTPLATE, BlockType.IRON_LEGGINGS, BlockType.IRON_BOOTS);
         armor('D', BlockType.DIAMOND_HELMET, BlockType.DIAMOND_CHESTPLATE, BlockType.DIAMOND_LEGGINGS, BlockType.DIAMOND_BOOTS);
+        armor('U', BlockType.FUR_HELMET, BlockType.FUR_CHESTPLATE, BlockType.FUR_LEGGINGS, BlockType.FUR_BOOTS);
 
         // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
         // itself is made by quenching a lava source with a water source (see

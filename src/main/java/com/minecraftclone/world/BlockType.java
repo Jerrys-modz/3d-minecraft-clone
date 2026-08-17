@@ -139,6 +139,9 @@ public enum BlockType {
     // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
     ROTTEN_FLESH(68, 4),
     BONES(69, 0),
+    // Wool - sheared from sheep (see World.damageMob). The material fur armor is
+    // made from, and a warm clothing resource in its own right.
+    WOOL(115, 0),
     // Snow-capped slabs: a bottom-half slab that's been covered by accumulating
     // snow (see World.tryAddSnow). Full-height solid blocks that MESH as a slab
     // under a snow cap, so the snow sits flush rather than floating above the
@@ -164,7 +167,14 @@ public enum BlockType {
     DIAMOND_HELMET(111, 0),
     DIAMOND_CHESTPLATE(112, 0),
     DIAMOND_LEGGINGS(113, 0),
-    DIAMOND_BOOTS(114, 0);
+    DIAMOND_BOOTS(114, 0),
+    // Fur armor - the warmest tier (see Armor.java warmth), crafted from wool
+    // (sheep). The least defensive but by far the best against the cold, so
+    // winter survival wants a set even though combat prefers metal.
+    FUR_HELMET(116, 0),
+    FUR_CHESTPLATE(117, 0),
+    FUR_LEGGINGS(118, 0),
+    FUR_BOOTS(119, 0);
 
     public final byte id;
     public final boolean solid;

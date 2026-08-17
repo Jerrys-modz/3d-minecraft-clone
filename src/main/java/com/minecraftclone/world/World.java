@@ -1335,6 +1335,11 @@ public class World implements BlockAccessor {
             int count = 1 + rnd.nextInt(mob.type == Mob.Type.SHEEP ? 2 : 3);
             spawnItem((int) Math.floor(mob.position.x), (int) Math.floor(mob.position.y),
                     (int) Math.floor(mob.position.z), drop, count, rnd);
+            // Sheep are woolly: killing one also drops wool to make fur armor with.
+            if (mob.type == Mob.Type.SHEEP) {
+                spawnItem((int) Math.floor(mob.position.x), (int) Math.floor(mob.position.y),
+                        (int) Math.floor(mob.position.z), BlockType.WOOL, 1 + rnd.nextInt(3), rnd);
+            }
         }
         return killed;
     }

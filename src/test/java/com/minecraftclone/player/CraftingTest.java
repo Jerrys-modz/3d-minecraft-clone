@@ -18,6 +18,21 @@ class CraftingTest {
     }
 
     @Test
+    void furHelmetCraftsFromWool() {
+        // Helmet pattern: UUU / U.U / ... (5 wool).
+        BlockType[] grid = new BlockType[9];
+        grid[0] = BlockType.WOOL;
+        grid[1] = BlockType.WOOL;
+        grid[2] = BlockType.WOOL;
+        grid[3] = BlockType.WOOL;
+        grid[5] = BlockType.WOOL;
+        Crafting.Recipe r = Crafting.match(grid);
+        assertNotNull(r);
+        assertEquals(BlockType.FUR_HELMET, r.output());
+        assertEquals(1, r.outputAmount());
+    }
+
+    @Test
     void shapedTwoPlanksToSticks() {
         BlockType[] grid = new BlockType[9];
         grid[0] = BlockType.PLANKS;

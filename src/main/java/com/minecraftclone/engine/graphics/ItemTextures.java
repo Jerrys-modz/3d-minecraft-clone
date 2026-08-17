@@ -98,6 +98,13 @@ public class ItemTextures {
             case ROTTEN_FLESH -> paintMeat(0x9A8A6A, 0x7A6A50);
             case BONES -> paintBones();
             case COAL -> paintCoal();
+            case WOOL -> paintWool();
+
+            // Fur armor - a warm, cream-white material tint.
+            case FUR_HELMET -> paintHelmet(0xEFE6D8);
+            case FUR_CHESTPLATE -> paintChestplate(0xEFE6D8);
+            case FUR_LEGGINGS -> paintLeggings(0xEFE6D8);
+            case FUR_BOOTS -> paintBoots(0xEFE6D8);
 
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
@@ -344,6 +351,23 @@ public class ItemTextures {
         img.setRGB(11, 2, 0xFF000000 | 0xE8E0D0);
         img.setRGB(12, 3, 0xFF000000 | 0xE8E0D0);
         img.setRGB(13, 4, 0xFF000000 | 0xE8E0D0);
+        return img;
+    }
+
+    /** A fluffy clump of sheep's wool - the material fur armor is made from. */
+    private static BufferedImage paintWool() {
+        BufferedImage img = blank();
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                double d = Math.hypot(x - 8, y - 8);
+                if (d <= 6.5) {
+                    // A soft off-white with a few warm-shadowed tufts for depth.
+                    int shade = (x * 31 + y * 17) % 7;
+                    int c = shade < 2 ? 0xD8D2C4 : 0xF0ECE0;
+                    img.setRGB(x, y, 0xFF000000 | c);
+                }
+            }
+        }
         return img;
     }
 
