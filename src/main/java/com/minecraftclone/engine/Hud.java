@@ -1021,7 +1021,14 @@ public class Hud {
         return Settings.rowInTab(tab, local);
     }
 
-    /** Width of the settings panel: widest label + room for a slider track and its value text. */
+    /**
+     * Width of the settings panel: whichever is wider between the row content
+     * (widest label + room for a slider track and its value text) and the tab
+     * strip across its top - without the max against the tab strip, adding a
+     * long-labeled tab (e.g. "Controller") could make the strip wider than a
+     * panel sized for content alone, hanging tab buttons off both edges of the
+     * panel background instead of sitting inside it.
+     */
     private float settingsPanelWidth() {
         float widest = 0f;
         for (int i = 0; i < Settings.ROW_COUNT; i++) {
@@ -1030,8 +1037,18 @@ public class Hud {
         for (int a = 0; a < KeyBindings.COUNT; a++) {
             widest = Math.max(widest, text.measure(KeyBindings.name(a), SETTINGS_SIZE));
         }
-        return widest + SETTINGS_LABEL_GAP + SETTINGS_TRACK_W + SETTINGS_VALUE_GAP + SETTINGS_VALUE_W
+        float contentWidth = widest + SETTINGS_LABEL_GAP + SETTINGS_TRACK_W + SETTINGS_VALUE_GAP + SETTINGS_VALUE_W
                 + SETTINGS_LEFT_PAD + SETTINGS_RIGHT_PAD;
+        return Math.max(contentWidth, settingsTabStripWidth());
+    }
+
+    /** Total width of the tab strip (every tab button plus the gaps between them). */
+    private float settingsTabStripWidth() {
+        float total = 0f;
+        for (int i = 0; i < Settings.TAB_COUNT; i++) {
+            total += settingsTabWidth(i) + SETTINGS_TAB_GAP;
+        }
+        return total - SETTINGS_TAB_GAP;
     }
 
     /** Logical center-y of the tab strip. */
@@ -1049,12 +1066,7 @@ public class Hud {
 
     /** Logical center-x of tab {@code t}: the strip is centered, spaced by {@link #SETTINGS_TAB_GAP}. */
     private float settingsTabCenterX(int t) {
-        float total = 0f;
-        for (int i = 0; i < Settings.TAB_COUNT; i++) {
-            total += settingsTabWidth(i) + SETTINGS_TAB_GAP;
-        }
-        total -= SETTINGS_TAB_GAP;
-        float x = -total / 2f;
+        float x = -settingsTabStripWidth() / 2f;
         for (int i = 0; i < t; i++) {
             x += settingsTabWidth(i) + SETTINGS_TAB_GAP;
         }
