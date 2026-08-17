@@ -726,6 +726,41 @@ public class Main {
             player.teleportTo(cx + 0.5f, poolTop - 2f, cz + 0.5f);
             System.out.println("Autotest swim pool: y " + poolBottom + " to " + poolTop + ", player at y " + (poolTop - 2));
         }
+        // Opt-in autotest hook: carve two adjacent water bodies of different
+        // total heights (a tall deep pool next to a shorter shallow one) and
+        // submerge the player on the deep side, level with the shallow side's
+        // own surface, looking across the boundary - exactly the underwater
+        // ledge shape that used to paint a phantom water-surface face midway
+        // through the deep side (see Chunk#emitFluid's sealedByFluidAbove
+        // check: a submerged cell's corner gets pulled down by averaging with
+        // the shorter neighbor's own surface at that same Y, which used to be
+        // (mis)read as "this corner needs its own top face too").
+        if (System.getenv("MCCLONE_AUTOTEST_UNDERWATER_LEDGE") != null && started[0]) {
+            Vector3f p = player.getPosition();
+            int cx = (int) Math.floor(p.x);
+            int cz = (int) Math.floor(p.z);
+            int surfaceY = world.getSurfaceHeight(cx, cz);
+            int bottom = surfaceY - 6;
+            int deepTop = surfaceY + 3;
+            int shallowTop = surfaceY - 1; // several blocks shorter than the deep side
+            for (int x = cx - 4; x <= cx + 4; x++) {
+                for (int z = cz - 2; z <= cz + 2; z++) {
+                    int top = x < cx ? deepTop : shallowTop;
+                    for (int y = bottom; y <= top; y++) {
+                        world.setBlock(x, y, z, BlockType.WATER_SOURCE);
+                    }
+                }
+            }
+            for (int i = 0; i < 5; i++) world.update(p.x, p.z);
+            // Deep side, right up against the step, level with the shallow
+            // side's own surface (where its corner-averaging pull-down would
+            // show up), facing across it (+X, toward the shallow side).
+            player.teleportTo(cx - 1.5f, shallowTop - 1f, cz + 0.5f);
+            player.getCamera().setYaw(0f);
+            player.getCamera().setPitch(10f);
+            System.out.println("Autotest underwater ledge: deep top " + deepTop + ", shallow top " + shallowTop
+                    + ", bottom " + bottom + ", player at y " + shallowTop);
+        }
         // Opt-in autotest hook: open the player's own inventory screen, equipping a
         // full iron set (plus a couple of bag items) so the armor column renders.
         if (System.getenv("MCCLONE_AUTOTEST_INVENTORY") != null && started[0]) {
@@ -1598,6 +1633,10 @@ public class Main {
                             player.isSubmerged(),
                             Inventory.HOTBAR_SIZE, window.getAspectRatio());
                 }
+                // A blue tint washes over the screen while your eyes are
+                // underwater, drawn before the frost vignette so a freezing
+                // dip under icy water still layers both.
+                hud.renderUnderwaterOverlay(player.isSubmerged());
                 // A frost vignette fades in over everything as you freeze outside
                 // in a storm (see Player/PlayerStats cold exposure).
                 hud.renderFrostOverlay(player.getStats().getColdness());

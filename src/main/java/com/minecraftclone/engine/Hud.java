@@ -252,6 +252,24 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    /**
+     * A translucent blue tint over the whole screen while the camera's eyes
+     * are underwater - the same fullscreen-quad technique as {@link #renderFrostOverlay},
+     * reusing its NDC quad (it just fills the same full screen either way).
+     */
+    public void renderUnderwaterOverlay(boolean submerged) {
+        if (!submerged) return;
+        glDisable(GL_DEPTH_TEST);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", modelMatrix.identity());
+        lineShader.setUniform("color", new Vector4f(0.1f, 0.35f, 0.65f, 0.35f));
+        frostOverlay.render();
+        lineShader.unbind();
+        glEnable(GL_DEPTH_TEST);
+    }
+
     /** @param breakFraction 0 (just looking at it) to 1 (about to break) - tints the outline red and thickens it as it climbs. */
     public void renderBlockOutline(Matrix4f projection, Matrix4f view, Vector3i blockPos, float breakFraction, float height) {
         lineShader.bind();
