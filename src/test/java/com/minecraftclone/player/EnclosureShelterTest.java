@@ -120,4 +120,22 @@ class EnclosureShelterTest {
         for (int i = 0; i < 200; i++) warm = Player.stepSpaceWarmth(warm, false, 1f);
         assertEquals(0f, warm, 1e-3f, "given long enough, it cools all the way");
     }
+
+    @Test
+    void aHouseKeepsItsHeatWhileYouAreElsewhere() {
+        java.util.Map<Long, Float> heat = new java.util.HashMap<>();
+        long house = 1L;
+        long outside = 2L;
+        // Heat the house to full while sealed...
+        float v = 0f;
+        for (int i = 0; i < 30; i++) v = Player.updateSpaceHeat(heat, house, true, 1f);
+        assertEquals(1f, v, 1e-3f);
+        // ...leave (stand in an unsealed cell for a long while)...
+        for (int i = 0; i < 300; i++) Player.updateSpaceHeat(heat, outside, false, 1f);
+        // ...and the house still holds its warmth - it only cools while you're in it.
+        assertEquals(1f, heat.get(house), 1e-3f, "the house holds its temperature while you're away");
+        // Standing back inside the (now-breached) house starts cooling it.
+        Player.updateSpaceHeat(heat, house, false, 1f);
+        assertTrue(heat.get(house) < 1f, "being back in a breached house lets the heat leak");
+    }
 }

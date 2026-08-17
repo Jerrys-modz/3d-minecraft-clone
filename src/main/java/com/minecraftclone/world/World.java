@@ -763,9 +763,11 @@ public class World implements BlockAccessor {
     }
 
     private void tryAddSnow(int x, int z, Climate climate, boolean blizzard) {
-        if (climate.temperatureFor(getBiome(x, z)) > FREEZING_TEMP) return;
         int y = findSurfaceY(x, z);
         if (y < 0) return;
+        // Altitude-aware surface temperature: high mountain ledges freeze (and
+        // snow) even when their foothills are above freezing.
+        if (climate.temperatureFor(getBiome(x, z), y, y) > FREEZING_TEMP) return;
         BlockType surface = getBlock(x, y, z);
         if (surface.slab) {
             // Cap a bottom-half slab flush with snow by swapping in a snow-capped
@@ -786,9 +788,10 @@ public class World implements BlockAccessor {
     private void tryMeltSnow(int x, int z, Climate climate) {
         Biome biome = getBiome(x, z);
         if (permanentSnow(biome)) return;
-        if (climate.temperatureFor(biome) <= THAW_TEMP) return;
         int y = findSurfaceY(x, z);
         if (y < 0) return;
+        // Altitude-aware: the top of a high mountain stays frozen past the thaw.
+        if (climate.temperatureFor(biome, y, y) <= THAW_TEMP) return;
         BlockType top = getBlock(x, y, z);
         if (top.isSnowCappedSlab()) {
             setBlock(x, y, z, uncapped(top)); // the snow cap melts, the slab shows again
@@ -801,10 +804,12 @@ public class World implements BlockAccessor {
 
     /** Freezes exposed water over to ice while it's freezing, thaws it back to water once warm. */
     private void tryUpdateWater(int x, int z, Climate climate) {
-        float temperature = climate.temperatureFor(getBiome(x, z));
+        int y = findSurfaceWaterY(x, z);
+        if (y < 0) return;
+        // Altitude-aware: high mountain lakes freeze earlier and thaw later.
+        float temperature = climate.temperatureFor(getBiome(x, z), y, y);
         if (temperature <= FREEZING_TEMP) {
-            int y = findSurfaceWaterY(x, z);
-            if (y >= 0 && getBlock(x, y + 1, z) == BlockType.AIR) {
+            if (getBlock(x, y + 1, z) == BlockType.AIR) {
                 BlockType water = getBlock(x, y, z);
                 // Only freeze static WATER, not WATER_SOURCE - sources keep flowing
                 // even in winter so their flow field stays intact through freeze/thaw.
@@ -813,8 +818,7 @@ public class World implements BlockAccessor {
                 }
             }
         } else if (temperature > THAW_TEMP) {
-            int y = findSurfaceY(x, z);
-            if (y >= 0 && getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
+            if (getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
                 setBlock(x, y, z, BlockType.WATER); // the surface ice thaws back into water
             }
         }

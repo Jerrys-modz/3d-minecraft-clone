@@ -10,6 +10,9 @@ import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.World;
 import org.joml.Vector3f;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * First-person player controller: walking/flying physics, AABB-vs-voxel
  * collision resolved one axis at a time, mouse look, survival stats
@@ -29,12 +32,25 @@ public class Player {
     private static final float SPACE_WARM_UP_SECONDS = 25f;
     /** Seconds of being breached/outside for the space's stored heat to fully leak away. */
     private static final float SPACE_COOL_SECONDS = 45f;
-    /** How warm the sealed space around the player currently is, 0 (cold) to 1 (toasty). */
-    private float spaceWarmth = 0f;
+    /** Coarse grid cell (in blocks) that stores space heat, so a whole small house is one cell. */
+    private static final int SPACE_HEAT_CELL = 8;
+    /** Most heat cells to remember before evicting the coldest (bounds memory across a long playthrough). */
+    private static final int SPACE_HEAT_CELL_LIMIT = 128;
+    /**
+     * Stored heat per coarse cell (key = column cell), so a house keeps its
+     * warmth after you step out: the value at the player's current cell rises
+     * while the space is sealed and leaks while breached, and the others persist
+     * (and slowly age) rather than resetting when the player moves away.
+     */
+    private final Map<Long, Float> spaceHeat = new HashMap<>();
+
+    private static long spaceHeatCell(int x, int z) {
+        return ((long) (x >> 3) << 32) | (z >> 3 & 0xFFFFFFFFL);
+    }
 
     /** How warm the enclosed space around the player is right now (0..1) - drives the cold exposure and F3 readout. */
     public float getSpaceWarmth() {
-        return spaceWarmth;
+        return spaceHeat.getOrDefault(spaceHeatCell((int) Math.floor(position.x), (int) Math.floor(position.z)), 0f);
     }
 
     private static final float WALK_SPEED = 4.3f;
@@ -280,15 +296,19 @@ public class Player {
             stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
-            // Cold exposure: weather strength, cut down by how sheltered the space
-            // around you is and how warm your armor is. A sealed space (walls all
-            // around, a roof, solid ground) heats up while you're in it and cools
-            // back down the moment it's breached - a door opening or a wall block
-            // breaking lets the cold in (a closed door counts as a wall, an open
-            // one doesn't). A nearby fire warms you almost completely.
+            // Cold exposure: how cold the local temperature is, cut down by how
+            // sheltered the space around you is and how warm your armor is. A
+            // sealed space (walls all around, a roof, solid ground) heats up while
+            // you're in it and the HOUSE keeps that warmth - the value is stored
+            // per 8x8 cell, so it cools only while you're standing in it and the
+            // cell is breached (a door opening or a wall block breaking lets the
+            // cold in - a closed door counts as a wall, an open one doesn't).
+            // A nearby fire warms you almost completely.
             float coldness = coldFactor;
             boolean enclosed = isEnclosed(world);
-            spaceWarmth = stepSpaceWarmth(spaceWarmth, enclosed, dt);
+            long cell = spaceHeatCell((int) Math.floor(position.x), (int) Math.floor(position.z));
+            float spaceWarmth = updateSpaceHeat(spaceHeat, cell, enclosed, dt);
+            ageStoredHeat(dt);
             if (enclosed) {
                 // Sealed: the space holds heat, so the cold barely reaches you.
                 coldness *= 1f - 0.9f * spaceWarmth;
@@ -369,6 +389,45 @@ public class Player {
             return Math.min(1f, current + dt / SPACE_WARM_UP_SECONDS);
         }
         return Math.max(0f, current - dt / SPACE_COOL_SECONDS);
+    }
+
+    /**
+     * Advances one heat cell's stored warmth and writes it back into {@code heat}
+     * (removing it once it cools to zero). Split out so the "house holds its
+     * temperature" behavior - a cell keeps its value while you're elsewhere - is
+     * unit-testable headlessly.
+     */
+    static float updateSpaceHeat(Map<Long, Float> heat, long cell, boolean enclosed, float dt) {
+        float value = stepSpaceWarmth(heat.getOrDefault(cell, 0f), enclosed, dt);
+        if (value <= 0f) {
+            heat.remove(cell);
+        } else {
+            heat.put(cell, value);
+        }
+        return value;
+    }
+
+    /**
+     * Slowly ages every remembered heat cell so an abandoned house eventually
+     * cools (over ~5 minutes), and evicts the coldest cell once too many have
+     * been remembered so memory stays bounded across a long playthrough.
+     */
+    private void ageStoredHeat(float dt) {
+        if (spaceHeat.size() < SPACE_HEAT_CELL_LIMIT) {
+            for (Map.Entry<Long, Float> e : spaceHeat.entrySet()) {
+                e.setValue(Math.max(0f, e.getValue() - dt / 300f));
+            }
+        } else {
+            long coldestKey = -1;
+            float coldest = Float.MAX_VALUE;
+            for (Map.Entry<Long, Float> e : spaceHeat.entrySet()) {
+                if (e.getValue() < coldest) {
+                    coldest = e.getValue();
+                    coldestKey = e.getKey();
+                }
+            }
+            if (coldestKey != -1) spaceHeat.remove(coldestKey);
+        }
     }
 
     /**

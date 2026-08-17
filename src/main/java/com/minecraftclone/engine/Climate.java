@@ -39,6 +39,12 @@ public class Climate {
     private static final float WETNESS_RISE_PER_SECOND = 0.006f;
     private static final float WETNESS_DRAIN_PER_SECOND = 0.005f;
     private static final float FREEZING_C = 0f;
+    /** World height treated as "sea level" for the altitude lapse (the normal world-gen default). */
+    private static final float SEA_LEVEL_REFERENCE = 42f;
+    /** Blocks of altitude per -1°C - mountains get cold with height. */
+    private static final float ALTITUDE_LAPSE_BLOCKS = 8f;
+    /** Blocks below the surface before the temperature is fully the biome's stable ground temperature. */
+    private static final float UNDERGROUND_BLEND_BLOCKS = 10f;
     /** The most unreliable the forecast gets (the far end of the 7-day range). */
     private static final float MAX_FORECAST_ERROR = 0.45f;
     /** Chance per second that a thunderstorm throws a lightning flash. */
@@ -345,6 +351,31 @@ public class Climate {
     }
 
     /**
+     * The temperature at a specific position in the world, refining the surface
+     * {@link #temperatureFor(Biome)} with two terrain effects:
+     * <ul>
+     *   <li><b>Altitude</b> - it gets colder the higher you climb above sea level
+     *       (a mountain peak is much colder than its foothills), see
+     *       {@link #ALTITUDE_LAPSE_BLOCKS}.</li>
+     *   <li><b>Underground stability</b> - below the surface the temperature
+     *       blends toward the biome's baseline (its annual mean, stripped of the
+     *       season/night/weather swings), so caves barely change across the year:
+     *       warmer than the frozen surface in winter, cooler than the hot surface
+     *       in summer.</li>
+     * </ul>
+     *
+     * @param y        the world Y of the position
+     * @param surfaceY the Y of the terrain surface directly above it (its column's top)
+     */
+    public float temperatureFor(Biome biome, float y, float surfaceY) {
+        if (forcedTemperature != null) return forcedTemperature;
+        float airTemp = temperatureFor(biome)
+                - Math.max(0f, (y - SEA_LEVEL_REFERENCE) / ALTITUDE_LAPSE_BLOCKS);
+        float depth = clamp01((surfaceY - y) / UNDERGROUND_BLEND_BLOCKS);
+        return lerp(airTemp, baseTemperature(biome), depth);
+    }
+
+    /**
      * Current humidity 0..1 at {@code biome}: its base, lifted toward wet by
      * rain and drained back during dry weather.
      */
@@ -419,5 +450,9 @@ public class Climate {
 
     private static float clamp01(float v) {
         return Math.max(0f, Math.min(1f, v));
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
     }
 }
