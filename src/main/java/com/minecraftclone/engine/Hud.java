@@ -620,7 +620,7 @@ public class Hud {
         for (int h = now; count < 8 && h < now + 24; h += 3) {
             Climate.ForecastSlot slot = h < 24 ? today[h] : tomorrow[h - 24];
             if (count > 0) hourly.append(", ");
-            hourly.append(h % 24).append("h ").append(slot.weather().displayName);
+            hourly.append(h % 24).append("h ").append(forecastLabel(slot.weather(), slot.strength()));
             count++;
         }
         drawTextAt(hourly.toString(), x, y, 0.022f, WHITE);

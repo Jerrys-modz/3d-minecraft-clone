@@ -244,6 +244,50 @@ class ClimateTest {
         assertTrue(climate.getWeatherStrength() >= 0.75f, "full strength immediately, no ramp");
     }
 
+    // ------------------------------------------------------------------
+    // Precipitation frequency (Climate.precipitationChance) - regression
+    // coverage for "it rains too much": a wetter biome/season should still
+    // roll higher, but a storm continuing an existing one must ignore both
+    // entirely and just use STORM_CONTINUE_CHANCE, and no combination should
+    // ever exceed the hard cap.
+    // ------------------------------------------------------------------
+
+    @Test
+    void higherHumidityMeansMoreRain() {
+        float desert = Climate.precipitationChance(0.08f, 0.45f, false);
+        float plains = Climate.precipitationChance(0.45f, 0.45f, false);
+        float jungle = Climate.precipitationChance(0.95f, 0.45f, false);
+        assertTrue(desert < plains, "desert " + desert + " should roll less than plains " + plains);
+        assertTrue(plains < jungle, "plains " + plains + " should roll less than jungle " + jungle);
+    }
+
+    @Test
+    void aWetterSeasonRaisesTheFreshStartChance() {
+        float dryOdds = Climate.precipitationChance(0.45f, Season.WINTER.precipitationBias, false);
+        float wetOdds = Climate.precipitationChance(0.45f, Season.SPRING.precipitationBias, false);
+        assertTrue(wetOdds > dryOdds, "spring " + wetOdds + " should roll more than winter " + dryOdds);
+    }
+
+    @Test
+    void freshStartChanceNeverExceedsTheCap() {
+        // Even the wettest biome (humidity 1) in the wettest possible season.
+        float chance = Climate.precipitationChance(1f, Season.SPRING.precipitationBias, false);
+        assertTrue(chance <= 0.25f, "capped regardless of how humid/wet the inputs are, got " + chance);
+    }
+
+    @Test
+    void aContinuingStormIgnoresHumidityAndSeasonEntirely() {
+        // Once a storm is already going, a bone-dry desert in winter keeps it
+        // going at exactly the same odds as a rainforest in spring.
+        float desertWinter = Climate.precipitationChance(0.08f, Season.WINTER.precipitationBias, true);
+        float jungleSpring = Climate.precipitationChance(0.95f, Season.SPRING.precipitationBias, true);
+        assertEquals(desertWinter, jungleSpring, 0.0001f);
+        // And that shared value should be well above any fresh-start chance -
+        // that's the whole point of storms clustering into multi-hour systems.
+        float freshJungleSpring = Climate.precipitationChance(0.95f, Season.SPRING.precipitationBias, false);
+        assertTrue(desertWinter > freshJungleSpring);
+    }
+
     @Test
     void forcedTemperatureShortCircuitsTheNaturalClimate() {
         Climate climate = rolledClimate(0);
