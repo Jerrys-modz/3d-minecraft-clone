@@ -197,6 +197,7 @@ public class Main {
                         settings.getGamepadBinds().set(bindingAction[0], pressed);
                         settings.save(settingsFile);
                         bindingAction[0] = -1;
+                        return;
                     }
                 }
             } else {
