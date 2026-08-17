@@ -61,6 +61,8 @@ public class Input {
     private final GLFWGamepadState gamepadState = GLFWGamepadState.malloc();
     private final boolean[] gamepadButtonsDown = new boolean[GLFW_GAMEPAD_BUTTON_LAST + 1];
     private final boolean[] gamepadButtonsPrev = new boolean[GLFW_GAMEPAD_BUTTON_LAST + 1];
+    /** Most recently pressed gamepad button, for capturing GamepadBindings (reset on consume). */
+    private int lastGamepadButtonPressed = -1;
 
     public Input(long windowHandle) {
         this.windowHandle = windowHandle;
@@ -125,12 +127,14 @@ public class Input {
      * While the cursor is captured (gameplay - see Window#setCursorCaptured), the
      * left stick becomes movement (mapped through {@code keyBinds}, so a rebound
      * layout still works), the right stick turns the camera, and the triggers
-     * become the mining/placing mouse buttons. While the cursor is free (any menu,
-     * the inventory, settings, a chest/furnace GUI...) the right stick instead
-     * drives the real OS cursor position, so every existing mouse-driven screen in
-     * the game works from a pad with no changes of its own.
+     * become the mining/placing mouse buttons. Which button drives each other
+     * gameplay action (jump, sprint, ...) comes from {@code gamepadBinds} - see
+     * {@link GamepadBindings}. While the cursor is free (any menu, the inventory,
+     * settings, a chest/furnace GUI...) the right stick instead drives the real OS
+     * cursor position, so every existing mouse-driven screen in the game works
+     * from a pad with no changes of its own.
      */
-    public void updateGamepad(float dt, KeyBindings keyBinds) {
+    public void updateGamepad(float dt, KeyBindings keyBinds, GamepadBindings gamepadBinds) {
         // Rebuild this frame's exposed state from the real keyboard/mouse baseline
         // first - see the keysDownReal/keysDown split above for why this can't just
         // OR gamepad presses into keysDown directly.
@@ -147,6 +151,9 @@ public class Input {
         ByteBuffer buttons = gamepadState.buttons();
         for (int i = 0; i < gamepadButtonsDown.length; i++) {
             gamepadButtonsDown[i] = buttons.get(i) == GLFW_PRESS;
+            if (gamepadButtonsDown[i] && !gamepadButtonsPrev[i]) {
+                lastGamepadButtonPressed = i;
+            }
         }
 
         FloatBuffer axes = gamepadState.axes();
@@ -161,24 +168,36 @@ public class Input {
         if (captured) {
             // Left stick -> movement, driven through the *current* bindings rather
             // than hardcoded WASD, so a rebound layout still works from a pad.
+            // There's only one stick to use for it, so unlike the buttons below
+            // this isn't remappable via GamepadBindings.
             mergeKey(keyBinds.get(KeyBindings.FORWARD), leftY < 0);
             mergeKey(keyBinds.get(KeyBindings.BACK), leftY > 0);
             mergeKey(keyBinds.get(KeyBindings.LEFT), leftX < 0);
             mergeKey(keyBinds.get(KeyBindings.RIGHT), leftX > 0);
 
-            mergeKey(keyBinds.get(KeyBindings.JUMP), gamepadDown(GLFW_GAMEPAD_BUTTON_A));
-            mergeKey(keyBinds.get(KeyBindings.SPRINT), gamepadDown(GLFW_GAMEPAD_BUTTON_LEFT_THUMB));
-            mergeKey(keyBinds.get(KeyBindings.FLY_DOWN), gamepadDown(GLFW_GAMEPAD_BUTTON_B));
-            mergeKey(keyBinds.get(KeyBindings.FLY_TOGGLE), gamepadJustPressed(GLFW_GAMEPAD_BUTTON_X));
-            mergeKey(keyBinds.get(KeyBindings.INVENTORY), gamepadJustPressed(GLFW_GAMEPAD_BUTTON_Y));
+            // Every other gameplay action -> whatever button GamepadBindings says
+            // (defaults: A/L3/B/X/Y/Back/D-Up/R3), so it stays in sync with any
+            // rebinding done in the settings menu's Controller tab.
+            mergeKey(keyBinds.get(KeyBindings.JUMP), gamepadDown(gamepadBinds.buttonFor(KeyBindings.JUMP)));
+            mergeKey(keyBinds.get(KeyBindings.SPRINT), gamepadDown(gamepadBinds.buttonFor(KeyBindings.SPRINT)));
+            mergeKey(keyBinds.get(KeyBindings.FLY_DOWN), gamepadDown(gamepadBinds.buttonFor(KeyBindings.FLY_DOWN)));
+            mergeKey(keyBinds.get(KeyBindings.FLY_TOGGLE), gamepadJustPressed(gamepadBinds.buttonFor(KeyBindings.FLY_TOGGLE)));
+            mergeKey(keyBinds.get(KeyBindings.INVENTORY), gamepadJustPressed(gamepadBinds.buttonFor(KeyBindings.INVENTORY)));
+            mergeKey(keyBinds.get(KeyBindings.DEBUG), gamepadJustPressed(gamepadBinds.buttonFor(KeyBindings.DEBUG)));
+            mergeKey(keyBinds.get(KeyBindings.SCREENSHOT), gamepadJustPressed(gamepadBinds.buttonFor(KeyBindings.SCREENSHOT)));
+            mergeKey(keyBinds.get(KeyBindings.FORECAST), gamepadJustPressed(gamepadBinds.buttonFor(KeyBindings.FORECAST)));
+
+            // Start -> the settings menu, same as Esc. Not in GamepadBindings for
+            // the same reason Esc itself isn't in KeyBindings - it's not really a
+            // reassignable "gameplay action" so much as a fixed part of the scheme.
             mergeKey(GLFW_KEY_ESCAPE, gamepadJustPressed(GLFW_GAMEPAD_BUTTON_START));
 
             // Triggers -> the same mouse buttons mining/placing already read.
             mergeMouseButton(GLFW_MOUSE_BUTTON_LEFT, leftTrigger > TRIGGER_PRESS_THRESHOLD);
             mergeMouseButton(GLFW_MOUSE_BUTTON_RIGHT, rightTrigger > TRIGGER_PRESS_THRESHOLD);
 
-            // Bumpers (and the d-pad, redundantly, for a physical-feeling option on
-            // Deck) cycle the hotbar the same way a scroll notch does.
+            // Bumpers (and the d-pad left/right, redundantly, for a physical-feeling
+            // option on Deck) cycle the hotbar the same way a scroll notch does.
             if (gamepadJustPressed(GLFW_GAMEPAD_BUTTON_LEFT_BUMPER) || gamepadJustPressed(GLFW_GAMEPAD_BUTTON_DPAD_LEFT)) {
                 scrollDelta -= 1;
             }
@@ -193,10 +212,16 @@ public class Input {
             deltaY += rightY * LOOK_SPEED_PX_PER_SEC * dt;
         } else {
             // A menu/inventory/GUI is open: right stick drives the real cursor
-            // instead, so every existing mouse-driven screen just works.
+            // instead, so every existing mouse-driven screen just works. A/X/B are
+            // fixed to confirm/right-click/back here (the universal console-UI
+            // convention), not remappable - same reasoning as Start above.
             moveCursor(rightX, rightY, dt);
             mergeMouseButton(GLFW_MOUSE_BUTTON_LEFT, gamepadDown(GLFW_GAMEPAD_BUTTON_A));
             mergeMouseButton(GLFW_MOUSE_BUTTON_RIGHT, gamepadDown(GLFW_GAMEPAD_BUTTON_X));
+            // Y still toggles the inventory here too (not just in gameplay) - so
+            // it can close an already-open inventory, or switch into it from a
+            // different open GUI, the same way E does on keyboard.
+            mergeKey(keyBinds.get(KeyBindings.INVENTORY), gamepadJustPressed(gamepadBinds.buttonFor(KeyBindings.INVENTORY)));
             mergeKey(GLFW_KEY_ESCAPE, gamepadJustPressed(GLFW_GAMEPAD_BUTTON_B) || gamepadJustPressed(GLFW_GAMEPAD_BUTTON_START));
         }
 
@@ -214,6 +239,13 @@ public class Input {
         return jid >= 0 ? glfwGetGamepadName(jid) : null;
     }
 
+    /** Returns the most recently pressed gamepad button (for GamepadBindings capture) and clears it. */
+    public int consumeLastGamepadButtonPressed() {
+        int b = lastGamepadButtonPressed;
+        lastGamepadButtonPressed = -1;
+        return b;
+    }
+
     private static int findGamepad() {
         for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; jid++) {
             if (glfwJoystickPresent(jid) && glfwJoystickIsGamepad(jid)) {
@@ -224,11 +256,12 @@ public class Input {
     }
 
     private boolean gamepadDown(int button) {
-        return gamepadButtonsDown[button];
+        return button >= 0 && button < gamepadButtonsDown.length && gamepadButtonsDown[button];
     }
 
     private boolean gamepadJustPressed(int button) {
-        return gamepadButtonsDown[button] && !gamepadButtonsPrev[button];
+        return button >= 0 && button < gamepadButtonsDown.length
+                && gamepadButtonsDown[button] && !gamepadButtonsPrev[button];
     }
 
     /** OR's a virtual press into this frame's key state; never clears one (see the keysDownReal split above). */
@@ -252,6 +285,14 @@ public class Input {
         mouseX = clamp(mouseX + dx * CURSOR_SPEED_PX_PER_SEC * dt, 0, w[0]);
         mouseY = clamp(mouseY + dy * CURSOR_SPEED_PX_PER_SEC * dt, 0, h[0]);
         glfwSetCursorPos(windowHandle, mouseX, mouseY);
+        // Also resync lastMouseX/Y so the *next* update() doesn't read this jump
+        // as real mouse motion - without this, the gap between the position we
+        // just set and the stale lastMouseX/Y (only update() advances those)
+        // would sit there compounding every frame the GUI stayed open, then
+        // surface as a violent camera snap the moment the cursor re-captures
+        // for gameplay.
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
     }
 
     private static double clamp(double v, double lo, double hi) {

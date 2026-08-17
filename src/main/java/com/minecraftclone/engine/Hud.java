@@ -1,6 +1,7 @@
 package com.minecraftclone.engine;
 
 import com.minecraftclone.Settings;
+import com.minecraftclone.engine.GamepadBindings;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.GuiTextures;
@@ -723,7 +724,8 @@ public class Hud {
         }
 
         // One row per entry in the active tab. The Controls tab shows the
-        // keybind list; the other two show their Settings rows.
+        // keybind list, Controller shows the gamepad-binding list, the rest
+        // show their Settings rows.
         int rows = settingsRowsForTab(selectedTab);
         if (selectedTab == Settings.TAB_CONTROLS) {
             for (int action = 0; action < rows; action++) {
@@ -736,6 +738,19 @@ public class Hud {
                 String keyText = capturing ? "?" : KeyBindings.keyName(settings.getKeyBinds().get(action));
                 float valueWidth = text.measure(keyText, size);
                 drawTextAt(keyText, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                        capturing ? highlight : idleValue);
+            }
+        } else if (selectedTab == Settings.TAB_CONTROLLER) {
+            for (int local = 0; local < rows; local++) {
+                float baseline = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H + 0.013f;
+                boolean selected = local == selectedIndex;
+                boolean capturing = local == capturingAction;
+                Vector4f rowColor = selected || capturing ? highlight : idle;
+                drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+                drawTextAt(GamepadBindings.name(local), left + SETTINGS_LEFT_PAD, baseline, size, rowColor);
+                String buttonText = capturing ? "?" : GamepadBindings.buttonName(settings.getGamepadBinds().get(local));
+                float valueWidth = text.measure(buttonText, size);
+                drawTextAt(buttonText, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
                         capturing ? highlight : idleValue);
             }
         } else {
@@ -752,8 +767,9 @@ public class Hud {
             }
         }
 
-        // Sliders for the range rows of the active (non-Controls) tab.
-        if (selectedTab != Settings.TAB_CONTROLS) {
+        // Sliders for the range rows of the active tab (Controls/Controller show
+        // keybind/gamepad-binding lists instead, no sliders).
+        if (selectedTab != Settings.TAB_CONTROLS && selectedTab != Settings.TAB_CONTROLLER) {
             float[] cx = settingsControlX();
             lineShader.bind();
             lineShader.setUniform("projection", identity);
@@ -801,7 +817,7 @@ public class Hud {
             lineShader.unbind();
         }
 
-        drawCenteredText(selectedTab == Settings.TAB_CONTROLS
+        drawCenteredText(selectedTab == Settings.TAB_CONTROLS || selectedTab == Settings.TAB_CONTROLLER
                         ? "Click/Enter: rebind    Tab: next section    Esc: close"
                         : "Click/Enter: toggle or adjust    Tab: next section    Esc: close",
                 0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
@@ -993,11 +1009,14 @@ public class Hud {
 
         glEnable(GL_DEPTH_TEST);
     }
-    /** Number of interactive rows for a settings tab (keybind actions on Controls, Settings rows elsewhere). */
-    private static int settingsRowsForTab(int tab) {        return tab == Settings.TAB_CONTROLS ? KeyBindings.COUNT : Settings.tabRowCount(tab);
+    /** Number of interactive rows for a settings tab (keybind/gamepad-binding actions on Controls/Controller, Settings rows elsewhere). */
+    private static int settingsRowsForTab(int tab) {
+        if (tab == Settings.TAB_CONTROLS) return KeyBindings.COUNT;
+        if (tab == Settings.TAB_CONTROLLER) return GamepadBindings.COUNT;
+        return Settings.tabRowCount(tab);
     }
 
-    /** The Settings row index shown as local row {@code local} on {@code tab} (only valid for non-Controls tabs). */
+    /** The Settings row index shown as local row {@code local} on {@code tab} (only valid for plain Settings tabs). */
     private static int settingsRowForTab(int tab, int local) {
         return Settings.rowInTab(tab, local);
     }
@@ -1111,7 +1130,8 @@ public class Hud {
     /** If the mouse is over a range row's slider track, the click fraction (0..1); otherwise -1. */
     public float settingsTrackAt(float logicalX, float logicalY, int tab) {
         int row = settingsRowAt(logicalX, logicalY, tab);
-        if (row < 0 || tab == Settings.TAB_CONTROLS || Settings.isToggle(settingsRowForTab(tab, row))) return -1f;
+        if (row < 0 || tab == Settings.TAB_CONTROLS || tab == Settings.TAB_CONTROLLER
+                || Settings.isToggle(settingsRowForTab(tab, row))) return -1f;
         float[] cx = settingsControlX();
         if (logicalX < cx[0] - 0.012f || logicalX > cx[1] + 0.012f) return -1f;
         return settingsSliderAt(logicalX, row, tab);

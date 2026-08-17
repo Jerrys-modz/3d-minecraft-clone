@@ -234,6 +234,29 @@ class SettingsTest {
     }
 
     @Test
+    void controllerTabHasNoSettingsRowsOfItsOwn() {
+        // Same shape as Controls: it shows GamepadBindings' own list instead of
+        // any Settings row, so it contributes nothing to the row-count/tab math.
+        assertEquals(0, Settings.tabRowCount(Settings.TAB_CONTROLLER));
+    }
+
+    @Test
+    void gamepadBindingsPersistThroughSaveAndLoad() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Settings s = new Settings();
+            s.getGamepadBinds().set(0, org.lwjgl.glfw.GLFW.GLFW_GAMEPAD_BUTTON_Y); // JUMP -> Y
+            s.save(file);
+
+            Settings loaded = Settings.load(file);
+            assertEquals(org.lwjgl.glfw.GLFW.GLFW_GAMEPAD_BUTTON_Y,
+                    loaded.getGamepadBinds().buttonFor(com.minecraftclone.engine.KeyBindings.JUMP));
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
     void tabsCoverAllRowsWithoutOverlap() {
         int seen = 0;
         for (int tab = 0; tab < Settings.TAB_COUNT; tab++) {
