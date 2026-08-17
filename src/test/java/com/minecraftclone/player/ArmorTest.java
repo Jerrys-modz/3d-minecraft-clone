@@ -87,6 +87,31 @@ class ArmorTest {
     }
 
     @Test
+    void furTiersGetWarmAndTougherAsTheyGetRarer() {
+        // Warmth climbs with the tier: sheep wool < wolf pelt < polar bear hide.
+        float fur = Armor.totalWarmth(BlockType.FUR_HELMET, BlockType.FUR_CHESTPLATE,
+                BlockType.FUR_LEGGINGS, BlockType.FUR_BOOTS);
+        float wolf = Armor.totalWarmth(BlockType.WOLF_HELMET, BlockType.WOLF_CHESTPLATE,
+                BlockType.WOLF_LEGGINGS, BlockType.WOLF_BOOTS);
+        float bear = Armor.totalWarmth(BlockType.BEAR_HELMET, BlockType.BEAR_CHESTPLATE,
+                BlockType.BEAR_LEGGINGS, BlockType.BEAR_BOOTS);
+        assertTrue(fur < wolf && wolf < bear, "warmth: fur < wolf < bear");
+        assertEquals(0f, Armor.coldMultiplier(bear), 1e-6f, "a full bear set fully shrugs off the cold");
+
+        // Defense climbs with the tier too - bear hide is tough.
+        int furDefense = Armor.totalDefense(BlockType.FUR_HELMET, BlockType.FUR_CHESTPLATE,
+                BlockType.FUR_LEGGINGS, BlockType.FUR_BOOTS);
+        int wolfDefense = Armor.totalDefense(BlockType.WOLF_HELMET, BlockType.WOLF_CHESTPLATE,
+                BlockType.WOLF_LEGGINGS, BlockType.WOLF_BOOTS);
+        int bearDefense = Armor.totalDefense(BlockType.BEAR_HELMET, BlockType.BEAR_CHESTPLATE,
+                BlockType.BEAR_LEGGINGS, BlockType.BEAR_BOOTS);
+        assertTrue(furDefense < wolfDefense && wolfDefense < bearDefense, "defense: fur < wolf < bear");
+        int fullIron = Armor.totalDefense(BlockType.IRON_HELMET, BlockType.IRON_CHESTPLATE,
+                BlockType.IRON_LEGGINGS, BlockType.IRON_BOOTS);
+        assertTrue(bearDefense < fullIron, "even a bear set stays weaker than full iron");
+    }
+
+    @Test
     void armorIsNotStackable() {
         assertEquals(1, Inventory.maxStack(BlockType.IRON_HELMET));
         assertEquals(1, Inventory.maxStack(BlockType.DIAMOND_BOOTS));
