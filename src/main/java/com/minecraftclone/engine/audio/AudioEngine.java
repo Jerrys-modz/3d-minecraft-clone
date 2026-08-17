@@ -220,6 +220,14 @@ public class AudioEngine {
      * a non-zero {@code amount} (0..1) starts/continues the loop at that volume,
      * zero stops it. Called every frame with the current weather's intensity, so
      * the loop follows the weather and the ambient volume slider live.
+     * <p>
+     * Only the gain is touched on every call - {@code alSourcePlay} restarts
+     * playback from the beginning even on a source that's already playing, so
+     * calling it unconditionally every frame (as this used to) retriggered the
+     * "seamless" loop from sample 0 some 60 times a second instead of ever
+     * letting it actually play: a harsh, clicking buzz instead of a smooth
+     * hiss. The buffer/looping/play setup now only runs once, on the frame
+     * playback actually starts (stopped -&gt; playing), same as any other loop.
      */
     public void setWeatherAmbience(float amount) {
         if (!enabled || weatherAmbientSource == 0) return;
@@ -227,10 +235,13 @@ public class AudioEngine {
             AL10.alSourceStop(weatherAmbientSource);
             return;
         }
+        AL10.alSourcef(weatherAmbientSource, AL10.AL_GAIN, clampVolume(amount) * categoryVolume(SoundCategory.AMBIENT));
+        if (AL10.alGetSourcei(weatherAmbientSource, AL10.AL_SOURCE_STATE) == AL10.AL_PLAYING) {
+            return; // already looping - just the gain update above, don't restart it
+        }
         Integer buffer = fixedBuffers.get(SoundEvent.RAIN);
         AL10.alSourcei(weatherAmbientSource, AL10.AL_SOURCE_RELATIVE, AL10.AL_TRUE);
         AL10.alSource3f(weatherAmbientSource, AL10.AL_POSITION, 0f, 0f, 0f);
-        AL10.alSourcef(weatherAmbientSource, AL10.AL_GAIN, clampVolume(amount) * categoryVolume(SoundCategory.AMBIENT));
         if (buffer != null) {
             AL10.alSourcei(weatherAmbientSource, AL10.AL_BUFFER, buffer);
         }
