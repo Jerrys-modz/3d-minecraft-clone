@@ -852,7 +852,7 @@ public class Main {
             player.getCamera().setYaw(0f);
             player.getCamera().setPitch(0f);
             System.out.println("Autotest ocean cliff: deep(" + bestX + "," + bestZ + ")=" + bestDeep
-                    + " shallow(" + (bestX + 4) + "," + bestZ + ")=" + bestShallow
+                    + " shallow(" + (bestX + 2) + "," + bestZ + ")=" + bestShallow
                     + " drop=" + (bestShallow - bestDeep) + ", player at y " + (bestDeep + 1.5f));
         }
         // Opt-in autotest hook: open a furnace mid-smelt (partially burned fuel,
@@ -2165,6 +2165,16 @@ public class Main {
             boolean overlayFull = world.getOverlay(p.x, p.y, p.z) != BlockType.AIR;
             boolean blocked = heldItem.isSubmersible() ? (targetIsFluid && overlayFull) : false;
             boolean intoFluid = heldItem.isSubmersible() && targetIsFluid && !overlayFull;
+            // For doors, validate the upper cell before consuming the item.
+            if (heldItem == BlockType.DOOR && !blocked && !intersectsPlayer(player, p)) {
+                if (p.y + 1 >= Chunk.HEIGHT) {
+                    blocked = true;
+                } else if (world.getBlock(p.x, p.y + 1, p.z) != BlockType.AIR) {
+                    blocked = true;
+                } else if (intersectsPlayer(player, new Vector3i(p.x, p.y + 1, p.z))) {
+                    blocked = true;
+                }
+            }
             if (!blocked && !intersectsPlayer(player, p)) {
                 boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
                 if (placed) {
@@ -2186,8 +2196,9 @@ public class Main {
                                 ? (front.x >= 0 ? 3 : 2)
                                 : (front.z >= 0 ? 1 : 0));
                         world.setBlockOrientation(p.x, p.y, p.z, facing);
-                        // A door is 2 blocks tall: also place the top half.
-                        if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.AIR) {
+                        // A door is 2 blocks tall: place the top half unconditionally
+                        // (validation already ensured it's safe).
+                        if (heldItem == BlockType.DOOR) {
                             world.setBlock(p.x, p.y + 1, p.z, BlockType.DOOR);
                             world.setBlockOrientation(p.x, p.y + 1, p.z, facing);
                         }

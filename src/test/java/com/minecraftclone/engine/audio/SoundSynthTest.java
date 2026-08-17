@@ -140,4 +140,14 @@ class SoundSynthTest {
             assertEquals(Math.round(s[i] * 0.5f), half[i], 1);
         }
     }
+
+    @Test
+    void bubblesLengthMatchesRequestedDurationEvenWhenShorterThanSingleChirp() {
+        // Regression test: when the requested duration is shorter than 0.03s
+        // (the minimum chirp duration), the bubbles method should still
+        // return a buffer matching the requested duration, not overflow.
+        short[] s = SoundSynth.bubbles(42L, 0.02f, 3, 0.5f);
+        assertEquals((int) (0.02f * SoundSynth.SAMPLE_RATE), s.length,
+                "bubbles should return exactly the requested duration even when shorter than a chirp");
+    }
 }

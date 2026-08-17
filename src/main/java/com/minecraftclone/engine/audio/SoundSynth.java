@@ -89,10 +89,17 @@ public final class SoundSynth {
             float startFreq = 250f + rnd.nextFloat() * 500f;
             // Rising pitch: a bubble nearing the surface, not a random blip.
             float endFreq = startFreq + 300f + rnd.nextFloat() * 700f;
-            float startT = rnd.nextFloat() * Math.max(0.0001f, durationSeconds - chirpDur);
+            // Clamp startT so the chirp fits entirely within the requested duration.
+            float maxStartT = Math.max(0f, durationSeconds - chirpDur);
+            float startT = rnd.nextFloat() * Math.max(0.0001f, maxStartT);
             float chirpAmp = amp * (0.6f + rnd.nextFloat() * 0.4f);
             short[] chirp = tone(startFreq, endFreq, chirpDur, chirpAmp, 0f);
-            out = mix(out, concat(silence(startT), chirp));
+            // Build the layer (silence + chirp), but truncate it to fit within out.length.
+            short[] layer = concat(silence(startT), chirp);
+            if (layer.length > out.length) {
+                layer = java.util.Arrays.copyOf(layer, out.length);
+            }
+            out = mix(out, layer);
         }
         return out;
     }
