@@ -1545,8 +1545,21 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
-    /** Draws the furnace's burn flame and smelting progress arrow (both driven by the furnace state). */
+    /**
+     * Draws the furnace's burn flame and smelting progress arrow (both driven
+     * by the furnace state). Binds {@link #lineShader} itself rather than
+     * assuming it's already active - the textured-GUI panel path (see
+     * {@link #flushGuiQuads}) explicitly unbinds whatever shader it used
+     * right before this runs, so without this the color/quad uniform calls
+     * below landed on no program at all and the flame/arrow silently stopped
+     * drawing.
+     */
     private void renderFurnaceProgress(Furnace furnace) {
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
         // Flame track behind the flame itself.
         furnaceDeco.clear();
         float flameHalf = 0.0225f;
@@ -1584,6 +1597,8 @@ public class Hud {
             lineShader.setUniform("color", new Vector4f(0.95f, 0.95f, 0.95f, 1f));
             inventoryPanel.render();
         }
+
+        lineShader.unbind();
     }
 
     /** Draws the cursor stack (icon + count) at the given logical position, above everything else. */

@@ -806,6 +806,20 @@ public class Main {
                     + " shallow(" + (bestX + 4) + "," + bestZ + ")=" + bestShallow
                     + " drop=" + (bestShallow - bestDeep) + ", player at y " + (bestDeep + 1.5f));
         }
+        // Opt-in autotest hook: open a furnace mid-smelt (partially burned fuel,
+        // partway through smelting) so the flame/progress-arrow decorations can
+        // be screenshotted in the actual container GUI screen - regression
+        // coverage for Hud#renderFurnaceProgress silently no-op'ing when it ran
+        // right after the textured-GUI panel path left no shader bound.
+        if (System.getenv("MCCLONE_AUTOTEST_FURNACE_GUI") != null && started[0]) {
+            Furnace furnace = world.getOrCreateFurnace(0, 5, 0);
+            furnace.setSlot(Furnace.SLOT_INPUT, BlockType.IRON_ORE, 8);
+            furnace.setSlot(Furnace.SLOT_FUEL, BlockType.COAL, 8);
+            furnace.tick(4f);
+            activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, furnace);
+            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+            System.out.println("Autotest furnace GUI: burn=" + furnace.burnFraction() + " progress=" + furnace.progressFraction());
+        }
         // Opt-in autotest hook: open the player's own inventory screen, equipping a
         // full iron set (plus a couple of bag items) so the armor column renders.
         if (System.getenv("MCCLONE_AUTOTEST_INVENTORY") != null && started[0]) {
