@@ -98,6 +98,16 @@ public class Main {
 
     private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
     private static final float SWIM_STROKE_INTERVAL = 0.55f; // seconds between stroke sounds while swimming and moving
+    // Minimum time between two splash sounds. isSubmerged() samples a single
+    // block at the eye position, so standing/floating with your eye height
+    // sitting almost exactly on a water surface's block boundary - e.g. right
+    // after breaking the block that was keeping you just above it, or
+    // treading water at the surface - lets ordinary per-frame physics noise
+    // walk that sample back and forth across the boundary every frame. Without
+    // a cooldown, each flicker fired its own splash, which sounded like a
+    // continuous harsh clicking rather than the occasional in/out splash it
+    // was meant to be.
+    private static final float SPLASH_COOLDOWN_SECONDS = 0.25f;
 
     /** Procedurally-generated GUI art (light/dark panels and slots), shared by every screen. */
     private GuiTextures guiTextures;
@@ -499,6 +509,7 @@ public class Main {
         float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
         float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
         boolean[] wasSubmerged = {false}; // last frame's Player#isSubmerged(), to fire a splash sound only on the change
+        float[] splashCooldown = {0f}; // time until another splash sound is allowed - see SPLASH_COOLDOWN_SECONDS
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
         System.out.println("          F to fly (double-tap W also takes off in creative and boosts speed");
@@ -1137,13 +1148,21 @@ public class Main {
 
                 if (player.hasJustJumped()) audio.play(SoundEvent.JUMP);
                 if (player.hasJustLanded()) audio.play(SoundEvent.LAND);
+                splashCooldown[0] = Math.max(0f, splashCooldown[0] - dt);
                 if (player.isSubmerged() != wasSubmerged[0]) {
-                    audio.play(SoundEvent.SPLASH);
                     wasSubmerged[0] = player.isSubmerged();
-                    // Diving in (or surfacing) already just played a splash this frame -
-                    // without this, swimStrokeTimer sitting at 0 (reset while not
-                    // swimming) would immediately fire a second, redundant one below.
-                    swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
+                    // Cooldown-gated: see SPLASH_COOLDOWN_SECONDS - the raw signal
+                    // can flicker several times a frame-group near a surface
+                    // boundary, but the actual splash sound should only fire for
+                    // the first crossing in a burst.
+                    if (splashCooldown[0] <= 0f) {
+                        audio.play(SoundEvent.SPLASH);
+                        splashCooldown[0] = SPLASH_COOLDOWN_SECONDS;
+                        // Diving in (or surfacing) already just played a splash this frame -
+                        // without this, swimStrokeTimer sitting at 0 (reset while not
+                        // swimming) would immediately fire a second, redundant one below.
+                        swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
+                    }
                 }
                 // A footstep every FOOTSTEP_INTERVAL seconds while walking/
                 // sprinting on the ground - timed off a countdown rather than a
