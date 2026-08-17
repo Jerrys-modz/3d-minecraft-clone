@@ -1,8 +1,17 @@
 package com.minecraftclone.world;
 
-/** Read access to blocks by absolute world coordinates, used by chunk mesh building for neighbor lookups. */
-public interface BlockAccessor {
-    BlockType getBlock(int worldX, int worldY, int worldZ);
+    /** Read access to blocks by absolute world coordinates, used by chunk mesh building for neighbor lookups. */
+    public interface BlockAccessor {
+        BlockType getBlock(int worldX, int worldY, int worldZ);
+
+        /**
+         * The per-block facing hint at this position (0 if unset) - used by
+         * stair/fence collision to orient their boxes. Defaulted so simple
+         * test stubs don't need to know about it.
+         */
+        default byte getBlockOrientation(int worldX, int worldY, int worldZ) {
+            return 0;
+        }
 
     /**
      * The fluid flow "level" at this position: 0 for a cell right next to its

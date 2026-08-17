@@ -1,6 +1,7 @@
 package com.minecraftclone.world;
 
 import com.minecraftclone.engine.graphics.TextureAtlas;
+import com.minecraftclone.util.AABB;
 
 /**
  * All placeable/generatable block types. Each entry defines which tile of
@@ -193,13 +194,18 @@ public enum BlockType {
 
     // Stairs: partial-cube blocks with a stepped profile, facing the direction
     // they were placed (their orientation byte). Stone and planks match their
-    // full-cube materials' tiles; collision is the full cell (walk-up stepping
-    // is not modelled - see Notes & Simplifications).
-    STONE_STAIRS(130, 4, true, false),
-    PLANKS_STAIRS(131, 11, true, false),
+    // Stairs: partial-cube blocks with a stepped profile, facing the direction
+    // they were placed (their orientation byte). Stone and planks match their
+    // full-cube materials' tiles. Collision is stepped: the low front step and
+    // the raised back step each get their own box, so a player can walk up
+    // stairs block by block.
+    STONE_STAIRS(130, 4, true, false, 1.0f),
+    PLANKS_STAIRS(131, 11, true, false, 1.0f),
     // Fences: thin posts with rails that auto-connect to neighbouring fences
-    // and solid blocks. One tile (planks) for the whole mesh.
-    WOODEN_FENCE(132, 11, false, true);
+    // and solid blocks. One tile (planks) for the whole mesh. Collision is a
+    // 1.5-block-tall box (the post is taller than a block), so neither the
+    // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
+    WOODEN_FENCE(132, 11, false, true, 1.5f);
 
     public final byte id;
     public final boolean solid;
@@ -286,8 +292,8 @@ public enum BlockType {
         this.collisionHeight = slab ? 0.5f : 1.0f;
     }
 
-    /** Stairs or fence: a partial-cube block with custom meshing and full-cell collision. */
-    BlockType(int id, int tile, boolean stair, boolean fence) {
+    /** Stairs or fence: a partial-cube block with custom meshing and custom collision boxes. */
+    BlockType(int id, int tile, boolean stair, boolean fence, float collisionHeight) {
         this.id = (byte) id;
         this.solid = true;
         this.transparent = false;
@@ -303,7 +309,7 @@ public enum BlockType {
         this.foodValue = 0;
         this.isItem = false;
         this.lightLevel = 0;
-        this.collisionHeight = 1.0f;
+        this.collisionHeight = collisionHeight;
     }
 
     /** Cross-shaped (billboard-X) world decoration block, e.g. grass/flowers/berry bush: one atlas tile, never collides. */
@@ -487,6 +493,30 @@ public enum BlockType {
     /** True for any partial-cube block that needs its own meshing (stairs, fences). */
     public boolean isPartialCube() {
         return stair || fence;
+    }
+
+    /**
+     * The collision boxes of this block occupying the cell at {@code (x,y,z)},
+     * given its {@code orientation} byte. Full cubes and slabs return a single
+     * box sized by {@link #collisionHeight}; stairs return two stepped boxes
+     * (a full-width low step and a raised back-half step, matching their mesh)
+     * so a player can climb them; a fence returns a single 1.5-block-tall box
+     * so nothing can jump over it.
+     */
+    public AABB[] collisionBoxes(int x, int y, int z, byte orientation) {
+        if (stair) {
+            // The raised (back) half sits opposite the facing, same as the mesh.
+            float loX = x, hiX = x + 1, loZ = z, hiZ = z + 1;
+            if (orientation == 2) hiX = x + 0.5f;        // facing +X: raised on -X half
+            else if (orientation == 3) loX = x + 0.5f;   // facing -X: raised on +X half
+            else if (orientation == 0) hiZ = z + 0.5f;   // facing +Z: raised on -Z half
+            else if (orientation == 1) loZ = z + 0.5f;   // facing -Z: raised on +Z half
+            return new AABB[]{
+                    new AABB(x, y, z, x + 1, y + 0.5f, z + 1),        // low step
+                    new AABB(loX, y + 0.5f, loZ, hiX, y + 1, hiZ),    // raised step
+            };
+        }
+        return new AABB[]{new AABB(x, y, z, x + 1, y + collisionHeight, z + 1)};
     }
 
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */
