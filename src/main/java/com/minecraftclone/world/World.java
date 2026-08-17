@@ -1286,9 +1286,10 @@ public class World implements BlockAccessor {
             Mob mob = it.next();
             float dx = mob.position.x - playerPos.x;
             float dz = mob.position.z - playerPos.z;
-            // Hostiles are gone by daylight (they burn/melt at dawn); everything
-            // far away or fallen out of the world despawns.
-            boolean gone = mob.isHostile() && !night;
+            // The undead are gone by daylight (they burn/melt at dawn); everything
+            // far away or fallen out of the world despawns. Wild animals (wolves,
+            // bears) don't have the dawn-despawn flag, so they stay out by day.
+            boolean gone = mob.isHostile() && mob.type.dawnDespawns && !night;
             if (gone || dx * dx + dz * dz > despawnSq || mob.position.y < -64f) {
                 it.remove();
                 continue;
@@ -1510,7 +1511,7 @@ public class World implements BlockAccessor {
         arrows.add(new ArrowEntity(sx, sy, sz, dx / len * speed, dy / len * speed, dz / len * speed));
     }
 
-    /** Spawns one mob on a random grass surface within range; does nothing if no spot qualifies. */
+    /** Spawns one mob on a random grass/snow surface within range; does nothing if no spot qualifies. */
     private void trySpawnMob(Random rnd, float playerWorldX, float playerWorldZ) {
         int radius = (int) MOB_SPAWN_RADIUS;
         for (int attempt = 0; attempt < 6; attempt++) {
@@ -1519,9 +1520,10 @@ public class World implements BlockAccessor {
             if (!isFullyGenerated(x, z)) continue;
             int y = getSurfaceHeight(x, z);
             if (y < 1 || y >= Chunk.HEIGHT - 1) continue;
-            if (getBlock(x, y, z) != BlockType.GRASS) continue;
+            BlockType surface = getBlock(x, y, z);
+            if (surface != BlockType.GRASS && surface != BlockType.SNOW) continue;
             if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
-            Mob.Type type = Mob.Type.values()[rnd.nextInt(Mob.Type.values().length)];
+            Mob.Type type = pickSurfaceMobType(rnd, getBiome(x, z));
             mobs.add(newMob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
             return;
         }
@@ -1540,6 +1542,26 @@ public class World implements BlockAccessor {
             if (m.id == id) return m;
         }
         return null;
+    }
+
+    /**
+     * Picks which mob fills a surface-spawn slot. The original common pool (pigs,
+     * cows, sheep, zombies, skeletons) stays as it was; the wild predators are
+     * rare, biome-tied bonuses - a wolf turns up in wooded biomes now and then,
+     * a polar bear very rarely in the frozen wastes - so the better fur pelts are
+     * harder to come by.
+     */
+    static Mob.Type pickSurfaceMobType(Random rnd, TerrainGenerator.Biome biome) {
+        float roll = rnd.nextFloat();
+        boolean woods = biome == TerrainGenerator.Biome.FOREST || biome == TerrainGenerator.Biome.TAIGA
+                || biome == TerrainGenerator.Biome.CHERRY_GROVE || biome == TerrainGenerator.Biome.FLOWER_MEADOW;
+        boolean frozen = biome == TerrainGenerator.Biome.SNOWY || biome == TerrainGenerator.Biome.TUNDRA
+                || biome == TerrainGenerator.Biome.FROZEN_OCEAN || biome == TerrainGenerator.Biome.MOUNTAIN;
+        if (frozen && roll < 0.04f) return Mob.Type.POLAR_BEAR; // rare, and dangerous
+        if (woods && roll < 0.14f) return Mob.Type.WOLF;        // uncommon
+        Mob.Type[] common = {Mob.Type.PIG, Mob.Type.COW, Mob.Type.SHEEP,
+                Mob.Type.ZOMBIE, Mob.Type.SKELETON};
+        return common[rnd.nextInt(common.length)];
     }
 
     /**
@@ -1573,6 +1595,11 @@ public class World implements BlockAccessor {
             int count = 1 + rnd.nextInt(mob.type == Mob.Type.SHEEP ? 2 : 3);
             spawnItem((int) Math.floor(mob.position.x), (int) Math.floor(mob.position.y),
                     (int) Math.floor(mob.position.z), drop, count, rnd);
+            // Sheep are woolly: killing one also drops wool to make fur armor with.
+            if (mob.type == Mob.Type.SHEEP) {
+                spawnItem((int) Math.floor(mob.position.x), (int) Math.floor(mob.position.y),
+                        (int) Math.floor(mob.position.z), BlockType.WOOL, 1 + rnd.nextInt(3), rnd);
+            }
         }
         return killed;
     }

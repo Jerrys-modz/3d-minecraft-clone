@@ -24,11 +24,17 @@ public class Mob {
 
     /** Mob kinds, with their dimensions, walking speed, hit points, and combat role. */
     public enum Type {
-        PIG(0.9f, 0.9f, 1.6f, 10f, false, 0f),
-        COW(1.0f, 1.0f, 1.4f, 10f, false, 0f),
-        SHEEP(0.9f, 0.9f, 1.4f, 10f, false, 0f),
-        ZOMBIE(0.7f, 1.8f, 2.0f, 20f, true, 4f),
-        SKELETON(0.6f, 1.8f, 2.2f, 20f, true, 3f);
+        PIG(0.9f, 0.9f, 1.6f, 10f, false, 0f, false),
+        COW(1.0f, 1.0f, 1.4f, 10f, false, 0f, false),
+        SHEEP(0.9f, 0.9f, 1.4f, 10f, false, 0f, false),
+        ZOMBIE(0.7f, 1.8f, 2.0f, 20f, true, 4f, true),
+        SKELETON(0.6f, 1.8f, 2.2f, 20f, true, 3f, true),
+        // Wild predators - hostile like monsters, but biome-tied and rarer: a
+        // wolf stalks forests, a polar bear owns the snowy wastes. Both drop the
+        // pelts that the higher fur-armor tiers are made from, and being wild
+        // animals (not undead), they stay out by day.
+        WOLF(0.8f, 0.8f, 1.4f, 14f, true, 3f, false),
+        POLAR_BEAR(1.4f, 1.2f, 1.4f, 30f, true, 6f, false);
 
         public final float width;     // x/z footprint
         public final float height;    // full body height
@@ -36,14 +42,17 @@ public class Mob {
         public final float maxHealth;
         public final boolean hostile;
         public final float attackDamage;
+        /** True if this hostile melts away at dawn (undead); wild animals don't. */
+        public final boolean dawnDespawns;
 
-        Type(float width, float height, float walkSpeed, float maxHealth, boolean hostile, float attackDamage) {
+        Type(float width, float height, float walkSpeed, float maxHealth, boolean hostile, float attackDamage, boolean dawnDespawns) {
             this.width = width;
             this.height = height;
             this.walkSpeed = walkSpeed;
             this.maxHealth = maxHealth;
             this.hostile = hostile;
             this.attackDamage = attackDamage;
+            this.dawnDespawns = dawnDespawns;
         }
     }
 
@@ -134,6 +143,8 @@ public class Mob {
             case SHEEP -> BlockType.MUTTON;
             case ZOMBIE -> BlockType.ROTTEN_FLESH;
             case SKELETON -> BlockType.BONES;
+            case WOLF -> BlockType.WOLF_PELT;
+            case POLAR_BEAR -> BlockType.BEAR_HIDE;
         };
     }
 

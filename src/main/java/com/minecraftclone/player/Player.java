@@ -287,12 +287,14 @@ public class Player {
             stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
-            // Cold exposure: weather strength, cut down by a roof overhead and
-            // nearly eliminated next to a fire (a lightning-struck tree, or any
-            // fire you huddle beside).
+            // Cold exposure: weather strength, cut down by a roof overhead, nearly
+            // eliminated next to a fire (a lightning-struck tree, or any fire you
+            // huddle beside), and scaled by how warm your armor is. Insulating
+            // fur/wool armor keeps you warm; bare metal armor doesn't.
             float coldness = coldFactor;
             if (hasRoofAbove(world)) coldness *= 0.15f;
             if (fireNearby(world)) coldness *= 0.15f;
+            coldness *= Armor.coldMultiplier(inventory.totalArmorWarmth());
             stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness);
         }
         lastFallImpactSpeed = 0f;
