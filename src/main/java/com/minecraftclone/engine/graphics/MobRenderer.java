@@ -78,6 +78,22 @@ public class MobRenderer {
                     new Part(0.065f, 0.20f, 0.065f, -0.28f, 0.20f, 0.18f, LEG_FACES),
                     new Part(0.065f, 0.20f, 0.065f, 0.28f, 0.20f, 0.18f, LEG_FACES),
             };
+            case WOLF -> new Part[]{ // a lean, low-slung quadruped
+                    new Part(0.36f, 0.20f, 0.26f, 0f, 0.44f, 0f, BODY_FACES),
+                    new Part(0.20f, 0.15f, 0.18f, 0f, 0.68f, 0.30f, HEAD_FACES),
+                    new Part(0.06f, 0.20f, 0.06f, -0.24f, 0.20f, -0.15f, LEG_FACES),
+                    new Part(0.06f, 0.20f, 0.06f, 0.24f, 0.20f, -0.15f, LEG_FACES),
+                    new Part(0.06f, 0.20f, 0.06f, -0.24f, 0.20f, 0.15f, LEG_FACES),
+                    new Part(0.06f, 0.20f, 0.06f, 0.24f, 0.20f, 0.15f, LEG_FACES),
+            };
+            case POLAR_BEAR -> new Part[]{ // a big, heavy quadruped
+                    new Part(0.48f, 0.30f, 0.34f, 0f, 0.52f, 0f, BODY_FACES),
+                    new Part(0.26f, 0.20f, 0.23f, 0f, 0.78f, 0.34f, HEAD_FACES),
+                    new Part(0.09f, 0.22f, 0.09f, -0.30f, 0.22f, -0.20f, LEG_FACES),
+                    new Part(0.09f, 0.22f, 0.09f, 0.30f, 0.22f, -0.20f, LEG_FACES),
+                    new Part(0.09f, 0.22f, 0.09f, -0.30f, 0.22f, 0.20f, LEG_FACES),
+                    new Part(0.09f, 0.22f, 0.09f, 0.30f, 0.22f, 0.20f, LEG_FACES),
+            };
             case ZOMBIE, SKELETON -> new Part[]{ // humanoid: body, head, two arms, two legs
                     new Part(0.26f, 0.35f, 0.13f, 0f, 0.85f, 0f, BODY_FACES),
                     new Part(0.23f, 0.23f, 0.23f, 0f, 1.40f, 0f, HEAD_FACES),

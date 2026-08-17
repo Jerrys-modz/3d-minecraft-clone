@@ -75,6 +75,19 @@ public final class Armor {
         put(BlockType.FUR_CHESTPLATE, Slot.CHESTPLATE, 2, 1f, 120);
         put(BlockType.FUR_LEGGINGS, Slot.LEGGINGS, 1, 0.85f, 110);
         put(BlockType.FUR_BOOTS, Slot.BOOTS, 1, 0.60f, 80);
+        // Wolf pelt - the second fur tier, from the hostile wolves of the woods
+        // (full set = 3.6 warmth, ~8 defense). Warmer and tougher than sheep wool.
+        put(BlockType.WOLF_HELMET, Slot.HELMET, 2, 0.85f, 160);
+        put(BlockType.WOLF_CHESTPLATE, Slot.CHESTPLATE, 3, 1f, 220);
+        put(BlockType.WOLF_LEGGINGS, Slot.LEGGINGS, 2, 0.90f, 200);
+        put(BlockType.WOLF_BOOTS, Slot.BOOTS, 1, 0.85f, 130);
+        // Polar bear hide - the rarest, warmest, toughest fur tier, from the
+        // great bears of the frozen wastes (full set = 4.0 warmth = the cap, and
+        // ~12 defense - a tough hide even against monsters).
+        put(BlockType.BEAR_HELMET, Slot.HELMET, 3, 1f, 350);
+        put(BlockType.BEAR_CHESTPLATE, Slot.CHESTPLATE, 4, 1f, 480);
+        put(BlockType.BEAR_LEGGINGS, Slot.LEGGINGS, 3, 1f, 430);
+        put(BlockType.BEAR_BOOTS, Slot.BOOTS, 2, 1f, 280);
     }
 
     private static void put(BlockType type, Slot slot, int defense, float warmth, int maxUses) {

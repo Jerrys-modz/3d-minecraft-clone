@@ -54,6 +54,15 @@ public class MobTextures {
     private static final int FACE_DARK = 0x6A584A;
     private static final int EYE = 0x26262B;
 
+    private static final int WOLF_BODY = 0x9A9A9A;
+    private static final int WOLF_DARK = 0x6E6E6E;
+    private static final int WOLF_LIGHT = 0xC6C6C6;
+    private static final int WOLF_BELLY = 0xE0E0E0;
+
+    private static final int BEAR_BODY = 0xE8E8E2;
+    private static final int BEAR_DARK = 0xC8C8BE;
+    private static final int BEAR_NOSE = 0x3A3A3A;
+
     private final Map<Mob.Type, Integer> textureIds = new EnumMap<>(Mob.Type.class);
     private int arrowTextureId = -1;
 
@@ -74,6 +83,8 @@ public class MobTextures {
             case SHEEP -> paintSheep(img, rnd);
             case ZOMBIE -> paintZombie(img, rnd);
             case SKELETON -> paintSkeleton(img, rnd);
+            case WOLF -> paintWolf(img, rnd);
+            case POLAR_BEAR -> paintPolarBear(img, rnd);
         }
         return img;
     }
@@ -162,6 +173,43 @@ public class MobTextures {
         for (int y = 10; y <= 13; y++) for (int x = 0; x <= 15; x++) set(img, x, y, FACE_DARK);
         set(img, 4, 11, EYE); set(img, 11, 11, EYE);
         fill(img, 0, 15, 14, 15, FACE_DARK);       // legs
+    }
+
+    /** A lean grey wolf with a pale belly and muzzle - a forest predator. */
+    private void paintWolf(BufferedImage img, Random rnd) {
+        fill(img, 0, 15, 0, 5, WOLF_BODY);         // body
+        speckle(img, rnd, 0, 15, 0, 5, WOLF_DARK, 0.15f);
+        fill(img, 0, 15, 4, 5, WOLF_BELLY);        // pale belly
+        fill(img, 0, 15, 6, 6, WOLF_LIGHT);        // body top
+        // Head side: grey with a pale jaw and a dark ear line.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(WOLF_BODY, 1f - 0.03f * (y - 7)));
+        }
+        set(img, 13, 8, EYE); set(img, 14, 8, EYE);
+        // Head front: eyes, pale snout, dark nose.
+        for (int y = 10; y <= 13; y++) for (int x = 0; x <= 15; x++) set(img, x, y, WOLF_BODY);
+        set(img, 4, 11, EYE); set(img, 11, 11, EYE);
+        fill(img, 6, 9, 12, 13, WOLF_LIGHT);       // snout
+        set(img, 7, 13, WOLF_DARK); set(img, 8, 13, WOLF_DARK);
+        fill(img, 0, 15, 14, 15, WOLF_DARK);       // legs
+    }
+
+    /** A huge white polar bear with a dark muzzle - the king of the frozen wastes. */
+    private void paintPolarBear(BufferedImage img, Random rnd) {
+        fill(img, 0, 15, 0, 5, BEAR_BODY);         // body
+        speckle(img, rnd, 0, 15, 0, 5, BEAR_DARK, 0.12f);
+        fill(img, 0, 15, 6, 6, BEAR_BODY);         // body top
+        // Head side: white with a dark eye.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(BEAR_BODY, 1f - 0.02f * (y - 7)));
+        }
+        set(img, 13, 8, EYE); set(img, 14, 8, EYE);
+        // Head front: small eyes, big dark nose/muzzle.
+        for (int y = 10; y <= 13; y++) for (int x = 0; x <= 15; x++) set(img, x, y, BEAR_BODY);
+        set(img, 4, 11, EYE); set(img, 11, 11, EYE);
+        fill(img, 5, 10, 12, 13, BEAR_NOSE);       // muzzle
+        set(img, 6, 13, EYE); set(img, 7, 13, EYE); set(img, 8, 13, EYE); set(img, 9, 13, EYE);
+        fill(img, 0, 15, 14, 15, BEAR_DARK);       // legs
     }
 
     /** A moldy zombie: a torn shirt over rotting flesh, with a proper 4-row face. */

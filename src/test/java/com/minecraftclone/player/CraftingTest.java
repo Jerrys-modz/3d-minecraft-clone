@@ -33,6 +33,36 @@ class CraftingTest {
     }
 
     @Test
+    void wolfAndBearArmorCraftFromTheirPelts() {
+        // Chestplate pattern: M.M / MMM / MMM (8 material).
+        BlockType[] wolfGrid = new BlockType[9];
+        wolfGrid[0] = BlockType.WOLF_PELT;
+        wolfGrid[2] = BlockType.WOLF_PELT;
+        wolfGrid[3] = BlockType.WOLF_PELT;
+        wolfGrid[4] = BlockType.WOLF_PELT;
+        wolfGrid[5] = BlockType.WOLF_PELT;
+        wolfGrid[6] = BlockType.WOLF_PELT;
+        wolfGrid[7] = BlockType.WOLF_PELT;
+        wolfGrid[8] = BlockType.WOLF_PELT;
+        Crafting.Recipe wolf = Crafting.match(wolfGrid);
+        assertNotNull(wolf);
+        assertEquals(BlockType.WOLF_CHESTPLATE, wolf.output());
+
+        BlockType[] bearGrid = new BlockType[9];
+        bearGrid[0] = BlockType.BEAR_HIDE;
+        bearGrid[2] = BlockType.BEAR_HIDE;
+        bearGrid[3] = BlockType.BEAR_HIDE;
+        bearGrid[4] = BlockType.BEAR_HIDE;
+        bearGrid[5] = BlockType.BEAR_HIDE;
+        bearGrid[6] = BlockType.BEAR_HIDE;
+        bearGrid[7] = BlockType.BEAR_HIDE;
+        bearGrid[8] = BlockType.BEAR_HIDE;
+        Crafting.Recipe bear = Crafting.match(bearGrid);
+        assertNotNull(bear);
+        assertEquals(BlockType.BEAR_CHESTPLATE, bear.output());
+    }
+
+    @Test
     void shapedTwoPlanksToSticks() {
         BlockType[] grid = new BlockType[9];
         grid[0] = BlockType.PLANKS;
