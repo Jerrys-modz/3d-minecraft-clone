@@ -278,6 +278,13 @@ public class Player {
         // Skip movement while sleeping - player is in bed, time is being skipped
         if (sleeping) {
             lastFallImpactSpeed = 0f;
+            justJumped = false;
+            justLanded = false;
+            movingOnGround = false;
+            swimmingAndMoving = false;
+            inWater = false;
+            swimming = false;
+            submerged = false;
             return;
         }
         if (gameMode.isSpectator()) {
