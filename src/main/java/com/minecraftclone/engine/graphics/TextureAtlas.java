@@ -121,7 +121,11 @@ public class TextureAtlas {
         paintTile(image, 56, rnd, 0xE4E0C8, 0xCFC8A8, true);   // end stone (pale, sandy)
         paintObsidian(image, 57, rnd);
         paintEndPortal(image, 58, rnd);
-        paintBed(image, 59, rnd);
+        // Bed textures: 4 tiles for a proper Minecraft-style bed
+        paintBedTop(image, 60, rnd);    // blanket top (red with pattern)
+        paintBedSide(image, 61, rnd);   // blanket side
+        paintBedFoot(image, 62, rnd);   // foot end (darker)
+        paintBedPillow(image, 63, rnd); // pillow/head end (white with red trim)
 
         // --- Furniture / fixtures ---
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
@@ -1113,6 +1117,107 @@ public class TextureAtlas {
         for (int x = 0; x < 5; x++) {
             for (int y = 0; y < TILE_PX; y++) {
                 img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0xE74C3C, faceShade(x, y)));
+            }
+        }
+    }
+
+    /** Bed blanket top: rich red with a subtle diamond quilt pattern. */
+    private void paintBedTop(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Base red blanket
+        paintNoiseTile(img, index, 0xC0392B, 0x922821, 0.4f, rnd);
+        // Diamond quilt pattern
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // Diamond pattern: alternating light/dark diamonds
+                int dx = x - 8, dy = y - 8;
+                if (dx < 0) dx = -dx;
+                if (dy < 0) dy = -dy;
+                if ((dx + dy) % 4 == 0) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0xA02020, faceShade(x, y)));
+                }
+            }
+        }
+        // Subtle stitch lines
+        for (int i = 2; i < TILE_PX; i += 4) {
+            for (int y = 0; y < TILE_PX; y++) {
+                if (rnd.nextFloat() < 0.3f) {
+                    img.setRGB(ox + i, oy + y, 0xFF000000 | shade(0x8B1C1C, faceShade(i, y)));
+                }
+            }
+        }
+    }
+
+    /** Bed blanket side: red with horizontal stripe detail. */
+    private void paintBedSide(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Base red
+        paintNoiseTile(img, index, 0xB03030, 0x802020, 0.35f, rnd);
+        // Horizontal stripes (quilt effect)
+        for (int y = 0; y < TILE_PX; y++) {
+            if (y % 4 == 0) {
+                for (int x = 0; x < TILE_PX; x++) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0x901818, faceShade(x, y)));
+                }
+            }
+        }
+        // Darker bottom edge
+        for (int y = TILE_PX - 2; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0x701010, faceShade(x, y)));
+            }
+        }
+    }
+
+    /** Bed foot end: dark wood frame with red accent. */
+    private void paintBedFoot(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Dark wood frame
+        paintNoiseTile(img, index, 0x5A4030, 0x3A2820, 0.5f, rnd);
+        // Red accent stripe at top
+        for (int x = 0; x < TILE_PX; x++) {
+            for (int y = 0; y < 3; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0xB02020, faceShade(x, y)));
+            }
+        }
+        // Wood grain lines
+        for (int x = 2; x < TILE_PX; x += 5) {
+            for (int y = 0; y < TILE_PX; y++) {
+                if (rnd.nextFloat() < 0.4f) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0x4A3020, faceShade(x, y)));
+                }
+            }
+        }
+    }
+
+    /** Bed pillow/head end: white pillow with red trim. */
+    private void paintBedPillow(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // White pillow base with subtle texture
+        paintNoiseTile(img, index, 0xF0F0F0, 0xD0D0D0, 0.3f, rnd);
+        // Red trim border
+        for (int i = 0; i < 2; i++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + i, 0xFF000000 | shade(0xC03030, faceShade(x, i)));
+                img.setRGB(ox + x, oy + TILE_PX - 1 - i, 0xFF000000 | shade(0xC03030, faceShade(x, TILE_PX - 1 - i)));
+            }
+            for (int y = 0; y < TILE_PX; y++) {
+                img.setRGB(ox + i, oy + y, 0xFF000000 | shade(0xC03030, faceShade(i, y)));
+                img.setRGB(ox + TILE_PX - 1 - i, oy + y, 0xFF000000 | shade(0xC03030, faceShade(TILE_PX - 1 - i, y)));
+            }
+        }
+        // Pillow puff effect (lighter center)
+        for (int y = 3; y < TILE_PX - 3; y++) {
+            for (int x = 3; x < TILE_PX - 3; x++) {
+                int dx = x - 8, dy = y - 8;
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                if (dist < 6) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | shade(0xFAFAFA, faceShade(x, y)));
+                }
             }
         }
     }

@@ -206,12 +206,13 @@ public enum BlockType {
     // 1.5-block-tall box (the post is taller than a block), so neither the
     // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
     WOODEN_FENCE(132, 11, false, true, 1.5f),
-    // Beds: a placeable sleeping surface. Solid, directional (faces the player),
-    // and has an occupied variant for when a player is sleeping in it. Beds
-    // cannot be placed in the Nether or End (they explode in nether like vanilla).
-    // Uses wool texture (red by default) with a distinct front face.
-    BED(133, true, false, 58, 58, 58, 59, 0),  // wool top/side/bottom, distinct front (foot end)
-    BED_OCCUPIED(134, true, false, 58, 58, 58, 59, 0); // same textures, different state
+    // Beds: a 1x2 sleeping surface (like Minecraft). BED is the foot end, BED_HEAD
+    // is the pillow/head end. Both halves are solid and directional. Beds cannot be
+    // placed in the Nether or End (they explode in nether like vanilla).
+    BED(133, true, false, 60, 61, 60, 62, 0),         // foot end: blanket top/side, foot texture
+    BED_HEAD(134, true, false, 63, 63, 63, 63, 0),  // head end: pillow texture
+    BED_OCCUPIED(135, true, false, 60, 61, 60, 62, 0),         // occupied foot end
+    BED_HEAD_OCCUPIED(136, true, false, 63, 63, 63, 63, 0);    // occupied head end
 
     public final byte id;
     public final boolean solid;
@@ -531,6 +532,11 @@ public enum BlockType {
 
     /** True for either half of a functional door (closed solid, or open walk-through). */
     public boolean isBed() {
+        return this == BED || this == BED_HEAD || this == BED_OCCUPIED || this == BED_HEAD_OCCUPIED;
+    }
+
+    /** True if this is the foot end of a bed (as opposed to the head/pillow end). */
+    public boolean isBedFoot() {
         return this == BED || this == BED_OCCUPIED;
     }
 
