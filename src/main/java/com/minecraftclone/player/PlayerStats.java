@@ -12,12 +12,16 @@ public class PlayerStats {
     public static final float MAX_HEALTH = 100f;
     public static final float MAX_HUNGER = 100f;
     public static final float MAX_STAMINA = 100f;
+    /** Seconds of breath you start a dive with - same value as {@link #DROWN_GRACE_SECONDS}, just public for the HUD's breath meter. */
+    public static final float MAX_BREATH = 6f;
 
     private static final float SAFE_FALL_SPEED = 10f;          // blocks/sec you can land at with no damage
     private static final float FALL_DAMAGE_PER_SPEED = 3.5f;   // damage per (blocks/sec) over the safe speed
     private static final float LAVA_DAMAGE_PER_SECOND = 20f;
     private static final float FIRE_DAMAGE_PER_SECOND = 6f;   // standing in lightning-lit fire burns
-    private static final float DROWN_GRACE_SECONDS = 6f;       // how long you can hold your breath
+    private static final float COLD_HUNGER_DRAIN_PER_SECOND = 100f / 300f; // ~5 min to empty at full exposure
+    private static final float COLD_DAMAGE_PER_SECOND = 2f;   // freezing once hunger is gone
+    private static final float DROWN_GRACE_SECONDS = MAX_BREATH; // how long you can hold your breath
     private static final float DROWN_DAMAGE_PER_SECOND = 5f;
     private static final float STARVE_DAMAGE_PER_SECOND = 2f;
     private static final float REGEN_HUNGER_THRESHOLD = 50f;   // need at least this much hunger to regenerate health
@@ -32,8 +36,33 @@ public class PlayerStats {
     private float hunger = MAX_HUNGER;
     private float stamina = MAX_STAMINA;
     private float submergedTime = 0f;
+    private float coldness = 0f; // 0 (warm) .. 1 (freezing out in a blizzard), set by Player each frame
     private boolean staminaExhausted = false;
     private boolean dead = false;
+    /** Damage multiplier from equipped armor (1 = no armor); applied by {@link #damage}. */
+    private float armorMultiplier = 1f;
+    /** Total damage accumulated this frame (after armor), cleared after armor wear is applied. */
+    private float frameDamageAccumulator = 0f;
+
+    /** Sets the damage multiplier from the player's equipped armor (1 = no armor, lower = more protection). */
+    public void setArmorMultiplier(float multiplier) {
+        this.armorMultiplier = multiplier;
+    }
+
+    /** Total damage accumulated this frame (after armor) - cleared after armor wear is applied. */
+    public float frameDamageAccumulator() {
+        return frameDamageAccumulator;
+    }
+
+    /** Clears the per-frame damage accumulator after armor wear has been consumed. */
+    public void clearFrameDamage() {
+        frameDamageAccumulator = 0f;
+    }
+
+    /** How exposed to the cold the player is this frame, 0 (warm) to 1 (freezing). */
+    public float getColdness() {
+        return coldness;
+    }
 
     public float getHealth() {
         return health;
@@ -47,6 +76,11 @@ public class PlayerStats {
         return stamina;
     }
 
+    /** Seconds of breath left before you start drowning (0..{@link #MAX_BREATH}) - only counts down while submerged. */
+    public float getBreath() {
+        return Math.max(0f, DROWN_GRACE_SECONDS - submergedTime);
+    }
+
     public boolean isDead() {
         return dead;
     }
@@ -56,8 +90,11 @@ public class PlayerStats {
         hunger = MAX_HUNGER;
         stamina = MAX_STAMINA;
         submergedTime = 0f;
+        coldness = 0f;
         staminaExhausted = false;
         dead = false;
+        armorMultiplier = 1f;
+        frameDamageAccumulator = 0f;
     }
 
     /** Keeps every stat topped up and the player alive - used in creative/spectator modes. */
@@ -66,8 +103,15 @@ public class PlayerStats {
         hunger = MAX_HUNGER;
         stamina = MAX_STAMINA;
         submergedTime = 0f;
+        coldness = 0f;
         staminaExhausted = false;
         dead = false;
+        // Also drop any damage a stray hit accumulated right before switching into an
+        // invulnerable mode - otherwise it lingers unconsumed (this branch skips
+        // Player.finalizeDamage's wear step) and gets wrongly applied to whatever armor
+        // is equipped much later, if the player switches back to a mortal mode.
+        armorMultiplier = 1f;
+        frameDamageAccumulator = 0f;
     }
 
     public boolean canSprint() {
@@ -79,9 +123,9 @@ public class PlayerStats {
      *
      * @param fallImpactSpeed the speed (blocks/sec) the player just landed at this frame, or 0 if not landing.
      */
-    public void update(float dt, boolean inLava, boolean inFire, boolean submerged, boolean sprintingAndMoving, float fallImpactSpeed) {
+    public void update(float dt, boolean inLava, boolean inFire, boolean submerged, boolean sprintingAndMoving, float fallImpactSpeed, float coldness) {
         if (dead) return;
-
+        this.coldness = coldness;
         if (sprintingAndMoving) {
             stamina = Math.max(0f, stamina - STAMINA_SPRINT_DRAIN_PER_SECOND * dt);
             if (stamina <= 0f) staminaExhausted = true;
@@ -116,13 +160,33 @@ public class PlayerStats {
         }
 
         if (submerged) {
+            float submergedBefore = submergedTime;
             submergedTime += dt;
-            if (submergedTime > DROWN_GRACE_SECONDS) {
-                damage(DROWN_DAMAGE_PER_SECOND * dt);
+            // Damage only the portion of this dt that's actually past the grace
+            // period - the update straddling the boundary (submergedBefore below
+            // it, submergedTime past it) would otherwise get charged for the
+            // *entire* dt, not just the fraction of it spent drowning. At a normal
+            // frame rate that sliver is negligible, but a large dt (a stutter, or
+            // a coarse test step) makes the overcharge obvious.
+            float drowningSeconds = submergedTime - Math.max(submergedBefore, DROWN_GRACE_SECONDS);
+            if (drowningSeconds > 0f) {
+                damage(DROWN_DAMAGE_PER_SECOND * drowningSeconds);
                 tookDamage = true;
             }
         } else {
             submergedTime = 0f;
+        }
+
+        if (coldness > 0f) {
+            // Freezing out in a storm: the cold burns through hunger first, then
+            // health once you've run out of food. Shelter or a warm fire reduces
+            // the exposure (see Player). tookDamage stays clear while food lasts
+            // so the regen below keeps working.
+            hunger = Math.max(0f, hunger - COLD_HUNGER_DRAIN_PER_SECOND * coldness * dt);
+            if (hunger <= 0f) {
+                damage(COLD_DAMAGE_PER_SECOND * coldness * dt);
+                tookDamage = true;
+            }
         }
 
         if (hunger <= 0f) {
@@ -134,7 +198,9 @@ public class PlayerStats {
 
     public void damage(float amount) {
         if (dead || amount <= 0f) return;
-        health -= amount;
+        float damageDealt = amount * armorMultiplier;
+        frameDamageAccumulator += damageDealt;
+        health -= damageDealt;
         if (health <= 0f) {
             health = 0f;
             dead = true;

@@ -103,6 +103,7 @@ public class Main {
     private static final int BERRIES_PER_BUSH = 2;
 
     private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
+    private static final float SWIM_STROKE_INTERVAL = 0.55f; // seconds between stroke sounds while swimming and moving
 
     /** Procedurally-generated GUI art (light/dark panels and slots), shared by every screen. */
     private GuiTextures guiTextures;
@@ -892,6 +893,7 @@ public class Main {
         float[] attackCooldown = {0f}; // time until the next mob hit can land
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
         float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
+        float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
         boolean[] wasSubmerged = {false}; // last frame's Player#isSubmerged(), to fire a splash sound only on the change
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
@@ -1052,6 +1054,39 @@ public class Main {
             activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid, container);
             openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
         }
+        // Opt-in autotest hook: carve a deep pool of water around the player and
+        // drop them in the middle of it, so swim physics (buoyancy, no onGround)
+        // can be screenshotted with the F3 "Swimming" debug line on.
+        if (System.getenv("MCCLONE_AUTOTEST_SWIM") != null && started[0]) {
+            Vector3f p = player.getPosition();
+            int cx = (int) Math.floor(p.x);
+            int cz = (int) Math.floor(p.z);
+            int surfaceY = world.getSurfaceHeight(cx, cz);
+            int poolTop = surfaceY + 3;
+            int poolBottom = surfaceY - 4;
+            for (int x = cx - 2; x <= cx + 2; x++) {
+                for (int z = cz - 2; z <= cz + 2; z++) {
+                    for (int y = poolBottom; y <= poolTop; y++) {
+                        world.setBlock(x, y, z, BlockType.WATER_SOURCE);
+                    }
+                }
+            }
+            for (int i = 0; i < 5; i++) world.update(p.x, p.z);
+            player.teleportTo(cx + 0.5f, poolTop - 2f, cz + 0.5f);
+            System.out.println("Autotest swim pool: y " + poolBottom + " to " + poolTop + ", player at y " + (poolTop - 2));
+        }
+        // Opt-in autotest hook: open the player's own inventory screen, equipping a
+        // full iron set (plus a couple of bag items) so the armor column renders.
+        if (System.getenv("MCCLONE_AUTOTEST_INVENTORY") != null && started[0]) {
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_HELMET, BlockType.IRON_HELMET);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_CHESTPLATE, BlockType.IRON_CHESTPLATE);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_LEGGINGS, BlockType.IRON_LEGGINGS);
+            player.getInventory().setArmor(Inventory.ARMOR_SLOT_BOOTS, BlockType.IRON_BOOTS);
+            player.getInventory().setSlot(0, BlockType.APPLE, 12);
+            player.getInventory().setSlot(1, BlockType.DIAMOND_PICKAXE, 1);
+            activeGui[0] = inventoryGui;
+            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+        }
         // Opt-in autotest hook: put a specific block/item in the held hotbar slot so
         // the first-person hand can be screenshotted holding something.
         if (System.getenv("MCCLONE_AUTOTEST_HELD") != null) {
@@ -1109,7 +1144,7 @@ public class Main {
                     if (world != null) {
                         float lightningDamage = lightningStrike(world, player, bolts, lightningRnd);
                         if (lightningDamage > 0f) {
-                            player.getStats().damage(lightningDamage);
+                            player.takeDamage(lightningDamage);
                         }
                     }
                 }
@@ -1132,7 +1167,7 @@ public class Main {
                         bolts.add(result.bolt());
                         audio.play(SoundEvent.THUNDER, 0.8f);
                         if (result.playerDamage() > 0f) {
-                            player.getStats().damage(result.playerDamage());
+                            player.takeDamage(result.playerDamage());
                         }
                         System.out.println("Autotest lightning strike at frame " + frameCount);
                     } else {
@@ -1631,7 +1666,14 @@ public class Main {
             }
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !chatOpen[0]) {
-                player.update(dt, input, world);
+                // Cold exposure factor: how cold the weather is this frame (snow
+                // is chilly, a blizzard is freezing). Player weighs shelter and
+                // nearby fires against it before it affects hunger/health.
+                Weather w = climate.getWeather();
+                float coldFactor = (w == Weather.SNOW ? 0.6f : w == Weather.BLIZZARD ? 1f : 0f)
+                        * climate.getWeatherStrength();
+                player.update(dt, input, world, coldFactor);
+
 
                 // Advance remote players' smoothed poses toward their server targets.
                 for (RemotePlayer rp : remotePlayers.values()) {
@@ -1667,6 +1709,10 @@ public class Main {
                 if (player.isSubmerged() != wasSubmerged[0]) {
                     audio.play(SoundEvent.SPLASH);
                     wasSubmerged[0] = player.isSubmerged();
+                    // Diving in (or surfacing) already just played a splash this frame -
+                    // without this, swimStrokeTimer sitting at 0 (reset while not
+                    // swimming) would immediately fire a second, redundant one below.
+                    swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
                 }
                 // A footstep every FOOTSTEP_INTERVAL seconds while walking/
                 // sprinting on the ground - timed off a countdown rather than a
@@ -1685,6 +1731,19 @@ public class Main {
                     }
                 } else {
                     footstepTimer[0] = 0f;
+                }
+                // A stroke sound every SWIM_STROKE_INTERVAL seconds while actively
+                // swimming - same countdown pattern as footsteps above, just reusing
+                // the splash sound (quieter, since it repeats) rather than a
+                // dedicated stroke effect.
+                if (player.isSwimmingAndMoving()) {
+                    swimStrokeTimer[0] -= dt;
+                    if (swimStrokeTimer[0] <= 0f) {
+                        swimStrokeTimer[0] = SWIM_STROKE_INTERVAL;
+                        audio.play(SoundEvent.SPLASH, 0.5f);
+                    }
+                } else {
+                    swimStrokeTimer[0] = 0f;
                 }
             }
 
@@ -1711,7 +1770,16 @@ public class Main {
                                 (int) Math.floor(deathPos.z), t, player.getInventory().countOf(slot), loot);
                     }
                 }
+                // Worn armor drops too (one piece per slot).
+                for (int slot = 0; slot < Inventory.ARMOR_SLOT_COUNT; slot++) {
+                    BlockType t = player.getInventory().armorType(slot);
+                    if (t != null) {
+                        world.spawnItem((int) Math.floor(deathPos.x), (int) Math.floor(deathPos.y),
+                                (int) Math.floor(deathPos.z), t, 1, loot);
+                    }
+                }
                 player.getInventory().clear();
+                player.getInventory().clearArmor();
                 player.getDurability().reset();
                 // Respawn back in the overworld, wherever you died.
                 if (currentDim[0] != DimensionType.OVERWORLD) {
@@ -1736,18 +1804,26 @@ public class Main {
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
             // to the player's health, where the existing death/respawn handling picks
-            // it up. Mobs are local-only (not synced between players yet), so they're
-            // disabled in multiplayer to keep every client's world consistent.
+            // it up. Use takeDamage (not getStats().damage) so mob damage routes through
+            // the same armor-mitigation and armor-wear path as environmental hazards.
+            // In multiplayer, mobs are simulated server-side, so the local client skips
+            // this (shared mob damage arrives via PLAYER_DAMAGE packets instead).
             Vector3f playerPos = player.getPosition();
             if (netClient == null) {
                 AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
                         playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
                 float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot);
                 if (mobDamage > 0f) {
-                    player.getStats().damage(mobDamage);
+                    player.takeDamage(mobDamage);
                     audio.play(SoundEvent.HURT);
                 }
             }
+            // Every damage source for this frame (environmental hazards inside
+            // player.update(), lightning and mob hits via takeDamage() above/below it)
+            // has now had its chance to run - wear armor for the frame's total and
+            // clear the accumulator, once, here. See Player.finalizeDamage's javadoc
+            // for why this can't just live inside player.update() itself.
+            player.finalizeDamage();
 
             // Age and drop expired on-screen messages (death notice, craft/tool feedback...).
             for (int i = messages.size() - 1; i >= 0; i--) {
@@ -2094,8 +2170,13 @@ public class Main {
                             player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
                             player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
                             player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
+                            player.getStats().getBreath(), PlayerStats.MAX_BREATH,
+                            player.isSubmerged(),
                             Inventory.HOTBAR_SIZE, window.getAspectRatio());
                 }
+                // A frost vignette fades in over everything as you freeze outside
+                // in a storm (see Player/PlayerStats cold exposure).
+                hud.renderFrostOverlay(player.getStats().getColdness());
             }
             hud.renderMessages(messages, window.getAspectRatio());
             // The chat input line, drawn under the messages while typing.
@@ -2128,6 +2209,10 @@ public class Main {
                 hud.drawTextLeft(String.format(Locale.ROOT, "Facing: %s (yaw %.1f, pitch %.1f)",
                                 facing, player.getCamera().getYaw(), player.getCamera().getPitch()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                if (player.isSwimming()) {
+                    hud.drawTextLeft("Swimming" + (player.isSubmerged() ? " (submerged)" : ""),
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
@@ -2147,6 +2232,14 @@ public class Main {
                 hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C, %.0f%% humidity",
                                 climate.temperatureFor(biome), climate.humidityFor(biome) * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft(String.format(Locale.ROOT, "Cold exposure: %.0f%%",
+                                player.getStats().getColdness() * 100f),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                if (player.isSubmerged()) {
+                    hud.drawTextLeft(String.format(Locale.ROOT, "Breath: %.1fs / %.0fs",
+                                    player.getStats().getBreath(), PlayerStats.MAX_BREATH),
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);

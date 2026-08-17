@@ -144,7 +144,27 @@ public enum BlockType {
     // under a snow cap, so the snow sits flush rather than floating above the
     // slab's half-height top. Melting restores the plain slab underneath.
     SNOWY_STONE_SLAB(89, true, false, 12, 4, 4),
-    SNOWY_PLANKS_SLAB(90, true, false, 12, 11, 11);
+    SNOWY_PLANKS_SLAB(90, true, false, 12, 11, 11),
+
+    // Armor pieces (inventory-only items, like tools): one per slot, per tier.
+    // Stats (defense points, durability) live in Armor.java, not here, to keep
+    // this enum focused on rendering/collision.
+    WOOD_HELMET(99, 0),
+    WOOD_CHESTPLATE(100, 0),
+    WOOD_LEGGINGS(101, 0),
+    WOOD_BOOTS(102, 0),
+    STONE_HELMET(103, 0),
+    STONE_CHESTPLATE(104, 0),
+    STONE_LEGGINGS(105, 0),
+    STONE_BOOTS(106, 0),
+    IRON_HELMET(107, 0),
+    IRON_CHESTPLATE(108, 0),
+    IRON_LEGGINGS(109, 0),
+    IRON_BOOTS(110, 0),
+    DIAMOND_HELMET(111, 0),
+    DIAMOND_CHESTPLATE(112, 0),
+    DIAMOND_LEGGINGS(113, 0),
+    DIAMOND_BOOTS(114, 0);
 
     public final byte id;
     public final boolean solid;

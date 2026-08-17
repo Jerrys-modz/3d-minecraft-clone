@@ -1,5 +1,6 @@
 package com.minecraftclone.player;
 
+import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.world.BlockType;
 import org.junit.jupiter.api.Test;
 
@@ -170,5 +171,125 @@ class InventoryControllerTest {
     void firstEmptySlotHelperWorks() {
         Inventory inv = new Inventory();
         assertEquals(0, firstEmptySlot(inv));
+    }
+
+    @Test
+    void clickEquipsArmorIntoMatchingSlot() {
+        Inventory inv = new Inventory();
+        inv.setSlot(10, BlockType.IRON_HELMET, 1);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        // Clicking an armor piece with an empty cursor auto-equips it.
+        c.click(10, false, false);
+        assertTrue(inv.isEmpty(10));
+        assertEquals(BlockType.IRON_HELMET, inv.armorType(Inventory.ARMOR_SLOT_HELMET));
+        assertFalse(c.hasCursorItem());
+    }
+
+    @Test
+    void clickDoesNotEquipWhenSlotIsOccupied() {
+        Inventory inv = new Inventory();
+        inv.setSlot(10, BlockType.IRON_HELMET, 1);
+        inv.setArmor(Inventory.ARMOR_SLOT_HELMET, BlockType.WOOD_HELMET);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(10, false, false);
+        assertTrue(inv.isEmpty(10), "occupied armor slot means a normal pickup instead");
+        assertEquals(BlockType.IRON_HELMET, c.cursorType());
+        assertEquals(BlockType.WOOD_HELMET, inv.armorType(Inventory.ARMOR_SLOT_HELMET));
+    }
+
+    @Test
+    void clickArmorSlotPicksItUpAndSwaps() {
+        Inventory inv = new Inventory();
+        inv.setArmor(Inventory.ARMOR_SLOT_CHESTPLATE, BlockType.IRON_CHESTPLATE);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        int slot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_CHESTPLATE;
+        c.click(slot, false, false);
+        assertEquals(BlockType.IRON_CHESTPLATE, c.cursorType());
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_CHESTPLATE));
+    }
+
+    @Test
+    void clickRejectsMismatchedArmorOnSlot() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        int helmetSlot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_HELMET;
+        c.pickCreativeItem(BlockType.IRON_BOOTS, false);
+        c.click(helmetSlot, false, false);
+        assertEquals(BlockType.IRON_BOOTS, c.cursorType(), "boots can't go in the helmet slot");
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_HELMET));
+    }
+
+    @Test
+    void shiftClickEquipsAndUnequipsArmor() {
+        Inventory inv = new Inventory();
+        inv.setSlot(20, BlockType.DIAMOND_LEGGINGS, 1);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        // Shift-click the piece in the bag: auto-equip.
+        c.click(20, false, true);
+        assertTrue(inv.isEmpty(20));
+        assertEquals(BlockType.DIAMOND_LEGGINGS, inv.armorType(Inventory.ARMOR_SLOT_LEGGINGS));
+        // Shift-click the armor slot: unequip back to the inventory.
+        int slot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_LEGGINGS;
+        c.click(slot, false, true);
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_LEGGINGS));
+        assertEquals(1, inv.getCount(BlockType.DIAMOND_LEGGINGS));
+    }
+
+    @Test
+    void armorSlotIsCountedInTheGui() {
+        Inventory inv = new Inventory();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.INVENTORY, inv, new CraftingGrid(), null);
+        assertEquals(Inventory.SIZE + CraftingGrid.SIZE + 1 + Inventory.ARMOR_SLOT_COUNT, gui.slotCount());
+        assertTrue(gui.isArmorSlot(ContainerGui.ARMOR_START));
+        assertTrue(gui.isArmorSlot(ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_COUNT - 1));
+        assertFalse(gui.isArmorSlot(ContainerGui.OUTPUT_SLOT));
+    }
+
+    @Test
+    void dragRejectsMismatchedArmorOnSlot() {
+        Inventory inv = new Inventory();
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        int helmetSlot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_HELMET;
+        c.pickCreativeItem(BlockType.DIAMOND_CHESTPLATE, false);
+        c.beginDrag(10, false);
+        c.continueDrag(helmetSlot);
+        c.endDrag(helmetSlot);
+        assertEquals(BlockType.DIAMOND_CHESTPLATE, c.cursorType(), "chestplate can't be dragged into helmet slot");
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_HELMET));
+    }
+
+    @Test
+    void dragStartingOnABaggedArmorPieceRejectsAMismatchedSlot() {
+        // Regression: a drag that *starts* on an inventory slot holding armor (not
+        // already on the cursor) must not resolve via a plain click(dragStart, ...) -
+        // that would trigger the bag's auto-equip shortcut and jump the piece into its
+        // own matching slot, ignoring wherever the drag actually released.
+        Inventory inv = new Inventory();
+        inv.setSlot(10, BlockType.DIAMOND_CHESTPLATE, 1);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        int helmetSlot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_HELMET;
+        c.beginDrag(10, false);
+        c.continueDrag(helmetSlot);
+        c.endDrag(helmetSlot);
+        assertEquals(BlockType.DIAMOND_CHESTPLATE, c.cursorType(), "still on the cursor, not auto-equipped");
+        assertEquals(1, c.cursorCount(), "exactly the one piece - not duplicated");
+        assertTrue(inv.isEmpty(10), "lifted out of its source slot, not left behind too");
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_HELMET));
+        assertNull(inv.armorType(Inventory.ARMOR_SLOT_CHESTPLATE), "never auto-equipped into its own slot either");
+    }
+
+    @Test
+    void dragStartingOnABaggedArmorPieceEquipsItsMatchingSlot() {
+        // The same starting gesture, but released on the *correct* slot: should equip.
+        Inventory inv = new Inventory();
+        inv.setSlot(10, BlockType.DIAMOND_CHESTPLATE, 1);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        int chestplateSlot = ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_CHESTPLATE;
+        c.beginDrag(10, false);
+        c.continueDrag(chestplateSlot);
+        c.endDrag(chestplateSlot);
+        assertFalse(c.hasCursorItem());
+        assertEquals(BlockType.DIAMOND_CHESTPLATE, inv.armorType(Inventory.ARMOR_SLOT_CHESTPLATE));
+        assertTrue(inv.isEmpty(10));
     }
 }

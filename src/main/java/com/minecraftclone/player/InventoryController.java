@@ -34,7 +34,7 @@ public class InventoryController {
     private int dragStart = -1;
     private boolean dragRight;
     private int dragDistinct;
-    private boolean[] dragVisited = new boolean[ContainerGui.OUTPUT_SLOT + 1];
+    private boolean[] dragVisited = new boolean[ContainerGui.ARMOR_START + Inventory.ARMOR_SLOT_COUNT];
 
     /** Wraps the plain inventory screen (player inventory + crafting grid). */
     public InventoryController(Inventory inventory, CraftingGrid grid) {
@@ -111,10 +111,29 @@ public class InventoryController {
             craft();
             return;
         }
+        if (gui.isArmorSlot(slotId)) {
+            clickArmorSlot(slotId, right);
+            return;
+        }
 
         BlockType st = slotType(slotId);
         int sc = slotCount(slotId);
         boolean isGrid = gui.isGridSlot(slotId);
+
+        // Clicking an armor piece held in the main inventory with an empty
+        // cursor auto-equips it into its matching armor slot (Minecraft
+        // behaviour: the piece jumps straight from the bag to the slot).
+        if (!hasCursorItem() && st != null && Armor.isArmor(st) && !isGrid) {
+            Armor.Slot slot = Armor.slotOf(st);
+            if (slot != null && gui.isArmorSlot(armorSlotIdFor(slot))) {
+                int armorId = armorSlotIdFor(slot);
+                if (gui.typeOf(armorId) == null) {
+                    gui.setSlot(slotId, null, 0);
+                    gui.setSlot(armorId, st, 1);
+                    return;
+                }
+            }
+        }
 
         if (!hasCursorItem()) {
             if (st == null) return;                       // empty click on empty slot
@@ -154,6 +173,39 @@ public class InventoryController {
         }
     }
 
+    /** The armor-slot id for a given {@link Armor.Slot} on the player's inventory screen. */
+    private int armorSlotIdFor(Armor.Slot slot) {
+        return ContainerGui.ARMOR_START + slot.ordinal();
+    }
+
+    /**
+     * Clicking an armor slot only ever exchanges <em>matching</em> armor: an
+     * empty cursor picks up the piece there, a cursor holding armor for this
+     * slot places it (swapping if the slot is occupied), and a cursor holding
+     * anything else does nothing - you can't jam a helmet into the boots slot.
+     */
+    private void clickArmorSlot(int slotId, boolean right) {
+        Armor.Slot wanted = Armor.Slot.values()[slotId - ContainerGui.ARMOR_START];
+        BlockType in = slotType(slotId);
+        if (!hasCursorItem()) {
+            if (in != null) {
+                cursorType = in;
+                cursorCount = 1;
+                setSlot(slotId, null, 0);
+            }
+            return;
+        }
+        if (Armor.slotOf(cursorType) != wanted) return;   // wrong piece for this slot
+        if (in != null) {
+            if (in == cursorType) return;                 // already wearing it
+            setSlot(slotId, cursorType, 1);               // swap: old piece goes to cursor
+            cursorType = in;
+        } else {
+            setSlot(slotId, cursorType, 1);
+            clearCursor();
+        }
+    }
+
     /**
      * Mouse press: starts a click/drag session without touching the inventory yet.
      * On release, a single touched slot resolves as a normal {@link #click}, while
@@ -190,8 +242,32 @@ public class InventoryController {
             dragVisited[releaseSlot] = true;
             dragDistinct++;
         }
+        // A single, non-stackable item (a tool or an armor piece) can't be
+        // "spread" one-per-slot across several touched slots the way a stack
+        // can - there's only one of it. Minecraft just resolves that drag as
+        // a normal click on wherever the mouse released, so a swipe that
+        // merely passes over unrelated slots on the way to (say) the wrong
+        // armor slot doesn't drop the item in the first empty slot it
+        // crossed - it's still refused by the same rules a direct click on
+        // the release slot would apply (e.g. clickArmorSlot's slot match).
+        // The item can already be on the cursor, or still sitting in
+        // dragStart (a press-and-drag starting on a filled slot) - either
+        // way it's the same non-spreadable case.
+        BlockType dragType = hasCursorItem() ? cursorType
+                : (gui.isOutputSlot(dragStart) ? null : slotType(dragStart));
         if (dragDistinct <= 1) {
             click(dragStart, dragRight, false);
+        } else if (dragType != null && Inventory.maxStack(dragType) <= 1) {
+            if (!hasCursorItem()) {
+                // Lift it directly rather than via click(dragStart, ...): clicking a
+                // bagged armor piece with an empty cursor auto-equips it into its
+                // matching armor slot (see click()'s auto-equip shortcut), which would
+                // ignore wherever this drag actually released.
+                cursorType = dragType;
+                cursorCount = 1;
+                setSlot(dragStart, null, 0);
+            }
+            click(releaseSlot, dragRight, false);
         } else {
             resolveDrag();
         }
@@ -222,6 +298,13 @@ public class InventoryController {
     private void depositOne(int slotId) {
         BlockType st = slotType(slotId);
         if (st == null) {
+            // Armor slots: only accept matching armor type into an empty slot.
+            if (gui.isArmorSlot(slotId)) {
+                Armor.Slot wantedSlot = Armor.Slot.values()[slotId - ContainerGui.ARMOR_START];
+                if (Armor.slotOf(cursorType) != wantedSlot) {
+                    return; // Wrong armor type for this slot, skip.
+                }
+            }
             setSlot(slotId, cursorType, 1);
             cursorCount--;
         } else if (st == cursorType && (gui.isPlayerSlot(slotId) || gui.isContainerSlot(slotId))) {
@@ -258,6 +341,12 @@ public class InventoryController {
             if (t != null && inventory.add(t, 1) == 0) gui.grid().set(slotId - ContainerGui.GRID_START, null);
             return;
         }
+        if (gui.isArmorSlot(slotId)) {
+            // Shift-click an armor slot: unequip it back into the inventory.
+            BlockType t = slotType(slotId);
+            if (t != null && inventory.add(t, 1) == 0) setSlot(slotId, null, 0);
+            return;
+        }
         if (gui.isContainerSlot(slotId)) {
             int cs = slotId - ContainerGui.CONTAINER_START;
             BlockType t = gui.container().typeOf(cs);
@@ -272,6 +361,18 @@ public class InventoryController {
         if (t == null) return;
         int count = inventory.countOf(slotId);
         int original = count;
+
+        // Shift-click an armor piece in the bag: auto-equip it into its slot
+        // if that slot is free (Minecraft behaviour).
+        if (Armor.isArmor(t)) {
+            Armor.Slot slot = Armor.slotOf(t);
+            int armorId = armorSlotIdFor(slot);
+            if (gui.isArmorSlot(armorId) && gui.typeOf(armorId) == null) {
+                inventory.setSlot(slotId, null, 0);
+                gui.setSlot(armorId, t, 1);
+                return;
+            }
+        }
 
         // Prefer the open container: ore/fuel into a furnace, anything into a
         // chest, items into empty crafting-table cells.

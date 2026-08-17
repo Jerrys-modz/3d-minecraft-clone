@@ -95,4 +95,55 @@ class CraftingTest {
         assertEquals(BlockType.TRAPDOOR, rt.output());
         assertEquals(2, rt.outputAmount());
     }
+
+    @Test
+    void armorCraftsFromMaterialShapes() {
+        // Iron chestplate: M.M / MMM / MMM.
+        BlockType[] chest = new BlockType[9];
+        chest[0] = BlockType.IRON_INGOT;
+        chest[2] = BlockType.IRON_INGOT;
+        chest[3] = BlockType.IRON_INGOT;
+        chest[4] = BlockType.IRON_INGOT;
+        chest[5] = BlockType.IRON_INGOT;
+        chest[6] = BlockType.IRON_INGOT;
+        chest[7] = BlockType.IRON_INGOT;
+        chest[8] = BlockType.IRON_INGOT;
+        Crafting.Recipe rc = Crafting.match(chest);
+        assertNotNull(rc);
+        assertEquals(BlockType.IRON_CHESTPLATE, rc.output());
+
+        // Diamond helmet: MMM / M.M / ...
+        BlockType[] helmet = new BlockType[9];
+        helmet[0] = BlockType.DIAMOND;
+        helmet[1] = BlockType.DIAMOND;
+        helmet[2] = BlockType.DIAMOND;
+        helmet[3] = BlockType.DIAMOND;
+        helmet[5] = BlockType.DIAMOND;
+        Crafting.Recipe rh = Crafting.match(helmet);
+        assertNotNull(rh);
+        assertEquals(BlockType.DIAMOND_HELMET, rh.output());
+
+        // Wood leggings: MMM / M.M / M.M.
+        BlockType[] legs = new BlockType[9];
+        legs[0] = BlockType.PLANKS;
+        legs[1] = BlockType.PLANKS;
+        legs[2] = BlockType.PLANKS;
+        legs[3] = BlockType.PLANKS;
+        legs[5] = BlockType.PLANKS;
+        legs[6] = BlockType.PLANKS;
+        legs[8] = BlockType.PLANKS;
+        Crafting.Recipe rl = Crafting.match(legs);
+        assertNotNull(rl);
+        assertEquals(BlockType.WOOD_LEGGINGS, rl.output());
+
+        // Stone boots: M.M / M.M / ...
+        BlockType[] boots = new BlockType[9];
+        boots[0] = BlockType.STONE;
+        boots[2] = BlockType.STONE;
+        boots[3] = BlockType.STONE;
+        boots[5] = BlockType.STONE;
+        Crafting.Recipe rb = Crafting.match(boots);
+        assertNotNull(rb);
+        assertEquals(BlockType.STONE_BOOTS, rb.output());
+    }
 }

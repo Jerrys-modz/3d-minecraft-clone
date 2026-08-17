@@ -10,6 +10,7 @@ import com.minecraftclone.engine.graphics.LineMesh;
 import com.minecraftclone.engine.graphics.TextRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.engine.gui.ContainerGui;
+import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
@@ -67,6 +68,8 @@ public class Hud {
     private static final float CRAFT_TOP_ROW_Y = INV_TOP_ROW_Y;
     private static final float OUTPUT_X = -0.50f;           // crafting result slot
     private static final float OUTPUT_Y = INV_TOP_ROW_Y - INV_STEP;
+    /** Center x of the vertical armor-slot column, just left of the player's inventory grid. */
+    private static final float ARMOR_X = -0.40f;
 
     // Furnace GUI layout (logical square units). The input/fuel slots sit in a
     // column to the left of the inventory grid, the output between them and the
@@ -133,6 +136,7 @@ public class Hud {
     private final LineMesh statBarFill = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarBackground = new LineMesh(GL_TRIANGLES);
     private final LineMesh durabilityBarFill = new LineMesh(GL_TRIANGLES);
+    private final LineMesh frostOverlay = new LineMesh(GL_TRIANGLES); // fullscreen cold vignette
     private final LineMesh settingsPanel = new LineMesh(GL_TRIANGLES);
     private final LineMesh inventoryPanel = new LineMesh(GL_TRIANGLES);
     private final LineMesh inventorySlotBg = new LineMesh(GL_TRIANGLES);
@@ -169,6 +173,12 @@ public class Hud {
         this.text = new TextRenderer(font, hudShader);
         buildCrosshair();
         buildCubeOutline();
+        // A fullscreen quad in NDC covering the whole screen, used for the cold
+        // vignette (drawn with an identity model/projection via the line shader).
+        frostOverlay.upload(new float[]{
+                -1, -1, 0, 1, -1, 0, 1, 1, 0,
+                -1, -1, 0, 1, 1, 0, -1, 1, 0,
+        });
     }
 
     /** Provides the GUI art (must be generated before any screen is drawn) and the current light/dark theme. */
@@ -219,6 +229,25 @@ public class Hud {
         lineShader.setUniform("color", new Vector4f(1, 1, 1, 0.9f));
         glLineWidth(2f);
         crosshair.render();
+        lineShader.unbind();
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
+     * A translucent frost vignette over the whole screen, fading in with cold
+     * exposure (0 = clear, 1 = freezing out in a blizzard). Drawn in NDC so it
+     * covers the viewport regardless of aspect ratio.
+     */
+    public void renderFrostOverlay(float coldness) {
+        if (coldness <= 0f) return;
+        glDisable(GL_DEPTH_TEST);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", modelMatrix.identity());
+        float a = Math.min(1f, coldness) * 0.45f;
+        lineShader.setUniform("color", new Vector4f(0.78f, 0.87f, 1f, a));
+        frostOverlay.render();
         lineShader.unbind();
         glEnable(GL_DEPTH_TEST);
     }
@@ -360,7 +389,7 @@ public class Hud {
             float digitSize = 0.028f;
             text.add(countText, cx + half - text.measure(countText, digitSize), cy - half, digitSize);
         }
-        if (Mining.isTool(type)) {
+        if (Mining.isTool(type) || Armor.isArmor(type)) {
             float fraction = durability.fraction(type);
             if (fraction < 1f) {
                 barCx.add(cx);
@@ -423,9 +452,15 @@ public class Hud {
 
     private static final int[] QUAD_INDICES = {0, 1, 2, 0, 2, 3};
 
-    /** Health (red), hunger (orange) and stamina (yellow) bars, stacked above the hotbar. */
+    /**
+     * Health (red), hunger (orange) and stamina (yellow) bars, stacked above the
+     * hotbar - plus a breath (cyan) bar on top, Minecraft-bubbles-style, but only
+     * while {@code submerged}: it's meaningless (and always full) on dry land, so
+     * showing it constantly would just be visual noise for a bar that never moves.
+     */
     public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
-                                  float stamina, float maxStamina, int hotbarSlotCount, float aspectRatio) {
+                                  float stamina, float maxStamina, float breath, float maxBreath,
+                                  boolean submerged, int hotbarSlotCount, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
@@ -439,10 +474,15 @@ public class Hud {
         float maxX = width / 2f;
         float y = hotbarPanelTopY() + STAT_BAR_STACK_MARGIN;
 
-        // Bottom to top: stamina, hunger, health - health ends up on top, most prominent.
+        // Bottom to top: stamina, hunger, health, (breath) - health ends up on top
+        // of the always-shown bars, most prominent; breath appears above even that
+        // while it's relevant, same as bubbles float above Minecraft's other bars.
         y = renderStatBar(minX, maxX, y, stamina / maxStamina, new Vector4f(0.92f, 0.80f, 0.15f, 0.95f));
         y = renderStatBar(minX, maxX, y, hunger / maxHunger, new Vector4f(0.85f, 0.55f, 0.15f, 0.95f));
-        renderStatBar(minX, maxX, y, health / maxHealth, new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
+        y = renderStatBar(minX, maxX, y, health / maxHealth, new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
+        if (submerged) {
+            renderStatBar(minX, maxX, y, breath / maxBreath, new Vector4f(0.25f, 0.65f, 0.85f, 0.95f));
+        }
 
         lineShader.unbind();
         glEnable(GL_DEPTH_TEST);
@@ -1242,6 +1282,13 @@ public class Hud {
             int r = g / CraftingGrid.WIDTH, c = g % CraftingGrid.WIDTH;
             return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
         }
+        if (gui.isArmorSlot(slotId)) {
+            // A vertical 1x4 column just left of the player's inventory grid:
+            // helmet on top, then chestplate, leggings, boots. Aligned to the
+            // grid's row spacing so the four read as one tidy stack.
+            int a = slotId - ContainerGui.ARMOR_START;
+            return new float[]{ARMOR_X, INV_TOP_ROW_Y - a * INV_STEP};
+        }
         if (gui.isContainerSlot(slotId)) {
             int cs = slotId - ContainerGui.CONTAINER_START;
             if (gui.kind() == ContainerGui.Kind.CHEST) {
@@ -1637,12 +1684,12 @@ public class Hud {
         text.render(hudTransform, WHITE);
     }
 
-    /** The tooltip lines for an item: its display name, plus durability for tools. */
+    /** The tooltip lines for an item: its display name, plus durability for tools and armor. */
     private String[] tooltipLines(BlockType type, ToolDurability durability) {
-        if (Mining.isTool(type)) {
-            int max = Mining.toolStats(type).maxUses();
+        if (Mining.isTool(type) || Armor.isArmor(type)) {
+            int maxUses = Armor.isArmor(type) ? Armor.maxUses(type) : Mining.toolStats(type).maxUses();
             int rem = durability.remaining(type);
-            return new String[]{type.displayName(), "Durability: " + rem + " / " + max};
+            return new String[]{type.displayName(), "Durability: " + rem + " / " + maxUses};
         }
         return new String[]{type.displayName()};
     }
@@ -1910,5 +1957,6 @@ public class Hud {
         settingsTrack.destroy();
         settingsFill.destroy();
         guiQuadMesh.destroy();
+        frostOverlay.destroy();
     }
 }

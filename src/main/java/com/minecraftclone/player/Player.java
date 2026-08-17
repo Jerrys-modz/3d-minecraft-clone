@@ -20,6 +20,10 @@ public class Player {
     private static final float WIDTH = 0.6f;
     private static final float HEIGHT = 1.8f;
     private static final float EYE_HEIGHT = 1.62f;
+    /** Blocks above the eye that count as shelter from the cold (a roof overhead). */
+    private static final int COLD_ROOF_CHECK = 8;
+    /** Horizontal radius (blocks) in which a burning fire warms you against the cold. */
+    private static final int COLD_FIRE_RADIUS = 3;
 
     private static final float WALK_SPEED = 4.3f;
     private static final float SPRINT_SPEED = 6.6f;
@@ -28,6 +32,18 @@ public class Player {
     private static final float JUMP_VELOCITY = 8.2f;
     private static final float GRAVITY = 24.0f;
     private static final float TERMINAL_VELOCITY = -50f;
+
+    // Swimming: water is buoyant rather than a floor, so it gets its own,
+    // much gentler vertical model instead of gravity/jump-impulse. A held
+    // direction (jump = up, fly-down's key = down) swims at SWIM_SPEED;
+    // released, the player sinks slowly under WATER_GRAVITY rather than
+    // free-falling - which also happens to cancel most fall damage on its
+    // own, since diving in decelerates you to WATER_SINK_SPEED well before
+    // you'd reach a real lakebed, instead of hitting it at terminal velocity.
+    private static final float SWIM_SPEED = 3.6f;
+    private static final float SWIM_SPRINT_SPEED = 5.4f;
+    private static final float WATER_GRAVITY = 5.0f;
+    private static final float WATER_SINK_SPEED = -1.3f;
 
     private static final float DEFAULT_MOUSE_SENSITIVITY = 0.12f;
     /** Max gap between two W presses for it to count as a double-tap (sprint, or fly-toggle in creative). */
@@ -57,6 +73,7 @@ public class Player {
     private boolean flying = false;
     private boolean movingOnGround = false; // moving horizontally while grounded (drives view bob)
     private boolean sprinting = false; // currently sprinting and actually moving (exposed for remote-player sync)
+    private boolean swimmingAndMoving = false; // moving horizontally while swimming (drives the stroke sound)
     private float lastFallImpactSpeed = 0f;
     private final DoubleTapDetector wTapDetector = new DoubleTapDetector(DOUBLE_TAP_WINDOW);
     private boolean sprintLatched = false; // sprint started by a double-tap, held until W is released
@@ -74,6 +91,12 @@ public class Player {
     // a splash sound on the frame it changes, without recomputing the same
     // world lookup a second time itself.
     private boolean submerged = false;
+    // Body-in-water-and-not-standing-on-anything state, recomputed every
+    // updateMovement() call - distinct from submerged (which only checks the
+    // eye/camera point): this drives swim physics and is true well before the
+    // head goes under, e.g. wading chest-deep. Exposed so Main can play a
+    // stroke sound while actively swimming.
+    private boolean swimming = false;
     private static final float LANDING_SOUND_MIN_SPEED = 4f; // ignore trivial dips, only a real fall
 
     public void spawn(World world, float x, float z) {
@@ -194,7 +217,43 @@ public class Player {
         return true;
     }
 
-    public void update(float dt, Input input, World world) {
+    /**
+     * Applies {@code amount} damage to the player, mitigated by armor and accumulated
+     * for armor wear. Use this for external damage sources (mobs, lightning, etc.) so
+     * they route through the same armor-mitigation and armor-wear path as environmental
+     * hazards - and so they respect the invulnerability check, which a direct
+     * {@code getStats().damage(...)} call would silently skip.
+     * <p>
+     * Refreshes the armor multiplier from the current inventory first: callers may run
+     * before or after {@link #update}, so this can't rely on that frame's {@code update}
+     * having already refreshed it.
+     */
+    public void takeDamage(float amount) {
+        if (gameMode.isInvulnerable()) return;
+        stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
+        stats.damage(amount);
+    }
+
+    /**
+     * Wears equipped armor by whatever damage has accumulated this frame and clears the
+     * accumulator. Called once per frame from {@code Main}, after every damage source for
+     * the frame (environmental hazards inside {@link #update}, plus mob/lightning hits via
+     * {@link #takeDamage} which can happen before or after it) has had a chance to run -
+     * consuming the accumulator from inside {@code update} itself would miss damage from
+     * calls made later in the same frame, deferring their wear to the next frame instead
+     * (and, worse, applying it to whatever armor happens to be equipped by then).
+     */
+    public void finalizeDamage() {
+        wearArmor(stats.frameDamageAccumulator());
+        stats.clearFrameDamage();
+    }
+
+    /**
+     * @param coldFactor 0..1 how cold the current weather is (snow/blizzard); the
+     *                    player's shelter and nearby fires cut it down to the
+     *                    effective coldness that drains hunger/freezes (see PlayerStats).
+     */
+    public void update(float dt, Input input, World world, float coldFactor) {
         updateLook(input);
         if (gameMode.isSpectator()) {
             flying = true; // always in no-clip flight
@@ -225,11 +284,63 @@ public class Player {
         if (gameMode.isInvulnerable()) {
             stats.forceFull();
         } else {
+            stats.setArmorMultiplier(Armor.damageMultiplier(inventory.armorDefense()));
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
             boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
-            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed);
+            // Cold exposure: weather strength, cut down by a roof overhead and
+            // nearly eliminated next to a fire (a lightning-struck tree, or any
+            // fire you huddle beside).
+            float coldness = coldFactor;
+            if (hasRoofAbove(world)) coldness *= 0.15f;
+            if (fireNearby(world)) coldness *= 0.15f;
+            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness);
         }
         lastFallImpactSpeed = 0f;
+    }
+
+    /**
+     * Wears the equipped armor by the damage just taken: each piece loses
+     * durability proportional to the hit (see {@link Armor#durabilityCost}) and
+     * is unequipped once worn out, exactly like a tool breaking.
+     */
+    public void wearArmor(float damage) {
+        if (damage <= 0f) return;
+        int cost = Armor.durabilityCost(damage);
+        for (int slot = 0; slot < Inventory.ARMOR_SLOT_COUNT; slot++) {
+            BlockType piece = inventory.armorType(slot);
+            if (piece != null && durability.wear(piece, cost)) {
+                inventory.setArmor(slot, null);
+            }
+        }
+    }
+
+    /** True if a solid block sits within {@link #COLD_ROOF_CHECK} blocks overhead - basic shelter. */
+    private boolean hasRoofAbove(World world) {
+        int x = (int) Math.floor(position.x);
+        int z = (int) Math.floor(position.z);
+        int y = (int) Math.floor(position.y + EYE_HEIGHT);
+        for (int i = 1; i <= COLD_ROOF_CHECK; i++) {
+            if (y + i >= 0 && y + i < com.minecraftclone.world.Chunk.HEIGHT) {
+                BlockType b = world.getBlock(x, y + i, z);
+                if (b.solid) return true;
+            }
+        }
+        return false;
+    }
+
+    /** True if a burning fire is within {@link #COLD_FIRE_RADIUS} blocks - huddling close warms you. */
+    private boolean fireNearby(World world) {
+        int cx = (int) Math.floor(position.x);
+        int cy = (int) Math.floor(position.y);
+        int cz = (int) Math.floor(position.z);
+        for (int dx = -COLD_FIRE_RADIUS; dx <= COLD_FIRE_RADIUS; dx++) {
+            for (int dz = -COLD_FIRE_RADIUS; dz <= COLD_FIRE_RADIUS; dz++) {
+                for (int dy = -1; dy <= 2; dy++) {
+                    if (world.getBlock(cx + dx, cy + dy, cz + dz) == BlockType.FIRE) return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** True on exactly the frame the player left the ground under their own jump (not falling off a ledge). */
@@ -247,9 +358,19 @@ public class Player {
         return submerged;
     }
 
+    /** Whether the player is currently swimming: in water and not standing on anything (see swim physics in updateMovement). */
+    public boolean isSwimming() {
+        return swimming;
+    }
+
     /** Whether the player is currently walking/sprinting on solid ground (not flying, not airborne) - drives footstep sounds. */
     public boolean isMovingOnGround() {
         return movingOnGround;
+    }
+
+    /** Whether the player is currently swimming *and* moving horizontally - drives the stroke sound. */
+    public boolean isSwimmingAndMoving() {
+        return swimmingAndMoving;
     }
 
     /** The block directly under the player's feet - what a footstep sound should sound like. */
@@ -316,6 +437,47 @@ public class Player {
         return armed && onGround && !wasOnGround && fallImpactSpeed >= LANDING_SOUND_MIN_SPEED;
     }
 
+    /**
+     * Whether the player should use swim physics this frame: their body overlaps
+     * water and they aren't resting on anything solid underneath it (that's just
+     * wading, handled by normal ground movement) - and flying/no-clip always wins,
+     * exactly like it already overrides gravity. No World/GL dependency, so this
+     * is directly unit testable.
+     */
+    static boolean computeSwimming(boolean flying, boolean spectator, boolean onGround, boolean inWater) {
+        return !flying && !spectator && !onGround && inWater;
+    }
+
+    /**
+     * One frame of swim vertical physics: a held stroke (up or down) moves at a
+     * flat {@link #SWIM_SPEED} in that direction; released, buoyancy takes over -
+     * {@code currentVy} decays toward {@link #WATER_SINK_SPEED} under
+     * {@link #WATER_GRAVITY} rather than free-falling under full gravity, which
+     * is also what keeps diving into water from dealing fall damage: by the time
+     * a dive reaches a real lakebed its vertical speed has already been capped
+     * here, well below what it entered the water at. No World/GL dependency, so
+     * this is directly unit testable.
+     */
+    static float swimVerticalVelocity(boolean strokeUp, boolean strokeDown, float currentVy, float dt) {
+        if (strokeUp) return SWIM_SPEED;
+        if (strokeDown) return -SWIM_SPEED;
+        return Math.max(currentVy - WATER_GRAVITY * dt, WATER_SINK_SPEED);
+    }
+
+    /**
+     * The fall-impact speed to record for a landing: the raw one, unless the
+     * player is also touching water right where they're landing, in which case
+     * it's capped to the same safe speed buoyancy would have slowed them to.
+     * Covers landings {@link #swimVerticalVelocity} alone can't: a fast fall can
+     * cross a shallow puddle and hit the solid floor beneath it within a single
+     * physics step, never getting a full frame of buoyancy first (updateMovement's
+     * swimming check runs against the position *before* that same step). No
+     * World/GL dependency, so this is directly unit testable.
+     */
+    static float landingImpactSpeed(float rawImpactSpeed, boolean landingInWater) {
+        return landingInWater ? Math.min(rawImpactSpeed, -WATER_SINK_SPEED) : rawImpactSpeed;
+    }
+
     private void updateDoubleTapW(Input input, float dt) {
         boolean doubleTapped = wTapDetector.tick(dt, input.isKeyJustPressed(keyBinds.get(KeyBindings.FORWARD)));
         switch (decideDoubleTapWAction(doubleTapped, flying, gameMode.isCreative())) {
@@ -350,11 +512,20 @@ public class Player {
             moveZ /= len;
         }
 
+        // Swimming: in water and not standing on anything solid - a diver mid-water
+        // column, not someone wading in the shallows with their feet on the bottom
+        // (that's onGround, and just walks slower through the water like normal
+        // ground movement). Flying overrides it entirely, same as it overrides gravity.
+        swimming = computeSwimming(flying, gameMode.isSpectator(), onGround,
+                overlapsAny(world, aabbAt(position), BlockType::isWater));
+
         boolean sprinting = (input.isKeyDown(keyBinds.get(KeyBindings.SPRINT)) || sprintLatched) && stats.canSprint();
         this.sprinting = sprinting && moving;
         float speed;
         if (flying) {
             speed = sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
+        } else if (swimming) {
+            speed = sprinting ? SWIM_SPRINT_SPEED : SWIM_SPEED;
         } else {
             speed = sprinting ? SPRINT_SPEED : WALK_SPEED;
         }
@@ -367,6 +538,10 @@ public class Player {
             if (input.isKeyDown(keyBinds.get(KeyBindings.JUMP))) vy += speed;
             if (input.isKeyDown(keyBinds.get(KeyBindings.FLY_DOWN))) vy -= speed;
             velocity.y = vy;
+        } else if (swimming) {
+            boolean strokeUp = input.isKeyDown(keyBinds.get(KeyBindings.JUMP));
+            boolean strokeDown = input.isKeyDown(keyBinds.get(KeyBindings.FLY_DOWN));
+            velocity.y = swimVerticalVelocity(strokeUp, strokeDown, velocity.y, dt);
         } else {
             velocity.y -= GRAVITY * dt;
             velocity.y = Math.max(velocity.y, TERMINAL_VELOCITY);
@@ -378,7 +553,15 @@ public class Player {
         }
 
         moveAndCollide(world, velocity.x * dt, velocity.y * dt, velocity.z * dt);
+        // Refresh against the post-move position/onGround: moveAndCollide can
+        // surface the player onto solid ground (or carry them out of the water
+        // entirely) this same frame, and the pre-move swimming computed above is
+        // stale by then - isSwimming()/isSwimmingAndMoving() (debug overlay,
+        // stroke sound) would otherwise report swimming for one extra frame.
+        swimming = computeSwimming(flying, gameMode.isSpectator(), onGround,
+                overlapsAny(world, aabbAt(position), BlockType::isWater));
         movingOnGround = onGround && moving && !flying;
+        swimmingAndMoving = swimming && moving;
         return sprinting && moving;
     }
 
@@ -462,7 +645,14 @@ public class Player {
         if (collidesAt(world, movedY)) {
             if (dy < 0) {
                 onGround = true;
-                lastFallImpactSpeed = Math.max(lastFallImpactSpeed, -velocity.y);
+                // Landing in water this same frame - possible even if updateMovement's
+                // swimming check (based on the position before this move) said the
+                // player wasn't swimming yet, since a fast fall can cross a shallow
+                // puddle and hit the solid floor beneath it within a single physics
+                // step, never getting a full frame of buoyancy to slow it down first.
+                // Cap the recorded impact the same way buoyancy would have.
+                boolean landingInWater = overlapsAny(world, movedY, BlockType::isWater);
+                lastFallImpactSpeed = Math.max(lastFallImpactSpeed, landingImpactSpeed(-velocity.y, landingInWater));
             }
             velocity.y = 0;
             dy = 0;
