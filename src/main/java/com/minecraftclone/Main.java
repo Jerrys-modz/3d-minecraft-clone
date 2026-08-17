@@ -1640,8 +1640,8 @@ public class Main {
                 hud.drawTextLeft(String.format(Locale.ROOT, "Cold exposure: %.0f%%",
                                 player.getStats().getColdness() * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format(Locale.ROOT, "Armor: %d pts defense, %.0f%% warmth",
-                                player.getInventory().armorDefense(),
+                hud.drawTextLeft(String.format(Locale.ROOT, "Shelter: space %.0f%% warm, armor %.0f%% warmth",
+                                player.getSpaceWarmth() * 100f,
                                 player.getInventory().totalArmorWarmth() / Armor.WARMTH_CAP * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 if (player.isSubmerged()) {
