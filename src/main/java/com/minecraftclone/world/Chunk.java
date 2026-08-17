@@ -28,10 +28,9 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
     // Per-block facing hint for doors (0:+Z, 1:-Z, 2:+X, 3:-X) - only doors use it.
     private final byte[] orientations = new byte[SIZE * HEIGHT * SIZE];
-    // Meshes are allocated lazily on the first rebuildMesh - a chunk can be
-    // generated (blocks filled) and even meshed CPU-side without ever touching
-    // the GPU, which is what lets a headless server host a World without an
-    // OpenGL context, and lets unit tests construct chunks directly.
+    // Created lazily on first mesh/upload, so a Chunk can be constructed (and even
+    // fully generated) without a live GL context - e.g. from a unit test, or off
+    // the main thread later. Only the GL thread ever touches it.
     private Mesh mesh;
     private Mesh translucentMesh;
     // Local positions (+ light level) of every light-emitting block (torches) currently
@@ -414,6 +413,10 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                         emitSlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
+                    if (block.isSnowCappedSlab()) {
+                        emitSnowySlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        continue;
+                    }
                     if (block.isFluid()) {
                         emitFluid(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
@@ -453,10 +456,14 @@ public class Chunk implements ChunkStorage.PersistableChunk {
             }
         }
 
-        if (mesh == null) mesh = new Mesh();
+        if (mesh == null) {
+            mesh = new Mesh();
+        }
         mesh.upload(vertices.toArray(), indices.toArray());
         hasMeshData = indices.size() > 0;
-        if (translucentMesh == null) translucentMesh = new Mesh();
+        if (translucentMesh == null) {
+            translucentMesh = new Mesh();
+        }
         translucentMesh.upload(transVertices.toArray(), transIndices.toArray());
         hasTranslucentData = transIndices.size() > 0;
         dirty = false;
@@ -985,6 +992,97 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         }
     }
 
+    /**
+     * Emits a full-height snow-capped slab: the slab material fills the lower
+     * half (same visibility rules as {@link #emitSlab}) and a snow cap fills
+     * the upper half, so accumulated snow sits flush on a slab instead of
+     * floating a half-block gap above its half-height top. Faces follow the
+     * same culling as {@link #emitSlab}: sides only toward air/cross, the top
+     * never covered, the bottom hidden under a full block below.
+     */
+    private void emitSnowySlab(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                               int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
+        float[] uvCap = atlas.getUV(block.topTile);
+        float[] uvSlab = atlas.getUV(block.sideTile);
+        float u0 = uvCap[0], v0 = uvCap[1], u1 = uvCap[2], v1 = uvCap[3];
+        float[][] capUvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+        float s0 = uvSlab[0], t0 = uvSlab[1], s1 = uvSlab[2], t1 = uvSlab[3];
+        float[][] slabUvs = {{s0, t1}, {s1, t1}, {s1, t0}, {s0, t0}};
+
+        float x0 = wx, z0 = wz, x1 = wx + 1, z1 = wz + 1;
+        float yBot = wy, yMid = wy + 0.5f, yTop = wy + 1f;
+
+        // The snow cap's top face is never covered from above (blocks start at whole-block heights).
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x0, yTop, z1}, {x1, yTop, z1}, {x1, yTop, z0}, {x0, yTop, z0}},
+                capUvs, LIGHT_TOP, blockLight);
+
+        // The slab's bottom face: drawn unless a full-height block sits directly below.
+        BlockType below = world.getBlock(wx, wy - 1, wz);
+        if (below == BlockType.AIR || below.cross || below.slab) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yBot, z0}, {x1, yBot, z0}, {x1, yBot, z1}, {x0, yBot, z1}},
+                    slabUvs, LIGHT_BOTTOM, blockLight);
+        }
+
+        // Four sides: the slab's lower half, then the snow's upper half. Apply
+        // the same visibility rules as solid blocks (including fluids and
+        // translucent neighbors). When adjacent to a plain slab, emit only the
+        // upper cap half - the lower slab half is shared and remains culled.
+        BlockType east = world.getBlock(wx + 1, wy, wz);
+        if (east == BlockType.AIR || east.cross || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || (leavesTransparent && east == BlockType.LEAVES)) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, yBot, z1}, {x1, yBot, z0}, {x1, yMid, z0}, {x1, yMid, z1}},
+                    slabUvs, LIGHT_EAST_WEST, blockLight);
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, yMid, z1}, {x1, yMid, z0}, {x1, yTop, z0}, {x1, yTop, z1}},
+                    capUvs, LIGHT_EAST_WEST, blockLight);
+        } else if (east.slab || east.isSnowCappedSlab()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, yMid, z1}, {x1, yMid, z0}, {x1, yTop, z0}, {x1, yTop, z1}},
+                    capUvs, LIGHT_EAST_WEST, blockLight);
+        }
+        BlockType west = world.getBlock(wx - 1, wy, wz);
+        if (west == BlockType.AIR || west.cross || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || (leavesTransparent && west == BlockType.LEAVES)) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yBot, z0}, {x0, yBot, z1}, {x0, yMid, z1}, {x0, yMid, z0}},
+                    slabUvs, LIGHT_EAST_WEST, blockLight);
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yMid, z0}, {x0, yMid, z1}, {x0, yTop, z1}, {x0, yTop, z0}},
+                    capUvs, LIGHT_EAST_WEST, blockLight);
+        } else if (west.slab || west.isSnowCappedSlab()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yMid, z0}, {x0, yMid, z1}, {x0, yTop, z1}, {x0, yTop, z0}},
+                    capUvs, LIGHT_EAST_WEST, blockLight);
+        }
+        BlockType south = world.getBlock(wx, wy, wz + 1);
+        if (south == BlockType.AIR || south.cross || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || (leavesTransparent && south == BlockType.LEAVES)) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yBot, z1}, {x1, yBot, z1}, {x1, yMid, z1}, {x0, yMid, z1}},
+                    slabUvs, LIGHT_NORTH_SOUTH, blockLight);
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yMid, z1}, {x1, yMid, z1}, {x1, yTop, z1}, {x0, yTop, z1}},
+                    capUvs, LIGHT_NORTH_SOUTH, blockLight);
+        } else if (south.slab || south.isSnowCappedSlab()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, yMid, z1}, {x1, yMid, z1}, {x1, yTop, z1}, {x0, yTop, z1}},
+                    capUvs, LIGHT_NORTH_SOUTH, blockLight);
+        }
+        BlockType north = world.getBlock(wx, wy, wz - 1);
+        if (north == BlockType.AIR || north.cross || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || (leavesTransparent && north == BlockType.LEAVES)) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, yBot, z0}, {x0, yBot, z0}, {x0, yMid, z0}, {x1, yMid, z0}},
+                    slabUvs, LIGHT_NORTH_SOUTH, blockLight);
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, yMid, z0}, {x0, yMid, z0}, {x0, yTop, z0}, {x1, yTop, z0}},
+                    capUvs, LIGHT_NORTH_SOUTH, blockLight);
+        } else if (north.slab || north.isSnowCappedSlab()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, yMid, z0}, {x0, yMid, z0}, {x0, yTop, z0}, {x1, yTop, z0}},
+                    capUvs, LIGHT_NORTH_SOUTH, blockLight);
+        }
+    }
+
     private void emitQuadBothSides(FloatArray vertices, IntArray indices, int[] vertexCounter,
                                     float[][] positions, float[][] uvs, float light, float blockLight) {
         emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
@@ -1029,20 +1127,26 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     public void render() {
-        if (hasMeshData && mesh != null) {
+        if (mesh != null && hasMeshData) {
             mesh.render();
         }
     }
 
     /** Renders the see-through (glass/ice) faces - the caller draws this after all opaque geometry. */
     public void renderTranslucent() {
-        if (hasTranslucentData && translucentMesh != null) {
+        if (translucentMesh != null && hasTranslucentData) {
             translucentMesh.render();
         }
     }
 
     public void destroy() {
-        if (mesh != null) mesh.destroy();
-        if (translucentMesh != null) translucentMesh.destroy();
+        if (mesh != null) {
+            mesh.destroy();
+            mesh = null;
+        }
+        if (translucentMesh != null) {
+            translucentMesh.destroy();
+            translucentMesh = null;
+        }
     }
 }

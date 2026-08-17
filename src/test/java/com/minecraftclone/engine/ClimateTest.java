@@ -4,6 +4,7 @@ import com.minecraftclone.world.gen.TerrainGenerator.Biome;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -173,5 +174,18 @@ class ClimateTest {
             assertEquals(before[h].weather(), after[h].weather(),
                     "forcing the live weather must not change the already-rolled forecast");
         }
+    }
+
+    @Test
+    void forcedTemperatureShortCircuitsTheNaturalClimate() {
+        Climate climate = rolledClimate(0);
+        float natural = climate.temperatureFor(Biome.PLAINS);
+        climate.forceTemperature(-12f);
+        assertEquals(-12f, climate.temperatureFor(Biome.PLAINS), 0.001f);
+        assertEquals(-12f, climate.temperatureFor(Biome.DESERT), 0.001f);
+        assertTrue(climate.hasForcedTemperature());
+        climate.forceTemperature(null);
+        assertEquals(natural, climate.temperatureFor(Biome.PLAINS), 0.001f);
+        assertFalse(climate.hasForcedTemperature());
     }
 }

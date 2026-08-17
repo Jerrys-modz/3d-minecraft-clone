@@ -56,6 +56,7 @@ public class Climate {
     private Biome currentBiome = Biome.PLAINS;
     private float wetness = 0f;
     private Weather forcedWeather; // autotest override (null = schedule-driven)
+    private Float forcedTemperature; // autotest override (null = natural climate)
     /** The absolute in-game hour that {@code hourly[0]} represents (always a day's midnight). */
     private int startHour = -1;
     /** Counts down a lightning flash during a thunderstorm; 0 = no flash. */
@@ -330,9 +331,11 @@ public class Climate {
 
     /**
      * Current temperature in °C at {@code biome}: its base, plus the seasonal
-     * offset, a dip at night, and cooling during precipitation.
+     * offset, a dip at night, and cooling during precipitation. An autotest
+     * override (see {@link #forceTemperature}) short-circuits all of that.
      */
     public float temperatureFor(Biome biome) {
+        if (forcedTemperature != null) return forcedTemperature;
         float base = baseTemperature(biome);
         float seasonal = calendar.temperatureOffset();
         float nightly = -6f * (1f - dayNightCycle.getDaylightFactor());
@@ -352,6 +355,16 @@ public class Climate {
     /** Forces a weather state (autotest/screenshot hook). */
     public void forceWeather(Weather weather) {
         this.forcedWeather = weather;
+    }
+
+    /** Forces a temperature override in °C (autotest/screenshot hook); null leaves the natural climate alone. */
+    public void forceTemperature(Float temperatureCelsius) {
+        this.forcedTemperature = temperatureCelsius;
+    }
+
+    /** True while a temperature override is active (autotest hook). */
+    public boolean hasForcedTemperature() {
+        return forcedTemperature != null;
     }
 
     /** A biome's baseline temperature in °C. */
@@ -374,6 +387,8 @@ public class Climate {
             case CHERRY_GROVE -> 15f;
             case FLOWER_MEADOW -> 18f;
             case MOUNTAIN -> 4f;
+            case NETHER -> 36f; // hot, hellish underworld
+            case END -> 8f;     // cool, airy void
         };
     }
 
@@ -397,6 +412,8 @@ public class Climate {
             case CHERRY_GROVE -> 0.60f;
             case FLOWER_MEADOW -> 0.50f;
             case MOUNTAIN -> 0.50f;
+            case NETHER -> 0.05f; // arid, scorched underworld
+            case END -> 0.40f;    // sparse, dry void
         };
     }
 

@@ -4,6 +4,7 @@ import com.minecraftclone.engine.DayNightCycle;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Chunk;
+import com.minecraftclone.world.DimensionType;
 import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
@@ -94,7 +95,7 @@ public class GameServer implements AutoCloseable {
     public GameServer(int port, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
         this.settings = settings;
         this.seed = seed;
-        this.world = new World(seed, settings, null, saveDir, true);
+        this.world = new World(seed, settings, null, saveDir, DimensionType.OVERWORLD, true);
         world.setKeepChunks(true);
         world.setRenderDistance(8);
         // Generate a starting area around the origin so chunk requests near

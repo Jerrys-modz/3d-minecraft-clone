@@ -98,6 +98,19 @@ public class Player {
         stats.reset();
     }
 
+    /**
+     * Teleports the player to the given absolute position, zeroing all velocity.
+     * Unlike spawn/respawn this doesn't probe the world for a surface - the
+     * caller (dimension teleporting) has already picked a safe landing spot.
+     */
+    public void teleportTo(float x, float y, float z) {
+        position.set(x, y, z);
+        velocity.set(0, 0, 0);
+        camera.setPosition(x, y + EYE_HEIGHT, z);
+        onGround = false;
+        lastFallImpactSpeed = 0f;
+    }
+
     public Camera getCamera() {
         return camera;
     }
@@ -213,7 +226,8 @@ public class Player {
             stats.forceFull();
         } else {
             boolean inLava = overlapsAny(world, aabbAt(position), BlockType::isLava);
-            stats.update(dt, inLava, submerged, sprintingAndMoving, lastFallImpactSpeed);
+            boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
+            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed);
         }
         lastFallImpactSpeed = 0f;
     }

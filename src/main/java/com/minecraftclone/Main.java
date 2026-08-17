@@ -7,6 +7,7 @@ import com.minecraftclone.engine.audio.SoundCategory;
 import com.minecraftclone.engine.audio.SoundEvent;
 import com.minecraftclone.engine.audio.SoundMaterial;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.GuiTextures;
 import com.minecraftclone.engine.graphics.HandRenderer;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
@@ -35,8 +36,10 @@ import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.Barrel;
 import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.BlockType;
-import com.minecraftclone.world.Furnace;
+import com.minecraftclone.world.Chunk;
+import com.minecraftclone.world.DimensionType;
 import com.minecraftclone.world.Door;
+import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.RemotePlayer;
@@ -85,6 +88,10 @@ public class Main {
     private static final float NEAR_PLANE = 0.05f;
     private static final float FAR_PLANE = 400f;
     private static final float AUTOSAVE_INTERVAL_SECONDS = 60f;
+    /** How long after teleporting through a portal before another portal can trigger (so you don't bounce straight back). */
+    private static final float PORTAL_COOLDOWN_SECONDS = 2.0f;
+    /** Overworld/nether coordinate ratio, Minecraft-style (1 block in the nether = 8 in the overworld). */
+    private static final float NETHER_SCALE = 8f;
 
     private static final int APPLE_DROP_CHANCE = 8;    // 1 in 8 leaves broken also yield an apple
 
@@ -97,8 +104,22 @@ public class Main {
 
     private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
 
+    /** Procedurally-generated GUI art (light/dark panels and slots), shared by every screen. */
+    private GuiTextures guiTextures;
+
+    /** HUD renderer; referenced by {@link #applySettings} to push the GUI theme live. */
+    private Hud hud;
+
     private static final Vector4f WHITE = new Vector4f(1f, 1f, 1f, 1f);
     private static final Vector3f WORLD_UP = new Vector3f(0f, 1f, 0f);
+
+    // Per-dimension sky/fog look (the overworld uses the day/night cycle).
+    private static final Vector3f NETHER_HORIZON = new Vector3f(0.28f, 0.07f, 0.03f);
+    private static final Vector3f NETHER_ZENITH = new Vector3f(0.16f, 0.04f, 0.02f);
+    private static final Vector3f END_HORIZON = new Vector3f(0.03f, 0.03f, 0.06f);
+    private static final Vector3f END_ZENITH = new Vector3f(0.01f, 0.01f, 0.02f);
+    private static final float NETHER_AMBIENT = 0.7f;   // dim lava/glowstone self-light
+    private static final float END_AMBIENT = 0.45f;     // dim, star-lit void
 
     // --- Multiplayer state (set from the main menu / network thread) ---
     /** The active server connection, or null when not in a multiplayer session. */
@@ -114,22 +135,26 @@ public class Main {
     /** Draws other players' bodies; created in run() once the GL context exists. */
     private PlayerRenderer playerRenderer;
 
+
     /** Queues a transient on-screen message (rendered via {@link Hud#renderMessages}). */
     private static void showMessage(List<Hud.Message> messages, String text, Vector4f color, float duration) {
         messages.add(new Hud.Message(text, color, duration));
     }
 
-    /** Pushes the current in-memory {@link Settings} into the world/renderer/player/audio. */
-    private void applySettings(Settings settings, World world, Player player, Window window, AudioEngine audio) {
-        if (world != null) {
-            world.setLeavesTransparent(settings.isLeavesTransparent());
-            world.setRenderDistance(settings.getRenderDistance());
+    /** Pushes the current in-memory {@link Settings} into every world/renderer/player/audio. */
+    private void applySettings(Settings settings, World[] worlds, Player player, Window window, AudioEngine audio) {
+        if (worlds != null) {
+            for (World world : worlds) {
+                world.setLeavesTransparent(settings.isLeavesTransparent());
+                world.setRenderDistance(settings.getRenderDistance());
+            }
         }
         window.setVsync(settings.isVsync());
         player.setMouseSensitivity(settings.getMouseSensitivity());
         player.setGameMode(settings.getGameMode());
         player.setInvertMouseY(settings.isInvertMouseY());
         player.setViewBobbing(settings.isViewBobbing());
+        hud.setGuiTextures(guiTextures, settings.isDarkGui());
         audio.setMasterVolume(settings.getSoundVolume());
         audio.setCategoryVolume(SoundCategory.MUSIC, settings.getMusicVolume());
         audio.setCategoryVolume(SoundCategory.AMBIENT, settings.getAmbientVolume());
@@ -146,7 +171,7 @@ public class Main {
      * selects the active section (Graphics / Gameplay / Controls); navigation
      * wraps within the active tab's rows, and Tab (or clicking a tab) switches.
      */
-    private void handleSettingsMenuInput(Input input, Settings settings, Path settingsFile, World world,
+    private void handleSettingsMenuInput(Input input, Settings settings, Path settingsFile, World[] worlds,
                                          Player player, Window window, Hud hud, AudioEngine audio,
                                          int[] menuSelection, int[] sliderDragRow, int[] bindingAction,
                                          int[] settingsTab) {
@@ -184,13 +209,13 @@ public class Main {
             }
             if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
                 if (tab != Settings.TAB_CONTROLS) {
-                    adjustSettingsRow(settings, settingsFile, world, player, window, audio,
+                    adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), -1);
                 }
             }
             if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
                 if (tab != Settings.TAB_CONTROLS) {
-                    adjustSettingsRow(settings, settingsFile, world, player, window, audio,
+                    adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), +1);
                 }
             }
@@ -199,7 +224,7 @@ public class Main {
                     bindingAction[0] = menuSelection[0];
                     input.consumeLastKeyPressed(); // discard the Enter/Space that started capture
                 } else {
-                    adjustSettingsRow(settings, settingsFile, world, player, window, audio,
+                    adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), +1);
                 }
             }
@@ -234,12 +259,12 @@ public class Main {
                 } else {
                     int row = Settings.rowInTab(tab, clicked);
                     if (Settings.isToggle(row)) {
-                        adjustSettingsRow(settings, settingsFile, world, player, window, audio, row, +1);
+                        adjustSettingsRow(settings, settingsFile, worlds, player, window, audio, row, +1);
                     } else {
                         float frac = hud.settingsTrackAt(sLx, sLy, tab);
                         if (frac >= 0f) {
                             settings.setFromFraction(row, frac);
-                            applySettings(settings, world, player, window, audio);
+                            applySettings(settings, worlds, player, window, audio);
                             settings.save(settingsFile);
                             sliderDragRow[0] = clicked;
                         }
@@ -250,7 +275,7 @@ public class Main {
         if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && sliderDragRow[0] >= 0) {
             float frac = hud.settingsSliderAt(sLx, sliderDragRow[0], tab);
             settings.setFromFraction(Settings.rowInTab(tab, sliderDragRow[0]), frac);
-            applySettings(settings, world, player, window, audio);
+            applySettings(settings, worlds, player, window, audio);
             settings.save(settingsFile);
         }
         if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
@@ -259,10 +284,10 @@ public class Main {
     }
 
     /** Steps/toggles a single settings row and pushes the change everywhere it applies. */
-    private void adjustSettingsRow(Settings settings, Path settingsFile, World world, Player player,
+    private void adjustSettingsRow(Settings settings, Path settingsFile, World[] worlds, Player player,
                                    Window window, AudioEngine audio, int row, int direction) {
         settings.adjust(row, direction);
-        applySettings(settings, world, player, window, audio);
+        applySettings(settings, worlds, player, window, audio);
         settings.save(settingsFile);
         audio.play(SoundEvent.UI_CLICK);
     }
@@ -499,7 +524,7 @@ public class Main {
                             ? saveRoot.resolve("multiplayer_client").resolve(Long.toString(System.nanoTime()))
                             : Paths.get("multiplayer_client");
                 }
-                World w = new World(welcome.seed(), remoteSettings, atlas, clientSaveDir);
+                World w = new World(welcome.seed(), remoteSettings, atlas, clientSaveDir, DimensionType.OVERWORLD);
                 w.setRenderDistance(settings.getRenderDistance());
                 w.setLeavesTransparent(settings.isLeavesTransparent());
                 // When the client generates a chunk from the seed, ask the server whether
@@ -781,6 +806,8 @@ public class Main {
         mobTextures.generate();
         FontAtlas font = new FontAtlas();
         font.generate();
+        guiTextures = new GuiTextures();
+        guiTextures.generate();
         // Best-effort: a machine with no audio device at all (routine for a
         // headless CI/verification environment) leaves this permanently
         // disabled rather than throwing - see AudioEngine's own javadoc.
@@ -797,16 +824,21 @@ public class Main {
         player.setKeyBinds(settings.getKeyBinds());
         // The world is created lazily when the player picks a world or creates one.
         World world = null;
+        World[] worlds = null;
+        DimensionType[] currentDim = {DimensionType.OVERWORLD};
         boolean[] started = {false};
         List<String> worldNames = new ArrayList<>();
 
-        Hud hud = new Hud(lineShader, hudShader, font);
+        hud = new Hud(lineShader, hudShader, font);
+        hud.setGuiTextures(guiTextures, false); // theme is applied via applySettings below
         ItemRenderer itemRenderer = new ItemRenderer();
         HandRenderer handRenderer = new HandRenderer();
         MobRenderer mobRenderer = new MobRenderer();
         playerRenderer = new PlayerRenderer();
         WeatherParticles weatherParticles = new WeatherParticles();
         WeatherRenderer weatherRenderer = new WeatherRenderer();
+        List<LightningBolt> bolts = new ArrayList<>();
+        Random lightningRnd = new Random(); // strike placement
         float prevFlash = 0f; // previous frame's lightning intensity - to catch a new flash
         List<Hud.Message> messages = new ArrayList<>();
         boolean[] showDebug = {false};
@@ -848,7 +880,7 @@ public class Main {
         window.setCursorCaptured(false); // free cursor in the main menu
 
         // Ensure the renderer/player/window/audio all match the loaded settings.
-        applySettings(settings, world, player, window, audio);
+        applySettings(settings, worlds, player, window, audio);
 
         int[] selectedSlot = {0};
         Random loot = new Random();
@@ -881,6 +913,9 @@ public class Main {
         boolean autoTest = System.getenv("MCCLONE_AUTOTEST") != null;
         int autoTestFrames = autoTest ? Integer.parseInt(System.getenv().getOrDefault("MCCLONE_AUTOTEST_FRAMES", "60")) : 0;
         String autoTestPath = System.getenv().getOrDefault("MCCLONE_AUTOTEST_PATH", "screenshot.png");
+        // Autotest hook: strike a bolt in front of the camera on the final frame,
+        // so the bolt + its fire can be screenshotted right as they appear.
+        boolean forceLightning = System.getenv("MCCLONE_AUTOTEST_LIGHTNING") != null;
         if (System.getenv("MCCLONE_AUTOTEST_TIME") != null) {
             dayNightCycle.setTime(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_TIME")));
         }
@@ -894,6 +929,9 @@ public class Main {
             } catch (IllegalArgumentException ignored) {
                 // Unknown weather override - leave the random forecast alone.
             }
+        }
+        if (System.getenv("MCCLONE_AUTOTEST_TEMP") != null) {
+            climate.forceTemperature(Float.parseFloat(System.getenv("MCCLONE_AUTOTEST_TEMP")));
         }
         if (System.getenv("MCCLONE_AUTOTEST_FORECAST") != null) {
             forecastOpen[0] = true;
@@ -931,10 +969,17 @@ public class Main {
             genSettings.setName(autoDir.getFileName().toString());
             saveWorldGenSettings(autoDir, genSettings);
             long seed = genSettings.resolveSeed();
-            world = new World(seed, genSettings, atlas, autoDir);
+            worlds = new World[DimensionType.values().length];
+            for (DimensionType dim : DimensionType.values()) {
+                worlds[dim.ordinal()] = new World(seed, genSettings, atlas, autoDir, dim);
+            }
+            currentDim[0] = DimensionType.OVERWORLD;
+            world = worlds[currentDim[0].ordinal()];
             startCalendar(dayNightCycle, calendar, genSettings);
-            world.setRenderDistance(settings.getRenderDistance());
-            world.setLeavesTransparent(settings.isLeavesTransparent());
+            for (World w : worlds) {
+                w.setRenderDistance(settings.getRenderDistance());
+                w.setLeavesTransparent(settings.isLeavesTransparent());
+            }
             for (int i = 0; i < 200; i++) world.update(0, 0);
             float[] spawn = findSpawn(world);
             player.spawn(world, spawn[0], spawn[1]);
@@ -1025,6 +1070,7 @@ public class Main {
         }
         int frameCount = 0;
         float timeSinceAutosave = 0f;
+        float[] teleportCooldown = {0f};
 
         while (!window.shouldClose()) {
             input.beginFrame();
@@ -1051,14 +1097,48 @@ public class Main {
                 // Rain/snow falls around the player's eye, scaled by the weather.
                 Vector3f eye = player.getEyePosition();
                 weatherParticles.update(dt, eye.x, eye.y, eye.z, climate.getWeather(), climate.getWeatherStrength());
+                // Snow accumulates on the ground and water freezes over while it's
+                // cold, melting back away when it warms - see World.updateSeasonalSurfaces.
+                world.updateSeasonalSurfaces(dt, player.getPosition().x, player.getPosition().z, climate);
                 // Weather ambience: the precipitation hiss follows the weather's
                 // intensity, and a lightning flash that just started gets its rumble.
                 audio.setWeatherAmbience(climate.isPrecipitation() ? climate.getWeatherStrength() : 0f);
                 float flash = climate.getFlashIntensity();
                 if (flash > 0f && prevFlash <= 0f) {
                     audio.play(SoundEvent.THUNDER, 0.8f);
+                    if (world != null) {
+                        float lightningDamage = lightningStrike(world, player, bolts, lightningRnd);
+                        if (lightningDamage > 0f) {
+                            player.getStats().damage(lightningDamage);
+                        }
+                    }
                 }
                 prevFlash = flash;
+                // Burning cells tick down, spread, hurt mobs and get doused by water.
+                world.tickFires(dt);
+                // Bolts flare and die quickly; drop any that have finished.
+                for (int i = bolts.size() - 1; i >= 0; i--) {
+                    LightningBolt bolt = bolts.get(i);
+                    bolt.update(dt);
+                    if (!bolt.isAlive()) bolts.remove(i);
+                }
+                // Autotest hook: force a strike just before the screenshot so the
+                // bolt (0.35s lifetime) is still crackling in frame.
+                if (forceLightning && frameCount == autoTestFrames - 1) {
+                    Vector3f front = player.getCamera().getFront();
+                    Vector3f pos = player.getPosition();
+                    World.LightningStrikeResult result = world.strikeLightning(lightningRnd, pos.x + front.x * 14f, pos.z + front.z * 14f, pos);
+                    if (result.bolt() != null) {
+                        bolts.add(result.bolt());
+                        audio.play(SoundEvent.THUNDER, 0.8f);
+                        if (result.playerDamage() > 0f) {
+                            player.getStats().damage(result.playerDamage());
+                        }
+                        System.out.println("Autotest lightning strike at frame " + frameCount);
+                    } else {
+                        System.out.println("Autotest lightning: no surface at strike target");
+                    }
+                }
             }
             animTime[0] += dt;
             attackCooldown[0] -= dt;
@@ -1087,6 +1167,11 @@ public class Main {
                             world.destroy();
                             world = null;
                         }
+                        if (worlds != null) {
+                            for (int i = 0; i < worlds.length; i++) {
+                                worlds[i] = null;
+                            }
+                        }
                     } else if (mpConnecting[0]) {
                         showMessage(messages, "Could not connect: " + reason, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
                     }
@@ -1100,7 +1185,15 @@ public class Main {
                     World newWorld = processNetPackets(netClient, world, player, atlas, settings, saveRoot,
                             genSettings, dayNightCycle, calendar, started, mainMenuOpen, multiplayerOpen,
                             mpConnecting, window, input, messages, audio);
-                    if (newWorld != null) world = newWorld;
+                    if (newWorld != null) {
+                        world = newWorld;
+                        // Multiplayer mirrors the server's single overworld - set up
+                        // the dimension array so the rest of the game (sky, portals)
+                        // sees a consistent single-world setup.
+                        worlds = new World[DimensionType.values().length];
+                        worlds[DimensionType.OVERWORLD.ordinal()] = newWorld;
+                        currentDim[0] = DimensionType.OVERWORLD;
+                    }
                     // Send the local player's pose to the server at ~20 Hz.
                     if (started[0] && netMoveTimer[0] >= 0.05f) {
                         netMoveTimer[0] = 0f;
@@ -1116,7 +1209,7 @@ public class Main {
                 if (mainSettingsOpen[0]) {
                     // Settings page opened from the main menu: same controls as the
                     // in-game Esc menu, but Esc returns to the main menu.
-                    handleSettingsMenuInput(input, settings, settingsFile, world, player, window, hud, audio,
+                    handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
                             menuSelection, sliderDragRow, bindingAction, settingsTab);
                     if (input.isKeyJustPressed(GLFW_KEY_ESCAPE) && bindingAction[0] < 0) {
                         mainSettingsOpen[0] = false;
@@ -1174,10 +1267,17 @@ public class Main {
                                     genSettings.setSeedText(Long.toString(seed));
                                     saveWorldGenSettings(worldDir, genSettings);
                                 }
-                                world = new World(seed, genSettings, atlas, worldDir);
+                                worlds = new World[DimensionType.values().length];
+                                for (DimensionType dim : DimensionType.values()) {
+                                    worlds[dim.ordinal()] = new World(seed, genSettings, atlas, worldDir, dim);
+                                }
+                                currentDim[0] = DimensionType.OVERWORLD;
+                                world = worlds[currentDim[0].ordinal()];
                                 startCalendar(dayNightCycle, calendar, genSettings);
-                            world.setRenderDistance(settings.getRenderDistance());
-                                world.setLeavesTransparent(settings.isLeavesTransparent());
+                                for (World w : worlds) {
+                                    w.setRenderDistance(settings.getRenderDistance());
+                                    w.setLeavesTransparent(settings.isLeavesTransparent());
+                                }
                                 for (int i = 0; i < 200; i++) world.update(0, 0);
                                 float[] spawn = findSpawn(world);
                                 player.spawn(world, spawn[0], spawn[1]);
@@ -1227,10 +1327,17 @@ public class Main {
                                 genSettings.setSeedText(Long.toString(seed));
                                 saveWorldGenSettings(worldDir, genSettings);
                             }
-                            world = new World(seed, genSettings, atlas, worldDir);
+                            worlds = new World[DimensionType.values().length];
+                            for (DimensionType dim : DimensionType.values()) {
+                                worlds[dim.ordinal()] = new World(seed, genSettings, atlas, worldDir, dim);
+                            }
+                            currentDim[0] = DimensionType.OVERWORLD;
+                            world = worlds[currentDim[0].ordinal()];
                             startCalendar(dayNightCycle, calendar, genSettings);
-                            world.setRenderDistance(settings.getRenderDistance());
-                            world.setLeavesTransparent(settings.isLeavesTransparent());
+                            for (World w : worlds) {
+                                w.setRenderDistance(settings.getRenderDistance());
+                                w.setLeavesTransparent(settings.isLeavesTransparent());
+                            }
                             for (int i = 0; i < 200; i++) world.update(0, 0);
                             float[] spawn = findSpawn(world);
                             player.spawn(world, spawn[0], spawn[1]);
@@ -1482,7 +1589,7 @@ public class Main {
                     inventoryController.endDrag(hoveredSlot[0]);
                 }
             } else if (menuOpen[0]) {
-                handleSettingsMenuInput(input, settings, settingsFile, world, player, window, hud, audio,
+                handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
                         menuSelection, sliderDragRow, bindingAction, settingsTab);
             }
 
@@ -1535,6 +1642,26 @@ public class Main {
                     rm.tickRemote(dt);
                 }
 
+                // Dimension portals: walking into a NETHER_PORTAL or END_PORTAL block
+                // teleports the player to the linked dimension (with a short cooldown
+                // so they don't instantly bounce back through the arrival portal).
+                teleportCooldown[0] = Math.max(0f, teleportCooldown[0] - dt);
+                if (teleportCooldown[0] <= 0f) {
+                    Vector3f p = player.getPosition();
+                    BlockType portal = world.getBlock((int) Math.floor(p.x), (int) Math.floor(p.y + 0.5f), (int) Math.floor(p.z));
+                    if (!portal.isPortal()) {
+                        portal = world.getBlock((int) Math.floor(p.x), (int) Math.floor(p.y + 1.5f), (int) Math.floor(p.z));
+                    }
+                    if (portal.isPortal()) {
+                        teleportThroughPortal(player, worlds, currentDim, portal);
+                        world = worlds[currentDim[0].ordinal()];
+                        teleportCooldown[0] = PORTAL_COOLDOWN_SECONDS;
+                        showMessage(messages, "Welcome to " + currentDim[0].displayName(),
+                                new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
+                    }
+                }
+
+
                 if (player.hasJustJumped()) audio.play(SoundEvent.JUMP);
                 if (player.hasJustLanded()) audio.play(SoundEvent.LAND);
                 if (player.isSubmerged() != wasSubmerged[0]) {
@@ -1586,6 +1713,14 @@ public class Main {
                 }
                 player.getInventory().clear();
                 player.getDurability().reset();
+                // Respawn back in the overworld, wherever you died.
+                if (currentDim[0] != DimensionType.OVERWORLD) {
+                    currentDim[0] = DimensionType.OVERWORLD;
+                    world = worlds[currentDim[0].ordinal()];
+                    for (int i = 0; i < 80; i++) {
+                        world.update(0, 0);
+                    }
+                }
                 player.respawn(world, 0.5f, 0.5f);
             }
 
@@ -1627,7 +1762,11 @@ public class Main {
             timeSinceAutosave += dt;
             if (timeSinceAutosave >= AUTOSAVE_INTERVAL_SECONDS) {
                 timeSinceAutosave = 0f;
-                if (world != null) world.saveAllModified();
+                if (worlds != null) {
+                    for (World w : worlds) {
+                        w.saveAllModified();
+                    }
+                }
             }
 
             hit = null;
@@ -1831,19 +1970,61 @@ public class Main {
             Matrix4f projection = player.getCamera().getProjectionMatrix(settings.getFov(), window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
             Matrix4f view = player.getCamera().getViewMatrix();
 
-            // Weather dims the sky: overcast skies lean grey and drop the light,
-            // and a thunderstorm's lightning briefly flashes everything bright.
+            // Per-dimension sky: the overworld runs the live day/night cycle; the
+            // Nether is a constant dim red glow (no sun/clouds/stars), and the End
+            // is a star-lit void. Weather (overcast skies, lightning flashes) dims
+            // the overworld sky; the other dimensions' skies are fixed. Reused
+            // scratch vectors keep this allocation-free.
             float overcast = climate.getOvercast();
             float flash = climate.getFlashIntensity();
-            Vector3f horizonColor = new Vector3f(dayNightCycle.getHorizonColor());
-            Vector3f zenithColor = new Vector3f(dayNightCycle.getZenithColor());
-            if (overcast > 0f) {
-                horizonColor.lerp(OVERCAST_HORIZON, overcast);
-                zenithColor.lerp(OVERCAST_ZENITH, overcast);
-            }
-            if (flash > 0f) {
-                horizonColor.lerp(FLASH_COLOR, flash * 0.8f);
-                zenithColor.lerp(FLASH_COLOR, flash * 0.8f);
+            Vector3f horizonColor;
+            Vector3f zenithColor;
+            Vector3f nightZenith;
+            Vector3f sunColor;
+            Vector3f moonColor;
+            float daylight;
+            float ambientBrightness;
+            float clouds = settings.getCloudAmount() / 3f;
+            float stars = settings.isStars() ? 1f : 0f;
+            if (currentDim[0] == DimensionType.NETHER) {
+                horizonColor = NETHER_HORIZON;
+                zenithColor = NETHER_ZENITH;
+                nightZenith = NETHER_ZENITH;
+                sunColor = NETHER_ZENITH;
+                moonColor = NETHER_ZENITH;
+                daylight = 1f;
+                clouds = 0f;
+                stars = 0f;
+                ambientBrightness = NETHER_AMBIENT * settings.getBrightness();
+            } else if (currentDim[0] == DimensionType.END) {
+                horizonColor = END_HORIZON;
+                zenithColor = END_ZENITH;
+                nightZenith = END_ZENITH;
+                sunColor = END_ZENITH;
+                moonColor = END_ZENITH;
+                daylight = 0.5f;
+                clouds = 0f;
+                stars = 1f;
+                ambientBrightness = END_AMBIENT * settings.getBrightness();
+            } else {
+                horizonColor = new Vector3f(dayNightCycle.getHorizonColor());
+                zenithColor = new Vector3f(dayNightCycle.getZenithColor());
+                nightZenith = dayNightCycle.getNightZenithColor();
+                sunColor = dayNightCycle.getSunColor();
+                moonColor = dayNightCycle.getMoonColor();
+                daylight = dayNightCycle.getDaylightFactor();
+                clouds = settings.getCloudAmount() / 3f;
+                stars = settings.isStars() ? 1f : 0f;
+                if (overcast > 0f) {
+                    horizonColor.lerp(OVERCAST_HORIZON, overcast);
+                    zenithColor.lerp(OVERCAST_ZENITH, overcast);
+                }
+                if (flash > 0f) {
+                    horizonColor.lerp(FLASH_COLOR, flash * 0.8f);
+                    zenithColor.lerp(FLASH_COLOR, flash * 0.8f);
+                }
+                ambientBrightness = dayNightCycle.getAmbientBrightness() * settings.getBrightness()
+                        * (1f - 0.55f * overcast) + flash * 0.5f;
             }
             window.setClearColor(horizonColor.x, horizonColor.y, horizonColor.z, 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1852,12 +2033,11 @@ public class Main {
             // plane so the world always draws in front of it.
             glDisable(GL_DEPTH_TEST);
             skyRenderer.render(skyShader, projection, view,
-                    dayNightCycle.getSunDirection(), dayNightCycle.getDaylightFactor(), dayNightCycle.getCloudPhase(),
-                    Math.min(1.5f, settings.getCloudAmount() / 3f + overcast * 0.9f),
+                    dayNightCycle.getSunDirection(), daylight, dayNightCycle.getCloudPhase(),
+                    Math.min(1.5f, clouds + (currentDim[0] == DimensionType.OVERWORLD ? overcast * 0.9f : 0f)),
                     0.5f + settings.getCloudSpeed() * 0.5f,
-                    (settings.isStars() ? 1f : 0f) * (1f - overcast),
-                    zenithColor, horizonColor,
-                    dayNightCycle.getNightZenithColor(), dayNightCycle.getSunColor(), dayNightCycle.getMoonColor());
+                    currentDim[0] == DimensionType.OVERWORLD ? stars * (1f - overcast) : stars,
+                    zenithColor, horizonColor, nightZenith, sunColor, moonColor);
             glEnable(GL_DEPTH_TEST);
 
             if (started[0]) {
@@ -1868,9 +2048,9 @@ public class Main {
             chunkShader.setUniform("fogColor", horizonColor);
             chunkShader.setUniform("fogStart", (world.getRenderDistance() - 2) * 16f);
             chunkShader.setUniform("fogEnd", world.getRenderDistance() * 16f);
-            chunkShader.setUniform("ambientBrightness",
-                    dayNightCycle.getAmbientBrightness() * settings.getBrightness()
-                            * (1f - 0.55f * overcast) + flash * 0.5f);
+            chunkShader.setUniform("ambientBrightness", ambientBrightness);
+            chunkShader.setUniform("time", animTime[0]);
+            chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             chunkShader.setUniform("time", animTime[0]);
             chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
@@ -1885,10 +2065,10 @@ public class Main {
             chunkShader.unbind();
             }
 
-            // Rain/snow particles, drawn against the world (depth-tested) but
-            // hidden behind menus just like the crosshair and hotbar.
+            // Rain/snow particles and lightning bolts, drawn against the world
+            // (depth-tested) but hidden behind menus just like the crosshair.
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                weatherRenderer.render(lineShader, projection, view, weatherParticles);
+                weatherRenderer.render(lineShader, projection, view, weatherParticles, bolts);
             }
 
             // First-person held item (Minecraft-style): drawn after the world so it
@@ -1950,6 +2130,8 @@ public class Main {
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);
                 hud.drawTextLeft("Selected: " + (sel == null ? "-" : sel.toString()),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft("Dimension: " + currentDim[0].displayName(),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 TerrainGenerator.Biome biome = world.getBiome((int) Math.floor(pos.x), (int) Math.floor(pos.z));
                 hud.drawTextLeft("Biome: " + biome,
@@ -2056,11 +2238,16 @@ public class Main {
             }
         }
 
-        if (world != null) world.saveAllModified();
+        if (worlds != null) {
+            for (World w : worlds) {
+                w.saveAllModified();
+            }
+        }
         settings.save(settingsFile);
         leaveMultiplayer(); // close any embedded server and client connection
 
         hud.destroy();
+        guiTextures.destroy();
         itemRenderer.destroy();
         handRenderer.destroy();
         mobRenderer.destroy();
@@ -2075,7 +2262,11 @@ public class Main {
         itemTextures.destroy();
         mobTextures.destroy();
         font.destroy();
-        if (world != null) world.destroy();
+        if (worlds != null) {
+            for (World w : worlds) {
+                w.destroy();
+            }
+        }
         audio.destroy();
         window.close();
     }
@@ -2138,6 +2329,23 @@ public class Main {
         while (existing.contains(base + " " + n)) n++;
         return base + " " + n;
     }
+    /**
+     * Picks a strike target near the player (a random distance, biased toward
+     * where the camera is looking so the bolt usually lands in view) and spawns
+     * the cosmetic bolt; the strike's fire and mob/player blast happen in World.
+     * Returns player damage from the strike.
+     */
+    private static float lightningStrike(World world, Player player, List<LightningBolt> bolts, Random rnd) {
+        Vector3f front = player.getCamera().getFront();
+        Vector3f pos = player.getPosition();
+        float angle = player.getCamera().getYaw() + (rnd.nextFloat() - 0.5f) * 2.2f;
+        float dist = 12f + rnd.nextFloat() * 30f;
+        World.LightningStrikeResult result = world.strikeLightning(rnd, pos.x + (float) Math.cos(angle) * dist,
+                pos.z + (float) Math.sin(angle) * dist, pos);
+        if (result.bolt() != null) bolts.add(result.bolt());
+        return result.playerDamage();
+    }
+
     /** Finds a dry, non-mountain spawn near the origin by scanning outward in square rings. */
     private static float[] findSpawn(World world) {
         for (int r = 0; r <= 50; r++) {
@@ -2152,6 +2360,87 @@ public class Main {
             }
         }
         return new float[]{0.5f, 0.5f};
+    }
+
+    /**
+     * Teleports the player through a portal block into the linked dimension. The
+     * overworld &lt;-&gt; nether swap scales coordinates 1:8 (Minecraft-style), so a
+     * base built at the same portal on each side lines up; the End always drops
+     * you at its central island (the only solid ground it has). The arrival spot
+     * is pre-generated and placed a couple of blocks above the local surface, so
+     * you never fall through ungenerated terrain. {@code currentDim} is updated
+     * in place and the caller swaps {@code world} to match.
+     */
+    private static void teleportThroughPortal(Player player, World[] worlds, DimensionType[] currentDim, BlockType portal) {
+        DimensionType from = currentDim[0];
+        DimensionType to = DimensionType.portalDestination(portal, from);
+        World targetWorld = worlds[to.ordinal()];
+        Vector3f pos = player.getPosition();
+
+        float x, z;
+        if (to == DimensionType.END) {
+            // The End is one island at the origin - always arrive at its heart.
+            x = 0.5f;
+            z = 0.5f;
+        } else if (from == DimensionType.OVERWORLD && to == DimensionType.NETHER) {
+            x = pos.x / NETHER_SCALE;
+            z = pos.z / NETHER_SCALE;
+        } else if (from == DimensionType.NETHER && to == DimensionType.OVERWORLD) {
+            x = pos.x * NETHER_SCALE;
+            z = pos.z * NETHER_SCALE;
+        } else {
+            x = pos.x;
+            z = pos.z;
+        }
+
+        // Generate/mesh the arrival area so the player has solid ground under them.
+        for (int i = 0; i < 100; i++) {
+            targetWorld.update(x, z);
+        }
+        int fx = (int) Math.floor(x);
+        int fz = (int) Math.floor(z);
+        int surfaceY = landingSurfaceY(targetWorld, fx, fz);
+
+        // When arriving in a new dimension, spawn a matching portal block right at
+        // the landing spot so there's always a way back home (Minecraft spawns the
+        // return portal on the far side too). A NETHER_PORTAL returns you from the
+        // Nether, an END_PORTAL from the End. The player lands a couple of blocks
+        // away so they don't instantly step back through it.
+        if (to != DimensionType.OVERWORLD) {
+            BlockType returnPortal = to == DimensionType.NETHER ? BlockType.NETHER_PORTAL : BlockType.END_PORTAL;
+            targetWorld.setBlock(fx, surfaceY + 1, fz, returnPortal);
+            // Nudge the landing spot clear of the portal.
+            x += 2.5f;
+            fx = (int) Math.floor(x);
+            int offsetY = landingSurfaceY(targetWorld, fx, fz);
+            if (offsetY > 1) {
+                surfaceY = offsetY;
+            }
+        }
+
+        player.teleportTo(x, surfaceY + 2f, z);
+
+        currentDim[0] = to;
+    }
+
+    /**
+     * The surface height to land on in a dimension. The overworld's highest block
+     * is its terrain (open sky above), and the End's is its island top - but the
+     * Nether is sealed by a bedrock ceiling, so its highest block would be ~110
+     * blocks up in the roof. There, scan down for the first solid block that has
+     * open air above it: the cavern floor a player can actually stand on.
+     */
+    private static int landingSurfaceY(World world, int bx, int bz) {
+        if (world.getDimension() == DimensionType.NETHER) {
+            for (int y = Chunk.HEIGHT - 2; y >= 2; y--) {
+                if (world.getBlock(bx, y, bz) != BlockType.AIR && world.getBlock(bx, y + 1, bz) == BlockType.AIR) {
+                    return y;
+                }
+            }
+            return 40;
+        }
+        int y = world.getSurfaceHeight(bx, bz);
+        return y < 1 ? 64 : y;
     }
 
     /** Reuses the seed from a previous run if this save directory already has one, otherwise mints and stores a new one. */

@@ -30,18 +30,19 @@ public class Settings {
     public static final int CLOUDS = 5;             // 0-3: off/light/normal/heavy (Graphics)
     public static final int CLOUD_SPEED = 6;        // 0-2: slow/normal/fast (Graphics)
     public static final int STARS = 7;              // toggle (Graphics)
-    public static final int GAME_MODE = 8;          // Gameplay
-    public static final int SENSITIVITY = 9;        // Gameplay
-    public static final int INVERT_MOUSE_Y = 10;    // toggle (Gameplay)
-    public static final int VIEW_BOBBING = 11;      // toggle (Gameplay)
-    public static final int SOUND_VOLUME = 12;      // Audio - master, multiplies every category below
-    public static final int MUSIC_VOLUME = 13;      // Audio
-    public static final int AMBIENT_VOLUME = 14;    // Audio
-    public static final int MOBS_VOLUME = 15;       // Audio
-    public static final int MACHINES_VOLUME = 16;   // Audio - blocks, doors, tools, crafting
-    public static final int PLAYER_VOLUME = 17;     // Audio - footsteps, jump/land, eat, hurt, ...
-    public static final int UI_VOLUME = 18;         // Audio
-    public static final int ROW_COUNT = 19;
+    public static final int DARK_GUI = 8;           // toggle (Graphics)
+    public static final int GAME_MODE = 9;          // Gameplay
+    public static final int SENSITIVITY = 10;       // Gameplay
+    public static final int INVERT_MOUSE_Y = 11;    // toggle (Gameplay)
+    public static final int VIEW_BOBBING = 12;      // toggle (Gameplay)
+    public static final int SOUND_VOLUME = 13;      // Audio - master, multiplies every category below
+    public static final int MUSIC_VOLUME = 14;      // Audio
+    public static final int AMBIENT_VOLUME = 15;    // Audio
+    public static final int MOBS_VOLUME = 16;       // Audio
+    public static final int MACHINES_VOLUME = 17;   // Audio - blocks, doors, tools, crafting
+    public static final int PLAYER_VOLUME = 18;     // Audio - footsteps, jump/land, eat, hurt, ...
+    public static final int UI_VOLUME = 19;         // Audio
+    public static final int ROW_COUNT = 20;
 
     // Settings tabs: each owns a contiguous slice of the rows above. The
     // Controls tab has no Settings rows - it shows the keybind list instead.
@@ -96,11 +97,12 @@ public class Settings {
         ranges[MACHINES_VOLUME] = 1f;
         ranges[PLAYER_VOLUME] = 1f;
         ranges[UI_VOLUME] = 1f;
+        // Light GUI by default (Minecraft's modern look); Dark is a toggle.
     }
 
     /** True if the given row is a boolean toggle; false for a numeric range. */
     public static boolean isToggle(int row) {
-        return row == LEAVES_TRANSPARENT || row == VSYNC || row == STARS
+        return row == LEAVES_TRANSPARENT || row == VSYNC || row == STARS || row == DARK_GUI
                 || row == INVERT_MOUSE_Y || row == VIEW_BOBBING;
     }
 
@@ -122,6 +124,7 @@ public class Settings {
             case CLOUDS -> "Clouds";
             case CLOUD_SPEED -> "Cloud speed";
             case STARS -> "Stars";
+            case DARK_GUI -> "Dark GUI";
             case INVERT_MOUSE_Y -> "Invert mouse Y";
             case VIEW_BOBBING -> "View bobbing";
             case SOUND_VOLUME -> "Master volume";
@@ -261,6 +264,7 @@ public class Settings {
         lines.add("clouds=" + getCloudAmount());
         lines.add("cloud_speed=" + getCloudSpeed());
         lines.add("stars=" + (toggles[STARS] ? 1 : 0));
+        lines.add("dark_gui=" + (toggles[DARK_GUI] ? 1 : 0));
         lines.add("invert_mouse_y=" + (toggles[INVERT_MOUSE_Y] ? 1 : 0));
         lines.add("view_bobbing=" + (toggles[VIEW_BOBBING] ? 1 : 0));
         lines.add("sound_volume=" + ranges[SOUND_VOLUME]);
@@ -308,6 +312,7 @@ public class Settings {
                         case "clouds" -> s.ranges[CLOUDS] = clamp(CLOUDS, Float.parseFloat(value));
                         case "cloud_speed" -> s.ranges[CLOUD_SPEED] = clamp(CLOUD_SPEED, Float.parseFloat(value));
                         case "stars" -> s.toggles[STARS] = parseBool(value);
+                        case "dark_gui" -> s.toggles[DARK_GUI] = parseBool(value);
                         case "invert_mouse_y" -> s.toggles[INVERT_MOUSE_Y] = parseBool(value);
                         case "view_bobbing" -> s.toggles[VIEW_BOBBING] = parseBool(value);
                         case "sound_volume" -> loadFiniteRange(s, SOUND_VOLUME, value);
@@ -387,6 +392,11 @@ public class Settings {
 
     public boolean isStars() {
         return toggles[STARS];
+    }
+
+    /** True for the dark GUI theme; false for the light theme (the default). */
+    public boolean isDarkGui() {
+        return toggles[DARK_GUI];
     }
 
     /** Brightness multiplier (0.5-1.5) applied to the world's ambient light. */

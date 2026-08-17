@@ -47,6 +47,7 @@ public enum BlockType {
     GLASS(21, true, false, 34, 34, 34),
     BERRY_BUSH(22, false, true, 37),
     TORCH(38, false, true, 38, 8), // cross-shaped, non-collidable, and a light source (see lightLevel)
+    FIRE(91, false, true, TextureAtlas.FIRE_TILE, 14), // transient burning block lit by lightning; never placeable
     LAMP(39, true, false, 25, 25, 25, 0, 15), // full-cube light source, brighter than a torch
     FURNACE(40, true, false, 4, 4, 4, 26, TextureAtlas.FURNACE_LIT_TILE, 0, 0), // smelting station: stone top/bottom/sides, furnace-face front (tile 26) that glows when burning
     STONE_SLAB(44, true, false, true, 4),   // bottom-half slab, stone texture
@@ -80,6 +81,17 @@ public enum BlockType {
     CRAFTING_TABLE(73, true, false, 48, 48, 48), // workbench: right-click opens the 3x3 crafting GUI
     CHEST(87, true, false, 50, 50, 50),          // storage: right-click opens a 27-slot container GUI (54 when doubled)
     BARREL(88, true, false, 51, 51, 51),         // storage: cheaper single 27-slot container, never doubles
+
+    // Dimension blocks: Nether terrain, End terrain, and the portal blocks that
+    // link the dimensions (see DimensionType.portalDestination). Portals are
+    // non-solid glowing swirls you walk into to teleport.
+    NETHERRACK(96, true, false, 52, 52, 52),
+    SOUL_SAND(97, true, false, 53, 53, 53),
+    GLOWSTONE(98, true, false, 54, 54, 54, 0, 15), // dim self-light source
+    NETHER_PORTAL(92, false, true, 55, 55, 55, 0, 15),
+    END_STONE(93, true, false, 56, 56, 56),
+    OBSIDIAN(94, true, false, 57, 57, 57),
+    END_PORTAL(95, false, true, 58, 58, 58, 0, 15),
 
     // Inventory-only items: food and tools. Never placed as a world block,
     // so they have no atlas tile - each gets its own procedurally generated
@@ -126,7 +138,13 @@ public enum BlockType {
     MUTTON(67, 12),
     // Hostile-mob loot - see World.damageMob. Rotten flesh is barely edible.
     ROTTEN_FLESH(68, 4),
-    BONES(69, 0);
+    BONES(69, 0),
+    // Snow-capped slabs: a bottom-half slab that's been covered by accumulating
+    // snow (see World.tryAddSnow). Full-height solid blocks that MESH as a slab
+    // under a snow cap, so the snow sits flush rather than floating above the
+    // slab's half-height top. Melting restores the plain slab underneath.
+    SNOWY_STONE_SLAB(89, true, false, 12, 4, 4),
+    SNOWY_PLANKS_SLAB(90, true, false, 12, 11, 11);
 
     public final byte id;
     public final boolean solid;
@@ -296,6 +314,11 @@ public enum BlockType {
         return this == WATER || this == WATER_SOURCE || this == WATER_FLOW;
     }
 
+    /** True for the portal blocks that teleport the player between dimensions. */
+    public boolean isPortal() {
+        return this == NETHER_PORTAL || this == END_PORTAL;
+    }
+
     /** True for any lava-family block (static, source, or flow). */
     public boolean isLava() {
         return this == LAVA || this == LAVA_SOURCE || this == LAVA_FLOW;
@@ -304,6 +327,22 @@ public enum BlockType {
     /** True for any fluid (water or lava), including static and flowing variants. */
     public boolean isFluid() {
         return isWater() || isLava();
+    }
+
+    /**
+     * True if this block's top face can support an accumulated snow layer:
+     * an opaque full cube (or a bottom-half slab, which snow caps flush - see
+     * {@link #isSnowCappedSlab()}) that isn't a cross-shaped plant, so snow
+     * piles up on ground, stone, wood, roofs, sand and snow itself, but not on
+     * leaves, glass, ice, fluids, torches or flowers.
+     */
+    public boolean canHoldSnow() {
+        return solid && !transparent && !cross && !isTranslucent();
+    }
+
+    /** True for a bottom-half slab that's been covered by a flush snow cap (see the snowy slab entries above). */
+    public boolean isSnowCappedSlab() {
+        return this == SNOWY_STONE_SLAB || this == SNOWY_PLANKS_SLAB;
     }
 
     /** True for the placeable, flowing fluid source blocks. */
