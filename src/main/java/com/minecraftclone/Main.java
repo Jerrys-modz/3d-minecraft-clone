@@ -1114,10 +1114,13 @@ public class Main {
                 // stays comfortable while the surface blizzards, and a mountain
                 // peak is harsher than its foothills). Ramps 0 above ~2°C to 1
                 // at ~-20°C. Player then weighs shelter, fires and armor warmth.
+                // The underground reference is the GENERATED terrain height (not
+                // the current surface) so a player-built roof doesn't fool the
+                // depth model into thinking a cave is at the surface.
                 float px = player.getPosition().x, pz = player.getPosition().z;
                 float playerY = player.getPosition().y;
                 TerrainGenerator.Biome pBiome = world.getBiome((int) Math.floor(px), (int) Math.floor(pz));
-                float localTemp = climate.temperatureFor(pBiome, playerY, world.getSurfaceHeight((int) Math.floor(px), (int) Math.floor(pz)));
+                float localTemp = climate.temperatureFor(pBiome, playerY, world.getTerrainHeight((int) Math.floor(px), (int) Math.floor(pz)));
                 float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
                 player.update(dt, input, world, coldFactor);
 
@@ -1640,7 +1643,7 @@ public class Main {
                                 climate.nextWeatherChange().displayName, climate.hoursUntilChange()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Climate: %.1f C at %.0f, %.0f%% humidity",
-                                climate.temperatureFor(biome, pos.y, world.getSurfaceHeight((int) Math.floor(pos.x), (int) Math.floor(pos.z))),
+                                climate.temperatureFor(biome, pos.y, world.getTerrainHeight((int) Math.floor(pos.x), (int) Math.floor(pos.z))),
                                 pos.y, climate.humidityFor(biome) * 100f),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Cold exposure: %.0f%%",

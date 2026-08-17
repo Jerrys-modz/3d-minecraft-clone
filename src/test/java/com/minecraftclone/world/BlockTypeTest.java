@@ -67,13 +67,15 @@ class BlockTypeTest {
     }
 
     @Test
-    void heatSourcesAreFireLampsTorchesFurnacesAndLava() {
+    void heatSourcesAreFireLampsTorchesAndLava() {
         assertTrue(BlockType.FIRE.isHeatSource());
         assertTrue(BlockType.TORCH.isHeatSource());
         assertTrue(BlockType.LAMP.isHeatSource());
-        assertTrue(BlockType.FURNACE.isHeatSource());
         assertTrue(BlockType.LAVA.isHeatSource());
         assertTrue(BlockType.LAVA_SOURCE.isHeatSource());
+        // A furnace only radiates heat while it's actively burning (checked live
+        // in Player.hasHeatSource via World.isBlockActive); cold stone warms nothing.
+        assertFalse(BlockType.FURNACE.isHeatSource());
         // Ordinary blocks radiate no heat - a plain sealed room stays cold.
         assertFalse(BlockType.PLANKS.isHeatSource());
         assertFalse(BlockType.STONE.isHeatSource());

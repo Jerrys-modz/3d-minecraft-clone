@@ -37,6 +37,11 @@ public class EndGenerator implements WorldGenerator {
     }
 
     @Override
+    public int terrainHeight(int wx, int wz) {
+        return 0;
+    }
+
+    @Override
     public TerrainGenerator.Biome biomeAtWorld(int wx, int wz) {
         return TerrainGenerator.Biome.END;
     }

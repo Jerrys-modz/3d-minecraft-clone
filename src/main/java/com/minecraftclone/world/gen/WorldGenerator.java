@@ -17,4 +17,12 @@ public interface WorldGenerator {
 
     /** The overworld biome at a world column, for the F3 debug overlay. Non-overworld dimensions return their dimension's stand-in biome. */
     TerrainGenerator.Biome biomeAtWorld(int wx, int wz);
+
+    /**
+     * The natural terrain surface height at a world column, as the generator
+     * produced it (ignoring any player-built blocks). Used as the climate's
+     * underground/surface reference. Non-overworld dimensions return their
+     * {@link #seaLevel()} (their temperature model is flat anyway).
+     */
+    int terrainHeight(int wx, int wz);
 }

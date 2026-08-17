@@ -608,6 +608,16 @@ public class World implements BlockAccessor {
         return generator.seaLevel();
     }
 
+    /**
+     * The natural terrain height at the given world column - the surface the
+     * generator produced, ignoring any blocks the player has placed or removed.
+     * Used as the climate's underground/surface reference so a player-built roof
+     * doesn't fool the temperature model into thinking a cave is at the surface.
+     */
+    public int getTerrainHeight(int worldX, int worldZ) {
+        return generator.terrainHeight(worldX, worldZ);
+    }
+
     /** Sets the per-block facing hint (used by doors) at a world position. */
     public void setBlockOrientation(int worldX, int worldY, int worldZ, byte orientation) {
         int cx = worldToChunk(worldX), cz = worldToChunk(worldZ);
@@ -824,12 +834,17 @@ public class World implements BlockAccessor {
         }
     }
 
-    /** The top-most exposed static water cell (WATER with only air above), or -1 if the column has none. */
+    /**
+     * The top-most exposed water-surface cell (WATER, or ICE when the lake is
+     * frozen over - both with only air above), or -1 if the column has none.
+     * Returning ice too is what lets the thaw branch actually reach a frozen
+     * surface once it warms up.
+     */
     private int findSurfaceWaterY(int x, int z) {
         for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
             BlockType b = getBlock(x, y, z);
-            if (b == BlockType.WATER) return y;
-            if (b != BlockType.AIR) return -1; // solid (ice, ground, a roof) sits above any water
+            if (b == BlockType.WATER || b == BlockType.ICE) return y;
+            if (b != BlockType.AIR) return -1; // solid (ground, a roof) sits above any water
         }
         return -1;
     }

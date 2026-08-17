@@ -473,9 +473,10 @@ public class Player {
     }
 
     /**
-     * True if a heat source (fire, torch, lamp, furnace, lava) is within
-     * {@link #COLD_HEAT_RADIUS} blocks - what makes a sealed house actually heat
-     * up. A plain sealed room with nothing burning in it stays cold inside.
+     * True if a heat source (fire, torch, lamp, an actively-burning furnace, or
+     * lava) is within {@link #COLD_HEAT_RADIUS} blocks - what makes a sealed
+     * house actually heat up. A plain sealed room with nothing burning in it
+     * stays cold inside; an unlit furnace is just cold stone.
      */
     private boolean hasHeatSource(World world) {
         int cx = (int) Math.floor(position.x);
@@ -484,7 +485,10 @@ public class Player {
         for (int dx = -COLD_HEAT_RADIUS; dx <= COLD_HEAT_RADIUS; dx++) {
             for (int dz = -COLD_HEAT_RADIUS; dz <= COLD_HEAT_RADIUS; dz++) {
                 for (int dy = -2; dy <= 3; dy++) {
-                    if (world.getBlock(cx + dx, cy + dy, cz + dz).isHeatSource()) return true;
+                    int bx = cx + dx, by = cy + dy, bz = cz + dz;
+                    BlockType block = world.getBlock(bx, by, bz);
+                    if (block.isHeatSource()) return true;
+                    if (block == BlockType.FURNACE && world.isBlockActive(bx, by, bz)) return true;
                 }
             }
         }
