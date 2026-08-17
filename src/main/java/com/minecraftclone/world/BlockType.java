@@ -205,7 +205,13 @@ public enum BlockType {
     // and solid blocks. One tile (planks) for the whole mesh. Collision is a
     // 1.5-block-tall box (the post is taller than a block), so neither the
     // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
-    WOODEN_FENCE(132, 11, false, true, 1.5f);
+    WOODEN_FENCE(132, 11, false, true, 1.5f),
+    // Beds: a placeable sleeping surface. Solid, directional (faces the player),
+    // and has an occupied variant for when a player is sleeping in it. Beds
+    // cannot be placed in the Nether or End (they explode in nether like vanilla).
+    // Uses wool texture (red by default) with a distinct front face.
+    BED(133, true, false, 58, 58, 58, 59, 0),  // wool top/side/bottom, distinct front (foot end)
+    BED_OCCUPIED(134, true, false, 58, 58, 58, 59, 0); // same textures, different state
 
     public final byte id;
     public final boolean solid;
@@ -521,6 +527,11 @@ public enum BlockType {
     /** True for a fence (thin post with auto-connecting rails). */
     public boolean isFence() {
         return fence;
+    }
+
+    /** True for either half of a functional door (closed solid, or open walk-through). */
+    public boolean isBed() {
+        return this == BED || this == BED_OCCUPIED;
     }
 
     /** True for any partial-cube block that needs its own meshing (stairs, fences). */
