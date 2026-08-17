@@ -627,6 +627,37 @@ public class Main {
                 System.err.println("MCCLONE_AUTOTEST_PLACE: unknown block " + System.getenv("MCCLONE_AUTOTEST_PLACE"));
             }
         }
+        // Opt-in autotest hook: lay a short run of stairs (stepping up away from
+        // the camera) or a row of fences (so their rails connect), for screenshots.
+        if (System.getenv("MCCLONE_AUTOTEST_PARTIAL") != null && started[0]) {
+            Vector3f front = player.getCamera().getFront();
+            int px = (int) Math.floor(player.getPosition().x + front.x * 3f);
+            int py = (int) Math.floor(player.getPosition().y) + 1;
+            int pz = (int) Math.floor(player.getPosition().z + front.z * 3f);
+            String mode = System.getenv("MCCLONE_AUTOTEST_PARTIAL");
+            byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
+                    ? (front.x >= 0 ? 3 : 2)
+                    : (front.z >= 0 ? 1 : 0));
+            if (mode.equals("stairs")) {
+                for (int i = 0; i < 4; i++) {
+                    world.setBlock(px + i, py, pz, BlockType.STONE_STAIRS);
+                    world.setBlockOrientation(px + i, py, pz, facing);
+                }
+                for (int i = 0; i < 4; i++) {
+                    System.out.println("Stair[" + i + "] = " + world.getBlock(px + i, py, pz));
+                }
+                System.out.println("Placed 4 stone stairs facing " + facing);
+            } else if (mode.equals("fence")) {
+                for (int i = 0; i < 3; i++) {
+                    world.setBlock(px + i, py, pz, BlockType.WOODEN_FENCE);
+                }
+                for (int i = 0; i < 3; i++) {
+                    System.out.println("Fence[" + i + "] = " + world.getBlock(px + i, py, pz));
+                }
+                System.out.println("Placed 3 wooden fences in a row");
+            }
+            for (int i = 0; i < 5; i++) world.update(player.getPosition().x, player.getPosition().z);
+        }
         // Opt-in autotest hook: open a chest GUI pre-loaded with a few items, so
         // the container screen can be screenshotted. MCCLONE_AUTOTEST_DOUBLE
         // merges a second chest beside it to screenshot a 54-slot double chest;
@@ -1433,8 +1464,9 @@ public class Main {
                                     // Doors, trapdoors, and other directional blocks
                                     // (e.g. a furnace) face the player: the front sits
                                     // on the side of the block nearest to them (opposite
-                                    // the look direction).
-                                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR) {
+                                    // the look direction). Stairs also store a facing so
+                                    // their stepped mesh rises away from the player.
+                                    if (heldItem.isDirectional() || heldItem == BlockType.DOOR || heldItem == BlockType.TRAPDOOR || heldItem.isStair()) {
                                         Vector3f front = player.getCamera().getFront();
                                         byte facing = (byte) (Math.abs(front.x) >= Math.abs(front.z)
                                                 ? (front.x >= 0 ? 3 : 2)

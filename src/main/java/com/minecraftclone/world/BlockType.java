@@ -164,7 +164,17 @@ public enum BlockType {
     DIAMOND_HELMET(111, 0),
     DIAMOND_CHESTPLATE(112, 0),
     DIAMOND_LEGGINGS(113, 0),
-    DIAMOND_BOOTS(114, 0);
+    DIAMOND_BOOTS(114, 0),
+
+    // Stairs: partial-cube blocks with a stepped profile, facing the direction
+    // they were placed (their orientation byte). Stone and planks match their
+    // full-cube materials' tiles; collision is the full cell (walk-up stepping
+    // is not modelled - see Notes & Simplifications).
+    STONE_STAIRS(115, 4, true, false),
+    PLANKS_STAIRS(116, 11, true, false),
+    // Fences: thin posts with rails that auto-connect to neighbouring fences
+    // and solid blocks. One tile (planks) for the whole mesh.
+    WOODEN_FENCE(117, 11, false, true);
 
     public final byte id;
     public final boolean solid;
@@ -184,6 +194,10 @@ public enum BlockType {
     public final int lightLevel;
     /** True if this block is a bottom-half slab (partial cube), which meshes and collides at half height. */
     public final boolean slab;
+    /** True for a stepped stair block - meshed with a stair profile and collides like a full cell. */
+    public final boolean stair;
+    /** True for a fence - a thin post with auto-connecting rails, meshed and colliding as a fence. */
+    public final boolean fence;
     /** Vertical extent of this block's collision box in blocks (1.0 for full cubes, 0.5 for slabs). */
     public final float collisionHeight;
 
@@ -209,6 +223,8 @@ public enum BlockType {
         this.transparent = transparent;
         this.cross = false;
         this.slab = false;
+        this.stair = false;
+        this.fence = false;
         this.topTile = topTile;
         this.sideTile = sideTile;
         this.bottomTile = bottomTile;
@@ -232,6 +248,8 @@ public enum BlockType {
         this.transparent = transparent;
         this.cross = false;
         this.slab = slab;
+        this.stair = false;
+        this.fence = false;
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
@@ -241,6 +259,26 @@ public enum BlockType {
         this.isItem = false;
         this.lightLevel = 0;
         this.collisionHeight = slab ? 0.5f : 1.0f;
+    }
+
+    /** Stairs or fence: a partial-cube block with custom meshing and full-cell collision. */
+    BlockType(int id, int tile, boolean stair, boolean fence) {
+        this.id = (byte) id;
+        this.solid = true;
+        this.transparent = false;
+        this.cross = false;
+        this.slab = false;
+        this.stair = stair;
+        this.fence = fence;
+        this.topTile = tile;
+        this.sideTile = tile;
+        this.bottomTile = tile;
+        this.frontTile = tile;
+        this.litFrontTile = tile;
+        this.foodValue = 0;
+        this.isItem = false;
+        this.lightLevel = 0;
+        this.collisionHeight = 1.0f;
     }
 
     /** Cross-shaped (billboard-X) world decoration block, e.g. grass/flowers/berry bush: one atlas tile, never collides. */
@@ -255,6 +293,8 @@ public enum BlockType {
         this.transparent = transparent;
         this.cross = true;
         this.slab = false;
+        this.stair = false;
+        this.fence = false;
         this.topTile = tile;
         this.sideTile = tile;
         this.bottomTile = tile;
@@ -273,6 +313,8 @@ public enum BlockType {
         this.transparent = true;
         this.cross = false;
         this.slab = false;
+        this.stair = false;
+        this.fence = false;
         this.topTile = -1;
         this.sideTile = -1;
         this.bottomTile = -1;
@@ -332,9 +374,7 @@ public enum BlockType {
     /** True for any water-family block (static, source, or flow). */
     public boolean isWater() {
         return this == WATER || this == WATER_SOURCE || this == WATER_FLOW;
-    }
-
-    /** True for the portal blocks that teleport the player between dimensions. */
+    }    /** True for the portal blocks that teleport the player between dimensions. */
     public boolean isPortal() {
         return this == NETHER_PORTAL || this == END_PORTAL;
     }
@@ -409,6 +449,21 @@ public enum BlockType {
     /** True for a functional trapdoor (closed solid panel, or open walk-through). */
     public boolean isTrapdoor() {
         return this == TRAPDOOR || this == TRAPDOOR_OPEN;
+    }
+
+    /** True for a stepped stair block (stone or planks). */
+    public boolean isStair() {
+        return stair;
+    }
+
+    /** True for a fence (thin post with auto-connecting rails). */
+    public boolean isFence() {
+        return fence;
+    }
+
+    /** True for any partial-cube block that needs its own meshing (stairs, fences). */
+    public boolean isPartialCube() {
+        return stair || fence;
     }
 
     /** A human-readable name for HUD tooltips, e.g. "DIAMOND_PICKAXE" -> "Diamond Pickaxe". */

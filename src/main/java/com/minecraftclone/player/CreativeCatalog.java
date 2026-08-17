@@ -22,10 +22,10 @@ public final class CreativeCatalog {
                     BlockType.WOOD_LOG, BlockType.PLANKS, BlockType.LEAVES, BlockType.GRAVEL, BlockType.SNOW,
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
                     BlockType.CRAFTING_TABLE, BlockType.CHEST, BlockType.BARREL,
+                    BlockType.STONE_STAIRS, BlockType.PLANKS_STAIRS, BlockType.WOODEN_FENCE,
                     BlockType.CACTUS, BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE,
                     BlockType.SWAMP_GRASS, BlockType.RED_CLAY, BlockType.MYCELIUM, BlockType.ICE, BlockType.PACKED_ICE,
-                    BlockType.PUMPKIN, BlockType.NETHERRACK, BlockType.SOUL_SAND, BlockType.GLOWSTONE,
-                    BlockType.END_STONE, BlockType.OBSIDIAN, BlockType.NETHER_PORTAL, BlockType.END_PORTAL,
+                    BlockType.PUMPKIN,
             }),
             new Tab("Decoration", new BlockType[]{
                     BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,

@@ -413,6 +413,15 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                         emitSlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
+                    if (block.isStair()) {
+                        emitStairs(world, vertices, indices, vertexCounter, wx, wy, wz, block,
+                                getOrientation(x, y, z), atlas, blockLight);
+                        continue;
+                    }
+                    if (block.isFence()) {
+                        emitFence(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        continue;
+                    }
                     if (block.isSnowCappedSlab()) {
                         emitSnowySlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
@@ -489,20 +498,22 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         if (block.isWater()) {
             // Translucent water: cull faces toward other water (and toward solid -
             // the solid's own face shows through the water instead).
-            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab;
+            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isStair() || neighbor.isFence();
         }
 
         if (block.isTranslucent()) {
             // Glass/ice: draw faces toward empty space, decoration and water, but
             // cull toward solid blocks and toward other translucent blocks (no
             // internal glass-to-glass faces).
-            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isWater();
+            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab
+                    || neighbor.isStair() || neighbor.isFence() || neighbor.isWater();
         }
 
-        // Cross-shaped decoration (grass/flowers) and slabs don't cover a full cell,
-        // and translucent water doesn't occlude, so a solid neighbor's face toward
-        // them must still be drawn - treat them like air for culling purposes.
-        if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isWater()) return true;
+        // Cross-shaped decoration (grass/flowers), slabs, stairs and fences don't
+        // cover a full cell, and translucent water doesn't occlude, so a solid
+        // neighbor's face toward them must still be drawn - treat them like air.
+        if (neighbor == BlockType.AIR || neighbor.cross || neighbor.slab
+                || neighbor.isStair() || neighbor.isFence() || neighbor.isWater()) return true;
         // Doors and trapdoors are thin panels, so they don't occlude the faces
         // around a doorway or hatch.
         if (neighbor.isDoor() || neighbor.isTrapdoor()) return true;
@@ -990,6 +1001,164 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                     new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
         }
+    }
+
+    /**
+     * Emits a stepped stair. The stair faces the direction it was placed toward
+     * (its orientation byte, {@link #frontFaceFor}): the low step is at the
+     * front and the raised step at the back, so you step up away from the
+     * facing direction. Two half-height steps keep the mesh simple: a full-width
+     * lower step and a back-half upper step, each drawn as a mini-cube with
+     * face culling like a solid block.
+     */
+    private void emitStairs(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                            int wx, int wy, int wz, BlockType block, byte orientation,
+                            TextureAtlas atlas, float blockLight) {
+        float[] uv = atlas.getUV(block.topTile);
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, z1 = wz + 1;
+        float midY = wy + 0.5f, topY = wy + 1f;
+
+        // The raised (back) half of the top step sits on the side OPPOSITE the
+        // facing, so you climb away from the direction the stair faces: facing
+        // +Z means the low step is at +Z and the high step at -Z, and so on.
+        float hiX0 = x0, hiX1 = x1, hiZ0 = z0, hiZ1 = z1;
+        if (orientation == 2) hiX1 = x0 + 0.5f;        // facing +X: high step on -X half
+        else if (orientation == 3) hiX0 = x1 - 0.5f;   // facing -X: high step on +X half
+        else if (orientation == 0) hiZ1 = z0 + 0.5f;   // facing +Z: high step on -Z half
+        else if (orientation == 1) hiZ0 = z1 - 0.5f;   // facing -Z: high step on +Z half
+
+        emitStep(world, vertices, indices, vertexCounter,
+                x0, y0, z0, x1, midY, z1, uvs, atlas, blockLight);
+        emitStep(world, vertices, indices, vertexCounter,
+                hiX0, midY, hiZ0, hiX1, topY, hiZ1, uvs, atlas, blockLight);
+    }
+
+    /**
+     * Emits one rectangular step box as a mini-cube with per-face culling.
+     * Faces hidden by a full solid neighbour are skipped; the lower step's top
+     * is covered by the raised step's back half, so it's drawn in full and the
+     * raised step simply overlays it (they share the same tile, so no seam).
+     */
+    private void emitStep(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                          float x0, float y0, float z0, float x1, float y1, float z1,
+                          float[][] uvs, TextureAtlas atlas, float blockLight) {
+        int bx0 = (int) x0, bz0 = (int) z0;
+
+        // Top face: hidden only when a full cube sits directly above.
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
+                uvs, LIGHT_TOP, blockLight);
+
+        // Bottom face: drawn unless a full-height block sits below.
+        BlockType below = world.getBlock(bx0, (int) y0 - 1, bz0);
+        if (below == BlockType.AIR || below.cross || below.slab || below.isStair()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
+                    uvs, LIGHT_BOTTOM, blockLight);
+        }
+
+        // Side faces: culled against full-cube neighbours. For the half-width
+        // raised step, the inward face toward the stair's own front half is
+        // against the lower step (solid), so it gets culled - clean.
+        int ex = (int) x1, wx2 = bx0 - 1, sz = (int) z1, nz = bz0 - 1;
+        BlockType east = world.getBlock(ex, (int) y0, bz0);
+        if (east == BlockType.AIR || east.cross || east.isStair()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}},
+                    uvs, LIGHT_EAST_WEST, blockLight);
+        }
+        BlockType west = world.getBlock(wx2, (int) y0, bz0);
+        if (west == BlockType.AIR || west.cross || west.isStair()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}},
+                    uvs, LIGHT_EAST_WEST, blockLight);
+        }
+        BlockType south = world.getBlock(bx0, (int) y0, sz);
+        if (south == BlockType.AIR || south.cross || south.isStair()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}},
+                    uvs, LIGHT_NORTH_SOUTH, blockLight);
+        }
+        BlockType north = world.getBlock(bx0, (int) y0, nz);
+        if (north == BlockType.AIR || north.cross || north.isStair()) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
+                    uvs, LIGHT_NORTH_SOUTH, blockLight);
+        }
+    }
+
+    /** True if the neighbour {@code t} connects a fence to it (another fence or any full solid block). */
+    private static boolean fenceConnects(BlockType t) {
+        return t != null && !t.isPassThrough() && (t.isFence() || t.solid);
+    }
+
+    /**
+     * Emits a fence: a thin central post plus rails toward any neighbour that
+     * connects (another fence or a solid block). The post is a ~2px-wide column
+     * and each rail a thin bar at ~3/4 height spanning the connecting side.
+     */
+    private void emitFence(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                           int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
+        float[] uv = atlas.getUV(block.topTile);
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + 1, z1 = wz + 1;
+        float postInset = 0.15f;   // half-width of the post (thin, like Minecraft)
+        float railY = wy + 0.75f;  // rail bar height (top edge)
+        float railT = 0.12f;       // rail thickness
+
+        // Central post: a thin column from the floor to the top.
+        emitBox(vertices, indices, vertexCounter,
+                wx + 0.5f - postInset, y0, wz + 0.5f - postInset,
+                wx + 0.5f + postInset, y1, wz + 0.5f + postInset, uvs, blockLight);
+
+        BlockType north = world.getBlock(wx, wy, wz - 1);
+        BlockType south = world.getBlock(wx, wy, wz + 1);
+        BlockType east = world.getBlock(wx + 1, wy, wz);
+        BlockType west = world.getBlock(wx - 1, wy, wz);
+
+        if (fenceConnects(north)) {
+            emitBox(vertices, indices, vertexCounter,
+                    x0 + 0.5f - postInset, railY - railT, z0,
+                    x0 + 0.5f + postInset, railY, z0 + 0.5f - postInset, uvs, blockLight);
+        }
+        if (fenceConnects(south)) {
+            emitBox(vertices, indices, vertexCounter,
+                    x0 + 0.5f - postInset, railY - railT, z0 + 0.5f + postInset,
+                    x0 + 0.5f + postInset, railY, z1, uvs, blockLight);
+        }
+        if (fenceConnects(east)) {
+            emitBox(vertices, indices, vertexCounter,
+                    x0 + 0.5f + postInset, railY - railT, z0 + 0.5f - postInset,
+                    x1, railY, z0 + 0.5f + postInset, uvs, blockLight);
+        }
+        if (fenceConnects(west)) {
+            emitBox(vertices, indices, vertexCounter,
+                    x0, railY - railT, z0 + 0.5f - postInset,
+                    x0 + 0.5f - postInset, railY, z0 + 0.5f + postInset, uvs, blockLight);
+        }
+    }
+
+    /** Emits a solid rectangular box (6 faces, no culling) - used for fence posts and rails. */
+    private void emitBox(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                         float x0, float y0, float z0, float x1, float y1, float z1,
+                         float[][] uvs, float blockLight) {
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}}, uvs, LIGHT_TOP, blockLight);
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}}, uvs, LIGHT_BOTTOM, blockLight);
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}}, uvs, LIGHT_EAST_WEST, blockLight);
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}}, uvs, LIGHT_EAST_WEST, blockLight);
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}}, uvs, LIGHT_NORTH_SOUTH, blockLight);
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}}, uvs, LIGHT_NORTH_SOUTH, blockLight);
     }
 
     /**

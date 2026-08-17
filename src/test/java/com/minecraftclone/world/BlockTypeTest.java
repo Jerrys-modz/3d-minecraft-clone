@@ -65,4 +65,34 @@ class BlockTypeTest {
         assertFalse(BlockType.FIRE.solid, "fire never collides");
         assertEquals(14, BlockType.FIRE.lightLevel, "a lightning-lit flame glows brightly");
     }
+
+    @Test
+    void stairsArePartialCubesWithFullCellCollision() {
+        assertTrue(BlockType.STONE_STAIRS.isStair());
+        assertTrue(BlockType.PLANKS_STAIRS.isStair());
+        assertFalse(BlockType.STONE.isStair());
+        assertFalse(BlockType.WOODEN_FENCE.isStair());
+        // Stairs are solid (collide) and occupy the full cell.
+        assertTrue(BlockType.STONE_STAIRS.solid);
+        assertEquals(1f, BlockType.STONE_STAIRS.collisionHeight, 1e-6f);
+        // They reuse their material's tiles.
+        assertEquals(BlockType.STONE.topTile, BlockType.STONE_STAIRS.topTile);
+        assertEquals(BlockType.PLANKS.topTile, BlockType.PLANKS_STAIRS.topTile);
+    }
+
+    @Test
+    void fenceIsAPartialCubeThatAutoConnects() {
+        assertTrue(BlockType.WOODEN_FENCE.isFence());
+        assertFalse(BlockType.PLANKS.isFence());
+        assertFalse(BlockType.STONE_STAIRS.isFence());
+        assertTrue(BlockType.WOODEN_FENCE.solid);
+        assertTrue(BlockType.WOODEN_FENCE.isPartialCube());
+    }
+
+    @Test
+    void stairsAndFenceHoldSnowLikeOtherSolids() {
+        assertTrue(BlockType.STONE_STAIRS.canHoldSnow());
+        assertTrue(BlockType.PLANKS_STAIRS.canHoldSnow());
+        assertTrue(BlockType.WOODEN_FENCE.canHoldSnow());
+    }
 }
