@@ -1744,9 +1744,12 @@ public class Main {
                                 showMessage(messages, "Cannot sleep here", new Vector4f(0.8f, 0.3f, 0.3f, 1f), 2f);
                             }
                         }
-                    } else if (noMob && mode.canPlace() && heldItem != null && !targeted.isBed()) {
-                        // Don't place a bed item if clicking on an existing bed (sleep instead)
-                        placeOrEatHeldItem(world, player, mode, heldItem, hit, audio, handRenderer);
+                    } else if (noMob && mode.canPlace() && heldItem != null) {
+                        // Don't place if clicking on a bed (sleep instead) or if placement spot is a bed
+                        BlockType placeTarget = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        if (!targeted.isBed() && !placeTarget.isBed()) {
+                            placeOrEatHeldItem(world, player, mode, heldItem, hit, audio, handRenderer);
+                        }
                     }
                 }
             }
