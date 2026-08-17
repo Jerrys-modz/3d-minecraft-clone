@@ -71,6 +71,22 @@ class PlayerStatsTest {
     }
 
     @Test
+    void drowningDamageOnlyCoversTheTimePastTheGraceBoundary() {
+        // Regression: an update straddling the grace boundary must only be
+        // charged for the fraction of dt actually spent drowning, not the whole
+        // dt - otherwise a single coarse update (or a stutter) overcharges.
+        PlayerStats stats = new PlayerStats();
+        float health = stats.getHealth();
+
+        stats.update(PlayerStats.MAX_BREATH - 0.5f, false, false, true, false, 0f, 0f); // 5.5s submerged
+        assertEquals(health, stats.getHealth(), 0.001f, "still within the grace period");
+
+        stats.update(1f, false, false, true, false, 0f, 0f); // crosses the 6s boundary by 0.5s
+        assertEquals(health - 2.5f, stats.getHealth(), 0.001f,
+                "only the 0.5s past the boundary should count, not the full 1s step");
+    }
+
+    @Test
     void damageAccumulatesForArmorWearAndClearsOnDemand() {
         PlayerStats stats = new PlayerStats();
         stats.damage(10f);

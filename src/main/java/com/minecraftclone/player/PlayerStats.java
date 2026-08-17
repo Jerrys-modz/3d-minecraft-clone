@@ -160,9 +160,17 @@ public class PlayerStats {
         }
 
         if (submerged) {
+            float submergedBefore = submergedTime;
             submergedTime += dt;
-            if (submergedTime > DROWN_GRACE_SECONDS) {
-                damage(DROWN_DAMAGE_PER_SECOND * dt);
+            // Damage only the portion of this dt that's actually past the grace
+            // period - the update straddling the boundary (submergedBefore below
+            // it, submergedTime past it) would otherwise get charged for the
+            // *entire* dt, not just the fraction of it spent drowning. At a normal
+            // frame rate that sliver is negligible, but a large dt (a stutter, or
+            // a coarse test step) makes the overcharge obvious.
+            float drowningSeconds = submergedTime - Math.max(submergedBefore, DROWN_GRACE_SECONDS);
+            if (drowningSeconds > 0f) {
+                damage(DROWN_DAMAGE_PER_SECOND * drowningSeconds);
                 tookDamage = true;
             }
         } else {
