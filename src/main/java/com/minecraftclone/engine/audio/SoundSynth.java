@@ -69,6 +69,34 @@ public final class SoundSynth {
         return samples;
     }
 
+    /**
+     * A cluster of short, randomly-pitched, randomly-timed upward tone chirps
+     * mixed together within a {@code durationSeconds} window - each chirp
+     * reads as a single bubble breaking the surface (real bubbles rise in
+     * pitch as they near the surface and pop). Neither {@link #tone} nor
+     * {@link #noise} alone reads as specifically liquid - a tone sweep is
+     * just a whistle and filtered noise is just a generic impact/wash - but
+     * a handful of these overlapping "bloops" gives a splash or swim-stroke
+     * sound the gurgle that's actually distinctive to water. {@code seed}
+     * makes the whole cluster deterministic; {@code count} controls how
+     * busy/dense it sounds and {@code amp} scales every chirp's peak volume.
+     */
+    public static short[] bubbles(long seed, float durationSeconds, int count, float amp) {
+        Random rnd = new Random(seed);
+        short[] out = silence(durationSeconds);
+        for (int i = 0; i < count; i++) {
+            float chirpDur = 0.03f + rnd.nextFloat() * 0.05f;
+            float startFreq = 250f + rnd.nextFloat() * 500f;
+            // Rising pitch: a bubble nearing the surface, not a random blip.
+            float endFreq = startFreq + 300f + rnd.nextFloat() * 700f;
+            float startT = rnd.nextFloat() * Math.max(0.0001f, durationSeconds - chirpDur);
+            float chirpAmp = amp * (0.6f + rnd.nextFloat() * 0.4f);
+            short[] chirp = tone(startFreq, endFreq, chirpDur, chirpAmp, 0f);
+            out = mix(out, concat(silence(startT), chirp));
+        }
+        return out;
+    }
+
     /** Silence, for spacing out notes in a {@link #concat}enated sound. */
     public static short[] silence(float durationSeconds) {
         return new short[Math.max(0, (int) (durationSeconds * SAMPLE_RATE))];

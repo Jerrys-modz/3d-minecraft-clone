@@ -98,8 +98,8 @@ public class Main {
 
     private static final float FOOTSTEP_INTERVAL = 0.38f; // seconds between footstep sounds while walking on the ground
     private static final float SWIM_STROKE_INTERVAL = 0.55f; // seconds between stroke sounds while swimming and moving
-    // Minimum time between two splash sounds. isSubmerged() samples a single
-    // block at the eye position, so standing/floating with your eye height
+    // Minimum time between two splash sounds. isInWater() samples the whole
+    // body hitbox against water, so standing/floating with the hitbox edge
     // sitting almost exactly on a water surface's block boundary - e.g. right
     // after breaking the block that was keeping you just above it, or
     // treading water at the surface - lets ordinary per-frame physics noise
@@ -508,7 +508,7 @@ public class Main {
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
         float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
         float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
-        boolean[] wasSubmerged = {false}; // last frame's Player#isSubmerged(), to fire a splash sound only on the change
+        boolean[] wasInWater = {false}; // last frame's Player#isInWater(), to fire a splash sound only on the change
         float[] splashCooldown = {0f}; // time until another splash sound is allowed - see SPLASH_COOLDOWN_SECONDS
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
@@ -1279,8 +1279,12 @@ public class Main {
                 if (player.hasJustJumped()) audio.play(SoundEvent.JUMP);
                 if (player.hasJustLanded()) audio.play(SoundEvent.LAND);
                 splashCooldown[0] = Math.max(0f, splashCooldown[0] - dt);
-                if (player.isSubmerged() != wasSubmerged[0]) {
-                    wasSubmerged[0] = player.isSubmerged();
+                // isInWater() (whole-body hitbox) rather than isSubmerged() (eye point
+                // only) - a jump into a shallow pool that never reaches eye height, or
+                // wading in up to your knees, is still an entry that should splash.
+                // isSubmerged() alone stayed silent for exactly that case.
+                if (player.isInWater() != wasInWater[0]) {
+                    wasInWater[0] = player.isInWater();
                     // Diving in (or surfacing) is a splash either way - even when the
                     // cooldown below suppresses the sound itself (a flicker burst),
                     // the stroke timer still needs resetting so the periodic stroke

@@ -99,6 +99,39 @@ class SoundSynthTest {
     }
 
     @Test
+    void bubblesLengthMatchesDurationAtTheSampleRate() {
+        short[] s = SoundSynth.bubbles(7L, 0.3f, 5, 0.5f);
+        assertEquals((int) (0.3f * SoundSynth.SAMPLE_RATE), s.length);
+    }
+
+    @Test
+    void bubblesIsDeterministicForTheSameSeed() {
+        short[] a = SoundSynth.bubbles(7L, 0.3f, 5, 0.5f);
+        short[] b = SoundSynth.bubbles(7L, 0.3f, 5, 0.5f);
+        assertArrayEquals(a, b);
+    }
+
+    @Test
+    void bubblesDiffersForDifferentSeeds() {
+        short[] a = SoundSynth.bubbles(1L, 0.3f, 5, 0.5f);
+        short[] b = SoundSynth.bubbles(2L, 0.3f, 5, 0.5f);
+        assertTrue(!java.util.Arrays.equals(a, b), "different seeds should produce different bubble timing/pitch");
+    }
+
+    @Test
+    void bubblesIsMostlySilentBetweenTheChirps() {
+        // Only a handful of short (~0.03-0.08s) chirps scattered across the
+        // window - most samples should be exactly the silence they're mixed
+        // over, not a continuous tone/wash like tone()/noise() produce.
+        short[] s = SoundSynth.bubbles(3L, 0.5f, 4, 0.8f);
+        int silentCount = 0;
+        for (short v : s) {
+            if (v == 0) silentCount++;
+        }
+        assertTrue(silentCount > s.length / 2, "expected most of the buffer to be silent between chirps");
+    }
+
+    @Test
     void scaleMultipliesAmplitudeProportionally() {
         short[] s = SoundSynth.tone(1000, 1000, 0.01f, 1f, 1f);
         short[] half = SoundSynth.scale(s, 0.5f);

@@ -90,6 +90,14 @@ public class Player {
     // a splash sound on the frame it changes, without recomputing the same
     // world lookup a second time itself.
     private boolean submerged = false;
+    // Any part of the body's hitbox overlapping a water cell, recomputed
+    // every updateMovement() call - distinct from submerged (eye point only)
+    // and broader than swimming (which also requires not standing on
+    // anything). True the instant your feet touch the surface, e.g. jumping
+    // into a shallow pool that never reaches your eyes - see Main's splash
+    // sound, which used to only trigger off submerged and so stayed silent
+    // for exactly that case.
+    private boolean inWater = false;
     // Body-in-water-and-not-standing-on-anything state, recomputed every
     // updateMovement() call - distinct from submerged (which only checks the
     // eye/camera point): this drives swim physics and is true well before the
@@ -346,6 +354,11 @@ public class Player {
         return swimming;
     }
 
+    /** Whether any part of the player's hitbox is touching water - true well before (or even without) the eyes going under; see {@link #isSubmerged()}. */
+    public boolean isInWater() {
+        return inWater;
+    }
+
     /** Whether the player is currently walking/sprinting on solid ground (not flying, not airborne) - drives footstep sounds. */
     public boolean isMovingOnGround() {
         return movingOnGround;
@@ -499,8 +512,8 @@ public class Player {
         // column, not someone wading in the shallows with their feet on the bottom
         // (that's onGround, and just walks slower through the water like normal
         // ground movement). Flying overrides it entirely, same as it overrides gravity.
-        swimming = computeSwimming(flying, gameMode.isSpectator(), onGround,
-                overlapsAny(world, aabbAt(position), BlockType::isWater));
+        inWater = overlapsAny(world, aabbAt(position), BlockType::isWater);
+        swimming = computeSwimming(flying, gameMode.isSpectator(), onGround, inWater);
 
         boolean sprinting = (input.isKeyDown(keyBinds.get(KeyBindings.SPRINT)) || sprintLatched) && stats.canSprint();
         float speed;
@@ -540,8 +553,8 @@ public class Player {
         // entirely) this same frame, and the pre-move swimming computed above is
         // stale by then - isSwimming()/isSwimmingAndMoving() (debug overlay,
         // stroke sound) would otherwise report swimming for one extra frame.
-        swimming = computeSwimming(flying, gameMode.isSpectator(), onGround,
-                overlapsAny(world, aabbAt(position), BlockType::isWater));
+        inWater = overlapsAny(world, aabbAt(position), BlockType::isWater);
+        swimming = computeSwimming(flying, gameMode.isSpectator(), onGround, inWater);
         movingOnGround = onGround && moving && !flying;
         swimmingAndMoving = swimming && moving;
         return sprinting && moving;
