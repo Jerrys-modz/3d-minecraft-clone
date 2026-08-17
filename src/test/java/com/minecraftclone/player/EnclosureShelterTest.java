@@ -106,19 +106,33 @@ class EnclosureShelterTest {
     }
 
     @Test
-    void spaceWarmthRisesWhileSealedAndLeaksWhenBreached() {
-        // A cold room heats up over SPACE_WARM_UP_SECONDS (~25s).
+    void spaceWarmthRisesWhileHeatedAndLeaksWhenNot() {
+        // A heated space warms up over SPACE_WARM_UP_SECONDS (~25s).
         float warm = 0f;
         for (int i = 0; i < 25; i++) warm = Player.stepSpaceWarmth(warm, true, 1f);
-        assertEquals(1f, warm, 1e-3f, "a sealed space warms to full");
+        assertEquals(1f, warm, 1e-3f, "a heated sealed space warms to full");
 
-        // ...and the moment it's breached, it starts cooling (slowly - a house
-        // holds its heat for a while after the door opens).
+        // ...and once it's breached (or its fire goes out), it starts cooling
+        // (slowly - a house holds its heat for a while).
         warm = Player.stepSpaceWarmth(warm, false, 1f);
-        assertTrue(warm < 1f, "a breach starts cooling the space");
+        assertTrue(warm < 1f, "no heat starts cooling the space");
         assertTrue(warm > 0.9f, "the heat leaks slowly, not instantly");
         for (int i = 0; i < 200; i++) warm = Player.stepSpaceWarmth(warm, false, 1f);
         assertEquals(0f, warm, 1e-3f, "given long enough, it cools all the way");
+    }
+
+    @Test
+    void aSealedSpaceWithoutAHeatSourceNeverWarmsUp() {
+        java.util.Map<Long, Float> heat = new java.util.HashMap<>();
+        long room = 1L;
+        // Sealed but nothing burning inside: the space stays cold forever.
+        for (int i = 0; i < 200; i++) {
+            assertEquals(0f, Player.updateSpaceHeat(heat, room, false, 1f), 1e-4f,
+                    "an unheated sealed room stays cold");
+        }
+        // The moment a heat source appears (heating=true), it starts to warm.
+        float v = Player.updateSpaceHeat(heat, room, true, 1f);
+        assertTrue(v > 0f, "a heat source lets the room warm up");
     }
 
     @Test
@@ -126,16 +140,16 @@ class EnclosureShelterTest {
         java.util.Map<Long, Float> heat = new java.util.HashMap<>();
         long house = 1L;
         long outside = 2L;
-        // Heat the house to full while sealed...
+        // Heat the house to full while it's sealed and heated...
         float v = 0f;
         for (int i = 0; i < 30; i++) v = Player.updateSpaceHeat(heat, house, true, 1f);
         assertEquals(1f, v, 1e-3f);
-        // ...leave (stand in an unsealed cell for a long while)...
+        // ...leave (stand in an unheated cell for a long while)...
         for (int i = 0; i < 300; i++) Player.updateSpaceHeat(heat, outside, false, 1f);
         // ...and the house still holds its warmth - it only cools while you're in it.
         assertEquals(1f, heat.get(house), 1e-3f, "the house holds its temperature while you're away");
-        // Standing back inside the (now-breached) house starts cooling it.
+        // Standing back inside the now-cold house starts cooling it.
         Player.updateSpaceHeat(heat, house, false, 1f);
-        assertTrue(heat.get(house) < 1f, "being back in a breached house lets the heat leak");
+        assertTrue(heat.get(house) < 1f, "being back in an unheated house lets the heat leak");
     }
 }

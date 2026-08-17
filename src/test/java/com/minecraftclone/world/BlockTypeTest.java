@@ -65,4 +65,19 @@ class BlockTypeTest {
         assertFalse(BlockType.FIRE.solid, "fire never collides");
         assertEquals(14, BlockType.FIRE.lightLevel, "a lightning-lit flame glows brightly");
     }
+
+    @Test
+    void heatSourcesAreFireLampsTorchesFurnacesAndLava() {
+        assertTrue(BlockType.FIRE.isHeatSource());
+        assertTrue(BlockType.TORCH.isHeatSource());
+        assertTrue(BlockType.LAMP.isHeatSource());
+        assertTrue(BlockType.FURNACE.isHeatSource());
+        assertTrue(BlockType.LAVA.isHeatSource());
+        assertTrue(BlockType.LAVA_SOURCE.isHeatSource());
+        // Ordinary blocks radiate no heat - a plain sealed room stays cold.
+        assertFalse(BlockType.PLANKS.isHeatSource());
+        assertFalse(BlockType.STONE.isHeatSource());
+        assertFalse(BlockType.WATER.isHeatSource());
+        assertFalse(BlockType.WOOL.isHeatSource());
+    }
 }

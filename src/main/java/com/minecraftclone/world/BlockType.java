@@ -367,6 +367,16 @@ public enum BlockType {
         return this == LAVA || this == LAVA_SOURCE || this == LAVA_FLOW;
     }
 
+    /**
+     * True if this block radiates heat - a fire, a torch or lamp, a burning
+     * furnace, or lava. A sealed house only warms up when it contains one of
+     * these (see {@link com.minecraftclone.player.Player}).
+     */
+    public boolean isHeatSource() {
+        return this == FIRE || this == TORCH || this == LAMP
+                || this == FURNACE || isLava();
+    }
+
     /** True for any fluid (water or lava), including static and flowing variants. */
     public boolean isFluid() {
         return isWater() || isLava();

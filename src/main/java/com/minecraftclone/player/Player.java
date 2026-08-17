@@ -28,6 +28,8 @@ public class Player {
     private static final int COLD_ROOF_CHECK = 8;
     /** Horizontal radius (blocks) in which a burning fire warms you against the cold. */
     private static final int COLD_FIRE_RADIUS = 3;
+    /** Horizontal radius (blocks) in which a heat source heats the sealed space around you. */
+    private static final int COLD_HEAT_RADIUS = 6;
     /** Seconds of staying sealed to fully heat the space around you. */
     private static final float SPACE_WARM_UP_SECONDS = 25f;
     /** Seconds of being breached/outside for the space's stored heat to fully leak away. */
@@ -298,19 +300,21 @@ public class Player {
             boolean inFire = overlapsAny(world, aabbAt(position), b -> b == BlockType.FIRE);
             // Cold exposure: how cold the local temperature is, cut down by how
             // sheltered the space around you is and how warm your armor is. A
-            // sealed space (walls all around, a roof, solid ground) heats up while
-            // you're in it and the HOUSE keeps that warmth - the value is stored
-            // per 8x8 cell, so it cools only while you're standing in it and the
-            // cell is breached (a door opening or a wall block breaking lets the
-            // cold in - a closed door counts as a wall, an open one doesn't).
-            // A nearby fire warms you almost completely.
+            // sealed space (walls all around, a roof, solid ground) only warms
+            // up if it contains a HEAT SOURCE - a fire, torch, lamp, burning
+            // furnace or lava - and the HOUSE keeps that warmth: the value is
+            // stored per 8x8 cell, so it cools only while you're standing in it
+            // and the space is breached (a door opening or a wall block breaking
+            // lets the cold in - a closed door counts as a wall, an open one
+            // doesn't) or its fire goes out. A nearby fire warms you almost
+            // completely either way.
             float coldness = coldFactor;
-            boolean enclosed = isEnclosed(world);
+            boolean heating = isEnclosed(world) && hasHeatSource(world);
             long cell = spaceHeatCell((int) Math.floor(position.x), (int) Math.floor(position.z));
-            float spaceWarmth = updateSpaceHeat(spaceHeat, cell, enclosed, dt);
+            float spaceWarmth = updateSpaceHeat(spaceHeat, cell, heating, dt);
             ageStoredHeat(dt);
-            if (enclosed) {
-                // Sealed: the space holds heat, so the cold barely reaches you.
+            if (heating) {
+                // Sealed and heated: the space holds heat, so the cold barely reaches you.
                 coldness *= 1f - 0.9f * spaceWarmth;
             } else {
                 // Not fully sealed: a roof alone still breaks the wind a little.
@@ -384,8 +388,13 @@ public class Player {
      * over {@link #SPACE_COOL_SECONDS} (slower, so a house holds its heat a while
      * after a door is opened).
      */
-    static float stepSpaceWarmth(float current, boolean enclosed, float dt) {
-        if (enclosed) {
+    /**
+     * Steps a cell's stored warmth: it rises toward 1 while the space is sealed
+     * AND being heated (a fire/torch/lamp/furnace/lava inside), and falls toward
+     * 0 once it's breached or its heat source goes out.
+     */
+    static float stepSpaceWarmth(float current, boolean heating, float dt) {
+        if (heating) {
             return Math.min(1f, current + dt / SPACE_WARM_UP_SECONDS);
         }
         return Math.max(0f, current - dt / SPACE_COOL_SECONDS);
@@ -397,8 +406,8 @@ public class Player {
      * temperature" behavior - a cell keeps its value while you're elsewhere - is
      * unit-testable headlessly.
      */
-    static float updateSpaceHeat(Map<Long, Float> heat, long cell, boolean enclosed, float dt) {
-        float value = stepSpaceWarmth(heat.getOrDefault(cell, 0f), enclosed, dt);
+    static float updateSpaceHeat(Map<Long, Float> heat, long cell, boolean heating, float dt) {
+        float value = stepSpaceWarmth(heat.getOrDefault(cell, 0f), heating, dt);
         if (value <= 0f) {
             heat.remove(cell);
         } else {
@@ -446,7 +455,9 @@ public class Player {
         }
     }
 
-    /** True if a burning fire is within {@link #COLD_FIRE_RADIUS} blocks - huddling close warms you. */
+    /**
+     * True if a burning fire is within {@link #COLD_FIRE_RADIUS} blocks - huddling close warms you.
+     */
     private boolean fireNearby(World world) {
         int cx = (int) Math.floor(position.x);
         int cy = (int) Math.floor(position.y);
@@ -455,6 +466,25 @@ public class Player {
             for (int dz = -COLD_FIRE_RADIUS; dz <= COLD_FIRE_RADIUS; dz++) {
                 for (int dy = -1; dy <= 2; dy++) {
                     if (world.getBlock(cx + dx, cy + dy, cz + dz) == BlockType.FIRE) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True if a heat source (fire, torch, lamp, furnace, lava) is within
+     * {@link #COLD_HEAT_RADIUS} blocks - what makes a sealed house actually heat
+     * up. A plain sealed room with nothing burning in it stays cold inside.
+     */
+    private boolean hasHeatSource(World world) {
+        int cx = (int) Math.floor(position.x);
+        int cy = (int) Math.floor(position.y);
+        int cz = (int) Math.floor(position.z);
+        for (int dx = -COLD_HEAT_RADIUS; dx <= COLD_HEAT_RADIUS; dx++) {
+            for (int dz = -COLD_HEAT_RADIUS; dz <= COLD_HEAT_RADIUS; dz++) {
+                for (int dy = -2; dy <= 3; dy++) {
+                    if (world.getBlock(cx + dx, cy + dy, cz + dz).isHeatSource()) return true;
                 }
             }
         }
