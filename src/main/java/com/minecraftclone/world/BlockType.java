@@ -408,9 +408,28 @@ public enum BlockType {
         return isFluidSource() || isFluidFlow();
     }
 
-    /** True if a ray should pass straight through this block (air, static water, or transient flow). */
+    /**
+     * True if a ray should pass straight through this block: open air, or any
+     * fluid (water/lava, static/source/flow alike - they're all rendered the
+     * same translucent, non-solid way, so there's no reason a source block
+     * should raycast any differently than the terrain-fill or flow forms
+     * sitting right next to it).
+     * <p>
+     * Missing WATER_SOURCE here used to be a real bug, not just an
+     * inconsistency: breaking a block next to natural ocean water promotes
+     * the boundary cell from WATER to WATER_SOURCE (see World#promoteIfStaticFluid),
+     * which is extremely common near any player-touched shoreline or
+     * underwater dig. The instant the camera's eye position entered one of
+     * those cells while swimming, Raycaster.cast's "already inside a solid
+     * block" branch fired every frame - water_source wasn't pass-through,
+     * so the game treated the player as embedded in solid ground - aiming
+     * the block-outline highlight at their own eye position. With the
+     * camera essentially inside the outlined cube, its edges radiated out
+     * to the screen corners: a glitchy wireframe-in-the-water look that's
+     * exactly what "x-ray in the ocean" describes.
+     */
     public boolean isPassThrough() {
-        return this == AIR || this == WATER || this == WATER_FLOW || this == LAVA_FLOW;
+        return this == AIR || isFluid();
     }
 
     /** True if this block is drawn in the see-through translucent render pass (glass, ice). */

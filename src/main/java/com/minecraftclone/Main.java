@@ -761,6 +761,51 @@ public class Main {
             System.out.println("Autotest underwater ledge: deep top " + deepTop + ", shallow top " + shallowTop
                     + ", bottom " + bottom + ", player at y " + shallowTop);
         }
+        // Diagnostic autotest hook: scans outward from spawn for the deepest
+        // nearby ocean floor point (and, as a tiebreaker, the steepest
+        // neighboring drop), and dives the player down to it, facing the
+        // slope - a general-purpose way to screenshot real generated ocean
+        // floor/cliff terrain headlessly, without hand-carving a scene.
+        if (System.getenv("MCCLONE_AUTOTEST_FIND_OCEAN_CLIFF") != null && started[0]) {
+            int seaLevel = TerrainGenerator.DEFAULT_SEA_LEVEL;
+            // getSurfaceHeight only reads already-loaded chunks (falling back to
+            // sea level otherwise), so stream a wide area around spawn in first.
+            for (int i = 0; i < 400; i++) world.update(player.getPosition().x, player.getPosition().z);
+            int bestX = 0, bestZ = 0, bestDeep = seaLevel, bestShallow = 0, bestDrop = -1;
+            int oceanTiles = 0, minHeightSeen = seaLevel;
+            for (int x = -90; x <= 90; x += 2) {
+                for (int z = -90; z <= 90; z += 2) {
+                    if (world.getBiome(x, z) != TerrainGenerator.Biome.OCEAN) continue;
+                    // Skip columns whose chunk isn't actually loaded/generated yet
+                    // (an ungenerated column reads all-AIR, which floorHeight would
+                    // otherwise misreport as a dramatic "floor at bedrock").
+                    if (world.getBlock(x, seaLevel, z) != BlockType.WATER) continue;
+                    if (world.getBlock(x + 2, seaLevel, z) == BlockType.AIR) continue;
+                    oceanTiles++;
+                    int h = floorHeight(world, x, z, seaLevel);
+                    minHeightSeen = Math.min(minHeightSeen, h);
+                    int hE = floorHeight(world, x + 2, z, seaLevel);
+                    int drop = hE - h;
+                    // Rank by depth first (dive at the deepest point found), tie
+                    // broken by whichever also has the steepest neighboring drop.
+                    if (h < bestDeep || (h == bestDeep && drop > bestDrop)) {
+                        bestDrop = drop;
+                        bestX = x;
+                        bestZ = z;
+                        bestDeep = h;
+                        bestShallow = hE;
+                    }
+                }
+            }
+            System.out.println("Autotest ocean cliff scan: oceanTiles=" + oceanTiles + " minHeightSeen=" + minHeightSeen);
+            for (int i = 0; i < 8; i++) world.update(bestX, bestZ);
+            player.teleportTo(bestX + 0.5f, bestDeep + 1.5f, bestZ + 0.5f);
+            player.getCamera().setYaw(0f);
+            player.getCamera().setPitch(0f);
+            System.out.println("Autotest ocean cliff: deep(" + bestX + "," + bestZ + ")=" + bestDeep
+                    + " shallow(" + (bestX + 4) + "," + bestZ + ")=" + bestShallow
+                    + " drop=" + (bestShallow - bestDeep) + ", player at y " + (bestDeep + 1.5f));
+        }
         // Opt-in autotest hook: open the player's own inventory screen, equipping a
         // full iron set (plus a couple of bag items) so the armor column renders.
         if (System.getenv("MCCLONE_AUTOTEST_INVENTORY") != null && started[0]) {
@@ -1617,7 +1662,18 @@ public class Main {
             }
 
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
-                if (hit != null && targetedMobRef[0] == null) {
+                // Raycaster.cast() reports a degenerate hit (point == origin,
+                // blockPos == the eye's own cell) when the eye's own cell holds
+                // an overlay decoration (e.g. seaweed) - intentional, so seaweed
+                // right at your feet can still be targeted/broken - but drawing
+                // a wireframe cube around a block the camera is literally inside
+                // of has nowhere sane to project to: its edges radiate out to
+                // the screen corners, a glitchy "x-ray" wireframe look. Skip the
+                // outline specifically for that degenerate case; breaking/
+                // placing against hit.blockPos is unaffected.
+                boolean degenerateHit = hit != null
+                        && hit.point.distanceSquared(player.getEyePosition()) < 0.0025f;
+                if (hit != null && targetedMobRef[0] == null && !degenerateHit) {
                     float outlineHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
                     hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
                 }
@@ -2067,6 +2123,21 @@ public class Main {
                 }
             }
         }
+    }
+
+    /**
+     * The Y of the first solid (non-air, non-fluid) block scanning down from
+     * {@code fromY} - unlike {@link World#getSurfaceHeight}, which treats
+     * water as "non-air" and so just returns the water's own top surface,
+     * this actually finds the sea/lake floor underneath it. Diagnostic-only
+     * (see {@code MCCLONE_AUTOTEST_FIND_OCEAN_CLIFF}).
+     */
+    private static int floorHeight(World world, int x, int z, int fromY) {
+        for (int y = fromY; y >= 0; y--) {
+            BlockType t = world.getBlock(x, y, z);
+            if (t != BlockType.AIR && !t.isFluid()) return y;
+        }
+        return 0;
     }
 
     private boolean intersectsPlayer(Player player, Vector3i blockPos) {

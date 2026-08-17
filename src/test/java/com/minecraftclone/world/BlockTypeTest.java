@@ -86,4 +86,29 @@ class BlockTypeTest {
         // Real food still works - foraged items keep their nonzero value.
         assertTrue(BlockType.APPLE.isEdible());
     }
+
+    /**
+     * Regression test: isPassThrough() used to list WATER and WATER_FLOW but
+     * not WATER_SOURCE (or LAVA/LAVA_SOURCE, only LAVA_FLOW) - despite all
+     * three water variants (and all three lava variants) being rendered
+     * identically (same tile, same non-solid/translucent flags, same
+     * Chunk#emitFluid mesh path). Breaking a block next to natural ocean
+     * water promotes the boundary cell from WATER to WATER_SOURCE (see
+     * World#promoteIfStaticFluid) - extremely common near any player-touched
+     * shoreline - so swimming through one of those cells made Raycaster.cast
+     * treat the camera's own eye position as "embedded in solid" every
+     * frame, aiming the block-outline highlight at the camera itself: a
+     * glitchy wireframe-in-the-water "x-ray" look.
+     */
+    @Test
+    void everyFluidVariantIsPassThroughLikeItsSiblings() {
+        assertTrue(BlockType.WATER.isPassThrough());
+        assertTrue(BlockType.WATER_SOURCE.isPassThrough());
+        assertTrue(BlockType.WATER_FLOW.isPassThrough());
+        assertTrue(BlockType.LAVA.isPassThrough());
+        assertTrue(BlockType.LAVA_SOURCE.isPassThrough());
+        assertTrue(BlockType.LAVA_FLOW.isPassThrough());
+        assertTrue(BlockType.AIR.isPassThrough());
+        assertFalse(BlockType.STONE.isPassThrough());
+    }
 }
