@@ -23,6 +23,7 @@ public final class Smelting {
         smelt(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);
         smelt(BlockType.DIAMOND_ORE, BlockType.DIAMOND);
         smelt(BlockType.COAL_ORE, BlockType.COAL);
+        smelt(BlockType.SAND, BlockType.GLASS);
     }
 
     private Smelting() {
