@@ -97,6 +97,11 @@ public final class Crafting {
         shaped2x2("I.", "I.", BlockType.IRON_PICKAXE, 1);            // simple iron pickaxe
         shaped2x2("D.", "D.", BlockType.DIAMOND_PICKAXE, 1);         // simple diamond pickaxe
 
+        // Register basic 2x2 recipes for 3x3 grids (so they work in crafting tables too)
+        shaped3x3("W..", "...", "...", BlockType.PLANKS, 4);         // log -> planks
+        shaped3x3("P..", "P..", "...", BlockType.STICK, 4);          // 2 planks vertical -> sticks
+        shaped3x3("C..", "S..", "...", BlockType.TORCH, 4);          // coal + stick -> torches
+
         // 3x3 recipes from crafting table
         // Stairs: a 6-material "K.. / KK. / KKK" wedge -> 4 stairs.
         shaped3x3("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);
@@ -115,6 +120,10 @@ public final class Crafting {
         // --- Shapeless recipes: any arrangement of the given ingredients. ---
         shapeless2x2(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
         shapeless2x2(BlockType.OBSIDIAN, 1, BlockType.LAVA_SOURCE, BlockType.WATER_SOURCE); // quench lava -> obsidian
+
+        // Register basic 2x2 shapeless recipes for 3x3 grids (so they work in crafting tables too)
+        shapeless3x3(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
+        shapeless3x3(BlockType.OBSIDIAN, 1, BlockType.LAVA_SOURCE, BlockType.WATER_SOURCE);
 
         // --- 3x3 Crafting Table Recipes ---
         // Tools (mirrored matching lets an axe be built either way round).
