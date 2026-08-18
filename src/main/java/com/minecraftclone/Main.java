@@ -637,6 +637,7 @@ public class Main {
             currentDim[0] = DimensionType.OVERWORLD;
             world = worlds[currentDim[0].ordinal()];
             mapRenderer[0] = new MapRenderer(world.getMapData());
+            hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
             startCalendar(dayNightCycle, calendar, genSettings);
             for (World w : worlds) {
                 w.setRenderDistance(settings.getRenderDistance());
@@ -1148,6 +1149,7 @@ public class Main {
                                 currentDim[0] = DimensionType.OVERWORLD;
                                 world = worlds[currentDim[0].ordinal()];
                                 mapRenderer[0] = new MapRenderer(world.getMapData());
+                                hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
                                 startCalendar(dayNightCycle, calendar, genSettings);
                                 for (World w : worlds) {
                                     w.setRenderDistance(settings.getRenderDistance());
@@ -1209,6 +1211,7 @@ public class Main {
                             currentDim[0] = DimensionType.OVERWORLD;
                             world = worlds[currentDim[0].ordinal()];
                             mapRenderer[0] = new MapRenderer(world.getMapData());
+                            hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
                             startCalendar(dayNightCycle, calendar, genSettings);
                             for (World w : worlds) {
                                 w.setRenderDistance(settings.getRenderDistance());
@@ -1447,6 +1450,8 @@ public class Main {
                         teleportThroughPortal(player, worlds, currentDim, portal);
                         world = worlds[currentDim[0].ordinal()];
                         mapRenderer[0] = new MapRenderer(world.getMapData());
+                        lastChunkX[0] = Integer.MIN_VALUE; // Reset chunk tracking for new dimension
+                        lastChunkZ[0] = Integer.MIN_VALUE;
                         teleportCooldown[0] = PORTAL_COOLDOWN_SECONDS;
                         showMessage(messages, "Welcome to " + currentDim[0].displayName(),
                                 new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
@@ -1552,6 +1557,9 @@ public class Main {
                 if (currentDim[0] != DimensionType.OVERWORLD) {
                     currentDim[0] = DimensionType.OVERWORLD;
                     world = worlds[currentDim[0].ordinal()];
+                    mapRenderer[0] = new MapRenderer(world.getMapData());
+                    lastChunkX[0] = Integer.MIN_VALUE; // Reset chunk tracking
+                    lastChunkZ[0] = Integer.MIN_VALUE;
                     for (int i = 0; i < 80; i++) {
                         world.update(0, 0);
                     }

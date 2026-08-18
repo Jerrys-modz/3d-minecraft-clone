@@ -173,11 +173,13 @@ public class MapRenderer {
             }
         }
 
-        // Player marker
+        // Player marker (with pan offset applied)
+        int markerX = centerX + (int) mapOffsetX;
+        int markerZ = centerZ + (int) mapOffsetZ;
         g.setColor(new Color(0, 255, 0));
-        g.fillOval(centerX - 3, centerZ - 3, 7, 7);
+        g.fillOval(markerX - 3, markerZ - 3, 7, 7);
 
-        // Crosshair in center
+        // Crosshair in center (always at screen center, not affected by pan)
         g.setColor(new Color(255, 255, 0));
         g.drawLine(centerX - 10, centerZ, centerX + 10, centerZ);
         g.drawLine(centerX, centerZ - 10, centerX, centerZ + 10);

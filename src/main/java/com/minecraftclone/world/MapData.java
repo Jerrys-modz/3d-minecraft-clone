@@ -89,8 +89,8 @@ public class MapData {
      */
     public static int[] getChunkCoords(float worldX, float worldZ) {
         return new int[]{
-            Math.floorDiv((int) worldX, 16),
-            Math.floorDiv((int) worldZ, 16)
+            Math.floorDiv((int) Math.floor(worldX), 16),
+            Math.floorDiv((int) Math.floor(worldZ), 16)
         };
     }
 

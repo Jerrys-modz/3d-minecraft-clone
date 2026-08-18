@@ -156,6 +156,11 @@ public class Hud {
     private final FloatArray guiVerts = new FloatArray(512);
     private final IntArray guiInds = new IntArray(256);
 
+    // Cached mini-map resources to avoid recreating every frame.
+    private java.awt.image.BufferedImage cachedMiniMapImage;
+    private int cachedMiniMapTextureId = -1;
+    private final IconMesh miniMapMesh = new IconMesh();
+
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
     private final FloatArray blockVertices = new FloatArray(1024);
@@ -1988,45 +1993,55 @@ public class Hud {
 
     /**
      * Renders a mini-map image in the top-right corner of the screen.
-     * The image is rendered as a simple 2D quad with the given dimensions.
+     * Caches the texture and mesh to avoid recreating them every frame.
+     * Call with null image to clear the cache (e.g., when changing worlds).
      */
     public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, float sizeX, float sizeY, float offsetX, float offsetY, float aspectRatio) {
-        if (miniMapImage == null) return;
+        if (miniMapImage == null) {
+            // Clear cache when no image provided
+            if (cachedMiniMapTextureId >= 0) {
+                glDeleteTextures(cachedMiniMapTextureId);
+                cachedMiniMapTextureId = -1;
+                miniMapMesh.destroy();
+            }
+            cachedMiniMapImage = null;
+            return;
+        }
+
+        // Recreate texture only if the image has changed
+        if (cachedMiniMapImage != miniMapImage) {
+            if (cachedMiniMapTextureId >= 0) {
+                glDeleteTextures(cachedMiniMapTextureId);
+            }
+            cachedMiniMapTextureId = GLTexture.upload(miniMapImage);
+            cachedMiniMapImage = miniMapImage;
+
+            // Recreate mesh with the correct position and UV coordinates
+            float minX = offsetX - sizeX / 2f;
+            float maxX = offsetX + sizeX / 2f;
+            float minY = offsetY - sizeY / 2f;
+            float maxY = offsetY + sizeY / 2f;
+
+            float[] verts = {
+                minX, minY, 0, 0, 0,  // bottom-left
+                maxX, minY, 0, 1, 0,  // bottom-right
+                maxX, maxY, 0, 1, 1,  // top-right
+                minX, maxY, 0, 0, 1,  // top-left
+            };
+            int[] inds = {0, 1, 2, 0, 2, 3};
+            miniMapMesh.upload(verts, inds);
+        }
 
         glDisable(GL_DEPTH_TEST);
-        int textureId = com.minecraftclone.engine.graphics.GLTexture.upload(miniMapImage);
-
-        // Position in logical square: top-right corner
-        // offsetX, offsetY are in logical units (e.g., -0.95f for 5% from edge)
-        float minX = offsetX - sizeX / 2f;
-        float maxX = offsetX + sizeX / 2f;
-        float minY = offsetY - sizeY / 2f;
-        float maxY = offsetY + sizeY / 2f;
-
-        // Create a simple quad mesh for the mini-map
-        float[] verts = {
-            minX, minY, 0, 0, 0,  // bottom-left
-            maxX, minY, 0, 1, 0,  // bottom-right
-            maxX, maxY, 0, 1, 1,  // top-right
-            minX, maxY, 0, 0, 1,  // top-left
-        };
-        int[] inds = {0, 1, 2, 0, 2, 3};
-
-        IconMesh tempMesh = new IconMesh();
-        tempMesh.upload(verts, inds);
-
         hudShader.bind();
         hudShader.setUniform("transform", new Matrix4f().identity().scale(1f / aspectRatio, 1f, 1f));
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureId);
+        glBindTexture(GL_TEXTURE_2D, cachedMiniMapTextureId);
         hudShader.setUniform("atlas", 0);
         hudShader.setUniform("color", new Vector4f(1f, 1f, 1f, 1f));
-        tempMesh.render();
+        miniMapMesh.render();
         hudShader.unbind();
-
         glBindTexture(GL_TEXTURE_2D, 0);
-        glDeleteTextures(textureId);
-        tempMesh.destroy();
         glEnable(GL_DEPTH_TEST);
     }
 
@@ -2051,5 +2066,10 @@ public class Hud {
         settingsFill.destroy();
         guiQuadMesh.destroy();
         frostOverlay.destroy();
+        if (cachedMiniMapTextureId >= 0) {
+            glDeleteTextures(cachedMiniMapTextureId);
+            cachedMiniMapTextureId = -1;
+        }
+        miniMapMesh.destroy();
     }
 }

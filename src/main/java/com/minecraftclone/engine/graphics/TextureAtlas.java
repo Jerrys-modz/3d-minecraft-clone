@@ -586,11 +586,8 @@ public class TextureAtlas {
         for (int y = 0; y < TILE_PX; y++) {
             int stripePhase = (y / stripeHeight) & 1;
             int color = stripePhase == 0 ? oreColor : oreDark;
-            // Add some noise variance to avoid too-uniform stripes.
-            if (rnd.nextFloat() < 0.6f) {
-                for (int x = 0; x < TILE_PX; x++) {
-                    img.setRGB(ox + x, oy + y, 0xFF000000 | color);
-                }
+            for (int x = 0; x < TILE_PX; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }
     }
