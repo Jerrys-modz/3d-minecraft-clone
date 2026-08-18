@@ -382,8 +382,9 @@ public class Main {
                 world.spawnItem(bx, by, bz, BlockType.COAL, 1, loot);
             } else if (OreDrops.isGthnOre(targetType)) {
                 // GTNH ores drop their crushed form instead of the ore block itself
-                BlockType crushedOre = OreDrops.dropFor(targetType);
-                world.spawnItem(bx, by, bz, crushedOre, 1, loot);
+                // Small ores have variable drops: 70% crushed ore, 30% impure pile
+                BlockType droppedItem = OreDrops.dropForWithVariance(targetType, loot);
+                world.spawnItem(bx, by, bz, droppedItem, 1, loot);
             } else {
                 // An open door/trapdoor drops the closed item.
                 // Any bed variant (head/foot, occupied/unoccupied) drops the base BED item.

@@ -347,7 +347,35 @@ public enum BlockType {
     SMALL_URANIUM_ORE(234, true, false, 116, 116, 116),
     SMALL_THORIUM_ORE(235, true, false, 117, 117, 117),
     SMALL_PLUTONIUM_ORE(236, true, false, 118, 118, 118),
-    SMALL_IRIDIUM_ORE(237, true, false, 119, 119, 119);
+    SMALL_IRIDIUM_ORE(237, true, false, 119, 119, 119),
+
+    // --- Impure Ore Piles: Secondary drop from small ores (partially processed) ---
+    // Note: Limited to 18 items to fit within byte ID range (238-255).
+    // Early-game impure ores (6 ores)
+    IMPURE_COPPER(238, 0),
+    IMPURE_TIN(239, 0),
+    IMPURE_BAUXITE(240, 0),
+    IMPURE_ZINC(241, 0),
+    IMPURE_LEAD(242, 0),
+    IMPURE_SILVER(243, 0),
+
+    // Mid-game impure ores (5 ores)
+    IMPURE_NICKEL(244, 0),
+    IMPURE_COBALT(245, 0),
+    IMPURE_TUNGSTEN(246, 0),
+    IMPURE_MOLYBDENUM(247, 0),
+    IMPURE_PLATINUM(248, 0),
+
+    // Advanced impure ores (4 ores - skipping VANADIUM)
+    IMPURE_CHROMIUM(249, 0),
+    IMPURE_MANGANESE(250, 0),
+    IMPURE_BERYLLIUM(251, 0),
+    IMPURE_TITANIUM(252, 0),
+
+    // Late-game impure ores (3 ores - skipping THORIUM)
+    IMPURE_URANIUM(253, 0),
+    IMPURE_PLUTONIUM(254, 0),
+    IMPURE_IRIDIUM(255, 0);
 
     public final byte id;
     public final boolean solid;
