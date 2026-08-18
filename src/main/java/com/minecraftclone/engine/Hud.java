@@ -160,6 +160,7 @@ public class Hud {
     private java.awt.image.BufferedImage cachedMiniMapImage;
     private int cachedMiniMapTextureId = -1;
     private final IconMesh miniMapMesh = new IconMesh();
+    private float cachedMiniMapSizeX, cachedMiniMapSizeY, cachedMiniMapOffsetX, cachedMiniMapOffsetY;
 
     // Cached full-screen map resources.
     private java.awt.image.BufferedImage cachedFullMapImage;
@@ -2013,25 +2014,37 @@ public class Hud {
             return;
         }
 
-        // Recreate texture only if the image has changed
-        if (cachedMiniMapImage != miniMapImage) {
+        // Check if image or layout has changed
+        boolean imageChanged = cachedMiniMapImage != miniMapImage;
+        boolean layoutChanged = cachedMiniMapSizeX != sizeX || cachedMiniMapSizeY != sizeY
+                             || cachedMiniMapOffsetX != offsetX || cachedMiniMapOffsetY != offsetY;
+
+        // Recreate texture if image has changed
+        if (imageChanged) {
             if (cachedMiniMapTextureId >= 0) {
                 glDeleteTextures(cachedMiniMapTextureId);
             }
             cachedMiniMapTextureId = GLTexture.upload(miniMapImage);
             cachedMiniMapImage = miniMapImage;
+        }
 
-            // Recreate mesh with the correct position and UV coordinates
+        // Rebuild mesh if image or layout has changed
+        if (imageChanged || layoutChanged) {
+            cachedMiniMapSizeX = sizeX;
+            cachedMiniMapSizeY = sizeY;
+            cachedMiniMapOffsetX = offsetX;
+            cachedMiniMapOffsetY = offsetY;
+
             float minX = offsetX - sizeX / 2f;
             float maxX = offsetX + sizeX / 2f;
             float minY = offsetY - sizeY / 2f;
             float maxY = offsetY + sizeY / 2f;
 
             float[] verts = {
-                minX, minY, 0, 0, 0,  // bottom-left
-                maxX, minY, 0, 1, 0,  // bottom-right
-                maxX, maxY, 0, 1, 1,  // top-right
-                minX, maxY, 0, 0, 1,  // top-left
+                minX, minY, 0f, 1f,  // bottom-left: v=1
+                maxX, minY, 1f, 1f,  // bottom-right: v=1
+                maxX, maxY, 1f, 0f,  // top-right: v=0
+                minX, maxY, 0f, 0f,  // top-left: v=0
             };
             int[] inds = {0, 1, 2, 0, 2, 3};
             miniMapMesh.upload(verts, inds);
@@ -2072,12 +2085,12 @@ public class Hud {
             cachedFullMapTextureId = GLTexture.upload(mapImage);
             cachedFullMapImage = mapImage;
 
-            // Full-screen quad: NDC −1..+1 in both axes, UV 0..1
+            // Full-screen quad: NDC −1..+1 in both axes, UV 0..1 with v flipped
             float[] verts = {
-                -1f, -1f, 0f, 0f, 0f,
-                 1f, -1f, 0f, 1f, 0f,
-                 1f,  1f, 0f, 1f, 1f,
-                -1f,  1f, 0f, 0f, 1f,
+                -1f, -1f, 0f, 1f,  // bottom-left: v=1
+                 1f, -1f, 1f, 1f,  // bottom-right: v=1
+                 1f,  1f, 1f, 0f,  // top-right: v=0
+                -1f,  1f, 0f, 0f,  // top-left: v=0
             };
             int[] inds = {0, 1, 2, 0, 2, 3};
             fullMapMesh.upload(verts, inds);
