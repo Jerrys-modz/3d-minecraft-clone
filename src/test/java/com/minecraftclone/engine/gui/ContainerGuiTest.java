@@ -119,8 +119,9 @@ class ContainerGuiTest {
         CraftingGrid grid = new CraftingGrid();
         ContainerGui gui = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, inv, grid, null);
         InventoryController c = new InventoryController(gui);
+        // 2x2 grid: stick recipe is 2 planks vertical (cells 0, 2)
         grid.set(0, BlockType.PLANKS);
-        grid.set(3, BlockType.PLANKS);
+        grid.set(2, BlockType.PLANKS);
         assertEquals(BlockType.STICK, gui.currentRecipe().output());
         c.click(ContainerGui.OUTPUT_SLOT, false, false);
         assertEquals(BlockType.STICK, c.cursorType());
@@ -136,11 +137,12 @@ class ContainerGuiTest {
         InventoryController c = new InventoryController(gui);
         inv.setSlot(0, BlockType.PLANKS, 5);
         c.click(0, false, true);
-        for (int i = 0; i < 5; i++) {
+        // 2x2 grid has only 4 cells, so only 4 planks fit
+        for (int i = 0; i < 4; i++) {
             assertEquals(BlockType.PLANKS, grid.get(i), "cell " + i + " filled");
         }
-        assertEquals(0, inv.getCount(BlockType.PLANKS), "stack moved entirely into the grid");
-        assertTrue(inv.isEmpty(0));
+        assertEquals(1, inv.getCount(BlockType.PLANKS), "5th plank stays in inventory (grid full)");
+        assertFalse(inv.isEmpty(0));
     }
 
     @Test

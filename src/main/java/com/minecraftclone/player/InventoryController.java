@@ -406,6 +406,11 @@ public class InventoryController {
                     count--;
                 }
             }
+            // Update the slot with remaining items and return (don't redistribute to other inventory slots)
+            if (count < original) {
+                inventory.setSlot(slotId, count == 0 ? null : t, count);
+            }
+            return;
         }
 
         // Anything left hops between hotbar and main inventory.

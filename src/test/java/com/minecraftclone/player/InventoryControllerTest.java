@@ -55,8 +55,9 @@ class InventoryControllerTest {
     void craftsFromTheGridIntoTheCursor() {
         Inventory inv = new Inventory();
         CraftingGrid grid = new CraftingGrid();
+        // 2x2 grid: stick recipe is P. / P. (cells 0, 2)
         grid.set(0, BlockType.PLANKS);
-        grid.set(3, BlockType.PLANKS);
+        grid.set(2, BlockType.PLANKS);
         InventoryController c = new InventoryController(inv, grid);
         assertEquals(BlockType.STICK, Crafting.match(grid.snapshot()).output());
         c.click(InventoryController.OUTPUT_SLOT, false, false);
