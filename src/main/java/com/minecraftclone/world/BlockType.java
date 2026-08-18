@@ -210,10 +210,10 @@ public enum BlockType {
     // Beds: a 1x2 sleeping surface (like Minecraft). BED is the foot end, BED_HEAD
     // is the pillow/head end. Both halves are solid, directional, and half-height.
     // Beds cannot be placed in the Nether or End (they explode in nether like vanilla).
-    BED(133, 60, 61, 60, 62, 62, 0.5f),              // foot end: blanket top/side, foot texture, half height
-    BED_HEAD(134, 63, 63, 63, 63, 63, 0.5f),         // head end: pillow texture, half height
-    BED_OCCUPIED(135, 60, 61, 60, 62, 62, 0.5f),     // occupied foot end
-    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f), // occupied head end
+    BED(133, 60, 61, 60, 62, 62, 0.5f),
+    BED_HEAD(134, 63, 63, 63, 63, 63, 0.5f),
+    BED_OCCUPIED(135, 60, 61, 60, 62, 62, 0.5f),
+    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f);
 
     public final byte id;
     public final boolean solid;
