@@ -500,7 +500,7 @@ public enum BlockType {
      * there - see {@link Chunk#setOverlay} and {@link BlockAccessor#getOverlay}.
      */
     public boolean isSubmersible() {
-        return this == SEAWEED;
+        return this == SEAWEED || this == LILY_PAD;
     }
 
     /** True for either half of a functional door (closed solid, or open walk-through). */

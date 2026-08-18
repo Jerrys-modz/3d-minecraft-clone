@@ -381,13 +381,15 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
                     if (overlay != BlockType.AIR) {
                         // A decoration living inside its cell's primary block (see
-                        // BlockType#isSubmersible) - e.g. seaweed inside a water cell,
-                        // drawn the same way any other cross-shaped decoration is.
+                        // BlockType#isSubmersible) - e.g. seaweed inside a water cell or
+                        // lily pads on top of water, drawn differently depending on type.
                         // Emitted before the primary block below so it's still drawn
                         // even on the rare cell whose "primary" is AIR (an overlay
                         // whose fluid was somehow removed without clearing it too).
                         if (overlay == BlockType.SEAWEED) {
                             emitSeaweed(vertices, indices, vertexCounter, wx, wy, wz, overlay, atlas, blockLight);
+                        } else if (overlay == BlockType.LILY_PAD) {
+                            emitLilyPad(vertices, indices, vertexCounter, wx, wy, wz, overlay, atlas, blockLight);
                         } else {
                             emitCross(vertices, indices, vertexCounter, wx, wy, wz, overlay, atlas, blockLight);
                         }
@@ -996,6 +998,25 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
         emitQuadBothSides(vertices, indices, vertexCounter, planeA, uvs, light, blockLight);
         emitQuadBothSides(vertices, indices, vertexCounter, planeB, uvs, light, blockLight);
+    }
+
+    /**
+     * Emits a lily pad as a single flat quad on the surface of the water block.
+     * Lily pads sit on top of water, not as cross decorations.
+     */
+    private void emitLilyPad(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
+        float[] uv = atlas.getUV(block.topTile);
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+        float light = LIGHT_TOP;
+
+        // Lily pad sits at the top of the water block as a thin flat surface
+        float x0 = wx, y = wy + 1.0f, z0 = wz, x1 = wx + 1, z1 = wz + 1;
+
+        float[][] positions = {{x0, y, z1}, {x1, y, z1}, {x1, y, z0}, {x0, y, z0}};
+
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
     }
 
     /**
