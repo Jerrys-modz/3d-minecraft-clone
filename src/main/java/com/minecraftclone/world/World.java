@@ -299,6 +299,51 @@ public class World implements BlockAccessor {
             promoteIfStaticFluid(worldX, worldY - 1, worldZ);
             promoteIfStaticFluid(worldX, worldY, worldZ + 1);
             promoteIfStaticFluid(worldX, worldY, worldZ - 1);
+
+            // Cactus, bamboo, and seaweed lose support when the block below is removed -
+            // break all stacked blocks above to simulate gravity (they fall and break).
+            BlockType above = getBlock(worldX, worldY + 1, worldZ);
+            if (above == BlockType.CACTUS || above == BlockType.BAMBOO || above == BlockType.SEAWEED) {
+                breakStackedPlant(worldX, worldY + 1, worldZ, above);
+            }
+            // Vines hang downward, so breaking a vine breaks all vines below it.
+            if (old == BlockType.VINE) {
+                breakHangingPlant(worldX, worldY - 1, worldZ, BlockType.VINE);
+            }
+        }
+    }
+
+    /** Recursively break stacked plant blocks (cactus/bamboo/seaweed) above the removed block. */
+    private void breakStackedPlant(int x, int y, int z, BlockType plantType) {
+        if (plantType == BlockType.SEAWEED) {
+            BlockType overlay = getOverlay(x, y, z);
+            if (overlay == plantType) {
+                setOverlay(x, y, z, BlockType.AIR);
+                breakStackedPlant(x, y + 1, z, plantType);
+            }
+        } else {
+            BlockType block = getBlock(x, y, z);
+            if (block == plantType) {
+                setBlock(x, y, z, BlockType.AIR);
+                breakStackedPlant(x, y + 1, z, plantType);
+            }
+        }
+    }
+
+    /** Recursively break hanging plant blocks (vines/seaweed) below the removed block. */
+    private void breakHangingPlant(int x, int y, int z, BlockType plantType) {
+        if (plantType == BlockType.SEAWEED) {
+            BlockType overlay = getOverlay(x, y, z);
+            if (overlay == plantType) {
+                setOverlay(x, y, z, BlockType.AIR);
+                breakHangingPlant(x, y - 1, z, plantType);
+            }
+        } else {
+            BlockType block = getBlock(x, y, z);
+            if (block == plantType) {
+                setBlock(x, y, z, BlockType.AIR);
+                breakHangingPlant(x, y - 1, z, plantType);
+            }
         }
     }
 

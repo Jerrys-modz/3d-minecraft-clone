@@ -375,7 +375,7 @@ public class InventoryController {
         }
 
         // Prefer the open container: ore/fuel into a furnace, anything into a
-        // chest, items into empty crafting-table cells.
+        // chest, items into empty crafting-grid cells.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
             int target = -1;
             if (Smelting.isSmeltable(t)) {
@@ -399,7 +399,10 @@ public class InventoryController {
                 inventory.setSlot(slotId, null, 0);
                 return;
             }
-        } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE) {
+        } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE ||
+                   (gui.kind() == ContainerGui.Kind.INVENTORY && slotId >= Inventory.HOTBAR_SIZE)) {
+            // For a dedicated crafting table, or when shift-clicking from main inventory to the crafting grid,
+            // place items into empty crafting-grid cells.
             for (int i = 0; i < CraftingGrid.SIZE && count > 0; i++) {
                 if (gui.grid().get(i) == null) {
                     gui.grid().set(i, t);
