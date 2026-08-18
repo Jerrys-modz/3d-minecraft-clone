@@ -206,6 +206,7 @@ public enum BlockType {
     // 1.5-block-tall box (the post is taller than a block), so neither the
     // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
     WOODEN_FENCE(132, 11, false, true, 1.5f),
+
     // Beds: a 1x2 sleeping surface (like Minecraft). BED is the foot end, BED_HEAD
     // is the pillow/head end. Both halves are solid, directional, and half-height.
     // Beds cannot be placed in the Nether or End (they explode in nether like vanilla).
