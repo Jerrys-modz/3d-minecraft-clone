@@ -118,6 +118,9 @@ public final class Mining {
         put(BlockType.PLANKS_STAIRS, 1.0f, ToolKind.BROADAXE, TIER_HAND);
         put(BlockType.WOODEN_FENCE, 1.0f, ToolKind.BROADAXE, TIER_HAND);
 
+        // Textiles - soft blocks.
+        put(BlockType.WOOL, 0.8f, ToolKind.NONE, TIER_HAND);
+
         // Stone and masonry - a hammer is the builder's tool (bare hands still work, just slow).
         put(BlockType.STONE, 2.5f, ToolKind.HAMMER, TIER_HAND);
         put(BlockType.STONE_SLAB, 2.5f, ToolKind.HAMMER, TIER_HAND);

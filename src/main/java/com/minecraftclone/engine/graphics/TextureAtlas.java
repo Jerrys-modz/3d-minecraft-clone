@@ -112,6 +112,7 @@ public class TextureAtlas {
         paintSeaweed(image, 45, rnd);
         paintDoor(image, 46, rnd);
         paintTrapdoor(image, 47, rnd);
+        paintWool(image, 59, rnd);
 
         // --- Nether / End dimension blocks ---
         paintNetherrack(image, 52, rnd);
@@ -1178,6 +1179,11 @@ public class TextureAtlas {
                 }
             }
         }
+    }
+
+    /** Wool: soft, fluffy texture in white. */
+    private void paintWool(BufferedImage img, int index, Random rnd) {
+        paintTile(img, index, rnd, 0xF5F5F5, 0xE0E0E0, true);
     }
 
     public void bind() {
