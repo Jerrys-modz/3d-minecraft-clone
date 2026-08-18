@@ -414,7 +414,8 @@ public class InventoryController {
                 inventory.setSlot(slotId, null, 0);
                 return;
             }
-        } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE) {
+        } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE ||
+                   (gui.kind() == ContainerGui.Kind.INVENTORY && slotId >= Inventory.HOTBAR_SIZE)) {
             for (int i = 0; i < CraftingGrid.SIZE && count > 0; i++) {
                 if (gui.grid().get(i) == null) {
                     gui.grid().set(i, t);
