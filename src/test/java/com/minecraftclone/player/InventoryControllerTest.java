@@ -341,4 +341,31 @@ class InventoryControllerTest {
         assertEquals(BlockType.DIRT, grid.get(4), "grid cell 4 should have dirt (only " + cellsWithItems + " cells filled)");
         assertFalse(c.hasCursorItem(), "cursor should be empty after placing all 5 items");
     }
+
+    @Test
+    void dragWithPopulatedCursorToCraftingGridPlacesInAllVisitedCells() {
+        Inventory inv = new Inventory();
+        CraftingGrid grid = new CraftingGrid();
+        InventoryController c = new InventoryController(inv, grid);
+        // Pre-populate cursor with planks (not lifted from dragStart)
+        inv.setSlot(10, BlockType.PLANKS, 5);
+        c.click(10, false, false); // Lift the stack onto the cursor
+        assertTrue(c.hasCursorItem(), "cursor should hold planks");
+        assertEquals(5, c.cursorCount(), "cursor should have 5 planks");
+
+        // Start drag on a crafting grid cell (dragStart is a destination, not source)
+        c.beginDrag(ContainerGui.GRID_START + 0, false);
+        c.continueDrag(ContainerGui.GRID_START + 1);
+        c.continueDrag(ContainerGui.GRID_START + 2);
+        c.continueDrag(ContainerGui.GRID_START + 3);
+        c.endDrag(ContainerGui.GRID_START + 4);
+
+        // All 5 visited cells should receive 1 plank each, including dragStart (cell 0)
+        assertEquals(BlockType.PLANKS, grid.get(0), "grid cell 0 (dragStart) should have plank");
+        assertEquals(BlockType.PLANKS, grid.get(1), "grid cell 1 should have plank");
+        assertEquals(BlockType.PLANKS, grid.get(2), "grid cell 2 should have plank");
+        assertEquals(BlockType.PLANKS, grid.get(3), "grid cell 3 should have plank");
+        assertEquals(BlockType.PLANKS, grid.get(4), "grid cell 4 should have plank");
+        assertFalse(c.hasCursorItem(), "cursor should be empty after placing all 5 items");
+    }
 }

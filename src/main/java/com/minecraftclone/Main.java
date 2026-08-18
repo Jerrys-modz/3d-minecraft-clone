@@ -1267,23 +1267,27 @@ public class Main {
                 input.resetMouseDelta();
             }
 
-            if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY))) {
-                if (inventoryOpen[0]) {
-                    closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
-                } else if (creativeOpen[0]) {
-                    closeCreative(inventoryController, creativeOpen, audio);
-                } else if (settings.getGameMode().isCreative()) {
-                    creativeOpen[0] = true;
-                    menuOpen[0] = false;
-                    audio.play(SoundEvent.UI_OPEN);
-                } else {
-                    activeGui[0] = inventoryGui;
-                    inventoryOpen[0] = true;
-                    menuOpen[0] = false;
-                    audio.play(SoundEvent.UI_OPEN);
+            // Suppress gameplay shortcuts (like inventory toggle) when the settings menu
+            // is waiting to capture a gamepad button press for a binding.
+            if (!(menuOpen[0] && bindingAction[0] >= 0)) {
+                if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY))) {
+                    if (inventoryOpen[0]) {
+                        closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
+                    } else if (creativeOpen[0]) {
+                        closeCreative(inventoryController, creativeOpen, audio);
+                    } else if (settings.getGameMode().isCreative()) {
+                        creativeOpen[0] = true;
+                        menuOpen[0] = false;
+                        audio.play(SoundEvent.UI_OPEN);
+                    } else {
+                        activeGui[0] = inventoryGui;
+                        inventoryOpen[0] = true;
+                        menuOpen[0] = false;
+                        audio.play(SoundEvent.UI_OPEN);
+                    }
+                    window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
+                    input.resetMouseDelta();
                 }
-                window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
-                input.resetMouseDelta();
             }
 
             if (creativeOpen[0]) {

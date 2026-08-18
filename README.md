@@ -137,7 +137,7 @@ Plug in (or dock) any GLFW-recognized gamepad - including the Steam Deck's built
 | Bumpers or d-pad left/right | Cycle the selected hotbar slot |
 | `Start` | Open/close the settings menu |
 
-A "Gamepad: <name>" line appears on the `F3` debug overlay whenever one's connected, as a quick check that it's been detected.
+A "Gamepad: `<name>`" line appears on the `F3` debug overlay whenever one's connected, as a quick check that it's been detected.
 
 The table above is the default mapping, and most of it is rebindable: open Settings and switch to the new **Controller** tab (next to Controls) to reassign Jump, Sprint, Fly down, Fly toggle, Inventory, Debug, Screenshot, and Weather forecast to a different button - click (or press Enter on) a row, then press the button you want. Movement always stays the left stick (there's only one stick for it), and Start/A/X/B keep their fixed roles (menu/confirm/right-click/back) the same way Esc and the mouse buttons aren't rebindable on keyboard either. Movement/jump/sprint/fly/inventory/debug/screenshot/forecast all route through whatever *action* they represent, so rebinding a controller button changes what triggers that action - and rebinding the underlying key in Settings > Controls still works the same way it always did.
 

@@ -18,7 +18,8 @@ import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.ToolDurability;
-import com.minecraftclone.world.gen.WorldGenSettings;import com.minecraftclone.util.FloatArray;
+import com.minecraftclone.world.gen.WorldGenSettings;
+import com.minecraftclone.util.FloatArray;
 import com.minecraftclone.util.IntArray;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Furnace;
@@ -1200,6 +1201,22 @@ public class Hud {
         blockVertexCounter += 4;
     }
 
+    /**
+     * Emits a quad from 4 arbitrary vertex positions (not necessarily axis-aligned).
+     * Vertices are specified in counter-clockwise order: bottom-left, bottom-right, top-right, top-left.
+     */
+    private void addArbitraryQuad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, float[] uv) {
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        int base = blockVertexCounter;
+        blockVertices.add(x0); blockVertices.add(y0); blockVertices.add(u0); blockVertices.add(v1);
+        blockVertices.add(x1); blockVertices.add(y1); blockVertices.add(u1); blockVertices.add(v1);
+        blockVertices.add(x2); blockVertices.add(y2); blockVertices.add(u1); blockVertices.add(v0);
+        blockVertices.add(x3); blockVertices.add(y3); blockVertices.add(u0); blockVertices.add(v0);
+        blockIndices.add(base); blockIndices.add(base + 1); blockIndices.add(base + 2);
+        blockIndices.add(base); blockIndices.add(base + 2); blockIndices.add(base + 3);
+        blockVertexCounter += 4;
+    }
+
     private void addQuad3(FloatArray out, float minX, float minY, float maxX, float maxY) {
         out.add(minX); out.add(minY); out.add(0);
         out.add(maxX); out.add(minY); out.add(0);
@@ -1220,26 +1237,32 @@ public class Hud {
 
         // Draw in back-to-front order for correct overlap (though z-ordering doesn't matter for 2D HUD)
 
-        // Left side face (X- in world space, shows as left in isometric)
-        float leftX0 = cx - half;
-        float leftX1 = cx - half + depth;
-        float leftY0 = cy - half + depth;
-        float leftY1 = cy + half - depth;
-        addQuad(leftX0, leftY0, leftX1, leftY1, atlas.getUV(type.sideTile));
+        // Left side face (X- in world space, shows as left in isometric) - trapezoid
+        // Bottom-left, bottom-right, top-right, top-left
+        addArbitraryQuad(
+            cx - half, cy,                          // bottom-left
+            cx - half + depth, cy - half + depth,   // bottom-right
+            cx - half + depth, cy - half,           // top-right
+            cx - half, cy - depth,                  // top-left
+            atlas.getUV(type.sideTile));
 
-        // Right side face (Z+ in world space, shows as right in isometric)
-        float rightX0 = cx + half - depth;
-        float rightX1 = cx + half;
-        float rightY0 = cy - half + depth;
-        float rightY1 = cy + half - depth;
-        addQuad(rightX0, rightY0, rightX1, rightY1, atlas.getUV(type.sideTile));
+        // Right side face (Z+ in world space, shows as right in isometric) - trapezoid
+        // Bottom-left, bottom-right, top-right, top-left
+        addArbitraryQuad(
+            cx + half - depth, cy - half + depth,   // bottom-left
+            cx + half, cy,                          // bottom-right
+            cx + half, cy - depth,                  // top-right
+            cx + half - depth, cy - half,           // top-left
+            atlas.getUV(type.sideTile));
 
-        // Top face (Y+ in world space) - draw last so it appears on top
-        float topX0 = cx - half + depth;
-        float topX1 = cx + half - depth;
-        float topY0 = cy - half;
-        float topY1 = cy - half + depth;
-        addQuad(topX0, topY0, topX1, topY1, atlas.getUV(type.topTile));
+        // Top face (Y+ in world space) - diamond-shaped quad
+        // Bottom vertex, right vertex, top vertex, left vertex
+        addArbitraryQuad(
+            cx, cy,                                 // bottom vertex
+            cx + half - depth, cy - half + depth,   // right vertex
+            cx, cy - half + 2 * depth,              // top vertex
+            cx - half + depth, cy - half + depth,   // left vertex
+            atlas.getUV(type.topTile));
     }
 
     private static float[] outlineLines(float cx, float cy, float half) {
