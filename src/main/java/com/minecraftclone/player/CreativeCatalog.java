@@ -64,6 +64,14 @@ public final class CreativeCatalog {
                     BlockType.THORIUM_ORE, BlockType.CRUSHED_THORIUM, BlockType.THORIUM_DUST, BlockType.THORIUM_INGOT,
                     BlockType.PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM, BlockType.PLUTONIUM_DUST, BlockType.PLUTONIUM_INGOT,
                     BlockType.IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM, BlockType.IRIDIUM_DUST, BlockType.IRIDIUM_INGOT,
+                    // GTNH Small Ore Variants - mining indicators (striped texture)
+                    BlockType.SMALL_COPPER_ORE, BlockType.SMALL_TIN_ORE, BlockType.SMALL_BAUXITE_ORE, BlockType.SMALL_ZINC_ORE,
+                    BlockType.SMALL_LEAD_ORE, BlockType.SMALL_SILVER_ORE,
+                    BlockType.SMALL_NICKEL_ORE, BlockType.SMALL_COBALT_ORE, BlockType.SMALL_TUNGSTEN_ORE, BlockType.SMALL_MOLYBDENUM_ORE,
+                    BlockType.SMALL_PLATINUM_ORE,
+                    BlockType.SMALL_CHROMIUM_ORE, BlockType.SMALL_MANGANESE_ORE, BlockType.SMALL_VANADIUM_ORE, BlockType.SMALL_BERYLLIUM_ORE,
+                    BlockType.SMALL_TITANIUM_ORE,
+                    BlockType.SMALL_URANIUM_ORE, BlockType.SMALL_THORIUM_ORE, BlockType.SMALL_PLUTONIUM_ORE, BlockType.SMALL_IRIDIUM_ORE,
             }),
             new Tab("Tools", new BlockType[]{
                     BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,

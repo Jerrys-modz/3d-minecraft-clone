@@ -142,6 +142,35 @@ public class TextureAtlas {
         paintOreTile(image, 98, rnd, 0x4A6A3A, 0x2A4A1A);                // plutonium ore (dark greenish-black)
         paintOreTile(image, 99, rnd, 0xD8D8F0, 0xB8B8D0);                // iridium ore (bright silver-rainbow)
 
+        // --- Small GTNH Ores: Striped indicator ores (tiles 100-119) ---
+        // Early-game small ores (striped, mineable with stone tools)
+        paintSmallOreTile(image, 100, rnd, 0xB87333, 0x8B5A2B);           // small copper ore (striped)
+        paintSmallOreTile(image, 101, rnd, 0xC0C0C0, 0xA0A0A0);           // small tin ore (striped)
+        paintSmallOreTile(image, 102, rnd, 0xE8E8E8, 0xD0D0D0);           // small bauxite ore (striped)
+        paintSmallOreTile(image, 103, rnd, 0xA8B8C8, 0x8898A8);           // small zinc ore (striped)
+        paintSmallOreTile(image, 104, rnd, 0x4A4A4A, 0x2A2A2A);           // small lead ore (striped)
+        paintSmallOreTile(image, 105, rnd, 0xE0E0E0, 0xC0C0C0);           // small silver ore (striped)
+
+        // Mid-game small ores (striped, mineable with iron tools)
+        paintSmallOreTile(image, 106, rnd, 0xC8D8C8, 0xA8B8A8);           // small nickel ore (striped)
+        paintSmallOreTile(image, 107, rnd, 0x5A6AB8, 0x404890);           // small cobalt ore (striped)
+        paintSmallOreTile(image, 108, rnd, 0x3A3A3A, 0x1A1A1A);           // small tungsten ore (striped)
+        paintSmallOreTile(image, 109, rnd, 0x5A5A5A, 0x3A3A3A);           // small molybdenum ore (striped)
+        paintSmallOreTile(image, 110, rnd, 0xF0F0F0, 0xD0D0D0);           // small platinum ore (striped)
+
+        // Advanced small ores (striped, mineable with diamond tools)
+        paintSmallOreTile(image, 111, rnd, 0xD8D8D8, 0xB8B8B8);           // small chromium ore (striped)
+        paintSmallOreTile(image, 112, rnd, 0x4A4A5A, 0x2A2A3A);           // small manganese ore (striped)
+        paintSmallOreTile(image, 113, rnd, 0x5A6A7A, 0x3A4A5A);           // small vanadium ore (striped)
+        paintSmallOreTile(image, 114, rnd, 0xE0E0E0, 0xC0C0C0);           // small beryllium ore (striped)
+        paintSmallOreTile(image, 115, rnd, 0xD0D0D0, 0xB0B0B0);           // small titanium ore (striped)
+
+        // Late-game small ores (striped, mineable with diamond tools)
+        paintSmallOreTile(image, 116, rnd, 0x7AB850, 0x5A9830);           // small uranium ore (striped)
+        paintSmallOreTile(image, 117, rnd, 0x5A5A5A, 0x3A3A3A);           // small thorium ore (striped)
+        paintSmallOreTile(image, 118, rnd, 0x4A6A3A, 0x2A4A1A);           // small plutonium ore (striped)
+        paintSmallOreTile(image, 119, rnd, 0xD8D8F0, 0xB8B8D0);           // small iridium ore (striped)
+
         // --- Nether / End dimension blocks ---
         paintNetherrack(image, 52, rnd);
         paintSoulSand(image, 53, rnd);
@@ -542,6 +571,25 @@ public class TextureAtlas {
                     } else if (d <= (size + 1) * (size + 1) && rnd.nextFloat() < 0.5f) {
                         img.setRGB(ox + px, oy + py, 0xFF000000 | oreDark);
                     }
+                }
+            }
+        }
+    }
+
+    /** Stone base with horizontal stripes of ore color (visual indicator for small ores). */
+    private void paintSmallOreTile(BufferedImage img, int index, Random rnd, int oreColor, int oreDark) {
+        paintStone(img, index, rnd);
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Paint alternating horizontal stripes for distinctive small ore appearance.
+        int stripeHeight = 2;
+        for (int y = 0; y < TILE_PX; y++) {
+            int stripePhase = (y / stripeHeight) & 1;
+            int color = stripePhase == 0 ? oreColor : oreDark;
+            // Add some noise variance to avoid too-uniform stripes.
+            if (rnd.nextFloat() < 0.6f) {
+                for (int x = 0; x < TILE_PX; x++) {
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | color);
                 }
             }
         }

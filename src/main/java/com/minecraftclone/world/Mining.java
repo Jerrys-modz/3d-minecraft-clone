@@ -167,6 +167,35 @@ public final class Mining {
         put(BlockType.PLUTONIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
         put(BlockType.IRIDIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
 
+        // GTNH Small Ores - mining indicators, -1 tier (one tier easier than full ore)
+        // Early-game small ores (wood tier - easier than stone tier full ores)
+        put(BlockType.SMALL_COPPER_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_TIN_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_BAUXITE_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_ZINC_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_LEAD_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_SILVER_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+
+        // Mid-game small ores (stone tier - easier than iron tier full ores)
+        put(BlockType.SMALL_NICKEL_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_COBALT_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_TUNGSTEN_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_MOLYBDENUM_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_PLATINUM_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+
+        // Advanced small ores (iron tier - easier than diamond tier full ores)
+        put(BlockType.SMALL_CHROMIUM_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_MANGANESE_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_VANADIUM_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_BERYLLIUM_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_TITANIUM_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+
+        // Late-game small ores (diamond tier - same as full ores, can't go lower)
+        put(BlockType.SMALL_URANIUM_ORE, 3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_THORIUM_ORE, 3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_PLUTONIUM_ORE, 3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_IRIDIUM_ORE, 3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+
         // Dimension blocks.
         put(BlockType.NETHERRACK, 1.2f, ToolKind.PICKAXE, TIER_HAND);
         put(BlockType.SOUL_SAND, 0.5f, ToolKind.NONE, TIER_HAND);

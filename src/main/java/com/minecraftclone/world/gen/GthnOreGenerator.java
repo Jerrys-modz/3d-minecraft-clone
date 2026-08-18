@@ -65,32 +65,32 @@ public class GthnOreGenerator {
     /** Small ore definitions (more common than veins, distributed throughout). */
     private static final SmallOreDef[] SMALL_ORE_DEFS = {
         // Early-game ores: common throughout
-        new SmallOreDef(15, 64, 0.70, BlockType.COPPER_ORE),
-        new SmallOreDef(15, 64, 0.72, BlockType.TIN_ORE),
-        new SmallOreDef(15, 64, 0.74, BlockType.BAUXITE_ORE),
-        new SmallOreDef(15, 64, 0.71, BlockType.ZINC_ORE),
-        new SmallOreDef(15, 64, 0.73, BlockType.LEAD_ORE),
-        new SmallOreDef(15, 64, 0.75, BlockType.SILVER_ORE),
+        new SmallOreDef(15, 64, 0.70, BlockType.SMALL_COPPER_ORE),
+        new SmallOreDef(15, 64, 0.72, BlockType.SMALL_TIN_ORE),
+        new SmallOreDef(15, 64, 0.74, BlockType.SMALL_BAUXITE_ORE),
+        new SmallOreDef(15, 64, 0.71, BlockType.SMALL_ZINC_ORE),
+        new SmallOreDef(15, 64, 0.73, BlockType.SMALL_LEAD_ORE),
+        new SmallOreDef(15, 64, 0.75, BlockType.SMALL_SILVER_ORE),
 
         // Mid-game ores: less common
-        new SmallOreDef(15, 50, 0.78, BlockType.NICKEL_ORE),
-        new SmallOreDef(15, 50, 0.79, BlockType.COBALT_ORE),
-        new SmallOreDef(15, 50, 0.80, BlockType.TUNGSTEN_ORE),
-        new SmallOreDef(15, 50, 0.81, BlockType.MOLYBDENUM_ORE),
-        new SmallOreDef(15, 50, 0.82, BlockType.PLATINUM_ORE),
+        new SmallOreDef(15, 50, 0.78, BlockType.SMALL_NICKEL_ORE),
+        new SmallOreDef(15, 50, 0.79, BlockType.SMALL_COBALT_ORE),
+        new SmallOreDef(15, 50, 0.80, BlockType.SMALL_TUNGSTEN_ORE),
+        new SmallOreDef(15, 50, 0.81, BlockType.SMALL_MOLYBDENUM_ORE),
+        new SmallOreDef(15, 50, 0.82, BlockType.SMALL_PLATINUM_ORE),
 
         // Advanced ores: rare
-        new SmallOreDef(10, 35, 0.85, BlockType.CHROMIUM_ORE),
-        new SmallOreDef(10, 35, 0.86, BlockType.MANGANESE_ORE),
-        new SmallOreDef(10, 35, 0.87, BlockType.VANADIUM_ORE),
-        new SmallOreDef(10, 35, 0.88, BlockType.BERYLLIUM_ORE),
-        new SmallOreDef(10, 35, 0.89, BlockType.TITANIUM_ORE),
+        new SmallOreDef(10, 35, 0.85, BlockType.SMALL_CHROMIUM_ORE),
+        new SmallOreDef(10, 35, 0.86, BlockType.SMALL_MANGANESE_ORE),
+        new SmallOreDef(10, 35, 0.87, BlockType.SMALL_VANADIUM_ORE),
+        new SmallOreDef(10, 35, 0.88, BlockType.SMALL_BERYLLIUM_ORE),
+        new SmallOreDef(10, 35, 0.89, BlockType.SMALL_TITANIUM_ORE),
 
         // Late-game ores: very rare deep
-        new SmallOreDef(5, 20, 0.90, BlockType.URANIUM_ORE),
-        new SmallOreDef(5, 20, 0.91, BlockType.THORIUM_ORE),
-        new SmallOreDef(5, 20, 0.92, BlockType.PLUTONIUM_ORE),
-        new SmallOreDef(5, 20, 0.93, BlockType.IRIDIUM_ORE),
+        new SmallOreDef(5, 20, 0.90, BlockType.SMALL_URANIUM_ORE),
+        new SmallOreDef(5, 20, 0.91, BlockType.SMALL_THORIUM_ORE),
+        new SmallOreDef(5, 20, 0.92, BlockType.SMALL_PLUTONIUM_ORE),
+        new SmallOreDef(5, 20, 0.93, BlockType.SMALL_IRIDIUM_ORE),
     };
 
     private final Noise veinNoise;

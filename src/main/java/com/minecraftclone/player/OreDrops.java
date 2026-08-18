@@ -42,6 +42,35 @@ public final class OreDrops {
         registerOreDrop(BlockType.THORIUM_ORE, BlockType.CRUSHED_THORIUM);
         registerOreDrop(BlockType.PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM);
         registerOreDrop(BlockType.IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM);
+
+        // Small ore variants (mining indicators) - drop same crushed ore as full-size
+        // Early-game small ores
+        registerOreDrop(BlockType.SMALL_COPPER_ORE, BlockType.CRUSHED_COPPER);
+        registerOreDrop(BlockType.SMALL_TIN_ORE, BlockType.CRUSHED_TIN);
+        registerOreDrop(BlockType.SMALL_BAUXITE_ORE, BlockType.CRUSHED_BAUXITE);
+        registerOreDrop(BlockType.SMALL_ZINC_ORE, BlockType.CRUSHED_ZINC);
+        registerOreDrop(BlockType.SMALL_LEAD_ORE, BlockType.CRUSHED_LEAD);
+        registerOreDrop(BlockType.SMALL_SILVER_ORE, BlockType.CRUSHED_SILVER);
+
+        // Mid-game small ores
+        registerOreDrop(BlockType.SMALL_NICKEL_ORE, BlockType.CRUSHED_NICKEL);
+        registerOreDrop(BlockType.SMALL_COBALT_ORE, BlockType.CRUSHED_COBALT);
+        registerOreDrop(BlockType.SMALL_TUNGSTEN_ORE, BlockType.CRUSHED_TUNGSTEN);
+        registerOreDrop(BlockType.SMALL_MOLYBDENUM_ORE, BlockType.CRUSHED_MOLYBDENUM);
+        registerOreDrop(BlockType.SMALL_PLATINUM_ORE, BlockType.CRUSHED_PLATINUM);
+
+        // Advanced small ores
+        registerOreDrop(BlockType.SMALL_CHROMIUM_ORE, BlockType.CRUSHED_CHROMIUM);
+        registerOreDrop(BlockType.SMALL_MANGANESE_ORE, BlockType.CRUSHED_MANGANESE);
+        registerOreDrop(BlockType.SMALL_VANADIUM_ORE, BlockType.CRUSHED_VANADIUM);
+        registerOreDrop(BlockType.SMALL_BERYLLIUM_ORE, BlockType.CRUSHED_BERYLLIUM);
+        registerOreDrop(BlockType.SMALL_TITANIUM_ORE, BlockType.CRUSHED_TITANIUM);
+
+        // Late-game small ores
+        registerOreDrop(BlockType.SMALL_URANIUM_ORE, BlockType.CRUSHED_URANIUM);
+        registerOreDrop(BlockType.SMALL_THORIUM_ORE, BlockType.CRUSHED_THORIUM);
+        registerOreDrop(BlockType.SMALL_PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM);
+        registerOreDrop(BlockType.SMALL_IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM);
     }
 
     private OreDrops() {
