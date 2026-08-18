@@ -207,12 +207,12 @@ public enum BlockType {
     // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
     WOODEN_FENCE(132, 11, false, true, 1.5f),
     // Beds: a 1x2 sleeping surface (like Minecraft). BED is the foot end, BED_HEAD
-    // is the pillow/head end. Both halves are solid and directional. Beds cannot be
-    // placed in the Nether or End (they explode in nether like vanilla).
-    BED(133, true, false, 60, 61, 60, 62, 0),         // foot end: blanket top/side, foot texture
-    BED_HEAD(134, true, false, 63, 63, 63, 63, 0),  // head end: pillow texture
-    BED_OCCUPIED(135, true, false, 60, 61, 60, 62, 0),         // occupied foot end
-    BED_HEAD_OCCUPIED(136, true, false, 63, 63, 63, 63, 0);    // occupied head end
+    // is the pillow/head end. Both halves are solid, directional, and half-height.
+    // Beds cannot be placed in the Nether or End (they explode in nether like vanilla).
+    BED(133, 60, 61, 60, 62, 62, 0.5f),              // foot end: blanket top/side, foot texture, half height
+    BED_HEAD(134, 63, 63, 63, 63, 63, 0.5f),         // head end: pillow texture, half height
+    BED_OCCUPIED(135, 60, 61, 60, 62, 62, 0.5f),     // occupied foot end
+    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f), // occupied head end
 
     public final byte id;
     public final boolean solid;
@@ -318,6 +318,26 @@ public enum BlockType {
         this.bottomTile = tile;
         this.frontTile = tile;
         this.litFrontTile = tile;
+        this.foodValue = 0;
+        this.isItem = false;
+        this.lightLevel = 0;
+        this.collisionHeight = collisionHeight;
+    }
+
+    /** Half-height directional block (like a bed): distinct front face, half collision height. */
+    BlockType(int id, int topTile, int sideTile, int bottomTile, int frontTile, int litFrontTile, float collisionHeight) {
+        this.id = (byte) id;
+        this.solid = true;
+        this.transparent = false;
+        this.cross = false;
+        this.slab = false;
+        this.stair = false;
+        this.fence = false;
+        this.topTile = topTile;
+        this.sideTile = sideTile;
+        this.bottomTile = bottomTile;
+        this.frontTile = frontTile;
+        this.litFrontTile = litFrontTile;
         this.foodValue = 0;
         this.isItem = false;
         this.lightLevel = 0;

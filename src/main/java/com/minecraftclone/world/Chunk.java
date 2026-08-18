@@ -419,6 +419,10 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                         emitSlab(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
+                    if (block.isBed()) {
+                        emitBed(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        continue;
+                    }
                     if (block.isStair()) {
                         emitStairs(world, vertices, indices, vertexCounter, wx, wy, wz, block,
                                 getOrientation(x, y, z), atlas, blockLight);
@@ -1067,6 +1071,89 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         }
         BlockType north = world.getBlock(wx, wy, wz - 1);
         if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || (leavesTransparent && (north == BlockType.LEAVES || north == BlockType.CHERRY_LEAVES))) {
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
+                    uvs, LIGHT_NORTH_SOUTH, blockLight);
+        }
+    }
+
+    /**
+     * Emits a half-height directional bed block: top face at half height (always visible),
+     * bottom face only when nothing full sits below, and side faces toward air/cross neighbors.
+     * The front face (facing direction) uses a different texture than the sides.
+     */
+    private void emitBed(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
+                        int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
+        byte orientation = getOrientation(wx, wy, wz);
+        
+        float[] topUv = atlas.getUV(block.topTile);
+        float[] sideUv = atlas.getUV(block.sideTile);
+        float[] bottomUv = atlas.getUV(block.bottomTile);
+        float[] frontUv = atlas.getUV(block.frontTile);
+        
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + 0.5f, z1 = wz + 1;
+
+        // Top face is never covered from above
+        float[][] topUvs = {{topUv[0], topUv[3]}, {topUv[2], topUv[3]}, {topUv[2], topUv[1]}, {topUv[0], topUv[1]}};
+        emitQuad(vertices, indices, vertexCounter,
+                new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}},
+                topUvs, LIGHT_TOP, blockLight);
+
+        // Bottom face: drawn unless a full-height block sits directly below
+        BlockType below = world.getBlock(wx, wy - 1, wz);
+        if (below == BlockType.AIR || below.cross || below.slab || below.isStair() || below.isFence() || below.isWater() || below.isTranslucent() || below.isDoor() || below.isTrapdoor() || below.isBed()) {
+            float[][] bottomUvs = {{bottomUv[0], bottomUv[1]}, {bottomUv[2], bottomUv[1]}, {bottomUv[2], bottomUv[3]}, {bottomUv[0], bottomUv[3]}};
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}},
+                    bottomUvs, LIGHT_BOTTOM, blockLight);
+        }
+
+        // Determine which face is the front (facing direction)
+        // orientation: 0=+Z (south), 1=-Z (north), 2=+X (east), 3=-X (west)
+        boolean frontOnEast = orientation == 2;
+        boolean frontOnWest = orientation == 3;
+        boolean frontOnSouth = orientation == 0;
+        boolean frontOnNorth = orientation == 1;
+
+        // East face (+X)
+        BlockType east = world.getBlock(wx + 1, wy, wz);
+        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || east.isBed()) {
+            float[][] uvs = frontOnEast ? 
+                new float[][]{{frontUv[0], frontUv[3]}, {frontUv[2], frontUv[3]}, {frontUv[2], frontUv[1]}, {frontUv[0], frontUv[1]}} :
+                new float[][]{{sideUv[0], sideUv[3]}, {sideUv[2], sideUv[3]}, {sideUv[2], sideUv[1]}, {sideUv[0], sideUv[1]}};
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}},
+                    uvs, LIGHT_EAST_WEST, blockLight);
+        }
+        
+        // West face (-X)
+        BlockType west = world.getBlock(wx - 1, wy, wz);
+        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || west.isBed()) {
+            float[][] uvs = frontOnWest ? 
+                new float[][]{{frontUv[2], frontUv[3]}, {frontUv[0], frontUv[3]}, {frontUv[0], frontUv[1]}, {frontUv[2], frontUv[1]}} :
+                new float[][]{{sideUv[2], sideUv[3]}, {sideUv[0], sideUv[3]}, {sideUv[0], sideUv[1]}, {sideUv[2], sideUv[1]}};
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}},
+                    uvs, LIGHT_EAST_WEST, blockLight);
+        }
+        
+        // South face (+Z)
+        BlockType south = world.getBlock(wx, wy, wz + 1);
+        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || south.isBed()) {
+            float[][] uvs = frontOnSouth ? 
+                new float[][]{{frontUv[0], frontUv[3]}, {frontUv[2], frontUv[3]}, {frontUv[2], frontUv[1]}, {frontUv[0], frontUv[1]}} :
+                new float[][]{{sideUv[0], sideUv[3]}, {sideUv[2], sideUv[3]}, {sideUv[2], sideUv[1]}, {sideUv[0], sideUv[1]}};
+            emitQuad(vertices, indices, vertexCounter,
+                    new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}},
+                    uvs, LIGHT_NORTH_SOUTH, blockLight);
+        }
+        
+        // North face (-Z)
+        BlockType north = world.getBlock(wx, wy, wz - 1);
+        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || north.isBed()) {
+            float[][] uvs = frontOnNorth ? 
+                new float[][]{{frontUv[2], frontUv[3]}, {frontUv[0], frontUv[3]}, {frontUv[0], frontUv[1]}, {frontUv[2], frontUv[1]}} :
+                new float[][]{{sideUv[2], sideUv[3]}, {sideUv[0], sideUv[3]}, {sideUv[0], sideUv[1]}, {sideUv[2], sideUv[1]}};
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
