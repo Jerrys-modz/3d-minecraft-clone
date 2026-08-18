@@ -63,6 +63,7 @@ public final class CreativeCatalog {
                     BlockType.URANIUM_ORE, BlockType.CRUSHED_URANIUM, BlockType.URANIUM_DUST, BlockType.URANIUM_INGOT,
                     BlockType.THORIUM_ORE, BlockType.CRUSHED_THORIUM, BlockType.THORIUM_DUST, BlockType.THORIUM_INGOT,
                     BlockType.PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM, BlockType.PLUTONIUM_DUST, BlockType.PLUTONIUM_INGOT,
+                    BlockType.IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM, BlockType.IRIDIUM_DUST, BlockType.IRIDIUM_INGOT,
             }),
             new Tab("Tools", new BlockType[]{
                     BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
