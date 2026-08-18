@@ -300,20 +300,33 @@ public class World implements BlockAccessor {
             promoteIfStaticFluid(worldX, worldY, worldZ + 1);
             promoteIfStaticFluid(worldX, worldY, worldZ - 1);
 
-            // Cactus blocks lose support when the block below is removed - break all
-            // stacked cactus above to simulate gravity (they fall and break).
-            if (old == BlockType.CACTUS) {
-                breakStackedCactus(worldX, worldY + 1, worldZ);
+            // Cactus and bamboo blocks lose support when the block below is removed -
+            // break all stacked blocks above to simulate gravity (they fall and break).
+            if (old == BlockType.CACTUS || old == BlockType.BAMBOO) {
+                breakStackedPlant(worldX, worldY + 1, worldZ, old);
+            }
+            // Vines hang downward, so breaking a vine breaks all vines below it.
+            if (old == BlockType.VINE) {
+                breakHangingVines(worldX, worldY - 1, worldZ);
             }
         }
     }
 
-    /** Recursively break cactus blocks stacked on top of each other. */
-    private void breakStackedCactus(int x, int y, int z) {
+    /** Recursively break stacked plant blocks (cactus/bamboo) above the removed block. */
+    private void breakStackedPlant(int x, int y, int z, BlockType plantType) {
         BlockType block = getBlock(x, y, z);
-        if (block == BlockType.CACTUS) {
+        if (block == plantType) {
             setBlock(x, y, z, BlockType.AIR);
-            breakStackedCactus(x, y + 1, z);
+            breakStackedPlant(x, y + 1, z, plantType);
+        }
+    }
+
+    /** Recursively break hanging vines below the removed block. */
+    private void breakHangingVines(int x, int y, int z) {
+        BlockType block = getBlock(x, y, z);
+        if (block == BlockType.VINE) {
+            setBlock(x, y, z, BlockType.AIR);
+            breakHangingVines(x, y - 1, z);
         }
     }
 
