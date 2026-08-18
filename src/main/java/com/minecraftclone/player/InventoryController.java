@@ -417,8 +417,9 @@ public class InventoryController {
                 return;
             }
         } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE ||
+                   gui.kind() == ContainerGui.Kind.ADVANCED_CRAFTING_TABLE ||
                    (gui.kind() == ContainerGui.Kind.INVENTORY && slotId >= Inventory.HOTBAR_SIZE)) {
-            // For a dedicated crafting table, or when shift-clicking from main inventory to the crafting grid,
+            // For a dedicated crafting table (3x3 or 5x5), or when shift-clicking from main inventory to the crafting grid,
             // place items into empty crafting-grid cells.
             for (int i = 0; i < gui.gridSize() && count > 0; i++) {
                 if (gui.grid().get(i) == null) {

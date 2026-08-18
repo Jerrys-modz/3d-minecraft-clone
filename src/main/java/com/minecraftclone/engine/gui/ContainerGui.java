@@ -1,5 +1,6 @@
 package com.minecraftclone.engine.gui;
 
+import com.minecraftclone.player.AdvancedCraftingTableGrid;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CraftingTableGrid;
@@ -42,6 +43,7 @@ public class ContainerGui {
         INVENTORY("Inventory"),
         FURNACE("Furnace"),
         CRAFTING_TABLE("Crafting Table"),
+        ADVANCED_CRAFTING_TABLE("Advanced Crafting Table"),
         CHEST("Chest");
 
         private final String title;
@@ -77,6 +79,7 @@ public class ContainerGui {
     private final Inventory inventory;
     private final CraftingGrid playerGrid;
     private final CraftingTableGrid tableGrid;
+    private final AdvancedCraftingTableGrid advancedGrid;
     private final StorageContainer container;
 
     /**
@@ -91,6 +94,7 @@ public class ContainerGui {
         this.inventory = inventory;
         this.playerGrid = grid;
         this.tableGrid = new CraftingTableGrid();
+        this.advancedGrid = new AdvancedCraftingTableGrid();
         this.container = (kind == Kind.FURNACE || kind == Kind.CHEST) ? container : null;
     }
 
@@ -103,7 +107,7 @@ public class ContainerGui {
     }
 
     public boolean hasGrid() {
-        return kind == Kind.INVENTORY || kind == Kind.CRAFTING_TABLE;
+        return kind == Kind.INVENTORY || kind == Kind.CRAFTING_TABLE || kind == Kind.ADVANCED_CRAFTING_TABLE;
     }
 
     public boolean hasContainer() {
@@ -116,10 +120,14 @@ public class ContainerGui {
 
     /**
      * Returns the crafting grid. Uses the player grid (2x2) for INVENTORY,
-     * and the table grid (3x3) for CRAFTING_TABLE.
+     * the table grid (3x3) for CRAFTING_TABLE, and the advanced grid (5x5) for ADVANCED_CRAFTING_TABLE.
      */
     public Grid grid() {
-        return kind == Kind.CRAFTING_TABLE ? tableGrid : playerGrid;
+        return switch (kind) {
+            case CRAFTING_TABLE -> tableGrid;
+            case ADVANCED_CRAFTING_TABLE -> advancedGrid;
+            default -> playerGrid;
+        };
     }
 
     /** Returns the crafting grid size (4 for 2x2, 9 for 3x3), determined from the grid's snapshot. */
@@ -214,6 +222,10 @@ public class ContainerGui {
         if (!hasGrid()) return null;
         BlockType[] snapshot = grid().snapshot();
         // Determine matching method based on grid size
-        return snapshot.length == 9 ? Crafting.match3x3(snapshot) : Crafting.match2x2(snapshot);
+        return switch (snapshot.length) {
+            case 9 -> Crafting.match3x3(snapshot);
+            case 25 -> Crafting.match5x5(snapshot);
+            default -> Crafting.match2x2(snapshot);
+        };
     }
 }

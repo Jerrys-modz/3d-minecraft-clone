@@ -59,6 +59,7 @@ public final class Crafting {
 
     private static final List<Recipe> RECIPES_2x2 = new ArrayList<>();
     private static final List<Recipe> RECIPES_3x3 = new ArrayList<>();
+    private static final List<Recipe> RECIPES_5x5 = new ArrayList<>();
 
     // Single-character codes used by the shaped() pattern strings. Add a code
     // here (and a new BlockType) to use it in a pattern.
@@ -144,6 +145,14 @@ public final class Crafting {
 
         // Fence
         shaped3x3("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);                       // 4 planks + 2 sticks -> 3 fence
+
+        // --- 5x5 Advanced Crafting Table Recipes ---
+        // These recipes require the full 5x5 grid and produce advanced items
+        // Large storage: 5x5 chest/vault (25 planks -> 1 large chest)
+        shaped5x5("PPPPP", "P...P", "P...P", "P...P", "PPPPP", BlockType.CHEST, 2);   // 20 planks -> 2 chests
+
+        // Advanced beacon/tower: glowstone tower with diamond cap (10 glowstone + 1 diamond)
+        shaped5x5("..G..", ".GGG.", "GGGGG", ".GGG.", "..D..", BlockType.LAMP, 3);    // glowstone tower -> 3 lamps
     }
 
     private Crafting() {
@@ -169,6 +178,16 @@ public final class Crafting {
         RECIPES_3x3.add(new ShapelessRecipe(ingredients, output, amount));
     }
 
+    /** Registers a shaped 5x5 recipe from five 5-character rows ('.' = empty). */
+    private static void shaped5x5(String r0, String r1, String r2, String r3, String r4, BlockType output, int amount) {
+        RECIPES_5x5.add(new ShapedRecipe(cells5x5(r0, r1, r2, r3, r4), output, amount));
+    }
+
+    /** Registers a shapeless 5x5 recipe that matches any arrangement of {@code ingredients}. */
+    private static void shapeless5x5(BlockType output, int amount, BlockType... ingredients) {
+        RECIPES_5x5.add(new ShapelessRecipe(ingredients, output, amount));
+    }
+
 
     private static BlockType[] cells2x2(String r0, String r1) {
         BlockType[] out = new BlockType[4];
@@ -192,6 +211,17 @@ public final class Crafting {
         return out;
     }
 
+    private static BlockType[] cells5x5(String r0, String r1, String r2, String r3, String r4) {
+        BlockType[] out = new BlockType[25];
+        String[] rows = {r0, r1, r2, r3, r4};
+        for (int r = 0; r < 5; r++) {
+            for (int c = 0; c < 5; c++) {
+                out[r * 5 + c] = CHARS.get(rows[r].charAt(c));
+            }
+        }
+        return out;
+    }
+
     /** Finds the recipe matching the given 2x2 grid (row-major, null = empty), or null. */
     public static Recipe match2x2(BlockType[] grid) {
         for (Recipe recipe : RECIPES_2x2) {
@@ -205,6 +235,16 @@ public final class Crafting {
     /** Finds the recipe matching the given 3x3 grid (row-major, null = empty), or null. */
     public static Recipe match3x3(BlockType[] grid) {
         for (Recipe recipe : RECIPES_3x3) {
+            if (recipe.matches(grid)) {
+                return recipe;
+            }
+        }
+        return null;
+    }
+
+    /** Finds the recipe matching the given 5x5 grid (row-major, null = empty), or null. */
+    public static Recipe match5x5(BlockType[] grid) {
+        for (Recipe recipe : RECIPES_5x5) {
             if (recipe.matches(grid)) {
                 return recipe;
             }
