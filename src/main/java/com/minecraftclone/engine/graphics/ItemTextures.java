@@ -191,14 +191,79 @@ public class ItemTextures {
             case IRIDIUM_DUST -> paintDustOre(0xD8D8F0);
             case IRIDIUM_INGOT -> paintIngot(0xD8D8F0);
 
-            // GTNH Extended gemstone and mineral ores
+            // GTNH Extended ore pack — crushed secondary forms (53 minerals)
+            // Iron-bearing silicates / oxides
+            case CRUSHED_MAGNETITE          -> paintCrushedOre(0x303030); // black iron oxide
+            case CRUSHED_HEMATITE           -> paintCrushedOre(0x8B2020); // red iron oxide
+            case CRUSHED_BROWN_LIMONITE     -> paintCrushedOre(0x8B6020); // brown iron hydroxide
+            case CRUSHED_YELLOW_LIMONITE    -> paintCrushedOre(0xD0A020); // yellow iron hydroxide
+            case CRUSHED_BANDED_IRON        -> paintCrushedOre(0x5A3030); // dark red-grey banded iron
+            case CRUSHED_VANADIUM_MAGNETITE -> paintCrushedOre(0x3A3050); // dark grey-purple
+            case CRUSHED_PYRITE             -> paintCrushedOre(0xD0B020); // fool's gold, golden
+            case CRUSHED_ARSENOPYRITE       -> paintCrushedOre(0xB8B8A0); // silver-white arsenide
+            // Copper-bearing
+            case CRUSHED_CHALCOPYRITE  -> paintCrushedOre(0xC89030); // golden copper sulphide
+            case CRUSHED_TETRAHEDRITE  -> paintCrushedOre(0x5A7060); // grey-green copper sulphide
+            case CRUSHED_MALACHITE     -> paintCrushedOre(0x28A050); // bright green copper carbonate
+            // Lead / Zinc / Galena
+            case CRUSHED_GALENA        -> paintCrushedOre(0x606080); // blue-grey lead sulphide
+            case CRUSHED_SPHALERITE    -> paintCrushedOre(0xD0C890); // cream zinc sulphide
+            // Nickel / Cobalt
+            case CRUSHED_GARNIERITE    -> paintCrushedOre(0xA0C090); // light green nickel silicate
+            case CRUSHED_PENTLANDITE   -> paintCrushedOre(0xB08830); // bronze nickel-iron sulphide
+            case CRUSHED_COBALTITE     -> paintCrushedOre(0x6080A0); // blue-grey cobalt arsenide
+            // Tin / Tungsten
+            case CRUSHED_CASSITERITE   -> paintCrushedOre(0xC8C8C0); // light grey tin oxide
+            case CRUSHED_SCHEELITE     -> paintCrushedOre(0xE8D890); // cream calcium tungstate
+            case CRUSHED_WOLFRAMITE    -> paintCrushedOre(0x2A2020); // dark brown-black tungstate
+            case CRUSHED_MOLYBDENITE   -> paintCrushedOre(0x808090); // silver-grey molybdenum sulphide
+            case CRUSHED_FERBERITE     -> paintCrushedOre(0x3A3020); // dark iron tungstate
+            // Chromium / Titanium
+            case CRUSHED_CHROMITE      -> paintCrushedOre(0x4A3020); // dark brown chrome iron oxide
+            case CRUSHED_ILMENITE      -> paintCrushedOre(0x282828); // black titanium iron oxide
+            case CRUSHED_RUTILE        -> paintCrushedOre(0xA04020); // red-brown titanium dioxide
+            // Uranium / Thorium
+            case CRUSHED_URANINITE     -> paintCrushedOre(0x303030); // dark grey uranium oxide
+            case CRUSHED_PITCHBLENDE   -> paintCrushedOre(0x282828); // black pitchblende
+            // Vanadium / Manganese
+            case CRUSHED_VANADINITE    -> paintCrushedOre(0xE06020); // orange-red lead vanadate
+            case CRUSHED_PYROLUSITE    -> paintCrushedOre(0x404040); // dark grey manganese dioxide
+            // Rare earth / PGM
+            case CRUSHED_MONAZITE      -> paintCrushedOre(0xC0A050); // brown-yellow rare earth phosphate
+            case CRUSHED_BASTNASITE    -> paintCrushedOre(0xD0A040); // yellow-brown REE carbonate
+            case CRUSHED_NEODYMIUM     -> paintCrushedOre(0xB0A8C0); // grey-purple rare earth
+            case CRUSHED_CERIUM        -> paintCrushedOre(0xD0D0C0); // light grey rare earth
+            case CRUSHED_OSMIUM        -> paintCrushedOre(0x8090C0); // blue-silver PGM
+            case CRUSHED_PALLADIUM     -> paintCrushedOre(0xE8E0E0); // silver-white PGM
+            case CRUSHED_NAQUADAH          -> paintCrushedOre(0x183020); // dark green exotic
+            case CRUSHED_NAQUADAH_ENRICHED -> paintCrushedOre(0x205030); // brighter green exotic
+            case CRUSHED_TRINIUM           -> paintCrushedOre(0xA0B8D0); // silver-blue exotic
+            // Light metals / lithium minerals
             case CRUSHED_LEPIDOLITE    -> paintCrushedOre(0xC8A0C8); // lavender lithium mica
+            case CRUSHED_LITHIUM       -> paintCrushedOre(0xE0E0D0); // pale white-grey lithium ore
+            case CRUSHED_CINNABAR      -> paintCrushedOre(0xE03020); // bright red mercury sulphide
+            // Gemstones
             case CRUSHED_RUBY          -> paintCrushedOre(0xE8253A);
             case CRUSHED_SAPPHIRE      -> paintCrushedOre(0x2848E8);
             case CRUSHED_GREEN_SAPPHIRE-> paintCrushedOre(0x28C848);
             case CRUSHED_PYROPE        -> paintCrushedOre(0xC81828); // deep red garnet
             case CRUSHED_SPESSARTINE   -> paintCrushedOre(0xE06020); // orange-red garnet
-            case CRUSHED_FERBERITE     -> paintCrushedOre(0x3A3020); // dark iron tungstate
+            // Non-metallic industrial minerals
+            case CRUSHED_CALCITE       -> paintCrushedOre(0xF0F0F0); // white calcium carbonate
+            case CRUSHED_OLIVINE       -> paintCrushedOre(0x78A030); // olive green silicate
+            case CRUSHED_TALC          -> paintCrushedOre(0xD0E0D0); // pale green-white
+            case CRUSHED_BENTONITE     -> paintCrushedOre(0x9090A0); // grey-blue clay
+            case CRUSHED_SODALITE      -> paintCrushedOre(0x3050B0); // deep blue lapis mineral
+            case CRUSHED_LAZURITE      -> paintCrushedOre(0x2040C0); // lapis blue
+            case CRUSHED_SALT          -> paintCrushedOre(0xF0F0F0); // white halite
+            case CRUSHED_ROCK_SALT     -> paintCrushedOre(0xF0D0D0); // pink-white
+            case CRUSHED_SALTPETER     -> paintCrushedOre(0xD8D8D8); // light grey potassium nitrate
+            case CRUSHED_BORAX         -> paintCrushedOre(0xEEEEEE); // near-white sodium borate
+            case CRUSHED_APATITE       -> paintCrushedOre(0x60B090); // blue-green phosphate
+            case CRUSHED_PHOSPHATE     -> paintCrushedOre(0xD8D8C0); // off-white
+            case CRUSHED_SULFUR        -> paintCrushedOre(0xE0C800); // bright yellow
+            case CRUSHED_GRAPHITE      -> paintCrushedOre(0x282828); // very dark grey
+            case CRUSHED_PYROCHLORE    -> paintCrushedOre(0x4A3818); // dark brown niobium ore
 
             // Impure ore piles (secondary small ore drops - 18 ores total)
             case IMPURE_COPPER -> paintImpurePile(0xB87333);

@@ -80,14 +80,79 @@ public final class CreativeCatalog {
                     BlockType.IMPURE_CHROMIUM, BlockType.IMPURE_MANGANESE, BlockType.IMPURE_BERYLLIUM,
                     BlockType.IMPURE_TITANIUM,
                     BlockType.IMPURE_URANIUM, BlockType.IMPURE_PLUTONIUM, BlockType.IMPURE_IRIDIUM,
-                    // Gemstone ores and cut gems
+                    // Extended GTNH ore pack — all crushed secondary forms
+                    // Iron minerals
+                    BlockType.MAGNETITE_ORE, BlockType.CRUSHED_MAGNETITE,
+                    BlockType.HEMATITE_ORE, BlockType.CRUSHED_HEMATITE,
+                    BlockType.BROWN_LIMONITE_ORE, BlockType.CRUSHED_BROWN_LIMONITE,
+                    BlockType.YELLOW_LIMONITE_ORE, BlockType.CRUSHED_YELLOW_LIMONITE,
+                    BlockType.BANDED_IRON_ORE, BlockType.CRUSHED_BANDED_IRON,
+                    BlockType.VANADIUM_MAGNETITE_ORE, BlockType.CRUSHED_VANADIUM_MAGNETITE,
+                    BlockType.PYRITE_ORE, BlockType.CRUSHED_PYRITE,
+                    BlockType.ARSENOPYRITE_ORE, BlockType.CRUSHED_ARSENOPYRITE,
+                    // Copper minerals
+                    BlockType.CHALCOPYRITE_ORE, BlockType.CRUSHED_CHALCOPYRITE,
+                    BlockType.TETRAHEDRITE_ORE, BlockType.CRUSHED_TETRAHEDRITE,
+                    BlockType.MALACHITE_ORE, BlockType.CRUSHED_MALACHITE,
+                    // Lead / Zinc
+                    BlockType.GALENA_ORE, BlockType.CRUSHED_GALENA,
+                    BlockType.SPHALERITE_ORE, BlockType.CRUSHED_SPHALERITE,
+                    // Nickel / Cobalt
+                    BlockType.GARNIERITE_ORE, BlockType.CRUSHED_GARNIERITE,
+                    BlockType.PENTLANDITE_ORE, BlockType.CRUSHED_PENTLANDITE,
+                    BlockType.COBALTITE_ORE, BlockType.CRUSHED_COBALTITE,
+                    // Tin / Tungsten
+                    BlockType.CASSITERITE_ORE, BlockType.CRUSHED_CASSITERITE,
+                    BlockType.SCHEELITE_ORE, BlockType.CRUSHED_SCHEELITE,
+                    BlockType.WOLFRAMITE_ORE, BlockType.CRUSHED_WOLFRAMITE,
+                    BlockType.MOLYBDENITE_ORE, BlockType.CRUSHED_MOLYBDENITE,
+                    BlockType.FERBERITE_ORE, BlockType.CRUSHED_FERBERITE,
+                    // Chromium / Titanium
+                    BlockType.CHROMITE_ORE, BlockType.CRUSHED_CHROMITE,
+                    BlockType.ILMENITE_ORE, BlockType.CRUSHED_ILMENITE,
+                    BlockType.RUTILE_ORE, BlockType.CRUSHED_RUTILE,
+                    // Uranium / Thorium
+                    BlockType.URANINITE_ORE, BlockType.CRUSHED_URANINITE,
+                    BlockType.PITCHBLENDE_ORE, BlockType.CRUSHED_PITCHBLENDE,
+                    // Vanadium / Manganese
+                    BlockType.VANADINITE_ORE, BlockType.CRUSHED_VANADINITE,
+                    BlockType.PYROLUSITE_ORE, BlockType.CRUSHED_PYROLUSITE,
+                    // Rare earth / PGM
+                    BlockType.MONAZITE_ORE, BlockType.CRUSHED_MONAZITE,
+                    BlockType.BASTNASITE_ORE, BlockType.CRUSHED_BASTNASITE,
+                    BlockType.NEODYMIUM_ORE, BlockType.CRUSHED_NEODYMIUM,
+                    BlockType.CERIUM_ORE, BlockType.CRUSHED_CERIUM,
+                    BlockType.OSMIUM_ORE, BlockType.CRUSHED_OSMIUM,
+                    BlockType.PALLADIUM_ORE, BlockType.CRUSHED_PALLADIUM,
+                    BlockType.NAQUADAH_ORE, BlockType.CRUSHED_NAQUADAH,
+                    BlockType.NAQUADAH_ENRICHED_ORE, BlockType.CRUSHED_NAQUADAH_ENRICHED,
+                    BlockType.TRINIUM_ORE, BlockType.CRUSHED_TRINIUM,
+                    // Light metals / lithium
+                    BlockType.LEPIDOLITE_ORE, BlockType.CRUSHED_LEPIDOLITE,
+                    BlockType.LITHIUM_ORE, BlockType.CRUSHED_LITHIUM,
+                    BlockType.CINNABAR_ORE, BlockType.CRUSHED_CINNABAR,
+                    // Gemstones
                     BlockType.RUBY_ORE, BlockType.CRUSHED_RUBY, BlockType.SMALL_RUBY_ORE, BlockType.RUBY,
                     BlockType.SAPPHIRE_ORE, BlockType.CRUSHED_SAPPHIRE, BlockType.SAPPHIRE,
                     BlockType.GREEN_SAPPHIRE_ORE, BlockType.CRUSHED_GREEN_SAPPHIRE, BlockType.GREEN_SAPPHIRE,
                     BlockType.PYROPE_ORE, BlockType.CRUSHED_PYROPE,
                     BlockType.SPESSARTINE_ORE, BlockType.CRUSHED_SPESSARTINE,
-                    BlockType.LEPIDOLITE_ORE, BlockType.CRUSHED_LEPIDOLITE,
-                    BlockType.FERBERITE_ORE, BlockType.CRUSHED_FERBERITE,
+                    // Industrial minerals
+                    BlockType.CALCITE_ORE, BlockType.CRUSHED_CALCITE,
+                    BlockType.OLIVINE_ORE, BlockType.CRUSHED_OLIVINE,
+                    BlockType.TALC_ORE, BlockType.CRUSHED_TALC,
+                    BlockType.BENTONITE_ORE, BlockType.CRUSHED_BENTONITE,
+                    BlockType.SODALITE_ORE, BlockType.CRUSHED_SODALITE,
+                    BlockType.LAZURITE_ORE, BlockType.CRUSHED_LAZURITE,
+                    BlockType.SALT_ORE, BlockType.CRUSHED_SALT,
+                    BlockType.ROCK_SALT_ORE, BlockType.CRUSHED_ROCK_SALT,
+                    BlockType.SALTPETER_ORE, BlockType.CRUSHED_SALTPETER,
+                    BlockType.BORAX_ORE, BlockType.CRUSHED_BORAX,
+                    BlockType.APATITE_ORE, BlockType.CRUSHED_APATITE,
+                    BlockType.PHOSPHATE_ORE, BlockType.CRUSHED_PHOSPHATE,
+                    BlockType.SULFUR_ORE, BlockType.CRUSHED_SULFUR,
+                    BlockType.GRAPHITE_ORE, BlockType.CRUSHED_GRAPHITE,
+                    BlockType.PYROCHLORE_ORE, BlockType.CRUSHED_PYROCHLORE,
             }),
             new Tab("Tools", new BlockType[]{
                     BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,

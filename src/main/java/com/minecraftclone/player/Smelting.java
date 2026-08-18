@@ -108,6 +108,13 @@ public final class Smelting {
         smelt(BlockType.CRUSHED_SULFUR,        BlockType.COAL);
         smelt(BlockType.CRUSHED_GRAPHITE,      BlockType.COAL);
         smelt(BlockType.CRUSHED_CALCITE,       BlockType.COAL);
+        smelt(BlockType.CRUSHED_OLIVINE,       BlockType.IRON_INGOT);   // magnesium-iron silicate → iron
+        smelt(BlockType.CRUSHED_TALC,          BlockType.COAL);         // magnesium silicate, no metal
+        smelt(BlockType.CRUSHED_BENTONITE,     BlockType.COAL);         // clay mineral, no metal
+        smelt(BlockType.CRUSHED_SALT,          BlockType.COAL);         // NaCl, no smeltable metal
+        smelt(BlockType.CRUSHED_ROCK_SALT,     BlockType.COAL);         // NaCl variant
+        smelt(BlockType.CRUSHED_SALTPETER,     BlockType.COAL);         // KNO3, no metal
+        smelt(BlockType.CRUSHED_BORAX,         BlockType.COAL);         // sodium borate, no metal
         smelt(BlockType.CRUSHED_APATITE,       BlockType.COAL);
         smelt(BlockType.CRUSHED_PHOSPHATE,     BlockType.COAL);
         smelt(BlockType.CRUSHED_PYROCHLORE,    BlockType.TUNGSTEN_INGOT); // niobium source → tungsten (placeholder)
