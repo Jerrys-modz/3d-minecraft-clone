@@ -120,6 +120,74 @@ public class ItemTextures {
             case BEAR_LEGGINGS -> paintLeggings(0xEFEDE6);
             case BEAR_BOOTS -> paintBoots(0xEFEDE6);
 
+            // GTNH Ores - early game (stone tier)
+            case CRUSHED_COPPER -> paintCrushedOre(0xB87333);
+            case COPPER_DUST -> paintDustOre(0xB87333);
+            case COPPER_INGOT -> paintIngot(0xB87333);
+            case CRUSHED_TIN -> paintCrushedOre(0xC0C0C0);
+            case TIN_DUST -> paintDustOre(0xC0C0C0);
+            case TIN_INGOT -> paintIngot(0xC0C0C0);
+            case CRUSHED_BAUXITE -> paintCrushedOre(0xE8E8E8);
+            case BAUXITE_DUST -> paintDustOre(0xE8E8E8);
+            case ALUMINUM_INGOT -> paintIngot(0xE8E8E8);
+            case CRUSHED_ZINC -> paintCrushedOre(0xA8B8C8);
+            case ZINC_DUST -> paintDustOre(0xA8B8C8);
+            case ZINC_INGOT -> paintIngot(0xA8B8C8);
+            case CRUSHED_LEAD -> paintCrushedOre(0x4A4A4A);
+            case LEAD_DUST -> paintDustOre(0x4A4A4A);
+            case LEAD_INGOT -> paintIngot(0x4A4A4A);
+            case CRUSHED_SILVER -> paintCrushedOre(0xE0E0E0);
+            case SILVER_DUST -> paintDustOre(0xE0E0E0);
+            case SILVER_INGOT -> paintIngot(0xE0E0E0);
+
+            // GTNH Ores - mid-game (iron tier)
+            case CRUSHED_NICKEL -> paintCrushedOre(0xC8D8C8);
+            case NICKEL_DUST -> paintDustOre(0xC8D8C8);
+            case NICKEL_INGOT -> paintIngot(0xC8D8C8);
+            case CRUSHED_COBALT -> paintCrushedOre(0x5A6AB8);
+            case COBALT_DUST -> paintDustOre(0x5A6AB8);
+            case COBALT_INGOT -> paintIngot(0x5A6AB8);
+            case CRUSHED_TUNGSTEN -> paintCrushedOre(0x3A3A3A);
+            case TUNGSTEN_DUST -> paintDustOre(0x3A3A3A);
+            case TUNGSTEN_INGOT -> paintIngot(0x3A3A3A);
+            case CRUSHED_MOLYBDENUM -> paintCrushedOre(0x5A5A5A);
+            case MOLYBDENUM_DUST -> paintDustOre(0x5A5A5A);
+            case MOLYBDENUM_INGOT -> paintIngot(0x5A5A5A);
+            case CRUSHED_PLATINUM -> paintCrushedOre(0xF0F0F0);
+            case PLATINUM_DUST -> paintDustOre(0xF0F0F0);
+            case PLATINUM_INGOT -> paintIngot(0xF0F0F0);
+
+            // GTNH Ores - advanced (diamond tier)
+            case CRUSHED_CHROMIUM -> paintCrushedOre(0xD8D8D8);
+            case CHROMIUM_DUST -> paintDustOre(0xD8D8D8);
+            case CHROMIUM_INGOT -> paintIngot(0xD8D8D8);
+            case CRUSHED_MANGANESE -> paintCrushedOre(0x4A4A5A);
+            case MANGANESE_DUST -> paintDustOre(0x4A4A5A);
+            case MANGANESE_INGOT -> paintIngot(0x4A4A5A);
+            case CRUSHED_VANADIUM -> paintCrushedOre(0x5A6A7A);
+            case VANADIUM_DUST -> paintDustOre(0x5A6A7A);
+            case VANADIUM_INGOT -> paintIngot(0x5A6A7A);
+            case CRUSHED_BERYLLIUM -> paintCrushedOre(0xE0E0E0);
+            case BERYLLIUM_DUST -> paintDustOre(0xE0E0E0);
+            case BERYLLIUM_INGOT -> paintIngot(0xE0E0E0);
+            case CRUSHED_TITANIUM -> paintCrushedOre(0xD0D0D0);
+            case TITANIUM_DUST -> paintDustOre(0xD0D0D0);
+            case TITANIUM_INGOT -> paintIngot(0xD0D0D0);
+
+            // GTNH Ores - late-game (endgame tier)
+            case CRUSHED_URANIUM -> paintCrushedOre(0x7AB850);
+            case URANIUM_DUST -> paintDustOre(0x7AB850);
+            case URANIUM_INGOT -> paintIngot(0x7AB850);
+            case CRUSHED_THORIUM -> paintCrushedOre(0x5A5A5A);
+            case THORIUM_DUST -> paintDustOre(0x5A5A5A);
+            case THORIUM_INGOT -> paintIngot(0x5A5A5A);
+            case CRUSHED_PLUTONIUM -> paintCrushedOre(0x4A6A3A);
+            case PLUTONIUM_DUST -> paintDustOre(0x4A6A3A);
+            case PLUTONIUM_INGOT -> paintIngot(0x4A6A3A);
+            case CRUSHED_IRIDIUM -> paintCrushedOre(0xD8D8F0);
+            case IRIDIUM_DUST -> paintDustOre(0xD8D8F0);
+            case IRIDIUM_INGOT -> paintIngot(0xD8D8F0);
+
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
     }
@@ -286,6 +354,40 @@ public class ItemTextures {
         // A light highlight along the top edge.
         for (int x = 4; x <= 11; x++) {
             img.setRGB(x, 7, 0xFF000000 | lighten(color));
+        }
+        return img;
+    }
+
+    /** Crushed ore: jagged irregular chunks with a ore-like texture. */
+    private static BufferedImage paintCrushedOre(int color) {
+        BufferedImage img = blank();
+        // Paint irregular jagged chunks in the center.
+        int[][] chunks = {
+            {5, 5}, {6, 5}, {7, 6}, {8, 5},
+            {4, 7}, {5, 8}, {6, 7}, {7, 8}, {8, 8}, {9, 7},
+            {5, 10}, {6, 10}, {7, 11}, {8, 10}, {9, 10}
+        };
+        for (int[] p : chunks) {
+            int c = ((p[0] + p[1]) % 2 == 0) ? color : shade(color, 0.85f);
+            img.setRGB(p[0], p[1], 0xFF000000 | c);
+            if (p[0] > 3 && p[0] < 12) img.setRGB(p[0] + 1, p[1], 0xFF000000 | shade(c, 0.9f));
+        }
+        return img;
+    }
+
+    /** Dust ore: fine powdery particles scattered across the item. */
+    private static BufferedImage paintDustOre(int color) {
+        BufferedImage img = blank();
+        // Paint fine dust particles with some variation using color as seed.
+        long seed = ((long) color * 31) ^ 0x9E3779B97F4A7C15L;
+        Random rnd = new Random(seed);
+        for (int y = 3; y <= 12; y++) {
+            for (int x = 4; x <= 11; x++) {
+                if (rnd.nextInt(100) < 45) {
+                    int c = rnd.nextInt(2) == 0 ? color : shade(color, 0.75f);
+                    img.setRGB(x, y, 0xFF000000 | c);
+                }
+            }
         }
         return img;
     }
