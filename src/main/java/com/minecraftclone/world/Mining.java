@@ -139,6 +139,33 @@ public final class Mining {
         put(BlockType.GOLD_ORE, 4.0f, ToolKind.PICKAXE, TIER_IRON);
         put(BlockType.DIAMOND_ORE, 6.0f, ToolKind.PICKAXE, TIER_IRON);
 
+        // GTNH Ores - early game (stone tier)
+        put(BlockType.COPPER_ORE, 2.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.TIN_ORE, 2.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.BAUXITE_ORE, 2.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.ZINC_ORE, 2.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.LEAD_ORE, 2.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SILVER_ORE, 2.0f, ToolKind.PICKAXE, TIER_WOOD);
+
+        // GTNH Ores - mid-game (iron tier)
+        put(BlockType.NICKEL_ORE, 3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.COBALT_ORE, 3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.TUNGSTEN_ORE, 3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.MOLYBDENUM_ORE, 3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.PLATINUM_ORE, 3.0f, ToolKind.PICKAXE, TIER_STONE);
+
+        // GTNH Ores - advanced (diamond tier)
+        put(BlockType.CHROMIUM_ORE, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.MANGANESE_ORE, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.VANADIUM_ORE, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.BERYLLIUM_ORE, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.TITANIUM_ORE, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+
+        // GTNH Ores - late-game (endgame tier)
+        put(BlockType.URANIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.THORIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.PLUTONIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+
         // Dimension blocks.
         put(BlockType.NETHERRACK, 1.2f, ToolKind.PICKAXE, TIER_HAND);
         put(BlockType.SOUL_SAND, 0.5f, ToolKind.NONE, TIER_HAND);

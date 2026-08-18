@@ -27,6 +27,7 @@ import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.player.StorageContainer;
+import com.minecraftclone.player.OreDrops;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
@@ -379,6 +380,10 @@ public class Main {
             } else if (targetType == BlockType.COAL_ORE) {
                 // Coal ore drops coal (the furnace fuel), not the ore itself.
                 world.spawnItem(bx, by, bz, BlockType.COAL, 1, loot);
+            } else if (OreDrops.isGthnOre(targetType)) {
+                // GTNH ores drop their crushed form instead of the ore block itself
+                BlockType crushedOre = OreDrops.dropFor(targetType);
+                world.spawnItem(bx, by, bz, crushedOre, 1, loot);
             } else {
                 // An open door/trapdoor drops the closed item.
                 // Any bed variant (head/foot, occupied/unoccupied) drops the base BED item.

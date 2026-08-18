@@ -213,7 +213,107 @@ public enum BlockType {
     BED(133, 60, 61, 60, 62, 62, 0.5f),
     BED_HEAD(134, 63, 63, 63, 63, 63, 0.5f),
     BED_OCCUPIED(135, 60, 61, 60, 62, 62, 0.5f),
-    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f);
+    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f),
+
+    // --- GTNH Ores: 20 ore types × 4 stages (ore, crushed, dust, ingot) ---
+    // Early game ores (stone tier)
+    COPPER_ORE(138, true, false, 4, 4, 4),
+    CRUSHED_COPPER(139, 0),
+    COPPER_DUST(140, 0),
+    COPPER_INGOT(141, 0),
+
+    TIN_ORE(142, true, false, 4, 4, 4),
+    CRUSHED_TIN(143, 0),
+    TIN_DUST(144, 0),
+    TIN_INGOT(145, 0),
+
+    BAUXITE_ORE(146, true, false, 4, 4, 4),
+    CRUSHED_BAUXITE(147, 0),
+    BAUXITE_DUST(148, 0),
+    ALUMINUM_INGOT(149, 0),
+
+    ZINC_ORE(150, true, false, 4, 4, 4),
+    CRUSHED_ZINC(151, 0),
+    ZINC_DUST(152, 0),
+    ZINC_INGOT(153, 0),
+
+    LEAD_ORE(154, true, false, 4, 4, 4),
+    CRUSHED_LEAD(155, 0),
+    LEAD_DUST(156, 0),
+    LEAD_INGOT(157, 0),
+
+    SILVER_ORE(158, true, false, 4, 4, 4),
+    CRUSHED_SILVER(159, 0),
+    SILVER_DUST(160, 0),
+    SILVER_INGOT(161, 0),
+
+    // Mid-game ores (iron tier)
+    NICKEL_ORE(162, true, false, 4, 4, 4),
+    CRUSHED_NICKEL(163, 0),
+    NICKEL_DUST(164, 0),
+    NICKEL_INGOT(165, 0),
+
+    COBALT_ORE(166, true, false, 4, 4, 4),
+    CRUSHED_COBALT(167, 0),
+    COBALT_DUST(168, 0),
+    COBALT_INGOT(169, 0),
+
+    TUNGSTEN_ORE(170, true, false, 4, 4, 4),
+    CRUSHED_TUNGSTEN(171, 0),
+    TUNGSTEN_DUST(172, 0),
+    TUNGSTEN_INGOT(173, 0),
+
+    MOLYBDENUM_ORE(174, true, false, 4, 4, 4),
+    CRUSHED_MOLYBDENUM(175, 0),
+    MOLYBDENUM_DUST(176, 0),
+    MOLYBDENUM_INGOT(177, 0),
+
+    PLATINUM_ORE(178, true, false, 4, 4, 4),
+    CRUSHED_PLATINUM(179, 0),
+    PLATINUM_DUST(180, 0),
+    PLATINUM_INGOT(181, 0),
+
+    // Advanced ores (diamond tier)
+    CHROMIUM_ORE(182, true, false, 4, 4, 4),
+    CRUSHED_CHROMIUM(183, 0),
+    CHROMIUM_DUST(184, 0),
+    CHROMIUM_INGOT(185, 0),
+
+    MANGANESE_ORE(186, true, false, 4, 4, 4),
+    CRUSHED_MANGANESE(187, 0),
+    MANGANESE_DUST(188, 0),
+    MANGANESE_INGOT(189, 0),
+
+    VANADIUM_ORE(190, true, false, 4, 4, 4),
+    CRUSHED_VANADIUM(191, 0),
+    VANADIUM_DUST(192, 0),
+    VANADIUM_INGOT(193, 0),
+
+    BERYLLIUM_ORE(194, true, false, 4, 4, 4),
+    CRUSHED_BERYLLIUM(195, 0),
+    BERYLLIUM_DUST(196, 0),
+    BERYLLIUM_INGOT(197, 0),
+
+    TITANIUM_ORE(198, true, false, 4, 4, 4),
+    CRUSHED_TITANIUM(199, 0),
+    TITANIUM_DUST(200, 0),
+    TITANIUM_INGOT(201, 0),
+
+    // Late-game ores (endgame tier)
+    URANIUM_ORE(202, true, false, 4, 4, 4),
+    CRUSHED_URANIUM(203, 0),
+    URANIUM_DUST(204, 0),
+    URANIUM_INGOT(205, 0),
+
+    THORIUM_ORE(206, true, false, 4, 4, 4),
+    CRUSHED_THORIUM(207, 0),
+    THORIUM_DUST(208, 0),
+    THORIUM_INGOT(209, 0),
+
+    PLUTONIUM_ORE(210, true, false, 4, 4, 4),
+    CRUSHED_PLUTONIUM(211, 0),
+    PLUTONIUM_DUST(212, 0),
+    PLUTONIUM_INGOT(213, 0);
 
     public final byte id;
     public final boolean solid;
