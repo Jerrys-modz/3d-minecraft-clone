@@ -414,7 +414,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                         continue;
                     }
                     if (block.isBed()) {
-                        emitBed(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        emitBed(world, vertices, indices, vertexCounter, wx, wy, wz, x, y, z, block, atlas, blockLight);
                         continue;
                     }
                     if (block.isStair()) {
@@ -1034,8 +1034,8 @@ public class Chunk implements ChunkStorage.PersistableChunk {
      * The front face (facing direction) uses a different texture than the sides.
      */
     private void emitBed(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
-                        int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
-        byte orientation = getOrientation(wx, wy, wz);
+                        int wx, int wy, int wz, int x, int y, int z, BlockType block, TextureAtlas atlas, float blockLight) {
+        byte orientation = getOrientation(x, y, z);
         
         float[] topUv = atlas.getUV(block.topTile);
         float[] sideUv = atlas.getUV(block.sideTile);
@@ -1068,7 +1068,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
         // East face (+X)
         BlockType east = world.getBlock(wx + 1, wy, wz);
-        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || east.isBed()) {
+        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || east.isBed() || (leavesTransparent && east == BlockType.LEAVES)) {
             float[][] uvs = frontOnEast ? 
                 new float[][]{{frontUv[0], frontUv[3]}, {frontUv[2], frontUv[3]}, {frontUv[2], frontUv[1]}, {frontUv[0], frontUv[1]}} :
                 new float[][]{{sideUv[0], sideUv[3]}, {sideUv[2], sideUv[3]}, {sideUv[2], sideUv[1]}, {sideUv[0], sideUv[1]}};
@@ -1079,7 +1079,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         
         // West face (-X)
         BlockType west = world.getBlock(wx - 1, wy, wz);
-        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || west.isBed()) {
+        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || west.isBed() || (leavesTransparent && west == BlockType.LEAVES)) {
             float[][] uvs = frontOnWest ? 
                 new float[][]{{frontUv[2], frontUv[3]}, {frontUv[0], frontUv[3]}, {frontUv[0], frontUv[1]}, {frontUv[2], frontUv[1]}} :
                 new float[][]{{sideUv[2], sideUv[3]}, {sideUv[0], sideUv[3]}, {sideUv[0], sideUv[1]}, {sideUv[2], sideUv[1]}};
@@ -1090,7 +1090,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         
         // South face (+Z)
         BlockType south = world.getBlock(wx, wy, wz + 1);
-        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || south.isBed()) {
+        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || south.isBed() || (leavesTransparent && south == BlockType.LEAVES)) {
             float[][] uvs = frontOnSouth ? 
                 new float[][]{{frontUv[0], frontUv[3]}, {frontUv[2], frontUv[3]}, {frontUv[2], frontUv[1]}, {frontUv[0], frontUv[1]}} :
                 new float[][]{{sideUv[0], sideUv[3]}, {sideUv[2], sideUv[3]}, {sideUv[2], sideUv[1]}, {sideUv[0], sideUv[1]}};
@@ -1101,7 +1101,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         
         // North face (-Z)
         BlockType north = world.getBlock(wx, wy, wz - 1);
-        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || north.isBed()) {
+        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || north.isBed() || (leavesTransparent && north == BlockType.LEAVES)) {
             float[][] uvs = frontOnNorth ? 
                 new float[][]{{frontUv[2], frontUv[3]}, {frontUv[0], frontUv[3]}, {frontUv[0], frontUv[1]}, {frontUv[2], frontUv[1]}} :
                 new float[][]{{sideUv[2], sideUv[3]}, {sideUv[0], sideUv[3]}, {sideUv[0], sideUv[1]}, {sideUv[2], sideUv[1]}};
