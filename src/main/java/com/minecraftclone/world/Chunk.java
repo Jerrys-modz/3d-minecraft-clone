@@ -1047,25 +1047,25 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         }
 
         BlockType east = world.getBlock(wx + 1, wy, wz);
-        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor()) {
+        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || (leavesTransparent && (east == BlockType.LEAVES || east == BlockType.CHERRY_LEAVES))) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}},
                     uvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType west = world.getBlock(wx - 1, wy, wz);
-        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor()) {
+        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || (leavesTransparent && (west == BlockType.LEAVES || west == BlockType.CHERRY_LEAVES))) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}},
                     uvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType south = world.getBlock(wx, wy, wz + 1);
-        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor()) {
+        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || (leavesTransparent && (south == BlockType.LEAVES || south == BlockType.CHERRY_LEAVES))) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
         }
         BlockType north = world.getBlock(wx, wy, wz - 1);
-        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor()) {
+        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || (leavesTransparent && (north == BlockType.LEAVES || north == BlockType.CHERRY_LEAVES))) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
