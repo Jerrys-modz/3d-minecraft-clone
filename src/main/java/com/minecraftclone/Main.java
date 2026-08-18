@@ -166,7 +166,10 @@ public class Main {
                                          int[] menuSelection, int[] sliderDragRow, int[] bindingAction,
                                          int[] settingsTab) {
         int tab = settingsTab[0];
-        int rows = tab == Settings.TAB_CONTROLS ? KeyBindings.COUNT : Settings.tabRowCount(tab);
+        boolean bindingTab = tab == Settings.TAB_CONTROLS || tab == Settings.TAB_CONTROLLER;
+        int rows = tab == Settings.TAB_CONTROLS ? KeyBindings.COUNT
+                : tab == Settings.TAB_CONTROLLER ? GamepadBindings.COUNT
+                : Settings.tabRowCount(tab);
 
         // Tab key switches to the next section; the selection resets to the top.
         if (input.isKeyJustPressed(GLFW_KEY_TAB)) {
@@ -178,19 +181,40 @@ public class Main {
         }
 
         if (bindingAction[0] >= 0) {
-            // Capturing a key for a keybind row: bind the next non-modifier
-            // key press (Esc cancels).
-            int pressed = input.consumeLastKeyPressed();
-            if (pressed == GLFW_KEY_ESCAPE) {
-                bindingAction[0] = -1;
-            } else if (pressed != GLFW_KEY_UNKNOWN && !KeyBindings.isModifierKey(pressed)) {
-                settings.getKeyBinds().set(bindingAction[0], pressed);
-                settings.save(settingsFile);
-                bindingAction[0] = -1;
+            if (tab == Settings.TAB_CONTROLLER) {
+                // Capturing a gamepad button for a Controller-tab row: bind the
+                // next button pressed. A/X/B/Start can't be captured this way -
+                // they're reserved for confirm/right-click/back/menu, and each
+                // one's own press fires that reserved action (including, for
+                // B/Start, this same Esc-equivalent cancel) before it could ever
+                // be read here as "the new binding". Esc from the keyboard also
+                // cancels, same as on the Controls tab.
+                if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                    bindingAction[0] = -1;
+                } else {
+                    int pressed = input.consumeLastGamepadButtonPressed();
+                    if (pressed >= 0) {
+                        settings.getGamepadBinds().set(bindingAction[0], pressed);
+                        settings.save(settingsFile);
+                        bindingAction[0] = -1;
+                        return;
+                    }
+                }
+            } else {
+                // Capturing a key for a keybind row: bind the next non-modifier
+                // key press (Esc cancels).
+                int pressed = input.consumeLastKeyPressed();
+                if (pressed == GLFW_KEY_ESCAPE) {
+                    bindingAction[0] = -1;
+                } else if (pressed != GLFW_KEY_UNKNOWN && !KeyBindings.isModifierKey(pressed)) {
+                    settings.getKeyBinds().set(bindingAction[0], pressed);
+                    settings.save(settingsFile);
+                    bindingAction[0] = -1;
+                }
             }
         } else {
             // Navigate with arrows/WASD; toggle/step settings or start a
-            // keybind capture with Enter/Space/Left/Right.
+            // keybind/gamepad-binding capture with Enter/Space/Left/Right.
             if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
                 menuSelection[0] = Math.floorMod(menuSelection[0] - 1, rows);
             }
@@ -198,21 +222,24 @@ public class Main {
                 menuSelection[0] = Math.floorMod(menuSelection[0] + 1, rows);
             }
             if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
-                if (tab != Settings.TAB_CONTROLS) {
+                if (!bindingTab) {
                     adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), -1);
                 }
             }
             if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
-                if (tab != Settings.TAB_CONTROLS) {
+                if (!bindingTab) {
                     adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), +1);
                 }
             }
             if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
-                if (tab == Settings.TAB_CONTROLS) {
+                if (bindingTab) {
                     bindingAction[0] = menuSelection[0];
-                    input.consumeLastKeyPressed(); // discard the Enter/Space that started capture
+                    // Discard whatever triggered this capture, so it doesn't
+                    // immediately get read back as *the new binding* itself.
+                    input.consumeLastKeyPressed();
+                    input.consumeLastGamepadButtonPressed();
                 } else {
                     adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
                             Settings.rowInTab(tab, menuSelection[0]), +1);
@@ -221,7 +248,7 @@ public class Main {
         }
 
         // Mouse: hover to select, click a tab to switch, click a toggle, click
-        // or drag a slider, or click a keybind row to start capturing it.
+        // or drag a slider, or click a keybind/gamepad-binding row to start capturing it.
         float sLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
         float sLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
         int hoverTab = hud.settingsTabAt(sLx, sLy);
@@ -242,9 +269,10 @@ public class Main {
         if (bindingAction[0] < 0 && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
             int clicked = hud.settingsRowAt(sLx, sLy, tab);
             if (clicked >= 0) {
-                if (tab == Settings.TAB_CONTROLS) {
+                if (bindingTab) {
                     bindingAction[0] = clicked;
                     input.consumeLastKeyPressed();
+                    input.consumeLastGamepadButtonPressed();
                     audio.play(SoundEvent.UI_CLICK);
                 } else {
                     int row = Settings.rowInTab(tab, clicked);
@@ -965,6 +993,11 @@ public class Main {
             }
 
             float dt = timer.getDeltaTime();
+            // Controller support (e.g. Steam Deck): folds the first connected
+            // gamepad's sticks/buttons/triggers into this frame's keyboard/mouse
+            // state - see Input#updateGamepad for the full mapping. A no-op with
+            // nothing connected, so this is safe to call unconditionally every frame.
+            input.updateGamepad(dt, settings.getKeyBinds(), settings.getGamepadBinds());
             timer.updateFps(dt);
             dayNightCycle.update(dt);
             // The calendar advances with the day/night cycle, and its season
@@ -1234,23 +1267,27 @@ public class Main {
                 input.resetMouseDelta();
             }
 
-            if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY))) {
-                if (inventoryOpen[0]) {
-                    closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
-                } else if (creativeOpen[0]) {
-                    closeCreative(inventoryController, creativeOpen, audio);
-                } else if (settings.getGameMode().isCreative()) {
-                    creativeOpen[0] = true;
-                    menuOpen[0] = false;
-                    audio.play(SoundEvent.UI_OPEN);
-                } else {
-                    activeGui[0] = inventoryGui;
-                    inventoryOpen[0] = true;
-                    menuOpen[0] = false;
-                    audio.play(SoundEvent.UI_OPEN);
+            // Suppress gameplay shortcuts (like inventory toggle) when the settings menu
+            // is waiting to capture a gamepad button press for a binding.
+            if (!(menuOpen[0] && bindingAction[0] >= 0)) {
+                if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY))) {
+                    if (inventoryOpen[0]) {
+                        closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
+                    } else if (creativeOpen[0]) {
+                        closeCreative(inventoryController, creativeOpen, audio);
+                    } else if (settings.getGameMode().isCreative()) {
+                        creativeOpen[0] = true;
+                        menuOpen[0] = false;
+                        audio.play(SoundEvent.UI_OPEN);
+                    } else {
+                        activeGui[0] = inventoryGui;
+                        inventoryOpen[0] = true;
+                        menuOpen[0] = false;
+                        audio.play(SoundEvent.UI_OPEN);
+                    }
+                    window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
+                    input.resetMouseDelta();
                 }
-                window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
-                input.resetMouseDelta();
             }
 
             if (creativeOpen[0]) {
@@ -1858,6 +1895,10 @@ public class Main {
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 if (player.isSwimming()) {
                     hud.drawTextLeft("Swimming" + (player.isSubmerged() ? " (submerged)" : ""),
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
+                if (input.isGamepadConnected()) {
+                    hud.drawTextLeft("Gamepad: " + input.getGamepadName(),
                             -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 }
                 BlockType sel = player.getInventory().typeOf(selectedSlot[0]);

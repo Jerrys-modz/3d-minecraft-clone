@@ -1,6 +1,7 @@
 package com.minecraftclone.engine;
 
 import com.minecraftclone.Settings;
+import com.minecraftclone.engine.GamepadBindings;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.GuiTextures;
@@ -17,7 +18,8 @@ import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.ToolDurability;
-import com.minecraftclone.world.gen.WorldGenSettings;import com.minecraftclone.util.FloatArray;
+import com.minecraftclone.world.gen.WorldGenSettings;
+import com.minecraftclone.util.FloatArray;
 import com.minecraftclone.util.IntArray;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Furnace;
@@ -399,7 +401,8 @@ public class Hud {
             hotbarItemIcon.render();
             hudShader.unbind();
         } else {
-            addQuad(cx - half, cy - half, cx + half, cy + half, atlas.getUV(type.topTile));
+            // Render as 3D isometric block
+            addIsometricBlock(cx, cy, half, type, atlas);
         }
 
         if (count > 1) {
@@ -723,7 +726,8 @@ public class Hud {
         }
 
         // One row per entry in the active tab. The Controls tab shows the
-        // keybind list; the other two show their Settings rows.
+        // keybind list, Controller shows the gamepad-binding list, the rest
+        // show their Settings rows.
         int rows = settingsRowsForTab(selectedTab);
         if (selectedTab == Settings.TAB_CONTROLS) {
             for (int action = 0; action < rows; action++) {
@@ -736,6 +740,19 @@ public class Hud {
                 String keyText = capturing ? "?" : KeyBindings.keyName(settings.getKeyBinds().get(action));
                 float valueWidth = text.measure(keyText, size);
                 drawTextAt(keyText, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                        capturing ? highlight : idleValue);
+            }
+        } else if (selectedTab == Settings.TAB_CONTROLLER) {
+            for (int local = 0; local < rows; local++) {
+                float baseline = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H + 0.013f;
+                boolean selected = local == selectedIndex;
+                boolean capturing = local == capturingAction;
+                Vector4f rowColor = selected || capturing ? highlight : idle;
+                drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
+                drawTextAt(GamepadBindings.name(local), left + SETTINGS_LEFT_PAD, baseline, size, rowColor);
+                String buttonText = capturing ? "?" : GamepadBindings.buttonName(settings.getGamepadBinds().get(local));
+                float valueWidth = text.measure(buttonText, size);
+                drawTextAt(buttonText, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
                         capturing ? highlight : idleValue);
             }
         } else {
@@ -752,8 +769,9 @@ public class Hud {
             }
         }
 
-        // Sliders for the range rows of the active (non-Controls) tab.
-        if (selectedTab != Settings.TAB_CONTROLS) {
+        // Sliders for the range rows of the active tab (Controls/Controller show
+        // keybind/gamepad-binding lists instead, no sliders).
+        if (selectedTab != Settings.TAB_CONTROLS && selectedTab != Settings.TAB_CONTROLLER) {
             float[] cx = settingsControlX();
             lineShader.bind();
             lineShader.setUniform("projection", identity);
@@ -801,7 +819,7 @@ public class Hud {
             lineShader.unbind();
         }
 
-        drawCenteredText(selectedTab == Settings.TAB_CONTROLS
+        drawCenteredText(selectedTab == Settings.TAB_CONTROLS || selectedTab == Settings.TAB_CONTROLLER
                         ? "Click/Enter: rebind    Tab: next section    Esc: close"
                         : "Click/Enter: toggle or adjust    Tab: next section    Esc: close",
                 0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
@@ -993,16 +1011,26 @@ public class Hud {
 
         glEnable(GL_DEPTH_TEST);
     }
-    /** Number of interactive rows for a settings tab (keybind actions on Controls, Settings rows elsewhere). */
-    private static int settingsRowsForTab(int tab) {        return tab == Settings.TAB_CONTROLS ? KeyBindings.COUNT : Settings.tabRowCount(tab);
+    /** Number of interactive rows for a settings tab (keybind/gamepad-binding actions on Controls/Controller, Settings rows elsewhere). */
+    private static int settingsRowsForTab(int tab) {
+        if (tab == Settings.TAB_CONTROLS) return KeyBindings.COUNT;
+        if (tab == Settings.TAB_CONTROLLER) return GamepadBindings.COUNT;
+        return Settings.tabRowCount(tab);
     }
 
-    /** The Settings row index shown as local row {@code local} on {@code tab} (only valid for non-Controls tabs). */
+    /** The Settings row index shown as local row {@code local} on {@code tab} (only valid for plain Settings tabs). */
     private static int settingsRowForTab(int tab, int local) {
         return Settings.rowInTab(tab, local);
     }
 
-    /** Width of the settings panel: widest label + room for a slider track and its value text. */
+    /**
+     * Width of the settings panel: whichever is wider between the row content
+     * (widest label + room for a slider track and its value text) and the tab
+     * strip across its top - without the max against the tab strip, adding a
+     * long-labeled tab (e.g. "Controller") could make the strip wider than a
+     * panel sized for content alone, hanging tab buttons off both edges of the
+     * panel background instead of sitting inside it.
+     */
     private float settingsPanelWidth() {
         float widest = 0f;
         for (int i = 0; i < Settings.ROW_COUNT; i++) {
@@ -1011,8 +1039,18 @@ public class Hud {
         for (int a = 0; a < KeyBindings.COUNT; a++) {
             widest = Math.max(widest, text.measure(KeyBindings.name(a), SETTINGS_SIZE));
         }
-        return widest + SETTINGS_LABEL_GAP + SETTINGS_TRACK_W + SETTINGS_VALUE_GAP + SETTINGS_VALUE_W
+        float contentWidth = widest + SETTINGS_LABEL_GAP + SETTINGS_TRACK_W + SETTINGS_VALUE_GAP + SETTINGS_VALUE_W
                 + SETTINGS_LEFT_PAD + SETTINGS_RIGHT_PAD;
+        return Math.max(contentWidth, settingsTabStripWidth());
+    }
+
+    /** Total width of the tab strip (every tab button plus the gaps between them). */
+    private float settingsTabStripWidth() {
+        float total = 0f;
+        for (int i = 0; i < Settings.TAB_COUNT; i++) {
+            total += settingsTabWidth(i) + SETTINGS_TAB_GAP;
+        }
+        return total - SETTINGS_TAB_GAP;
     }
 
     /** Logical center-y of the tab strip. */
@@ -1030,12 +1068,7 @@ public class Hud {
 
     /** Logical center-x of tab {@code t}: the strip is centered, spaced by {@link #SETTINGS_TAB_GAP}. */
     private float settingsTabCenterX(int t) {
-        float total = 0f;
-        for (int i = 0; i < Settings.TAB_COUNT; i++) {
-            total += settingsTabWidth(i) + SETTINGS_TAB_GAP;
-        }
-        total -= SETTINGS_TAB_GAP;
-        float x = -total / 2f;
+        float x = -settingsTabStripWidth() / 2f;
         for (int i = 0; i < t; i++) {
             x += settingsTabWidth(i) + SETTINGS_TAB_GAP;
         }
@@ -1111,7 +1144,8 @@ public class Hud {
     /** If the mouse is over a range row's slider track, the click fraction (0..1); otherwise -1. */
     public float settingsTrackAt(float logicalX, float logicalY, int tab) {
         int row = settingsRowAt(logicalX, logicalY, tab);
-        if (row < 0 || tab == Settings.TAB_CONTROLS || Settings.isToggle(settingsRowForTab(tab, row))) return -1f;
+        if (row < 0 || tab == Settings.TAB_CONTROLS || tab == Settings.TAB_CONTROLLER
+                || Settings.isToggle(settingsRowForTab(tab, row))) return -1f;
         float[] cx = settingsControlX();
         if (logicalX < cx[0] - 0.012f || logicalX > cx[1] + 0.012f) return -1f;
         return settingsSliderAt(logicalX, row, tab);
@@ -1167,6 +1201,22 @@ public class Hud {
         blockVertexCounter += 4;
     }
 
+    /**
+     * Emits a quad from 4 arbitrary vertex positions (not necessarily axis-aligned).
+     * Vertices are specified in counter-clockwise order: bottom-left, bottom-right, top-right, top-left.
+     */
+    private void addArbitraryQuad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, float[] uv) {
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        int base = blockVertexCounter;
+        blockVertices.add(x0); blockVertices.add(y0); blockVertices.add(u0); blockVertices.add(v1);
+        blockVertices.add(x1); blockVertices.add(y1); blockVertices.add(u1); blockVertices.add(v1);
+        blockVertices.add(x2); blockVertices.add(y2); blockVertices.add(u1); blockVertices.add(v0);
+        blockVertices.add(x3); blockVertices.add(y3); blockVertices.add(u0); blockVertices.add(v0);
+        blockIndices.add(base); blockIndices.add(base + 1); blockIndices.add(base + 2);
+        blockIndices.add(base); blockIndices.add(base + 2); blockIndices.add(base + 3);
+        blockVertexCounter += 4;
+    }
+
     private void addQuad3(FloatArray out, float minX, float minY, float maxX, float maxY) {
         out.add(minX); out.add(minY); out.add(0);
         out.add(maxX); out.add(minY); out.add(0);
@@ -1174,6 +1224,45 @@ public class Hud {
         out.add(minX); out.add(minY); out.add(0);
         out.add(maxX); out.add(maxY); out.add(0);
         out.add(minX); out.add(maxY); out.add(0);
+    }
+
+    /**
+     * Renders a block as a 3D isometric cube in an inventory slot.
+     * Creates the illusion of depth by rendering three quads: the top face and two side faces
+     * in an isometric projection (45° rotation, 35° tilt).
+     */
+    private void addIsometricBlock(float cx, float cy, float half, BlockType type, TextureAtlas atlas) {
+        // The isometric projection creates depth by offsetting side faces
+        float depth = half * 0.32f;  // Depth of the side faces (how much they extend)
+
+        // Draw in back-to-front order for correct overlap (though z-ordering doesn't matter for 2D HUD)
+
+        // Left side face (X- in world space, shows as left in isometric) - trapezoid
+        // Bottom-left, bottom-right, top-right, top-left
+        addArbitraryQuad(
+            cx - half, cy,                          // bottom-left
+            cx - half + depth, cy - half + depth,   // bottom-right
+            cx - half + depth, cy - half,           // top-right
+            cx - half, cy - depth,                  // top-left
+            atlas.getUV(type.sideTile));
+
+        // Right side face (Z+ in world space, shows as right in isometric) - trapezoid
+        // Bottom-left, bottom-right, top-right, top-left
+        addArbitraryQuad(
+            cx + half - depth, cy - half + depth,   // bottom-left
+            cx + half, cy,                          // bottom-right
+            cx + half, cy - depth,                  // top-right
+            cx + half - depth, cy - half,           // top-left
+            atlas.getUV(type.sideTile));
+
+        // Top face (Y+ in world space) - diamond-shaped quad
+        // Bottom vertex, right vertex, top vertex, left vertex
+        addArbitraryQuad(
+            cx, cy,                                 // bottom vertex
+            cx + half - depth, cy - half + depth,   // right vertex
+            cx, cy - half + 2 * depth,              // top vertex
+            cx - half + depth, cy - half + depth,   // left vertex
+            atlas.getUV(type.topTile));
     }
 
     private static float[] outlineLines(float cx, float cy, float half) {

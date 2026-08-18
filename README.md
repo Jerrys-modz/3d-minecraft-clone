@@ -119,6 +119,28 @@ The packaged jar bundles LWJGL natives for Linux, Windows and macOS (Intel + App
 
 You start with an empty inventory - break blocks to collect them (they show up with a count on the hotbar) before you can place them elsewhere. Bedrock can't be broken.
 
+### Controller support (Steam Deck and other gamepads)
+
+Plug in (or dock) any GLFW-recognized gamepad - including the Steam Deck's built-in controls - and it works immediately, no setup: keyboard/mouse and controller can both be used interchangeably, even within the same session. The first connected gamepad is polled every frame and folded into the same input the keyboard/mouse drive, so it reaches every screen in the game, not just movement - the inventory, settings, crafting/chest/furnace GUIs all work from a pad too, via a virtual cursor.
+
+| Input | Action |
+|---|---|
+| Left stick | Move (gameplay) |
+| Right stick | Look around (gameplay) / move the cursor (any menu or GUI) |
+| `A` | Jump / fly up (gameplay) / click (menus) |
+| `X` | Toggle flight - creative only (gameplay) / right-click, e.g. armor slots (menus) |
+| `Y` | Open/close the inventory (gameplay) |
+| `B` | Fly down / swim down (gameplay) / back-out, closes the open menu (menus) |
+| Left trigger | Mine the targeted block |
+| Right trigger | Place the selected block / eat / open a furnace or crafting table |
+| Left stick click | Sprint |
+| Bumpers or d-pad left/right | Cycle the selected hotbar slot |
+| `Start` | Open/close the settings menu |
+
+A "Gamepad: `<name>`" line appears on the `F3` debug overlay whenever one's connected, as a quick check that it's been detected.
+
+The table above is the default mapping, and most of it is rebindable: open Settings and switch to the new **Controller** tab (next to Controls) to reassign Jump, Sprint, Fly down, Fly toggle, Inventory, Debug, Screenshot, and Weather forecast to a different button - click (or press Enter on) a row, then press the button you want. Movement always stays the left stick (there's only one stick for it), and Start/A/X/B keep their fixed roles (menu/confirm/right-click/back) the same way Esc and the mouse buttons aren't rebindable on keyboard either. Movement/jump/sprint/fly/inventory/debug/screenshot/forecast all route through whatever *action* they represent, so rebinding a controller button changes what triggers that action - and rebinding the underlying key in Settings > Controls still works the same way it always did.
+
 ## Survival
 
 - **Health** (red bar) drops from fall damage (landing too hard - a couple of blocks is safe), standing in lava, staying underwater past your ~6-second breath limit, or starving. It regenerates slowly on its own whenever hunger is above half and you aren't actively taking damage that same instant. At 0 you die: your inventory is scattered on the ground as item drops and you respawn at world spawn with everything reset.
@@ -234,6 +256,6 @@ MCCLONE_AUTOTEST=1 MCCLONE_AUTOTEST_FRAMES=90 MCCLONE_AUTOTEST_PATH=out.png \
 
 Add `MCCLONE_AUTOTEST_TIME=0.5` (0=midnight, 0.5=noon, etc.) to pin the day/night cycle to a specific moment for a reproducible screenshot instead of whatever the default start time renders.
 
-To screenshot one of the menu screens instead of a live world, add `MCCLONE_AUTOTEST_SHOW_MENU=1` together with one of `MCCLONE_AUTOTEST_MENU` (in-game settings), `MCCLONE_AUTOTEST_MAINMENU_SETTINGS` (main-menu Settings page), `MCCLONE_AUTOTEST_WORLDSELECT` or `MCCLONE_AUTOTEST_WORLDGEN`. For the settings page, `MCCLONE_AUTOTEST_SETTINGS_TAB=0|1|2|3` picks the Graphics / Gameplay / Audio / Controls tab. `MCCLONE_AUTOTEST_INVENTORY=1` opens the player's own inventory screen with a full iron armor set equipped, so the armor column can be screenshotted. `MCCLONE_AUTOTEST_PARTIAL=stairs` (a climbing run of 4 stone stairs) or `=fence` (a row of 3 connecting fences) lays out partial-cube blocks for screenshots. `MCCLONE_AUTOTEST_MOB_SWIM=1` carves a water pool and drops a pig into it (add `MCCLONE_AUTOTEST_MOB_SWIM_DROWN=1` to cap it with a ceiling so the pig stays submerged and drowns) so mob swimming/drowning can be screenshotted. `MCCLONE_AUTOTEST_SWIM=1` instead submerges the player themself in a deep pool, so the player's own swim physics can be screenshotted with the F3 "Swimming" debug line on.
+To screenshot one of the menu screens instead of a live world, add `MCCLONE_AUTOTEST_SHOW_MENU=1` together with one of `MCCLONE_AUTOTEST_MENU` (in-game settings), `MCCLONE_AUTOTEST_MAINMENU_SETTINGS` (main-menu Settings page), `MCCLONE_AUTOTEST_WORLDSELECT` or `MCCLONE_AUTOTEST_WORLDGEN`. For the settings page, `MCCLONE_AUTOTEST_SETTINGS_TAB=0|1|2|3|4` picks the Graphics / Gameplay / Audio / Controls / Controller tab. `MCCLONE_AUTOTEST_INVENTORY=1` opens the player's own inventory screen with a full iron armor set equipped, so the armor column can be screenshotted. `MCCLONE_AUTOTEST_PARTIAL=stairs` (a climbing run of 4 stone stairs) or `=fence` (a row of 3 connecting fences) lays out partial-cube blocks for screenshots. `MCCLONE_AUTOTEST_MOB_SWIM=1` carves a water pool and drops a pig into it (add `MCCLONE_AUTOTEST_MOB_SWIM_DROWN=1` to cap it with a ceiling so the pig stays submerged and drowns) so mob swimming/drowning can be screenshotted. `MCCLONE_AUTOTEST_SWIM=1` instead submerges the player themself in a deep pool, so the player's own swim physics can be screenshotted with the F3 "Swimming" debug line on.
 
 This runs the given number of frames, saves a screenshot, and exits.

@@ -283,12 +283,29 @@ public class InventoryController {
      * holding a different item, like Minecraft's drag).
      */
     private void resolveDrag() {
+        boolean liftedFromDragStart = false;
         if (!hasCursorItem() && !gui.isOutputSlot(dragStart) && slotType(dragStart) != null) {
             click(dragStart, false, false);
+            liftedFromDragStart = true;
         }
         if (!hasCursorItem()) return;
+
+        // Check if we're dragging to crafting grid cells - if so, don't place items back in source
+        boolean dragToCraftingGrid = false;
         for (int i = 0; i < dragVisited.length; i++) {
+            if (dragVisited[i] && gui.isGridSlot(i)) {
+                dragToCraftingGrid = true;
+                break;
+            }
+        }
+
+        for (int i = 0; i < dragVisited.length; i++) {
+            // Skip the output slot and any unvisited slots
             if (!gui.isOutputSlot(i) && dragVisited[i]) {
+                // When dragging to crafting grid, skip dragStart only if it was the pickup source
+                if (dragToCraftingGrid && i == dragStart && liftedFromDragStart) {
+                    continue;
+                }
                 depositOne(i);
             }
         }
