@@ -976,9 +976,9 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     /**
-     * Emits seaweed as a shorter cross decoration (0.85 height instead of full
-     * block height) so stacked seaweed overlaps slightly and hides the texture gaps
-     * between blocks.
+     * Emits seaweed with overlapping height so consecutive seaweed blocks overlap
+     * slightly and hide the texture gaps between blocks. Since seaweed grows upward
+     * from the ocean floor, we extend down 0.15 blocks to overlap with the block below.
      */
     private void emitSeaweed(FloatArray vertices, IntArray indices, int[] vertexCounter,
                              int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
@@ -987,9 +987,9 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
         float light = LIGHT_TOP;
 
-        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1;
-        float y1 = wy + 0.85f;  // Shorter height to overlap consecutive seaweed blocks
-        float z1 = wz + 1;
+        float x0 = wx, z0 = wz, x1 = wx + 1, z1 = wz + 1;
+        float y0 = wy - 0.15f;  // Extend down to overlap with block below
+        float y1 = wy + 1.0f;   // Full height upward
 
         float[][] planeA = {{x0, y0, z0}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z0}};
         float[][] planeB = {{x0, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x0, y1, z1}};

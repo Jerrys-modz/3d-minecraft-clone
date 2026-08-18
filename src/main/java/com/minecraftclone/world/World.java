@@ -300,18 +300,14 @@ public class World implements BlockAccessor {
             promoteIfStaticFluid(worldX, worldY, worldZ + 1);
             promoteIfStaticFluid(worldX, worldY, worldZ - 1);
 
-            // Cactus and bamboo blocks lose support when the block below is removed -
+            // Cactus, bamboo, and seaweed lose support when the block below is removed -
             // break all stacked blocks above to simulate gravity (they fall and break).
-            if (old == BlockType.CACTUS || old == BlockType.BAMBOO) {
+            if (old == BlockType.CACTUS || old == BlockType.BAMBOO || old == BlockType.SEAWEED) {
                 breakStackedPlant(worldX, worldY + 1, worldZ, old);
             }
-            // Vines and seaweed hang downward, so breaking them breaks all blocks
-            // of the same type below it.
+            // Vines hang downward, so breaking a vine breaks all vines below it.
             if (old == BlockType.VINE) {
                 breakHangingPlant(worldX, worldY - 1, worldZ, BlockType.VINE);
-            }
-            if (old == BlockType.SEAWEED) {
-                breakHangingPlant(worldX, worldY - 1, worldZ, BlockType.SEAWEED);
             }
         }
     }
