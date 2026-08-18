@@ -98,12 +98,12 @@ public final class Smelting {
         smelt(BlockType.CRUSHED_LEPIDOLITE,    BlockType.BERYLLIUM_INGOT);
         smelt(BlockType.CRUSHED_LITHIUM,       BlockType.BERYLLIUM_INGOT);
         smelt(BlockType.CRUSHED_CINNABAR,      BlockType.SILVER_INGOT); // mercury → silver (placeholder)
-        // Gemstones (no standalone gem items yet; map to DIAMOND as the nearest gem output)
-        smelt(BlockType.CRUSHED_RUBY,          BlockType.DIAMOND);     // ruby → diamond (gem placeholder)
-        smelt(BlockType.CRUSHED_SAPPHIRE,      BlockType.DIAMOND);     // sapphire → diamond
-        smelt(BlockType.CRUSHED_GREEN_SAPPHIRE,BlockType.DIAMOND);     // green sapphire → diamond
-        smelt(BlockType.CRUSHED_PYROPE,        BlockType.DIAMOND);     // garnet → diamond (closest gem)
-        smelt(BlockType.CRUSHED_SPESSARTINE,   BlockType.DIAMOND);     // garnet → diamond
+        // Gemstones
+        smelt(BlockType.CRUSHED_RUBY,          BlockType.RUBY);
+        smelt(BlockType.CRUSHED_SAPPHIRE,      BlockType.SAPPHIRE);
+        smelt(BlockType.CRUSHED_GREEN_SAPPHIRE,BlockType.GREEN_SAPPHIRE);
+        smelt(BlockType.CRUSHED_PYROPE,        BlockType.RUBY);        // garnet → ruby (closest gem)
+        smelt(BlockType.CRUSHED_SPESSARTINE,   BlockType.RUBY);        // garnet → ruby
         // Non-metal minerals → COAL (gives back a fuel as a practical placeholder)
         smelt(BlockType.CRUSHED_SULFUR,        BlockType.COAL);
         smelt(BlockType.CRUSHED_GRAPHITE,      BlockType.COAL);
@@ -111,9 +111,9 @@ public final class Smelting {
         smelt(BlockType.CRUSHED_APATITE,       BlockType.COAL);
         smelt(BlockType.CRUSHED_PHOSPHATE,     BlockType.COAL);
         smelt(BlockType.CRUSHED_PYROCHLORE,    BlockType.TUNGSTEN_INGOT); // niobium source → tungsten (placeholder)
-        // Lapis minerals → DIAMOND (blue gem placeholder)
-        smelt(BlockType.CRUSHED_SODALITE,      BlockType.DIAMOND);
-        smelt(BlockType.CRUSHED_LAZURITE,      BlockType.DIAMOND);
+        // Lapis minerals → SAPPHIRE (blue gem)
+        smelt(BlockType.CRUSHED_SODALITE,      BlockType.SAPPHIRE);
+        smelt(BlockType.CRUSHED_LAZURITE,      BlockType.SAPPHIRE);
     }
 
     private Smelting() {

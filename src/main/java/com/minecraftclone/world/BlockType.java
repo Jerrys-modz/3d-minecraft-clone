@@ -600,7 +600,12 @@ public enum BlockType {
 
     // Ferberite: ore #23 in the table (atlas tile 142), added after the main sequence
     FERBERITE_ORE(414, true, false, 142, 142, 142),
-    CRUSHED_FERBERITE(415, 0);
+    CRUSHED_FERBERITE(415, 0),
+
+    // Gem items: smelted outputs for the gemstone ore chain (inventory-only, no atlas tile).
+    RUBY(416, 0),          // smelted from ruby ore / crushed ruby
+    SAPPHIRE(417, 0),      // smelted from sapphire ore / crushed sapphire
+    GREEN_SAPPHIRE(418, 0); // smelted from green sapphire ore / crushed green sapphire
 
     public final short id;
     public final boolean solid;

@@ -80,6 +80,14 @@ public final class CreativeCatalog {
                     BlockType.IMPURE_CHROMIUM, BlockType.IMPURE_MANGANESE, BlockType.IMPURE_BERYLLIUM,
                     BlockType.IMPURE_TITANIUM,
                     BlockType.IMPURE_URANIUM, BlockType.IMPURE_PLUTONIUM, BlockType.IMPURE_IRIDIUM,
+                    // Gemstone ores and cut gems
+                    BlockType.RUBY_ORE, BlockType.CRUSHED_RUBY, BlockType.SMALL_RUBY_ORE, BlockType.RUBY,
+                    BlockType.SAPPHIRE_ORE, BlockType.CRUSHED_SAPPHIRE, BlockType.SAPPHIRE,
+                    BlockType.GREEN_SAPPHIRE_ORE, BlockType.CRUSHED_GREEN_SAPPHIRE, BlockType.GREEN_SAPPHIRE,
+                    BlockType.PYROPE_ORE, BlockType.CRUSHED_PYROPE,
+                    BlockType.SPESSARTINE_ORE, BlockType.CRUSHED_SPESSARTINE,
+                    BlockType.LEPIDOLITE_ORE, BlockType.CRUSHED_LEPIDOLITE,
+                    BlockType.FERBERITE_ORE, BlockType.CRUSHED_FERBERITE,
             }),
             new Tab("Tools", new BlockType[]{
                     BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,

@@ -73,6 +73,9 @@ public class ItemTextures {
             case IRON_INGOT -> paintIngot(0xE8E8E8);
             case GOLD_INGOT -> paintIngot(0xE8C93A);
             case DIAMOND -> paintGem(0x5FE0E0);
+            case RUBY -> paintGem(0xE8253A);
+            case SAPPHIRE -> paintGem(0x2848E8);
+            case GREEN_SAPPHIRE -> paintGem(0x28C848);
 
             // Armor: each piece shares one painter per slot, tinted by material.
             case WOOD_HELMET -> paintHelmet(0xA9814F);
@@ -187,6 +190,15 @@ public class ItemTextures {
             case CRUSHED_IRIDIUM -> paintCrushedOre(0xD8D8F0);
             case IRIDIUM_DUST -> paintDustOre(0xD8D8F0);
             case IRIDIUM_INGOT -> paintIngot(0xD8D8F0);
+
+            // GTNH Extended gemstone and mineral ores
+            case CRUSHED_LEPIDOLITE    -> paintCrushedOre(0xC8A0C8); // lavender lithium mica
+            case CRUSHED_RUBY          -> paintCrushedOre(0xE8253A);
+            case CRUSHED_SAPPHIRE      -> paintCrushedOre(0x2848E8);
+            case CRUSHED_GREEN_SAPPHIRE-> paintCrushedOre(0x28C848);
+            case CRUSHED_PYROPE        -> paintCrushedOre(0xC81828); // deep red garnet
+            case CRUSHED_SPESSARTINE   -> paintCrushedOre(0xE06020); // orange-red garnet
+            case CRUSHED_FERBERITE     -> paintCrushedOre(0x3A3020); // dark iron tungstate
 
             // Impure ore piles (secondary small ore drops - 18 ores total)
             case IMPURE_COPPER -> paintImpurePile(0xB87333);
