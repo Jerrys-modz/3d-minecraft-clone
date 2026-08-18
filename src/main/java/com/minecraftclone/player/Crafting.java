@@ -89,13 +89,6 @@ public final class Crafting {
         shaped2x2("PP", "PP", BlockType.CRAFTING_TABLE, 1);          // 4 planks -> crafting table
         shaped2x2("P.", "P.", BlockType.STICK, 4);                   // 2 planks vertical -> sticks
         shaped2x2("C.", "S.", BlockType.TORCH, 4);                   // coal + stick -> torches
-        shaped2x2("PS", "PS", BlockType.DOOR, 1);                    // 4 planks + 2 sticks -> door
-        shaped2x2("PP", "..", BlockType.PLANKS_SLAB, 2);             // 2 planks -> 2 slabs
-        shaped2x2("KK", "..", BlockType.STONE_SLAB, 2);              // 2 stone -> 2 slabs
-        shaped2x2("W.", "W.", BlockType.WOOD_PICKAXE, 1);            // simple wooden pickaxe
-        shaped2x2("K.", "K.", BlockType.STONE_PICKAXE, 1);           // simple stone pickaxe
-        shaped2x2("I.", "I.", BlockType.IRON_PICKAXE, 1);            // simple iron pickaxe
-        shaped2x2("D.", "D.", BlockType.DIAMOND_PICKAXE, 1);         // simple diamond pickaxe
 
         // 3x3 recipes from crafting table
         // Stairs: a 6-material "K.. / KK. / KKK" wedge -> 4 stairs.
@@ -117,6 +110,13 @@ public final class Crafting {
         shapeless2x2(BlockType.OBSIDIAN, 1, BlockType.LAVA_SOURCE, BlockType.WATER_SOURCE); // quench lava -> obsidian
 
         // --- 3x3 Crafting Table Recipes ---
+        // Slabs: 3 blocks in a row
+        shaped3x3("PPP", "...", "...", BlockType.PLANKS_SLAB, 6);                       // 3 planks -> 6 slabs
+        shaped3x3("KKK", "...", "...", BlockType.STONE_SLAB, 6);                        // 3 stone -> 6 slabs
+
+        // Doors: 2x3 arrangement (2 wide, 3 tall)
+        shaped3x3("PP.", "PP.", "PP.", BlockType.DOOR, 1);                             // 6 planks -> 1 door
+
         // Tools (mirrored matching lets an axe be built either way round).
         tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD,
                 BlockType.WOOD_SHOVEL, BlockType.WOOD_HAMMER, BlockType.WOOD_BROADAXE);
