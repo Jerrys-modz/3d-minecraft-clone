@@ -115,15 +115,10 @@ public class ContainerGui {
     }
 
     /**
-     * Returns the crafting grid. Uses the player grid for INVENTORY,
-     * and the table grid for CRAFTING_TABLE (unless the player grid was specifically passed).
+     * Returns the crafting grid. Uses the player grid (2x2) for INVENTORY,
+     * and the table grid (3x3) for CRAFTING_TABLE.
      */
     public Grid grid() {
-        // If a grid was explicitly passed and we're in CRAFTING_TABLE mode, use it
-        // (for backward compatibility with tests that create CRAFTING_TABLE with 2x2 grids)
-        if (kind == Kind.CRAFTING_TABLE && playerGrid != null) {
-            return playerGrid;
-        }
         return kind == Kind.CRAFTING_TABLE ? tableGrid : playerGrid;
     }
 
