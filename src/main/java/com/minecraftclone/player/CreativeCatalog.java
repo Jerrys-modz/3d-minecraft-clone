@@ -40,6 +40,29 @@ public final class CreativeCatalog {
                     BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
                     BlockType.COAL, BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
                     BlockType.WOOL,
+                    // GTNH Ores - early game
+                    BlockType.COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.COPPER_DUST, BlockType.COPPER_INGOT,
+                    BlockType.TIN_ORE, BlockType.CRUSHED_TIN, BlockType.TIN_DUST, BlockType.TIN_INGOT,
+                    BlockType.BAUXITE_ORE, BlockType.CRUSHED_BAUXITE, BlockType.BAUXITE_DUST, BlockType.ALUMINUM_INGOT,
+                    BlockType.ZINC_ORE, BlockType.CRUSHED_ZINC, BlockType.ZINC_DUST, BlockType.ZINC_INGOT,
+                    BlockType.LEAD_ORE, BlockType.CRUSHED_LEAD, BlockType.LEAD_DUST, BlockType.LEAD_INGOT,
+                    BlockType.SILVER_ORE, BlockType.CRUSHED_SILVER, BlockType.SILVER_DUST, BlockType.SILVER_INGOT,
+                    // GTNH Ores - mid-game
+                    BlockType.NICKEL_ORE, BlockType.CRUSHED_NICKEL, BlockType.NICKEL_DUST, BlockType.NICKEL_INGOT,
+                    BlockType.COBALT_ORE, BlockType.CRUSHED_COBALT, BlockType.COBALT_DUST, BlockType.COBALT_INGOT,
+                    BlockType.TUNGSTEN_ORE, BlockType.CRUSHED_TUNGSTEN, BlockType.TUNGSTEN_DUST, BlockType.TUNGSTEN_INGOT,
+                    BlockType.MOLYBDENUM_ORE, BlockType.CRUSHED_MOLYBDENUM, BlockType.MOLYBDENUM_DUST, BlockType.MOLYBDENUM_INGOT,
+                    BlockType.PLATINUM_ORE, BlockType.CRUSHED_PLATINUM, BlockType.PLATINUM_DUST, BlockType.PLATINUM_INGOT,
+                    // GTNH Ores - advanced
+                    BlockType.CHROMIUM_ORE, BlockType.CRUSHED_CHROMIUM, BlockType.CHROMIUM_DUST, BlockType.CHROMIUM_INGOT,
+                    BlockType.MANGANESE_ORE, BlockType.CRUSHED_MANGANESE, BlockType.MANGANESE_DUST, BlockType.MANGANESE_INGOT,
+                    BlockType.VANADIUM_ORE, BlockType.CRUSHED_VANADIUM, BlockType.VANADIUM_DUST, BlockType.VANADIUM_INGOT,
+                    BlockType.BERYLLIUM_ORE, BlockType.CRUSHED_BERYLLIUM, BlockType.BERYLLIUM_DUST, BlockType.BERYLLIUM_INGOT,
+                    BlockType.TITANIUM_ORE, BlockType.CRUSHED_TITANIUM, BlockType.TITANIUM_DUST, BlockType.TITANIUM_INGOT,
+                    // GTNH Ores - late-game
+                    BlockType.URANIUM_ORE, BlockType.CRUSHED_URANIUM, BlockType.URANIUM_DUST, BlockType.URANIUM_INGOT,
+                    BlockType.THORIUM_ORE, BlockType.CRUSHED_THORIUM, BlockType.THORIUM_DUST, BlockType.THORIUM_INGOT,
+                    BlockType.PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM, BlockType.PLUTONIUM_DUST, BlockType.PLUTONIUM_INGOT,
             }),
             new Tab("Tools", new BlockType[]{
                     BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
