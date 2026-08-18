@@ -111,12 +111,7 @@ public final class Crafting {
         shaped3x3("OLO", "L.L", "OLO", BlockType.END_PORTAL, 1);    // obsidian + glowstone ring -> end portal
 
         // --- Shapeless recipes: any arrangement of the given ingredients. ---
-        shapeless2x2(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
-        shapeless2x2(BlockType.OBSIDIAN, 1, BlockType.LAVA_SOURCE, BlockType.WATER_SOURCE); // quench lava -> obsidian
-
-        // Register basic 2x2 shapeless recipes for 3x3 grids (so they work in crafting tables too)
-        shapeless3x3(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
-        shapeless3x3(BlockType.OBSIDIAN, 1, BlockType.LAVA_SOURCE, BlockType.WATER_SOURCE);
+        // Note: Glass is made in the furnace (smelting sand); obsidian forms in the world (lava + water)
 
         // --- 3x3 Crafting Table Recipes ---
         // Slabs: 3 blocks in a row

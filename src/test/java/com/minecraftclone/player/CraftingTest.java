@@ -261,16 +261,4 @@ class CraftingTest {
         assertEquals(4, r.outputAmount());
     }
 
-    @Test
-    void shapelessGlassFromSandIn3x3Grid() {
-        // Basic 2x2 shapeless recipe (glass from sand) submitted as 9-cell grid
-        // Any arrangement of 2 sand -> 1 glass
-        BlockType[] grid = new BlockType[9];
-        grid[2] = BlockType.SAND;
-        grid[5] = BlockType.SAND;
-        Crafting.Recipe r = Crafting.match3x3(grid);
-        assertNotNull(r, "Glass recipe should match in 3x3 grid");
-        assertEquals(BlockType.GLASS, r.output());
-        assertEquals(1, r.outputAmount());
-    }
 }
