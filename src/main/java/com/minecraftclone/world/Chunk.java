@@ -386,7 +386,11 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                         // Emitted before the primary block below so it's still drawn
                         // even on the rare cell whose "primary" is AIR (an overlay
                         // whose fluid was somehow removed without clearing it too).
-                        emitCross(vertices, indices, vertexCounter, wx, wy, wz, overlay, atlas, blockLight);
+                        if (overlay == BlockType.SEAWEED) {
+                            emitSeaweed(vertices, indices, vertexCounter, wx, wy, wz, overlay, atlas, blockLight);
+                        } else {
+                            emitCross(vertices, indices, vertexCounter, wx, wy, wz, overlay, atlas, blockLight);
+                        }
                     }
                     if (block == BlockType.AIR) continue;
 
@@ -963,6 +967,29 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         float light = LIGHT_TOP;
 
         float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1, y1 = wy + 1, z1 = wz + 1;
+
+        float[][] planeA = {{x0, y0, z0}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z0}};
+        float[][] planeB = {{x0, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x0, y1, z1}};
+
+        emitQuadBothSides(vertices, indices, vertexCounter, planeA, uvs, light, blockLight);
+        emitQuadBothSides(vertices, indices, vertexCounter, planeB, uvs, light, blockLight);
+    }
+
+    /**
+     * Emits seaweed as a shorter cross decoration (0.85 height instead of full
+     * block height) so stacked seaweed overlaps slightly and hides the texture gaps
+     * between blocks.
+     */
+    private void emitSeaweed(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
+        float[] uv = atlas.getUV(block.topTile);
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+        float light = LIGHT_TOP;
+
+        float x0 = wx, y0 = wy, z0 = wz, x1 = wx + 1;
+        float y1 = wy + 0.85f;  // Shorter height to overlap consecutive seaweed blocks
+        float z1 = wz + 1;
 
         float[][] planeA = {{x0, y0, z0}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z0}};
         float[][] planeB = {{x0, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x0, y1, z1}};

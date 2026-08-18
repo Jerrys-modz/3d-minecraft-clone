@@ -305,9 +305,13 @@ public class World implements BlockAccessor {
             if (old == BlockType.CACTUS || old == BlockType.BAMBOO) {
                 breakStackedPlant(worldX, worldY + 1, worldZ, old);
             }
-            // Vines hang downward, so breaking a vine breaks all vines below it.
+            // Vines and seaweed hang downward, so breaking them breaks all blocks
+            // of the same type below it.
             if (old == BlockType.VINE) {
-                breakHangingVines(worldX, worldY - 1, worldZ);
+                breakHangingPlant(worldX, worldY - 1, worldZ, BlockType.VINE);
+            }
+            if (old == BlockType.SEAWEED) {
+                breakHangingPlant(worldX, worldY - 1, worldZ, BlockType.SEAWEED);
             }
         }
     }
@@ -321,12 +325,12 @@ public class World implements BlockAccessor {
         }
     }
 
-    /** Recursively break hanging vines below the removed block. */
-    private void breakHangingVines(int x, int y, int z) {
+    /** Recursively break hanging plant blocks (vines/seaweed) below the removed block. */
+    private void breakHangingPlant(int x, int y, int z, BlockType plantType) {
         BlockType block = getBlock(x, y, z);
-        if (block == BlockType.VINE) {
+        if (block == plantType) {
             setBlock(x, y, z, BlockType.AIR);
-            breakHangingVines(x, y - 1, z);
+            breakHangingPlant(x, y - 1, z, plantType);
         }
     }
 
