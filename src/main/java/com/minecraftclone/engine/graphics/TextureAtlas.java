@@ -33,7 +33,7 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
  */
 public class TextureAtlas {
 
-    public static final int GRID = 8;
+    public static final int GRID = 16;
     public static final int TILE_PX = 16;
     public static final int ATLAS_PX = GRID * TILE_PX;
 
@@ -113,6 +113,34 @@ public class TextureAtlas {
         paintDoor(image, 46, rnd);
         paintTrapdoor(image, 47, rnd);
         paintWool(image, 59, rnd);
+
+        // --- GTNH Ores: early-game (tiles 80-85) ---
+        paintOreTile(image, 80, rnd, 0xB87333, 0x8B5A2B);                // copper ore (reddish-brown)
+        paintOreTile(image, 81, rnd, 0xC0C0C0, 0xA0A0A0);                // tin ore (silver-gray)
+        paintOreTile(image, 82, rnd, 0xE8E8E8, 0xD0D0D0);                // bauxite ore (white/aluminum)
+        paintOreTile(image, 83, rnd, 0xA8B8C8, 0x8898A8);                // zinc ore (silver-blue)
+        paintOreTile(image, 84, rnd, 0x4A4A4A, 0x2A2A2A);                // lead ore (dark gray)
+        paintOreTile(image, 85, rnd, 0xE0E0E0, 0xC0C0C0);                // silver ore (bright silver)
+
+        // --- GTNH Ores: mid-game (tiles 86-90) ---
+        paintOreTile(image, 86, rnd, 0xC8D8C8, 0xA8B8A8);                // nickel ore (pale gray-green)
+        paintOreTile(image, 87, rnd, 0x5A6AB8, 0x404890);                // cobalt ore (blue-ish)
+        paintOreTile(image, 88, rnd, 0x3A3A3A, 0x1A1A1A);                // tungsten ore (dark gray)
+        paintOreTile(image, 89, rnd, 0x5A5A5A, 0x3A3A3A);                // molybdenum ore (dark metallic)
+        paintOreTile(image, 90, rnd, 0xF0F0F0, 0xD0D0D0);                // platinum ore (silver-white)
+
+        // --- GTNH Ores: advanced (tiles 91-95) ---
+        paintOreTile(image, 91, rnd, 0xD8D8D8, 0xB8B8B8);                // chromium ore (silvery)
+        paintOreTile(image, 92, rnd, 0x4A4A5A, 0x2A2A3A);                // manganese ore (dark gray-purple)
+        paintOreTile(image, 93, rnd, 0x5A6A7A, 0x3A4A5A);                // vanadium ore (dark blue-gray)
+        paintOreTile(image, 94, rnd, 0xE0E0E0, 0xC0C0C0);                // beryllium ore (light silver)
+        paintOreTile(image, 95, rnd, 0xD0D0D0, 0xB0B0B0);                // titanium ore (metallic silver)
+
+        // --- GTNH Ores: late-game (tiles 96-99) ---
+        paintOreTile(image, 96, rnd, 0x7AB850, 0x5A9830);                // uranium ore (greenish)
+        paintOreTile(image, 97, rnd, 0x5A5A5A, 0x3A3A3A);                // thorium ore (dark gray)
+        paintOreTile(image, 98, rnd, 0x4A6A3A, 0x2A4A1A);                // plutonium ore (dark greenish-black)
+        paintOreTile(image, 99, rnd, 0xD8D8F0, 0xB8B8D0);                // iridium ore (bright silver-rainbow)
 
         // --- Nether / End dimension blocks ---
         paintNetherrack(image, 52, rnd);
