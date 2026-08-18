@@ -292,4 +292,23 @@ class InventoryControllerTest {
         assertEquals(BlockType.DIAMOND_CHESTPLATE, inv.armorType(Inventory.ARMOR_SLOT_CHESTPLATE));
         assertTrue(inv.isEmpty(10));
     }
+
+    @Test
+    void shiftClickPlacesStackIntoCraftingGrid() {
+        Inventory inv = new Inventory();
+        CraftingGrid grid = new CraftingGrid();
+        InventoryController c = new InventoryController(inv, grid);  // Creates a ContainerGui internally
+        inv.setSlot(10, BlockType.PLANKS, 5);
+
+        // Shift-click should place items into the crafting grid
+        c.click(10, false, true);
+
+        // Verify: 5 items from inventory should be placed in 5 grid cells
+        assertEquals(BlockType.PLANKS, grid.get(0), "first grid cell should have 1 plank");
+        assertEquals(BlockType.PLANKS, grid.get(1), "second grid cell should have 1 plank");
+        assertEquals(BlockType.PLANKS, grid.get(2), "third grid cell should have 1 plank");
+        assertEquals(BlockType.PLANKS, grid.get(3), "fourth grid cell should have 1 plank");
+        assertEquals(BlockType.PLANKS, grid.get(4), "fifth grid cell should have 1 plank");
+        assertTrue(inv.isEmpty(10), "inventory slot should be empty");
+    }
 }
