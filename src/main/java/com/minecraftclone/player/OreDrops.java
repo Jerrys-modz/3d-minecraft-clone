@@ -2,81 +2,84 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
 
-import java.util.EnumMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Ore drop mappings for GTNH ores. When a GTNH ore block is broken,
- * it drops its corresponding crushed ore item instead of the block itself.
- * This allows for the multi-stage ore processing pipeline (ore → crushed → dust → ingot).
+ * it drops its corresponding crushed ore item (or for small ores, randomly
+ * selects between crushed ore and impure pile).
+ *
+ * This allows for the multi-stage ore processing pipeline:
+ * ore → crushed → dust → ingot (or impure → washed/centrifuged).
  */
 public final class OreDrops {
 
+    /** Maps ore to its primary drop (crushed ore). */
     private static final Map<BlockType, BlockType> PRIMARY_DROPS = new EnumMap<>(BlockType.class);
+
+    /** Maps small ore to its secondary drop (impure pile). */
     private static final Map<BlockType, BlockType> SECONDARY_DROPS = new EnumMap<>(BlockType.class);
+
+    /** Set of ore blocks that have variable drops (small ores). */
     private static final Set<BlockType> VARIABLE_DROP_ORES = new HashSet<>();
-    private static final Map<BlockType, BlockType> DROPS = new EnumMap<>(BlockType.class);
 
     static {
         // Early game ores (stone tier)
-        registerOreDrop(BlockType.COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.CRUSHED_COPPER);
-        registerOreDrop(BlockType.TIN_ORE, BlockType.CRUSHED_TIN, BlockType.CRUSHED_TIN);
-        registerOreDrop(BlockType.BAUXITE_ORE, BlockType.CRUSHED_BAUXITE, BlockType.CRUSHED_BAUXITE);
-        registerOreDrop(BlockType.ZINC_ORE, BlockType.CRUSHED_ZINC, BlockType.CRUSHED_ZINC);
-        registerOreDrop(BlockType.LEAD_ORE, BlockType.CRUSHED_LEAD, BlockType.CRUSHED_LEAD);
-        registerOreDrop(BlockType.SILVER_ORE, BlockType.CRUSHED_SILVER, BlockType.CRUSHED_SILVER);
+        registerOreDrop(BlockType.COPPER_ORE, BlockType.CRUSHED_COPPER, null);
+        registerOreDrop(BlockType.TIN_ORE, BlockType.CRUSHED_TIN, null);
+        registerOreDrop(BlockType.BAUXITE_ORE, BlockType.CRUSHED_BAUXITE, null);
+        registerOreDrop(BlockType.ZINC_ORE, BlockType.CRUSHED_ZINC, null);
+        registerOreDrop(BlockType.LEAD_ORE, BlockType.CRUSHED_LEAD, null);
+        registerOreDrop(BlockType.SILVER_ORE, BlockType.CRUSHED_SILVER, null);
 
         // Mid-game ores (iron tier)
-        registerOreDrop(BlockType.NICKEL_ORE, BlockType.CRUSHED_NICKEL, BlockType.CRUSHED_NICKEL);
-        registerOreDrop(BlockType.COBALT_ORE, BlockType.CRUSHED_COBALT, BlockType.CRUSHED_COBALT);
-        registerOreDrop(BlockType.TUNGSTEN_ORE, BlockType.CRUSHED_TUNGSTEN, BlockType.CRUSHED_TUNGSTEN);
-        registerOreDrop(BlockType.MOLYBDENUM_ORE, BlockType.CRUSHED_MOLYBDENUM, BlockType.CRUSHED_MOLYBDENUM);
-        registerOreDrop(BlockType.PLATINUM_ORE, BlockType.CRUSHED_PLATINUM, BlockType.CRUSHED_PLATINUM);
+        registerOreDrop(BlockType.NICKEL_ORE, BlockType.CRUSHED_NICKEL, null);
+        registerOreDrop(BlockType.COBALT_ORE, BlockType.CRUSHED_COBALT, null);
+        registerOreDrop(BlockType.TUNGSTEN_ORE, BlockType.CRUSHED_TUNGSTEN, null);
+        registerOreDrop(BlockType.MOLYBDENUM_ORE, BlockType.CRUSHED_MOLYBDENUM, null);
+        registerOreDrop(BlockType.PLATINUM_ORE, BlockType.CRUSHED_PLATINUM, null);
 
         // Advanced ores (diamond tier)
-        registerOreDrop(BlockType.CHROMIUM_ORE, BlockType.CRUSHED_CHROMIUM, BlockType.CRUSHED_CHROMIUM);
-        registerOreDrop(BlockType.MANGANESE_ORE, BlockType.CRUSHED_MANGANESE, BlockType.CRUSHED_MANGANESE);
-        registerOreDrop(BlockType.VANADIUM_ORE, BlockType.CRUSHED_VANADIUM, BlockType.CRUSHED_VANADIUM);
-        registerOreDrop(BlockType.BERYLLIUM_ORE, BlockType.CRUSHED_BERYLLIUM, BlockType.CRUSHED_BERYLLIUM);
-        registerOreDrop(BlockType.TITANIUM_ORE, BlockType.CRUSHED_TITANIUM, BlockType.CRUSHED_TITANIUM);
+        registerOreDrop(BlockType.CHROMIUM_ORE, BlockType.CRUSHED_CHROMIUM, null);
+        registerOreDrop(BlockType.MANGANESE_ORE, BlockType.CRUSHED_MANGANESE, null);
+        registerOreDrop(BlockType.VANADIUM_ORE, BlockType.CRUSHED_VANADIUM, null);
+        registerOreDrop(BlockType.BERYLLIUM_ORE, BlockType.CRUSHED_BERYLLIUM, null);
+        registerOreDrop(BlockType.TITANIUM_ORE, BlockType.CRUSHED_TITANIUM, null);
 
         // Late-game ores (endgame tier)
-        registerOreDrop(BlockType.URANIUM_ORE, BlockType.CRUSHED_URANIUM, BlockType.CRUSHED_URANIUM);
-        registerOreDrop(BlockType.THORIUM_ORE, BlockType.CRUSHED_THORIUM, BlockType.CRUSHED_THORIUM);
-        registerOreDrop(BlockType.PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM, BlockType.CRUSHED_PLUTONIUM);
-        registerOreDrop(BlockType.IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM, BlockType.CRUSHED_IRIDIUM);
+        registerOreDrop(BlockType.URANIUM_ORE, BlockType.CRUSHED_URANIUM, null);
+        registerOreDrop(BlockType.THORIUM_ORE, BlockType.CRUSHED_THORIUM, null);
+        registerOreDrop(BlockType.PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM, null);
+        registerOreDrop(BlockType.IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM, null);
 
-        // Small ore variants (mining indicators) - primary 70%, secondary 30%
+        // Small ore variants (mining indicators) - variable drops: crushed (70%) or impure (30%)
         // Early-game small ores
-        registerVariableDrop(BlockType.SMALL_COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.CRUSHED_COPPER);
-        registerVariableDrop(BlockType.SMALL_TIN_ORE, BlockType.CRUSHED_TIN, BlockType.CRUSHED_TIN);
-        registerVariableDrop(BlockType.SMALL_BAUXITE_ORE, BlockType.CRUSHED_BAUXITE, BlockType.CRUSHED_BAUXITE);
-        registerVariableDrop(BlockType.SMALL_ZINC_ORE, BlockType.CRUSHED_ZINC, BlockType.CRUSHED_ZINC);
-        registerVariableDrop(BlockType.SMALL_LEAD_ORE, BlockType.CRUSHED_LEAD, BlockType.CRUSHED_LEAD);
-        registerVariableDrop(BlockType.SMALL_SILVER_ORE, BlockType.CRUSHED_SILVER, BlockType.CRUSHED_SILVER);
+        registerOreDrop(BlockType.SMALL_COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.IMPURE_COPPER);
+        registerOreDrop(BlockType.SMALL_TIN_ORE, BlockType.CRUSHED_TIN, BlockType.IMPURE_TIN);
+        registerOreDrop(BlockType.SMALL_BAUXITE_ORE, BlockType.CRUSHED_BAUXITE, BlockType.IMPURE_BAUXITE);
+        registerOreDrop(BlockType.SMALL_ZINC_ORE, BlockType.CRUSHED_ZINC, BlockType.IMPURE_ZINC);
+        registerOreDrop(BlockType.SMALL_LEAD_ORE, BlockType.CRUSHED_LEAD, BlockType.IMPURE_LEAD);
+        registerOreDrop(BlockType.SMALL_SILVER_ORE, BlockType.CRUSHED_SILVER, BlockType.IMPURE_SILVER);
 
         // Mid-game small ores
-        registerVariableDrop(BlockType.SMALL_NICKEL_ORE, BlockType.CRUSHED_NICKEL, BlockType.CRUSHED_NICKEL);
-        registerVariableDrop(BlockType.SMALL_COBALT_ORE, BlockType.CRUSHED_COBALT, BlockType.CRUSHED_COBALT);
-        registerVariableDrop(BlockType.SMALL_TUNGSTEN_ORE, BlockType.CRUSHED_TUNGSTEN, BlockType.CRUSHED_TUNGSTEN);
-        registerVariableDrop(BlockType.SMALL_MOLYBDENUM_ORE, BlockType.CRUSHED_MOLYBDENUM, BlockType.CRUSHED_MOLYBDENUM);
-        registerVariableDrop(BlockType.SMALL_PLATINUM_ORE, BlockType.CRUSHED_PLATINUM, BlockType.CRUSHED_PLATINUM);
+        registerOreDrop(BlockType.SMALL_NICKEL_ORE, BlockType.CRUSHED_NICKEL, BlockType.IMPURE_NICKEL);
+        registerOreDrop(BlockType.SMALL_COBALT_ORE, BlockType.CRUSHED_COBALT, BlockType.IMPURE_COBALT);
+        registerOreDrop(BlockType.SMALL_TUNGSTEN_ORE, BlockType.CRUSHED_TUNGSTEN, BlockType.IMPURE_TUNGSTEN);
+        registerOreDrop(BlockType.SMALL_MOLYBDENUM_ORE, BlockType.CRUSHED_MOLYBDENUM, BlockType.IMPURE_MOLYBDENUM);
+        registerOreDrop(BlockType.SMALL_PLATINUM_ORE, BlockType.CRUSHED_PLATINUM, BlockType.IMPURE_PLATINUM);
 
-        // Advanced small ores
-        registerVariableDrop(BlockType.SMALL_CHROMIUM_ORE, BlockType.CRUSHED_CHROMIUM, BlockType.CRUSHED_CHROMIUM);
-        registerVariableDrop(BlockType.SMALL_MANGANESE_ORE, BlockType.CRUSHED_MANGANESE, BlockType.CRUSHED_MANGANESE);
-        registerVariableDrop(BlockType.SMALL_VANADIUM_ORE, BlockType.CRUSHED_VANADIUM, BlockType.CRUSHED_VANADIUM);
-        registerVariableDrop(BlockType.SMALL_BERYLLIUM_ORE, BlockType.CRUSHED_BERYLLIUM, BlockType.CRUSHED_BERYLLIUM);
-        registerVariableDrop(BlockType.SMALL_TITANIUM_ORE, BlockType.CRUSHED_TITANIUM, BlockType.CRUSHED_TITANIUM);
+        // Advanced small ores (4 ores)
+        registerOreDrop(BlockType.SMALL_CHROMIUM_ORE, BlockType.CRUSHED_CHROMIUM, BlockType.IMPURE_CHROMIUM);
+        registerOreDrop(BlockType.SMALL_MANGANESE_ORE, BlockType.CRUSHED_MANGANESE, BlockType.IMPURE_MANGANESE);
+        registerOreDrop(BlockType.SMALL_VANADIUM_ORE, BlockType.CRUSHED_VANADIUM, null); // Single drop only
+        registerOreDrop(BlockType.SMALL_BERYLLIUM_ORE, BlockType.CRUSHED_BERYLLIUM, BlockType.IMPURE_BERYLLIUM);
+        registerOreDrop(BlockType.SMALL_TITANIUM_ORE, BlockType.CRUSHED_TITANIUM, BlockType.IMPURE_TITANIUM);
 
         // Late-game small ores (3 ores)
-        registerVariableDrop(BlockType.SMALL_URANIUM_ORE, BlockType.CRUSHED_URANIUM, BlockType.IMPURE_URANIUM);
+        registerOreDrop(BlockType.SMALL_URANIUM_ORE, BlockType.CRUSHED_URANIUM, BlockType.IMPURE_URANIUM);
         registerOreDrop(BlockType.SMALL_THORIUM_ORE, BlockType.CRUSHED_THORIUM, null); // Single drop only
-        registerVariableDrop(BlockType.SMALL_PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM, BlockType.IMPURE_PLUTONIUM);
-        registerVariableDrop(BlockType.SMALL_IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM, BlockType.IMPURE_IRIDIUM);
+        registerOreDrop(BlockType.SMALL_PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM, BlockType.IMPURE_PLUTONIUM);
+        registerOreDrop(BlockType.SMALL_IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM, BlockType.IMPURE_IRIDIUM);
 
         // =====================================================================
         // Extended GTNH ore pack — vein ore drops (primary: crushed ore)
@@ -219,22 +222,18 @@ public final class OreDrops {
     private OreDrops() {
     }
 
-    /** Registers an ore block to drop a specific crushed ore item. */
+    /** Registers an ore block with primary and optional secondary (variable) drops. */
     private static void registerOreDrop(BlockType ore, BlockType primary, BlockType secondary) {
         PRIMARY_DROPS.put(ore, primary);
-        SECONDARY_DROPS.put(ore, secondary);
-        DROPS.put(ore, primary);
-    }
-
-    /** Registers a small ore that can drop either primary or secondary drop. */
-    private static void registerVariableDrop(BlockType ore, BlockType primary, BlockType secondary) {
-        registerOreDrop(ore, primary, secondary);
-        VARIABLE_DROP_ORES.add(ore);
+        if (secondary != null) {
+            SECONDARY_DROPS.put(ore, secondary);
+            VARIABLE_DROP_ORES.add(ore);
+        }
     }
 
     /** Returns the item that should drop when this ore block is broken, or null if not a GTNH ore. */
     public static BlockType dropFor(BlockType ore) {
-        return DROPS.get(ore);
+        return PRIMARY_DROPS.get(ore);
     }
 
     /**
@@ -256,6 +255,6 @@ public final class OreDrops {
 
     /** True if this block is a GTNH ore that has a registered drop. */
     public static boolean isGthnOre(BlockType type) {
-        return type != null && DROPS.containsKey(type);
+        return type != null && PRIMARY_DROPS.containsKey(type);
     }
 }

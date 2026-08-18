@@ -644,7 +644,7 @@ public class Main {
                     autoDir.resolve(dim.saveFolder()).resolve("map.dat"));
             }
             mapRenderer[0] = new MapRenderer(world.getMapData());
-            hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
+            hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
             startCalendar(dayNightCycle, calendar, genSettings);
             for (World w : worlds) {
                 w.setRenderDistance(settings.getRenderDistance());
@@ -1161,7 +1161,7 @@ public class Main {
                                         worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
                                 }
                                 mapRenderer[0] = new MapRenderer(world.getMapData());
-                                hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
+                                hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
                                 startCalendar(dayNightCycle, calendar, genSettings);
                                 for (World w : worlds) {
                                     w.setRenderDistance(settings.getRenderDistance());
@@ -1228,7 +1228,7 @@ public class Main {
                                     worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
                             }
                             mapRenderer[0] = new MapRenderer(world.getMapData());
-                            hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
+                            hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
                             startCalendar(dayNightCycle, calendar, genSettings);
                             for (World w : worlds) {
                                 w.setRenderDistance(settings.getRenderDistance());
@@ -1297,7 +1297,7 @@ public class Main {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
                 } else if (mapOpen[0]) {
                     mapOpen[0] = false;
-                    hud.renderFullMap(null); // clear GL texture cache
+                    hud.renderFullMap(null, -1); // clear GL texture cache
                 } else if (inventoryOpen[0]) {
                     closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                 } else if (creativeOpen[0]) {
@@ -1427,9 +1427,10 @@ public class Main {
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.FORECAST))) {
                 forecastOpen[0] = !forecastOpen[0];
             }
-            if (mapRenderer[0] != null && input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.MAP))) {
+            if (mapRenderer[0] != null && input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.MAP))
+                    && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 mapOpen[0] = !mapOpen[0];
-                if (!mapOpen[0]) hud.renderFullMap(null); // clear GL texture cache on close
+                if (!mapOpen[0]) hud.renderFullMap(null, -1); // clear GL texture cache on close
                 window.setCursorCaptured(!mapOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
                 input.resetMouseDelta();
             }
@@ -1447,7 +1448,7 @@ public class Main {
                 if (input.isKeyJustPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_R)) mapRenderer[0].resetView();
             }
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
                 // Cold exposure factor, driven by the LOCAL temperature at the
                 // player's position (which already folds in the biome, season,
                 // night, weather, altitude and underground depth - so a deep cave
@@ -1663,7 +1664,7 @@ public class Main {
 
             // Block selection via number keys / scroll wheel - the hotbar is the
             // first 9 inventory slots (only in gameplay).
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
                 for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
                     if (input.isKeyJustPressed(GLFW_KEY_1 + i)) {
                         selectedSlot[0] = i;
@@ -1675,7 +1676,7 @@ public class Main {
                 }
             }
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 // A cell can hold an overlay decoration inside its primary block (e.g.
@@ -1923,21 +1924,21 @@ public class Main {
 
             // Rain/snow particles and lightning bolts, drawn against the world
             // (depth-tested) but hidden behind menus just like the crosshair.
-            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
                 weatherRenderer.render(lineShader, projection, view, weatherParticles, bolts);
             }
 
             // First-person held item (Minecraft-style): drawn after the world so it
             // always sits on top, hidden while any menu/inventory is up and in
             // spectator (no hand to look at).
-            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]
                     && !settings.getGameMode().isSpectator()) {
                 handRenderer.render(chunkShader, atlas, itemTextures,
                         player.getInventory().typeOf(selectedSlot[0]),
                         player.getBobPhase(), animTime[0], dt, projection);
             }
 
-            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
+            if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
                 // Raycaster.cast() reports a degenerate hit (point == origin,
                 // blockPos == the eye's own cell) when the eye's own cell holds
                 // an overlay decoration (e.g. seaweed) - intentional, so seaweed
@@ -1960,7 +1961,8 @@ public class Main {
                     java.awt.image.BufferedImage miniMapImage = mapRenderer[0].renderMiniMap(
                             player.getPosition().x, player.getPosition().z,
                             player.getCamera().getYaw());
-                    hud.renderMiniMap(miniMapImage, 0.2f, 0.2f, 0.9f, 0.9f, window.getAspectRatio());
+                    hud.renderMiniMap(miniMapImage, mapRenderer[0].getMiniMapVersion(),
+                            0.2f, 0.2f, 0.9f, 0.9f, window.getAspectRatio());
                 }
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
                 if (!settings.getGameMode().isInvulnerable()) {
@@ -1990,7 +1992,7 @@ public class Main {
                         window.getWidth(), window.getHeight(),
                         player.getPosition().x, player.getPosition().z,
                         player.getCamera().getYaw());
-                hud.renderFullMap(fullMapImage);
+                hud.renderFullMap(fullMapImage, mapRenderer[0].getFullMapVersion());
             }
             if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();

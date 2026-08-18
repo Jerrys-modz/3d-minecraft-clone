@@ -72,6 +72,14 @@ public final class CreativeCatalog {
                     BlockType.SMALL_CHROMIUM_ORE, BlockType.SMALL_MANGANESE_ORE, BlockType.SMALL_VANADIUM_ORE, BlockType.SMALL_BERYLLIUM_ORE,
                     BlockType.SMALL_TITANIUM_ORE,
                     BlockType.SMALL_URANIUM_ORE, BlockType.SMALL_THORIUM_ORE, BlockType.SMALL_PLUTONIUM_ORE, BlockType.SMALL_IRIDIUM_ORE,
+                    // GTNH Impure Ore Piles - secondary small ore drops (70%/30% split, 18 ores)
+                    BlockType.IMPURE_COPPER, BlockType.IMPURE_TIN, BlockType.IMPURE_BAUXITE, BlockType.IMPURE_ZINC,
+                    BlockType.IMPURE_LEAD, BlockType.IMPURE_SILVER,
+                    BlockType.IMPURE_NICKEL, BlockType.IMPURE_COBALT, BlockType.IMPURE_TUNGSTEN, BlockType.IMPURE_MOLYBDENUM,
+                    BlockType.IMPURE_PLATINUM,
+                    BlockType.IMPURE_CHROMIUM, BlockType.IMPURE_MANGANESE, BlockType.IMPURE_BERYLLIUM,
+                    BlockType.IMPURE_TITANIUM,
+                    BlockType.IMPURE_URANIUM, BlockType.IMPURE_PLUTONIUM, BlockType.IMPURE_IRIDIUM,
             }),
             new Tab("Tools", new BlockType[]{
                     BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,

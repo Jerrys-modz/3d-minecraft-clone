@@ -188,6 +188,26 @@ public class ItemTextures {
             case IRIDIUM_DUST -> paintDustOre(0xD8D8F0);
             case IRIDIUM_INGOT -> paintIngot(0xD8D8F0);
 
+            // Impure ore piles (secondary small ore drops - 18 ores total)
+            case IMPURE_COPPER -> paintImpurePile(0xB87333);
+            case IMPURE_TIN -> paintImpurePile(0xC0C0C0);
+            case IMPURE_BAUXITE -> paintImpurePile(0xE8E8E8);
+            case IMPURE_ZINC -> paintImpurePile(0xA8B8C8);
+            case IMPURE_LEAD -> paintImpurePile(0x4A4A4A);
+            case IMPURE_SILVER -> paintImpurePile(0xE0E0E0);
+            case IMPURE_NICKEL -> paintImpurePile(0xD0D0D0);
+            case IMPURE_COBALT -> paintImpurePile(0x2E5090);
+            case IMPURE_TUNGSTEN -> paintImpurePile(0x4A4A5A);
+            case IMPURE_MOLYBDENUM -> paintImpurePile(0x5A5A6A);
+            case IMPURE_PLATINUM -> paintImpurePile(0xE8E0D0);
+            case IMPURE_CHROMIUM -> paintImpurePile(0xC8B8B8);
+            case IMPURE_MANGANESE -> paintImpurePile(0x6A5A5A);
+            case IMPURE_BERYLLIUM -> paintImpurePile(0xD0D0E8);
+            case IMPURE_TITANIUM -> paintImpurePile(0xB8C8C8);
+            case IMPURE_URANIUM -> paintImpurePile(0x9AC870);
+            case IMPURE_PLUTONIUM -> paintImpurePile(0x6A8A5A);
+            case IMPURE_IRIDIUM -> paintImpurePile(0xE8E8F8);
+
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
     }
@@ -386,6 +406,33 @@ public class ItemTextures {
                 if (rnd.nextInt(100) < 45) {
                     int c = rnd.nextInt(2) == 0 ? color : shade(color, 0.75f);
                     img.setRGB(x, y, 0xFF000000 | c);
+                }
+            }
+        }
+        return img;
+    }
+
+    /** Impure ore pile: intermediate form between crushed ore and dust, with chunky irregular lumps. */
+    private static BufferedImage paintImpurePile(int color) {
+        BufferedImage img = blank();
+        long seed = ((long) color * 37) ^ 0x8BADF00D5CAFEBAL;
+        Random rnd = new Random(seed);
+        // Paint irregular lumps representing partially processed ore.
+        int lumps = 5 + rnd.nextInt(4);
+        for (int lump = 0; lump < lumps; lump++) {
+            int cx = 3 + rnd.nextInt(10);
+            int cy = 3 + rnd.nextInt(10);
+            int size = 1 + rnd.nextInt(2);
+            for (int dy = -size; dy <= size; dy++) {
+                for (int dx = -size; dx <= size; dx++) {
+                    int px = cx + dx, py = cy + dy;
+                    if (px >= 0 && px < SIZE && py >= 0 && py < SIZE) {
+                        float d = dx * dx + dy * dy;
+                        if (d <= size * size + 0.5f && rnd.nextFloat() < 0.7f) {
+                            int c = rnd.nextFloat() < 0.4f ? shade(color, 0.85f) : color;
+                            img.setRGB(px, py, 0xFF000000 | c);
+                        }
+                    }
                 }
             }
         }

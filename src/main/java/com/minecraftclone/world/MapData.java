@@ -44,18 +44,29 @@ public class MapData {
         exploredChunks.add(chunkKey);
 
         // Scan the chunk for ore veins (full-size ores only, not small ores)
+        // Group into 4x4 column cells to reduce density; keep at most one vein per ore type per cell
         List<OreVeinRecord> veins = new ArrayList<>();
         int baseX = chunkX * 16;
         int baseZ = chunkZ * 16;
 
-        for (int y = 5; y < 64; y++) {
-            for (int x = baseX; x < baseX + 16; x++) {
-                for (int z = baseZ; z < baseZ + 16; z++) {
-                    BlockType block = world.getBlock(x, y, z);
-                    if (isFullSizeOre(block)) {
-                        veins.add(new OreVeinRecord(x, y, z, block));
+        // 4x4 cells in a 16x16 chunk = 4x4 grid of cells
+        for (int cellX = 0; cellX < 4; cellX++) {
+            for (int cellZ = 0; cellZ < 4; cellZ++) {
+                int minX = baseX + cellX * 4;
+                int minZ = baseZ + cellZ * 4;
+                Map<BlockType, OreVeinRecord> cellVeins = new HashMap<>();
+
+                for (int y = 5; y < 64; y++) {
+                    for (int x = minX; x < minX + 4; x++) {
+                        for (int z = minZ; z < minZ + 4; z++) {
+                            BlockType block = world.getBlock(x, y, z);
+                            if (isFullSizeOre(block) && !cellVeins.containsKey(block)) {
+                                cellVeins.put(block, new OreVeinRecord(x, y, z, block));
+                            }
+                        }
                     }
                 }
+                veins.addAll(cellVeins.values());
             }
         }
 
@@ -115,7 +126,8 @@ public class MapData {
      */
     public void saveTo(Path file) {
         try {
-            Files.createDirectories(file.getParent());
+            Path parent = file.getParent();
+            if (parent != null) Files.createDirectories(parent);
             try (DataOutputStream out = new DataOutputStream(
                     new BufferedOutputStream(Files.newOutputStream(file)))) {
                 out.writeInt(SAVE_VERSION);
@@ -170,6 +182,10 @@ public class MapData {
             for (int i = 0; i < veinChunkCount; i++) {
                 long key = in.readLong();
                 int veinCount = in.readInt();
+                if (veinCount < 0 || veinCount > 100_000) {
+                    System.err.println("Corrupt map data: invalid vein count " + veinCount + ", skipping.");
+                    return;
+                }
                 List<OreVeinRecord> veins = new ArrayList<>(veinCount);
                 for (int j = 0; j < veinCount; j++) {
                     int x = in.readInt();
