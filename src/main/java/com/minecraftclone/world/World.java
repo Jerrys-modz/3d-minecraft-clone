@@ -722,10 +722,10 @@ public class World implements BlockAccessor {
                         }
                         // Lightning fire is transient: any saved mid-burn fire cells
                         // are cleared on reload rather than persisting forever.
-                        byte[] raw = chunk.getRawBlocks();
+                        short[] raw = chunk.getRawBlocks();
                         boolean hadFire = false;
                         for (int i = 0; i < raw.length; i++) {
-                            if ((raw[i] & 0xFF) == BlockType.FIRE.id) {
+                            if (raw[i] == BlockType.FIRE.id) {
                                 raw[i] = BlockType.AIR.id;
                                 hadFire = true;
                             }

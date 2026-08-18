@@ -261,7 +261,7 @@ public class Furnace implements BlockEntity, StorageContainer {
                 types[i] = null;
                 counts[i] = 0;
             } else {
-                types[i] = BlockType.byId((byte) id);
+                types[i] = BlockType.byId(id);
                 counts[i] = count;
             }
         }

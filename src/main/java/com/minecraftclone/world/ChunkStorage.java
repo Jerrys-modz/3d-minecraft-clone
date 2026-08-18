@@ -42,13 +42,13 @@ public class ChunkStorage {
     public interface PersistableChunk {
         ChunkPos getPos();
 
-        byte[] getRawBlocks();
+        short[] getRawBlocks();
 
-        void setRawBlocks(byte[] data);
+        void setRawBlocks(short[] data);
 
-        byte[] getRawOverlays();
+        short[] getRawOverlays();
 
-        void setRawOverlays(byte[] data);
+        void setRawOverlays(short[] data);
 
         byte[] getRawOrientations();
 
@@ -86,30 +86,63 @@ public class ChunkStorage {
      * entities that were saved in the chunk (empty for files from before block
      * entities existed); the caller registers them back into the world.
      */
+    /**
+     * Magic byte written at the start of a new-format (short-array) chunk file.
+     * Old files (byte-array) do not start with this byte, so we can detect format.
+     * Value 0x53 = 'S' for Short. Any block-id byte value 0x53 (= 83 = WOOD_HAMMER,
+     * an inventory-only item never placed in the world) is safe as a sentinel.
+     */
+    private static final byte SHORT_FORMAT_MAGIC = 0x53;
+
     public List<BlockEntitySave> load(PersistableChunk chunk) {
         Path file = fileFor(chunk.getPos());
         List<BlockEntitySave> entities = new ArrayList<>();
         try (InputStream in = new GZIPInputStream(Files.newInputStream(file))) {
             byte[] data = in.readAllBytes();
-            int blockLen = chunk.getRawBlocks().length;
-            // A file from before overlays existed is just the blocks half - still
-            // loads fine, every cell just defaults to no overlay.
-            byte[] blockData = data.length >= blockLen ? java.util.Arrays.copyOfRange(data, 0, blockLen) : data;
-            chunk.setRawBlocks(blockData);
-            int overlayLen = chunk.getRawOverlays().length;
-            if (data.length >= blockLen + overlayLen) {
-                byte[] overlayData = java.util.Arrays.copyOfRange(data, blockLen, blockLen + overlayLen);
-                chunk.setRawOverlays(overlayData);
-            }
+            int nBlocks = chunk.getRawBlocks().length; // number of block cells
             int orientLen = chunk.getRawOrientations().length;
-            if (data.length >= blockLen + overlayLen + orientLen) {
-                byte[] orientData = java.util.Arrays.copyOfRange(data, blockLen + overlayLen, blockLen + overlayLen + orientLen);
+
+            int entityOffset;
+            if (data.length > 0 && data[0] == SHORT_FORMAT_MAGIC) {
+                // New format: magic byte + short arrays (2 bytes per cell) + byte orientations
+                DataInputStream d2 = new DataInputStream(new ByteArrayInputStream(data, 1, data.length - 1));
+                short[] blocks = new short[nBlocks];
+                for (int i = 0; i < nBlocks; i++) blocks[i] = d2.readShort();
+                chunk.setRawBlocks(blocks);
+                short[] overlays = new short[nBlocks];
+                for (int i = 0; i < nBlocks; i++) overlays[i] = d2.readShort();
+                chunk.setRawOverlays(overlays);
+                byte[] orientData = new byte[orientLen];
+                d2.readFully(orientData);
                 chunk.setRawOrientations(orientData);
+                entityOffset = 1 + nBlocks * 2 + nBlocks * 2 + orientLen;
+            } else {
+                // Old byte format (backward compatibility with pre-short saves)
+                short[] blocks = new short[nBlocks];
+                for (int i = 0; i < Math.min(nBlocks, data.length); i++) {
+                    blocks[i] = (short) (data[i] & 0xFF);
+                }
+                chunk.setRawBlocks(blocks);
+                int overlayStart = nBlocks;
+                if (data.length >= nBlocks + nBlocks) {
+                    short[] overlays = new short[nBlocks];
+                    for (int i = 0; i < nBlocks; i++) {
+                        overlays[i] = (short) (data[overlayStart + i] & 0xFF);
+                    }
+                    chunk.setRawOverlays(overlays);
+                }
+                int orientStart = nBlocks + nBlocks;
+                if (data.length >= orientStart + orientLen) {
+                    byte[] orientData = java.util.Arrays.copyOfRange(data, orientStart, orientStart + orientLen);
+                    chunk.setRawOrientations(orientData);
+                }
+                entityOffset = nBlocks + nBlocks + orientLen;
             }
+
             // A file from before block entities existed has no tail section.
-            int offset = blockLen + overlayLen + orientLen;
-            if (data.length >= offset + 4) {
-                DataInputStream d = new DataInputStream(new ByteArrayInputStream(data, offset, data.length - offset));
+            if (data.length >= entityOffset + 4) {
+                DataInputStream d = new DataInputStream(
+                        new ByteArrayInputStream(data, entityOffset, data.length - entityOffset));
                 int count = d.readInt();
                 for (int i = 0; i < count; i++) {
                     String type = d.readUTF();
@@ -143,26 +176,27 @@ public class ChunkStorage {
 
     public void save(PersistableChunk chunk, List<BlockEntitySave> entities) {
         Path file = fileFor(chunk.getPos());
-        try (OutputStream out = new GZIPOutputStream(Files.newOutputStream(file))) {
-            out.write(chunk.getRawBlocks());
-            out.write(chunk.getRawOverlays());
+        try (OutputStream rawOut = new GZIPOutputStream(Files.newOutputStream(file))) {
+            DataOutputStream out = new DataOutputStream(rawOut);
+            out.writeByte(SHORT_FORMAT_MAGIC);
+            for (short s : chunk.getRawBlocks()) out.writeShort(s);
+            for (short s : chunk.getRawOverlays()) out.writeShort(s);
             out.write(chunk.getRawOrientations());
-            DataOutputStream d = new DataOutputStream(out);
-            d.writeInt(entities.size());
+            out.writeInt(entities.size());
             for (BlockEntitySave es : entities) {
-                d.writeUTF(es.entity().type());
-                d.writeInt(es.x());
-                d.writeInt(es.y());
-                d.writeInt(es.z());
+                out.writeUTF(es.entity().type());
+                out.writeInt(es.x());
+                out.writeInt(es.y());
+                out.writeInt(es.z());
                 // Length-prefixed payload: lets an unknown type on load skip
                 // exactly its own bytes without breaking the rest of the file.
                 ByteArrayOutputStream payload = new ByteArrayOutputStream();
                 es.entity().writeTo(new DataOutputStream(payload));
                 byte[] bytes = payload.toByteArray();
-                d.writeInt(bytes.length);
-                d.write(bytes);
+                out.writeInt(bytes.length);
+                out.write(bytes);
             }
-            d.flush();
+            out.flush();
         } catch (IOException e) {
             System.err.println("Failed to save chunk " + chunk.getPos() + ": " + e.getMessage());
         }
