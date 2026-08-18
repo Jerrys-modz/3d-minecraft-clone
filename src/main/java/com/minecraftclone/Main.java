@@ -16,6 +16,7 @@ import com.minecraftclone.engine.graphics.MobTextures;
 import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.engine.graphics.WeatherRenderer;
+import com.minecraftclone.engine.MapRenderer;
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.CraftingGrid;
@@ -545,6 +546,9 @@ public class Main {
         MiningController mining = new MiningController();
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
         float[] attackCooldown = {0f}; // time until the next mob hit can land
+        MapRenderer[] mapRenderer = {null}; // initialized when world is created
+        int[] lastChunkX = {Integer.MIN_VALUE}; // last explored chunk X (to detect chunk changes)
+        int[] lastChunkZ = {Integer.MIN_VALUE}; // last explored chunk Z
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
         float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
         float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
@@ -632,6 +636,7 @@ public class Main {
             }
             currentDim[0] = DimensionType.OVERWORLD;
             world = worlds[currentDim[0].ordinal()];
+            mapRenderer[0] = new MapRenderer(world.getMapData());
             startCalendar(dayNightCycle, calendar, genSettings);
             for (World w : worlds) {
                 w.setRenderDistance(settings.getRenderDistance());
@@ -1142,6 +1147,7 @@ public class Main {
                                 }
                                 currentDim[0] = DimensionType.OVERWORLD;
                                 world = worlds[currentDim[0].ordinal()];
+                                mapRenderer[0] = new MapRenderer(world.getMapData());
                                 startCalendar(dayNightCycle, calendar, genSettings);
                                 for (World w : worlds) {
                                     w.setRenderDistance(settings.getRenderDistance());
@@ -1202,6 +1208,7 @@ public class Main {
                             }
                             currentDim[0] = DimensionType.OVERWORLD;
                             world = worlds[currentDim[0].ordinal()];
+                            mapRenderer[0] = new MapRenderer(world.getMapData());
                             startCalendar(dayNightCycle, calendar, genSettings);
                             for (World w : worlds) {
                                 w.setRenderDistance(settings.getRenderDistance());
@@ -1416,6 +1423,16 @@ public class Main {
                 float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
                 player.update(dt, input, world, coldFactor);
 
+                // Track chunk exploration for the map
+                Vector3f playerPos_forChunk = player.getPosition();
+                int chunkX = World.worldToChunk((int) Math.floor(playerPos_forChunk.x));
+                int chunkZ = World.worldToChunk((int) Math.floor(playerPos_forChunk.z));
+                if (chunkX != lastChunkX[0] || chunkZ != lastChunkZ[0]) {
+                    world.getMapData().exploreChunk(chunkX, chunkZ, world);
+                    lastChunkX[0] = chunkX;
+                    lastChunkZ[0] = chunkZ;
+                }
+
                 // Dimension portals: walking into a NETHER_PORTAL or END_PORTAL block
                 // teleports the player to the linked dimension (with a short cooldown
                 // so they don't instantly bounce back through the arrival portal).
@@ -1429,6 +1446,7 @@ public class Main {
                     if (portal.isPortal()) {
                         teleportThroughPortal(player, worlds, currentDim, portal);
                         world = worlds[currentDim[0].ordinal()];
+                        mapRenderer[0] = new MapRenderer(world.getMapData());
                         teleportCooldown[0] = PORTAL_COOLDOWN_SECONDS;
                         showMessage(messages, "Welcome to " + currentDim[0].displayName(),
                                 new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
@@ -1891,6 +1909,11 @@ public class Main {
                 }
                 hud.renderCrosshair(window.getAspectRatio());
                 hud.renderHotbar(atlas, itemTextures, player.getDurability(), player.getInventory(), selectedSlot[0], window.getAspectRatio());
+                // Render mini-map in top-right corner
+                if (mapRenderer[0] != null) {
+                    java.awt.image.BufferedImage miniMapImage = mapRenderer[0].renderMiniMap(player.getPosition().x, player.getPosition().z);
+                    hud.renderMiniMap(miniMapImage, 0.2f, 0.2f, 0.9f, 0.9f, window.getAspectRatio());
+                }
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
                 if (!settings.getGameMode().isInvulnerable()) {
                     hud.renderStatusBars(

@@ -55,6 +55,7 @@ public class World implements BlockAccessor {
     private final TextureAtlas atlas;
     private final ChunkStorage storage;
     private final DimensionType dimension;
+    private final MapData mapData = new MapData();
 
     private int renderDistance = 6;
     private boolean leavesTransparent = false;
@@ -166,6 +167,10 @@ public class World implements BlockAccessor {
 
     public DimensionType getDimension() {
         return dimension;
+    }
+
+    public MapData getMapData() {
+        return mapData;
     }
 
     /** Packs chunk-grid coordinates into a single key. {@code chunkZ} is masked so negative coordinates stay unique. */

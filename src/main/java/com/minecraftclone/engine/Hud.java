@@ -4,6 +4,7 @@ import com.minecraftclone.Settings;
 import com.minecraftclone.engine.GamepadBindings;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.GLTexture;
 import com.minecraftclone.engine.graphics.GuiTextures;
 import com.minecraftclone.engine.graphics.IconMesh;
 import com.minecraftclone.engine.graphics.ItemTextures;
@@ -31,6 +32,8 @@ import org.joml.Vector4f;
 import java.util.List;
 
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
+import static org.lwjgl.opengl.GL13.glActiveTexture;
 
 /**
  * Draws all 2D overlay elements: the crosshair, the wireframe outline around
@@ -1980,6 +1983,50 @@ public class Hud {
         drawCenteredText("Creative    Click: add to cursor    Shift-click: to hotbar    X: delete",
                 0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
+     * Renders a mini-map image in the top-right corner of the screen.
+     * The image is rendered as a simple 2D quad with the given dimensions.
+     */
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, float sizeX, float sizeY, float offsetX, float offsetY, float aspectRatio) {
+        if (miniMapImage == null) return;
+
+        glDisable(GL_DEPTH_TEST);
+        int textureId = com.minecraftclone.engine.graphics.GLTexture.upload(miniMapImage);
+
+        // Position in logical square: top-right corner
+        // offsetX, offsetY are in logical units (e.g., -0.95f for 5% from edge)
+        float minX = offsetX - sizeX / 2f;
+        float maxX = offsetX + sizeX / 2f;
+        float minY = offsetY - sizeY / 2f;
+        float maxY = offsetY + sizeY / 2f;
+
+        // Create a simple quad mesh for the mini-map
+        float[] verts = {
+            minX, minY, 0, 0, 0,  // bottom-left
+            maxX, minY, 0, 1, 0,  // bottom-right
+            maxX, maxY, 0, 1, 1,  // top-right
+            minX, maxY, 0, 0, 1,  // top-left
+        };
+        int[] inds = {0, 1, 2, 0, 2, 3};
+
+        IconMesh tempMesh = new IconMesh();
+        tempMesh.upload(verts, inds);
+
+        hudShader.bind();
+        hudShader.setUniform("transform", new Matrix4f().identity().scale(1f / aspectRatio, 1f, 1f));
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureId);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", new Vector4f(1f, 1f, 1f, 1f));
+        tempMesh.render();
+        hudShader.unbind();
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glDeleteTextures(textureId);
+        tempMesh.destroy();
         glEnable(GL_DEPTH_TEST);
     }
 
