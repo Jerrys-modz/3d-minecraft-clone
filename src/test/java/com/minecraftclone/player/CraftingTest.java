@@ -247,4 +247,30 @@ class CraftingTest {
         assertEquals(BlockType.WOODEN_FENCE, r.output());
         assertEquals(3, r.outputAmount());
     }
+
+    @Test
+    void shapedSticksFromPlanksIn3x3Grid() {
+        // Basic 2x2 shaped recipe (sticks from planks) submitted as 9-cell grid
+        // Pattern: "P.. / P.. / ..." (2 planks vertical -> 4 sticks)
+        BlockType[] grid = new BlockType[9];
+        grid[0] = BlockType.PLANKS;
+        grid[3] = BlockType.PLANKS;
+        Crafting.Recipe r = Crafting.match3x3(grid);
+        assertNotNull(r, "Sticks recipe should match in 3x3 grid");
+        assertEquals(BlockType.STICK, r.output());
+        assertEquals(4, r.outputAmount());
+    }
+
+    @Test
+    void shapelessGlassFromSandIn3x3Grid() {
+        // Basic 2x2 shapeless recipe (glass from sand) submitted as 9-cell grid
+        // Any arrangement of 2 sand -> 1 glass
+        BlockType[] grid = new BlockType[9];
+        grid[2] = BlockType.SAND;
+        grid[5] = BlockType.SAND;
+        Crafting.Recipe r = Crafting.match3x3(grid);
+        assertNotNull(r, "Glass recipe should match in 3x3 grid");
+        assertEquals(BlockType.GLASS, r.output());
+        assertEquals(1, r.outputAmount());
+    }
 }
