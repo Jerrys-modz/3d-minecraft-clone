@@ -161,6 +161,11 @@ public class Hud {
     private int cachedMiniMapTextureId = -1;
     private final IconMesh miniMapMesh = new IconMesh();
 
+    // Cached full-screen map resources.
+    private java.awt.image.BufferedImage cachedFullMapImage;
+    private int cachedFullMapTextureId = -1;
+    private final IconMesh fullMapMesh = new IconMesh();
+
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
     private final FloatArray blockVertices = new FloatArray(1024);
@@ -2045,6 +2050,52 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    /**
+     * Renders the full-screen map image, filling the entire viewport.
+     * Pass {@code null} to clear the cached texture (e.g. when closing the map).
+     */
+    public void renderFullMap(java.awt.image.BufferedImage mapImage) {
+        if (mapImage == null) {
+            if (cachedFullMapTextureId >= 0) {
+                glDeleteTextures(cachedFullMapTextureId);
+                cachedFullMapTextureId = -1;
+                fullMapMesh.destroy();
+            }
+            cachedFullMapImage = null;
+            return;
+        }
+
+        if (cachedFullMapImage != mapImage) {
+            if (cachedFullMapTextureId >= 0) {
+                glDeleteTextures(cachedFullMapTextureId);
+            }
+            cachedFullMapTextureId = GLTexture.upload(mapImage);
+            cachedFullMapImage = mapImage;
+
+            // Full-screen quad: NDC −1..+1 in both axes, UV 0..1
+            float[] verts = {
+                -1f, -1f, 0f, 0f, 0f,
+                 1f, -1f, 0f, 1f, 0f,
+                 1f,  1f, 0f, 1f, 1f,
+                -1f,  1f, 0f, 0f, 1f,
+            };
+            int[] inds = {0, 1, 2, 0, 2, 3};
+            fullMapMesh.upload(verts, inds);
+        }
+
+        glDisable(GL_DEPTH_TEST);
+        hudShader.bind();
+        hudShader.setUniform("transform", new Matrix4f().identity());
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, cachedFullMapTextureId);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", new Vector4f(1f, 1f, 1f, 1f));
+        fullMapMesh.render();
+        hudShader.unbind();
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glEnable(GL_DEPTH_TEST);
+    }
+
     public void destroy() {
         crosshair.destroy();
         cubeOutline.destroy();
@@ -2071,5 +2122,10 @@ public class Hud {
             cachedMiniMapTextureId = -1;
         }
         miniMapMesh.destroy();
+        if (cachedFullMapTextureId >= 0) {
+            glDeleteTextures(cachedFullMapTextureId);
+            cachedFullMapTextureId = -1;
+        }
+        fullMapMesh.destroy();
     }
 }

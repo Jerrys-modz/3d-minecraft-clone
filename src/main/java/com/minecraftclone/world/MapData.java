@@ -1,5 +1,7 @@
 package com.minecraftclone.world;
 
+import java.io.*;
+import java.nio.file.*;
 import java.util.*;
 
 /**
@@ -99,6 +101,95 @@ public class MapData {
      */
     private static long encodeChunkKey(int chunkX, int chunkZ) {
         return ((long) chunkX & 0xFFFFFFFFL) | (((long) chunkZ & 0xFFFFFFFFL) << 32);
+    }
+
+    // ── Persistence ───────────────────────────────────────────────────────────
+
+    private static final int SAVE_VERSION = 1;
+
+    /**
+     * Persist explored-chunk and vein data to disk. Called when switching
+     * dimensions or returning to the main menu so exploration is not lost.
+     *
+     * @param file target file path (created along with any missing parent dirs)
+     */
+    public void saveTo(Path file) {
+        try {
+            Files.createDirectories(file.getParent());
+            try (DataOutputStream out = new DataOutputStream(
+                    new BufferedOutputStream(Files.newOutputStream(file)))) {
+                out.writeInt(SAVE_VERSION);
+
+                // Explored chunk keys
+                out.writeInt(exploredChunks.size());
+                for (long key : exploredChunks) {
+                    out.writeLong(key);
+                }
+
+                // Vein records per chunk
+                out.writeInt(veinsByChunk.size());
+                for (Map.Entry<Long, List<OreVeinRecord>> entry : veinsByChunk.entrySet()) {
+                    out.writeLong(entry.getKey());
+                    List<OreVeinRecord> veins = entry.getValue();
+                    out.writeInt(veins.size());
+                    for (OreVeinRecord vein : veins) {
+                        out.writeInt(vein.worldX);
+                        out.writeInt(vein.worldY);
+                        out.writeInt(vein.worldZ);
+                        out.writeUTF(vein.oreType.name());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to save map data to " + file + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Load previously saved exploration data from disk. Ignores the file
+     * gracefully if it does not exist (new world) or its format is unknown.
+     *
+     * @param file the map data file to load
+     */
+    public void loadFrom(Path file) {
+        if (!Files.exists(file)) return;
+        try (DataInputStream in = new DataInputStream(
+                new BufferedInputStream(Files.newInputStream(file)))) {
+            int version = in.readInt();
+            if (version != SAVE_VERSION) {
+                System.err.println("Unknown map data version " + version + ", skipping.");
+                return;
+            }
+
+            int chunkCount = in.readInt();
+            for (int i = 0; i < chunkCount; i++) {
+                exploredChunks.add(in.readLong());
+            }
+
+            int veinChunkCount = in.readInt();
+            for (int i = 0; i < veinChunkCount; i++) {
+                long key = in.readLong();
+                int veinCount = in.readInt();
+                List<OreVeinRecord> veins = new ArrayList<>(veinCount);
+                for (int j = 0; j < veinCount; j++) {
+                    int x = in.readInt();
+                    int y = in.readInt();
+                    int z = in.readInt();
+                    String typeName = in.readUTF();
+                    try {
+                        BlockType type = BlockType.valueOf(typeName);
+                        veins.add(new OreVeinRecord(x, y, z, type));
+                    } catch (IllegalArgumentException ignored) {
+                        // Block type removed/renamed; skip the vein.
+                    }
+                }
+                if (!veins.isEmpty()) {
+                    veinsByChunk.put(key, veins);
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to load map data from " + file + ": " + e.getMessage());
+        }
     }
 
     /**
