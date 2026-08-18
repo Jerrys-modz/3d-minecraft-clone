@@ -299,6 +299,21 @@ public class World implements BlockAccessor {
             promoteIfStaticFluid(worldX, worldY - 1, worldZ);
             promoteIfStaticFluid(worldX, worldY, worldZ + 1);
             promoteIfStaticFluid(worldX, worldY, worldZ - 1);
+
+            // Cactus blocks lose support when the block below is removed - break all
+            // stacked cactus above to simulate gravity (they fall and break).
+            if (old == BlockType.CACTUS) {
+                breakStackedCactus(worldX, worldY + 1, worldZ);
+            }
+        }
+    }
+
+    /** Recursively break cactus blocks stacked on top of each other. */
+    private void breakStackedCactus(int x, int y, int z) {
+        BlockType block = getBlock(x, y, z);
+        if (block == BlockType.CACTUS) {
+            setBlock(x, y, z, BlockType.AIR);
+            breakStackedCactus(x, y + 1, z);
         }
     }
 
