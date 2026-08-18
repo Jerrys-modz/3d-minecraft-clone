@@ -141,8 +141,8 @@ public enum BlockType {
     ROTTEN_FLESH(68, 4),
     BONES(69, 0),
     // Wool - sheared from sheep (see World.damageMob). The material fur armor is
-    // made from, and a warm clothing resource in its own right.
-    WOOL(115, 0),
+    // made from, and a warm clothing resource in its own right. Placeable as a block.
+    WOOL(115, true, false, 59, 59, 59),
     // Snow-capped slabs: a bottom-half slab that's been covered by accumulating
     // snow (see World.tryAddSnow). Full-height solid blocks that MESH as a slab
     // under a snow cap, so the snow sits flush rather than floating above the
