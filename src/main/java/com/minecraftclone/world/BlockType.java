@@ -375,9 +375,234 @@ public enum BlockType {
     // Late-game impure ores (3 ores - skipping THORIUM)
     IMPURE_URANIUM(253, 0),
     IMPURE_PLUTONIUM(254, 0),
-    IMPURE_IRIDIUM(255, 0);
+    IMPURE_IRIDIUM(255, 0),
 
-    public final byte id;
+    // --- New GTNH Compound Ores (Phase 2): 60 ore types ---
+    // Block IDs 256+, atlas tiles 120-179 for ore blocks, 180-219 for small ores
+    // Ores 1-22 and 24-40 have SMALL_ variants; Ferberite (#23) and Naquadah Enriched (#36) do not.
+
+    MAGNETITE_ORE(256, true, false, 120, 120, 120),
+    CRUSHED_MAGNETITE(257, 0),
+    SMALL_MAGNETITE_ORE(258, true, false, 180, 180, 180),
+
+    HEMATITE_ORE(259, true, false, 121, 121, 121),
+    CRUSHED_HEMATITE(260, 0),
+    SMALL_HEMATITE_ORE(261, true, false, 181, 181, 181),
+
+    BROWN_LIMONITE_ORE(262, true, false, 122, 122, 122),
+    CRUSHED_BROWN_LIMONITE(263, 0),
+    SMALL_BROWN_LIMONITE_ORE(264, true, false, 182, 182, 182),
+
+    YELLOW_LIMONITE_ORE(265, true, false, 123, 123, 123),
+    CRUSHED_YELLOW_LIMONITE(266, 0),
+    SMALL_YELLOW_LIMONITE_ORE(267, true, false, 183, 183, 183),
+
+    BANDED_IRON_ORE(268, true, false, 124, 124, 124),
+    CRUSHED_BANDED_IRON(269, 0),
+    SMALL_BANDED_IRON_ORE(270, true, false, 184, 184, 184),
+
+    VANADIUM_MAGNETITE_ORE(271, true, false, 125, 125, 125),
+    CRUSHED_VANADIUM_MAGNETITE(272, 0),
+    SMALL_VANADIUM_MAGNETITE_ORE(273, true, false, 185, 185, 185),
+
+    CHALCOPYRITE_ORE(274, true, false, 126, 126, 126),
+    CRUSHED_CHALCOPYRITE(275, 0),
+    SMALL_CHALCOPYRITE_ORE(276, true, false, 186, 186, 186),
+
+    TETRAHEDRITE_ORE(277, true, false, 127, 127, 127),
+    CRUSHED_TETRAHEDRITE(278, 0),
+    SMALL_TETRAHEDRITE_ORE(279, true, false, 187, 187, 187),
+
+    MALACHITE_ORE(280, true, false, 128, 128, 128),
+    CRUSHED_MALACHITE(281, 0),
+    SMALL_MALACHITE_ORE(282, true, false, 188, 188, 188),
+
+    GALENA_ORE(283, true, false, 129, 129, 129),
+    CRUSHED_GALENA(284, 0),
+    SMALL_GALENA_ORE(285, true, false, 189, 189, 189),
+
+    SPHALERITE_ORE(286, true, false, 130, 130, 130),
+    CRUSHED_SPHALERITE(287, 0),
+    SMALL_SPHALERITE_ORE(288, true, false, 190, 190, 190),
+
+    GARNIERITE_ORE(289, true, false, 131, 131, 131),
+    CRUSHED_GARNIERITE(290, 0),
+    SMALL_GARNIERITE_ORE(291, true, false, 191, 191, 191),
+
+    PENTLANDITE_ORE(292, true, false, 132, 132, 132),
+    CRUSHED_PENTLANDITE(293, 0),
+    SMALL_PENTLANDITE_ORE(294, true, false, 192, 192, 192),
+
+    COBALTITE_ORE(295, true, false, 133, 133, 133),
+    CRUSHED_COBALTITE(296, 0),
+    SMALL_COBALTITE_ORE(297, true, false, 193, 193, 193),
+
+    PYRITE_ORE(298, true, false, 134, 134, 134),
+    CRUSHED_PYRITE(299, 0),
+    SMALL_PYRITE_ORE(300, true, false, 194, 194, 194),
+
+    ARSENOPYRITE_ORE(301, true, false, 135, 135, 135),
+    CRUSHED_ARSENOPYRITE(302, 0),
+    SMALL_ARSENOPYRITE_ORE(303, true, false, 195, 195, 195),
+
+    SULFUR_ORE(304, true, false, 136, 136, 136),
+    CRUSHED_SULFUR(305, 0),
+    SMALL_SULFUR_ORE(306, true, false, 196, 196, 196),
+
+    CINNABAR_ORE(307, true, false, 137, 137, 137),
+    CRUSHED_CINNABAR(308, 0),
+    SMALL_CINNABAR_ORE(309, true, false, 197, 197, 197),
+
+    CASSITERITE_ORE(310, true, false, 138, 138, 138),
+    CRUSHED_CASSITERITE(311, 0),
+    SMALL_CASSITERITE_ORE(312, true, false, 198, 198, 198),
+
+    SCHEELITE_ORE(313, true, false, 139, 139, 139),
+    CRUSHED_SCHEELITE(314, 0),
+    SMALL_SCHEELITE_ORE(315, true, false, 199, 199, 199),
+
+    WOLFRAMITE_ORE(316, true, false, 140, 140, 140),
+    CRUSHED_WOLFRAMITE(317, 0),
+    SMALL_WOLFRAMITE_ORE(318, true, false, 200, 200, 200),
+
+    MOLYBDENITE_ORE(319, true, false, 141, 141, 141),
+    CRUSHED_MOLYBDENITE(320, 0),
+    SMALL_MOLYBDENITE_ORE(321, true, false, 201, 201, 201),
+
+    CHROMITE_ORE(322, true, false, 143, 143, 143),
+    CRUSHED_CHROMITE(323, 0),
+    SMALL_CHROMITE_ORE(324, true, false, 202, 202, 202),
+
+    ILMENITE_ORE(325, true, false, 144, 144, 144),
+    CRUSHED_ILMENITE(326, 0),
+    SMALL_ILMENITE_ORE(327, true, false, 203, 203, 203),
+
+    RUTILE_ORE(328, true, false, 145, 145, 145),
+    CRUSHED_RUTILE(329, 0),
+    SMALL_RUTILE_ORE(330, true, false, 204, 204, 204),
+
+    URANINITE_ORE(331, true, false, 146, 146, 146),
+    CRUSHED_URANINITE(332, 0),
+    SMALL_URANINITE_ORE(333, true, false, 205, 205, 205),
+
+    PITCHBLENDE_ORE(334, true, false, 147, 147, 147),
+    CRUSHED_PITCHBLENDE(335, 0),
+    SMALL_PITCHBLENDE_ORE(336, true, false, 206, 206, 206),
+
+    MONAZITE_ORE(337, true, false, 148, 148, 148),
+    CRUSHED_MONAZITE(338, 0),
+    SMALL_MONAZITE_ORE(339, true, false, 207, 207, 207),
+
+    BASTNASITE_ORE(340, true, false, 149, 149, 149),
+    CRUSHED_BASTNASITE(341, 0),
+    SMALL_BASTNASITE_ORE(342, true, false, 208, 208, 208),
+
+    VANADINITE_ORE(343, true, false, 150, 150, 150),
+    CRUSHED_VANADINITE(344, 0),
+    SMALL_VANADINITE_ORE(345, true, false, 209, 209, 209),
+
+    PYROLUSITE_ORE(346, true, false, 151, 151, 151),
+    CRUSHED_PYROLUSITE(347, 0),
+    SMALL_PYROLUSITE_ORE(348, true, false, 210, 210, 210),
+
+    GRAPHITE_ORE(349, true, false, 152, 152, 152),
+    CRUSHED_GRAPHITE(350, 0),
+    SMALL_GRAPHITE_ORE(351, true, false, 211, 211, 211),
+
+    LITHIUM_ORE(352, true, false, 153, 153, 153),
+    CRUSHED_LITHIUM(353, 0),
+    SMALL_LITHIUM_ORE(354, true, false, 212, 212, 212),
+
+    NAQUADAH_ORE(355, true, false, 154, 154, 154),
+    CRUSHED_NAQUADAH(356, 0),
+    SMALL_NAQUADAH_ORE(357, true, false, 213, 213, 213),
+
+    NAQUADAH_ENRICHED_ORE(358, true, false, 155, 155, 155),
+    CRUSHED_NAQUADAH_ENRICHED(359, 0),
+
+    TRINIUM_ORE(360, true, false, 156, 156, 156),
+    CRUSHED_TRINIUM(361, 0),
+    SMALL_TRINIUM_ORE(362, true, false, 214, 214, 214),
+
+    NEODYMIUM_ORE(363, true, false, 157, 157, 157),
+    CRUSHED_NEODYMIUM(364, 0),
+    SMALL_NEODYMIUM_ORE(365, true, false, 215, 215, 215),
+
+    CERIUM_ORE(366, true, false, 158, 158, 158),
+    CRUSHED_CERIUM(367, 0),
+    SMALL_CERIUM_ORE(368, true, false, 216, 216, 216),
+
+    OSMIUM_ORE(369, true, false, 159, 159, 159),
+    CRUSHED_OSMIUM(370, 0),
+    SMALL_OSMIUM_ORE(371, true, false, 217, 217, 217),
+
+    PALLADIUM_ORE(372, true, false, 160, 160, 160),
+    CRUSHED_PALLADIUM(373, 0),
+    SMALL_PALLADIUM_ORE(374, true, false, 218, 218, 218),
+
+    CALCITE_ORE(375, true, false, 161, 161, 161),
+    CRUSHED_CALCITE(376, 0),
+
+    OLIVINE_ORE(377, true, false, 162, 162, 162),
+    CRUSHED_OLIVINE(378, 0),
+
+    TALC_ORE(379, true, false, 163, 163, 163),
+    CRUSHED_TALC(380, 0),
+
+    BENTONITE_ORE(381, true, false, 164, 164, 164),
+    CRUSHED_BENTONITE(382, 0),
+
+    SODALITE_ORE(383, true, false, 165, 165, 165),
+    CRUSHED_SODALITE(384, 0),
+
+    LAZURITE_ORE(385, true, false, 166, 166, 166),
+    CRUSHED_LAZURITE(386, 0),
+
+    SALT_ORE(387, true, false, 167, 167, 167),
+    CRUSHED_SALT(388, 0),
+
+    ROCK_SALT_ORE(389, true, false, 168, 168, 168),
+    CRUSHED_ROCK_SALT(390, 0),
+
+    SALTPETER_ORE(391, true, false, 169, 169, 169),
+    CRUSHED_SALTPETER(392, 0),
+
+    BORAX_ORE(393, true, false, 170, 170, 170),
+    CRUSHED_BORAX(394, 0),
+
+    APATITE_ORE(395, true, false, 171, 171, 171),
+    CRUSHED_APATITE(396, 0),
+
+    PHOSPHATE_ORE(397, true, false, 172, 172, 172),
+    CRUSHED_PHOSPHATE(398, 0),
+
+    PYROCHLORE_ORE(399, true, false, 173, 173, 173),
+    CRUSHED_PYROCHLORE(400, 0),
+
+    LEPIDOLITE_ORE(401, true, false, 174, 174, 174),
+    CRUSHED_LEPIDOLITE(402, 0),
+
+    RUBY_ORE(403, true, false, 175, 175, 175),
+    CRUSHED_RUBY(404, 0),
+    SMALL_RUBY_ORE(405, true, false, 219, 219, 219),
+
+    SAPPHIRE_ORE(406, true, false, 176, 176, 176),
+    CRUSHED_SAPPHIRE(407, 0),
+
+    GREEN_SAPPHIRE_ORE(408, true, false, 177, 177, 177),
+    CRUSHED_GREEN_SAPPHIRE(409, 0),
+
+    PYROPE_ORE(410, true, false, 178, 178, 178),
+    CRUSHED_PYROPE(411, 0),
+
+    SPESSARTINE_ORE(412, true, false, 179, 179, 179),
+    CRUSHED_SPESSARTINE(413, 0),
+
+    // Ferberite: ore #23 in the table (atlas tile 142), added after the main sequence
+    FERBERITE_ORE(414, true, false, 142, 142, 142),
+    CRUSHED_FERBERITE(415, 0);
+
+    public final short id;
     public final boolean solid;
     public final boolean transparent;
     public final boolean cross;
@@ -424,7 +649,7 @@ public enum BlockType {
 
     /** Full-cube block with a distinct front face that also changes while active (a lit furnace mouth). */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int frontTile, int litFrontTile, int foodValue, int lightLevel) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = solid;
         this.transparent = transparent;
         this.cross = false;
@@ -449,7 +674,7 @@ public enum BlockType {
 
     /** Bottom-half slab: a partial cube, one atlas tile for all faces, colliding only in its lower half. */
     BlockType(int id, boolean solid, boolean transparent, boolean slab, int tile) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = solid;
         this.transparent = transparent;
         this.cross = false;
@@ -469,7 +694,7 @@ public enum BlockType {
 
     /** Stairs or fence: a partial-cube block with custom meshing and custom collision boxes. */
     BlockType(int id, int tile, boolean stair, boolean fence, float collisionHeight) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = true;
         this.transparent = false;
         this.cross = false;
@@ -489,7 +714,7 @@ public enum BlockType {
 
     /** Half-height directional block (like a bed): distinct front face, half collision height. */
     BlockType(int id, int topTile, int sideTile, int bottomTile, int frontTile, int litFrontTile, float collisionHeight) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = true;
         this.transparent = false;
         this.cross = false;
@@ -514,7 +739,7 @@ public enum BlockType {
 
     /** Cross-shaped world decoration that's also a light source, e.g. a torch. */
     BlockType(int id, boolean solid, boolean transparent, int tile, int lightLevel) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = solid;
         this.transparent = transparent;
         this.cross = true;
@@ -534,7 +759,7 @@ public enum BlockType {
 
     /** Inventory-only item (tool, or foraged food like apple/berries): no atlas tile, has its own procedurally generated texture, never placeable as a world block. */
     BlockType(int id, int foodValue) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = false;
         this.transparent = true;
         this.cross = false;
@@ -552,17 +777,18 @@ public enum BlockType {
         this.collisionHeight = 1.0f;
     }
 
-    // Sparse id lookup over the whole unsigned-byte range (0-255). Block ids are
-    // persisted as raw bytes, so ids above 127 wrap negative as Java bytes but
-    // recover cleanly via the & 0xFF mask here (both when building the table and
-    // when reading one back). ids don't have to be a dense 0..N-1 range (e.g.
+    // Sparse id lookup over the short range (0-4095 used). Block ids are
+    // persisted as raw shorts; ids don't have to be a dense 0..N-1 range (e.g.
     // slabs use 44/45 while other features may take 39-43); unused slots stay null.
     private static final BlockType[] BY_ID;
 
     static {
-        BY_ID = new BlockType[256];
+        BY_ID = new BlockType[4096];
         for (BlockType t : values()) {
-            int idx = t.id & 0xFF;
+            int idx = t.id & 0xFFFF;
+            if (idx >= BY_ID.length) {
+                throw new IllegalStateException("Block id " + t.id + " out of range for " + t);
+            }
             if (BY_ID[idx] != null) {
                 // Fail fast on a duplicate id - a re-used id would silently corrupt save files.
                 throw new IllegalStateException("Duplicate block id " + t.id + ": " + t + " and " + BY_ID[idx]);
@@ -571,8 +797,8 @@ public enum BlockType {
         }
     }
 
-    public static BlockType byId(byte id) {
-        int idx = id & 0xFF;
+    public static BlockType byId(int id) {
+        int idx = id & 0xFFFF;
         BlockType type = idx < BY_ID.length ? BY_ID[idx] : null;
         return type == null ? AIR : type;
     }

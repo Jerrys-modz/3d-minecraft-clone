@@ -46,6 +46,72 @@ public class GthnOreGenerator {
         // Early-game tier: 20-60 blocks deep
         new OreVeinDef(20, 60, 0.52, BlockType.COPPER_ORE, BlockType.TIN_ORE, BlockType.SILVER_ORE),
         new OreVeinDef(20, 60, 0.48, BlockType.BAUXITE_ORE, BlockType.ZINC_ORE, BlockType.LEAD_ORE),
+
+        // Iron formation veins (Y: 10-50)
+        new OreVeinDef(10, 50, 0.55, BlockType.MAGNETITE_ORE, BlockType.HEMATITE_ORE, BlockType.BROWN_LIMONITE_ORE, BlockType.VANADIUM_MAGNETITE_ORE),
+        new OreVeinDef(10, 50, 0.50, BlockType.YELLOW_LIMONITE_ORE, BlockType.BROWN_LIMONITE_ORE, BlockType.BANDED_IRON_ORE, BlockType.MALACHITE_ORE),
+
+        // Copper/sulfide veins (Y: 10-40)
+        new OreVeinDef(10, 40, 0.55, BlockType.CHALCOPYRITE_ORE, BlockType.PYRITE_ORE, BlockType.MALACHITE_ORE, BlockType.TETRAHEDRITE_ORE),
+        new OreVeinDef(10, 40, 0.52, BlockType.TETRAHEDRITE_ORE, BlockType.CHALCOPYRITE_ORE, BlockType.COBALTITE_ORE),
+
+        // Lead/silver (Y: 5-30)
+        new OreVeinDef(5, 30, 0.60, BlockType.GALENA_ORE, BlockType.SULFUR_ORE, BlockType.ARSENOPYRITE_ORE),
+
+        // Nickel/cobalt (Y: 10-40)
+        new OreVeinDef(10, 40, 0.62, BlockType.GARNIERITE_ORE, BlockType.PENTLANDITE_ORE, BlockType.COBALTITE_ORE),
+
+        // Tin (Y: 40-80)
+        new OreVeinDef(40, 80, 0.55, BlockType.CASSITERITE_ORE, BlockType.CASSITERITE_ORE),
+
+        // Tungsten (Y: 5-20)
+        new OreVeinDef(5, 20, 0.75, BlockType.SCHEELITE_ORE, BlockType.WOLFRAMITE_ORE, BlockType.FERBERITE_ORE, BlockType.MOLYBDENITE_ORE),
+
+        // Chromium (Y: 10-40)
+        new OreVeinDef(10, 40, 0.70, BlockType.CHROMITE_ORE, BlockType.MALACHITE_ORE),
+
+        // Titanium (Y: 10-40)
+        new OreVeinDef(10, 40, 0.72, BlockType.ILMENITE_ORE, BlockType.RUTILE_ORE),
+
+        // Uranium/nuclear (Y: 5-20)
+        new OreVeinDef(5, 20, 0.85, BlockType.URANINITE_ORE, BlockType.URANINITE_ORE),
+        new OreVeinDef(5, 20, 0.80, BlockType.PITCHBLENDE_ORE, BlockType.URANINITE_ORE),
+
+        // Rare earth (Y: 5-30)
+        new OreVeinDef(5, 30, 0.78, BlockType.MONAZITE_ORE, BlockType.BASTNASITE_ORE, BlockType.NEODYMIUM_ORE, BlockType.CERIUM_ORE),
+
+        // Sulfur/pyrite (Y: 5-15)
+        new OreVeinDef(5, 15, 0.55, BlockType.SULFUR_ORE, BlockType.PYRITE_ORE, BlockType.CINNABAR_ORE, BlockType.ARSENOPYRITE_ORE),
+
+        // Platinum group (Y: 5-20)
+        new OreVeinDef(5, 20, 0.90, BlockType.OSMIUM_ORE, BlockType.PALLADIUM_ORE),
+
+        // Naquadah (Y: 5-20, rare)
+        new OreVeinDef(5, 20, 0.95, BlockType.NAQUADAH_ORE, BlockType.NAQUADAH_ENRICHED_ORE, BlockType.TRINIUM_ORE),
+
+        // Lithium (Y: 30-60)
+        new OreVeinDef(30, 60, 0.68, BlockType.LITHIUM_ORE, BlockType.LEPIDOLITE_ORE),
+
+        // Salt/mineral (Y: 50-80)
+        new OreVeinDef(50, 80, 0.55, BlockType.SALT_ORE, BlockType.ROCK_SALT_ORE, BlockType.BORAX_ORE, BlockType.SALTPETER_ORE),
+
+        // Calcite/minerals (Y: 10-40)
+        new OreVeinDef(10, 40, 0.50, BlockType.CALCITE_ORE, BlockType.OLIVINE_ORE, BlockType.TALC_ORE, BlockType.BENTONITE_ORE),
+
+        // Lapis (sodalite/lazurite) (Y: 10-40)
+        new OreVeinDef(10, 40, 0.60, BlockType.SODALITE_ORE, BlockType.LAZURITE_ORE),
+
+        // Apatite/phosphate (Y: 30-60)
+        new OreVeinDef(30, 60, 0.60, BlockType.APATITE_ORE, BlockType.PHOSPHATE_ORE, BlockType.PYROCHLORE_ORE),
+
+        // Manganese/vanadium
+        new OreVeinDef(10, 40, 0.68, BlockType.PYROLUSITE_ORE, BlockType.VANADINITE_ORE),
+
+        // Graphite/ruby (Y: 5-25)
+        new OreVeinDef(5, 25, 0.72, BlockType.GRAPHITE_ORE, BlockType.RUBY_ORE, BlockType.PYROPE_ORE),
+
+        // Gemstones (Y: 20-60)
+        new OreVeinDef(20, 60, 0.68, BlockType.SAPPHIRE_ORE, BlockType.GREEN_SAPPHIRE_ORE, BlockType.SPESSARTINE_ORE),
     };
 
     /** Small ore definitions: depth range and base rarity threshold. */
@@ -91,6 +157,48 @@ public class GthnOreGenerator {
         new SmallOreDef(5, 20, 0.91, BlockType.SMALL_THORIUM_ORE),
         new SmallOreDef(5, 20, 0.92, BlockType.SMALL_PLUTONIUM_ORE),
         new SmallOreDef(5, 20, 0.93, BlockType.SMALL_IRIDIUM_ORE),
+
+        // New GTNH compound small ores
+        new SmallOreDef(10, 50, 0.75, BlockType.SMALL_MAGNETITE_ORE),
+        new SmallOreDef(10, 50, 0.76, BlockType.SMALL_HEMATITE_ORE),
+        new SmallOreDef(15, 60, 0.74, BlockType.SMALL_BROWN_LIMONITE_ORE),
+        new SmallOreDef(15, 60, 0.73, BlockType.SMALL_YELLOW_LIMONITE_ORE),
+        new SmallOreDef(10, 50, 0.77, BlockType.SMALL_BANDED_IRON_ORE),
+        new SmallOreDef(10, 50, 0.79, BlockType.SMALL_VANADIUM_MAGNETITE_ORE),
+        new SmallOreDef(10, 40, 0.75, BlockType.SMALL_CHALCOPYRITE_ORE),
+        new SmallOreDef(10, 40, 0.76, BlockType.SMALL_TETRAHEDRITE_ORE),
+        new SmallOreDef(10, 40, 0.74, BlockType.SMALL_MALACHITE_ORE),
+        new SmallOreDef(5, 30, 0.78, BlockType.SMALL_GALENA_ORE),
+        new SmallOreDef(10, 40, 0.76, BlockType.SMALL_SPHALERITE_ORE),
+        new SmallOreDef(10, 40, 0.77, BlockType.SMALL_GARNIERITE_ORE),
+        new SmallOreDef(10, 40, 0.78, BlockType.SMALL_PENTLANDITE_ORE),
+        new SmallOreDef(10, 40, 0.80, BlockType.SMALL_COBALTITE_ORE),
+        new SmallOreDef(5, 40, 0.74, BlockType.SMALL_PYRITE_ORE),
+        new SmallOreDef(5, 40, 0.78, BlockType.SMALL_ARSENOPYRITE_ORE),
+        new SmallOreDef(5, 15, 0.76, BlockType.SMALL_SULFUR_ORE),
+        new SmallOreDef(5, 15, 0.79, BlockType.SMALL_CINNABAR_ORE),
+        new SmallOreDef(40, 80, 0.76, BlockType.SMALL_CASSITERITE_ORE),
+        new SmallOreDef(5, 20, 0.82, BlockType.SMALL_SCHEELITE_ORE),
+        new SmallOreDef(5, 20, 0.83, BlockType.SMALL_WOLFRAMITE_ORE),
+        new SmallOreDef(5, 25, 0.81, BlockType.SMALL_MOLYBDENITE_ORE),
+        new SmallOreDef(10, 40, 0.83, BlockType.SMALL_CHROMITE_ORE),
+        new SmallOreDef(10, 40, 0.82, BlockType.SMALL_ILMENITE_ORE),
+        new SmallOreDef(10, 40, 0.84, BlockType.SMALL_RUTILE_ORE),
+        new SmallOreDef(5, 20, 0.87, BlockType.SMALL_URANINITE_ORE),
+        new SmallOreDef(5, 20, 0.86, BlockType.SMALL_PITCHBLENDE_ORE),
+        new SmallOreDef(5, 30, 0.85, BlockType.SMALL_MONAZITE_ORE),
+        new SmallOreDef(5, 30, 0.86, BlockType.SMALL_BASTNASITE_ORE),
+        new SmallOreDef(5, 25, 0.84, BlockType.SMALL_VANADINITE_ORE),
+        new SmallOreDef(10, 40, 0.80, BlockType.SMALL_PYROLUSITE_ORE),
+        new SmallOreDef(5, 25, 0.79, BlockType.SMALL_GRAPHITE_ORE),
+        new SmallOreDef(30, 60, 0.81, BlockType.SMALL_LITHIUM_ORE),
+        new SmallOreDef(5, 20, 0.91, BlockType.SMALL_NAQUADAH_ORE),
+        new SmallOreDef(5, 20, 0.94, BlockType.SMALL_TRINIUM_ORE),
+        new SmallOreDef(5, 30, 0.87, BlockType.SMALL_NEODYMIUM_ORE),
+        new SmallOreDef(5, 30, 0.86, BlockType.SMALL_CERIUM_ORE),
+        new SmallOreDef(5, 20, 0.92, BlockType.SMALL_OSMIUM_ORE),
+        new SmallOreDef(5, 20, 0.90, BlockType.SMALL_PALLADIUM_ORE),
+        new SmallOreDef(5, 25, 0.88, BlockType.SMALL_RUBY_ORE),
     };
 
     private final Noise veinNoise;

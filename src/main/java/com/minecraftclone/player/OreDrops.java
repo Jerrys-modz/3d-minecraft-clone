@@ -80,6 +80,143 @@ public final class OreDrops {
         registerOreDrop(BlockType.SMALL_THORIUM_ORE, BlockType.CRUSHED_THORIUM, null); // Single drop only
         registerOreDrop(BlockType.SMALL_PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM, BlockType.IMPURE_PLUTONIUM);
         registerOreDrop(BlockType.SMALL_IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM, BlockType.IMPURE_IRIDIUM);
+
+        // =====================================================================
+        // Extended GTNH ore pack — vein ore drops (primary: crushed ore)
+        // =====================================================================
+        // Iron chain
+        registerOreDrop(BlockType.MAGNETITE_ORE,          BlockType.CRUSHED_MAGNETITE, null);
+        registerOreDrop(BlockType.HEMATITE_ORE,           BlockType.CRUSHED_HEMATITE, null);
+        registerOreDrop(BlockType.BROWN_LIMONITE_ORE,     BlockType.CRUSHED_BROWN_LIMONITE, null);
+        registerOreDrop(BlockType.YELLOW_LIMONITE_ORE,    BlockType.CRUSHED_YELLOW_LIMONITE, null);
+        registerOreDrop(BlockType.BANDED_IRON_ORE,        BlockType.CRUSHED_BANDED_IRON, null);
+        registerOreDrop(BlockType.VANADIUM_MAGNETITE_ORE, BlockType.CRUSHED_VANADIUM_MAGNETITE, null);
+        // Copper chain
+        registerOreDrop(BlockType.CHALCOPYRITE_ORE,  BlockType.CRUSHED_CHALCOPYRITE, null);
+        registerOreDrop(BlockType.TETRAHEDRITE_ORE,  BlockType.CRUSHED_TETRAHEDRITE, null);
+        registerOreDrop(BlockType.MALACHITE_ORE,     BlockType.CRUSHED_MALACHITE, null);
+        // Lead / Zinc
+        registerOreDrop(BlockType.GALENA_ORE,        BlockType.CRUSHED_GALENA, null);
+        registerOreDrop(BlockType.SPHALERITE_ORE,    BlockType.CRUSHED_SPHALERITE, null);
+        // Nickel / Cobalt
+        registerOreDrop(BlockType.GARNIERITE_ORE,    BlockType.CRUSHED_GARNIERITE, null);
+        registerOreDrop(BlockType.PENTLANDITE_ORE,   BlockType.CRUSHED_PENTLANDITE, null);
+        registerOreDrop(BlockType.COBALTITE_ORE,     BlockType.CRUSHED_COBALTITE, null);
+        // Sulfur chain
+        registerOreDrop(BlockType.PYRITE_ORE,        BlockType.CRUSHED_PYRITE, null);
+        registerOreDrop(BlockType.ARSENOPYRITE_ORE,  BlockType.CRUSHED_ARSENOPYRITE, null);
+        registerOreDrop(BlockType.SULFUR_ORE,        BlockType.CRUSHED_SULFUR, null);
+        registerOreDrop(BlockType.CINNABAR_ORE,      BlockType.CRUSHED_CINNABAR, null);
+        // Tin
+        registerOreDrop(BlockType.CASSITERITE_ORE,   BlockType.CRUSHED_CASSITERITE, null);
+        // Tungsten family
+        registerOreDrop(BlockType.SCHEELITE_ORE,     BlockType.CRUSHED_SCHEELITE, null);
+        registerOreDrop(BlockType.WOLFRAMITE_ORE,    BlockType.CRUSHED_WOLFRAMITE, null);
+        registerOreDrop(BlockType.MOLYBDENITE_ORE,   BlockType.CRUSHED_MOLYBDENITE, null);
+        registerOreDrop(BlockType.FERBERITE_ORE,     BlockType.CRUSHED_FERBERITE, null);
+        // Chromium / Titanium
+        registerOreDrop(BlockType.CHROMITE_ORE,      BlockType.CRUSHED_CHROMITE, null);
+        registerOreDrop(BlockType.ILMENITE_ORE,      BlockType.CRUSHED_ILMENITE, null);
+        registerOreDrop(BlockType.RUTILE_ORE,        BlockType.CRUSHED_RUTILE, null);
+        // Uranium family
+        registerOreDrop(BlockType.URANINITE_ORE,     BlockType.CRUSHED_URANINITE, null);
+        registerOreDrop(BlockType.PITCHBLENDE_ORE,   BlockType.CRUSHED_PITCHBLENDE, null);
+        // Rare earth
+        registerOreDrop(BlockType.MONAZITE_ORE,      BlockType.CRUSHED_MONAZITE, null);
+        registerOreDrop(BlockType.BASTNASITE_ORE,    BlockType.CRUSHED_BASTNASITE, null);
+        // Vanadium / Manganese minerals
+        registerOreDrop(BlockType.VANADINITE_ORE,    BlockType.CRUSHED_VANADINITE, null);
+        registerOreDrop(BlockType.PYROLUSITE_ORE,    BlockType.CRUSHED_PYROLUSITE, null);
+        // Carbon
+        registerOreDrop(BlockType.GRAPHITE_ORE,      BlockType.CRUSHED_GRAPHITE, null);
+        // Light metals
+        registerOreDrop(BlockType.LITHIUM_ORE,       BlockType.CRUSHED_LITHIUM, null);
+        // GTNH exotics
+        registerOreDrop(BlockType.NAQUADAH_ORE,          BlockType.CRUSHED_NAQUADAH, null);
+        registerOreDrop(BlockType.NAQUADAH_ENRICHED_ORE, BlockType.CRUSHED_NAQUADAH_ENRICHED, null);
+        registerOreDrop(BlockType.TRINIUM_ORE,           BlockType.CRUSHED_TRINIUM, null);
+        // Additional rare earths / PGM
+        registerOreDrop(BlockType.NEODYMIUM_ORE,     BlockType.CRUSHED_NEODYMIUM, null);
+        registerOreDrop(BlockType.CERIUM_ORE,        BlockType.CRUSHED_CERIUM, null);
+        registerOreDrop(BlockType.OSMIUM_ORE,        BlockType.CRUSHED_OSMIUM, null);
+        registerOreDrop(BlockType.PALLADIUM_ORE,     BlockType.CRUSHED_PALLADIUM, null);
+        // Rock/mineral ores
+        registerOreDrop(BlockType.CALCITE_ORE,       BlockType.CRUSHED_CALCITE, null);
+        registerOreDrop(BlockType.OLIVINE_ORE,       BlockType.CRUSHED_OLIVINE, null);
+        registerOreDrop(BlockType.TALC_ORE,          BlockType.CRUSHED_TALC, null);
+        registerOreDrop(BlockType.BENTONITE_ORE,     BlockType.CRUSHED_BENTONITE, null);
+        // Lapis components
+        registerOreDrop(BlockType.SODALITE_ORE,      BlockType.CRUSHED_SODALITE, null);
+        registerOreDrop(BlockType.LAZURITE_ORE,      BlockType.CRUSHED_LAZURITE, null);
+        // Evaporites
+        registerOreDrop(BlockType.SALT_ORE,          BlockType.CRUSHED_SALT, null);
+        registerOreDrop(BlockType.ROCK_SALT_ORE,     BlockType.CRUSHED_ROCK_SALT, null);
+        registerOreDrop(BlockType.SALTPETER_ORE,     BlockType.CRUSHED_SALTPETER, null);
+        registerOreDrop(BlockType.BORAX_ORE,         BlockType.CRUSHED_BORAX, null);
+        // Phosphates
+        registerOreDrop(BlockType.APATITE_ORE,       BlockType.CRUSHED_APATITE, null);
+        registerOreDrop(BlockType.PHOSPHATE_ORE,     BlockType.CRUSHED_PHOSPHATE, null);
+        registerOreDrop(BlockType.PYROCHLORE_ORE,    BlockType.CRUSHED_PYROCHLORE, null);
+        // Gemstones
+        registerOreDrop(BlockType.LEPIDOLITE_ORE,    BlockType.CRUSHED_LEPIDOLITE, null);
+        registerOreDrop(BlockType.RUBY_ORE,          BlockType.CRUSHED_RUBY, null);
+        registerOreDrop(BlockType.SAPPHIRE_ORE,      BlockType.CRUSHED_SAPPHIRE, null);
+        registerOreDrop(BlockType.GREEN_SAPPHIRE_ORE,BlockType.CRUSHED_GREEN_SAPPHIRE, null);
+        registerOreDrop(BlockType.PYROPE_ORE,        BlockType.CRUSHED_PYROPE, null);
+        registerOreDrop(BlockType.SPESSARTINE_ORE,   BlockType.CRUSHED_SPESSARTINE, null);
+
+        // Small ore variants (variable drops: 70% crushed, 30% crushed again = single drop for now)
+        // Iron-chain small ores
+        registerOreDrop(BlockType.SMALL_MAGNETITE_ORE,          BlockType.CRUSHED_MAGNETITE, null);
+        registerOreDrop(BlockType.SMALL_HEMATITE_ORE,           BlockType.CRUSHED_HEMATITE, null);
+        registerOreDrop(BlockType.SMALL_BROWN_LIMONITE_ORE,     BlockType.CRUSHED_BROWN_LIMONITE, null);
+        registerOreDrop(BlockType.SMALL_YELLOW_LIMONITE_ORE,    BlockType.CRUSHED_YELLOW_LIMONITE, null);
+        registerOreDrop(BlockType.SMALL_BANDED_IRON_ORE,        BlockType.CRUSHED_BANDED_IRON, null);
+        registerOreDrop(BlockType.SMALL_VANADIUM_MAGNETITE_ORE, BlockType.CRUSHED_VANADIUM_MAGNETITE, null);
+        // Copper-chain small ores
+        registerOreDrop(BlockType.SMALL_CHALCOPYRITE_ORE,  BlockType.CRUSHED_CHALCOPYRITE, null);
+        registerOreDrop(BlockType.SMALL_TETRAHEDRITE_ORE,  BlockType.CRUSHED_TETRAHEDRITE, null);
+        registerOreDrop(BlockType.SMALL_MALACHITE_ORE,     BlockType.CRUSHED_MALACHITE, null);
+        // Lead / Zinc small ores
+        registerOreDrop(BlockType.SMALL_GALENA_ORE,        BlockType.CRUSHED_GALENA, null);
+        registerOreDrop(BlockType.SMALL_SPHALERITE_ORE,    BlockType.CRUSHED_SPHALERITE, null);
+        // Nickel / Cobalt small ores
+        registerOreDrop(BlockType.SMALL_GARNIERITE_ORE,    BlockType.CRUSHED_GARNIERITE, null);
+        registerOreDrop(BlockType.SMALL_PENTLANDITE_ORE,   BlockType.CRUSHED_PENTLANDITE, null);
+        registerOreDrop(BlockType.SMALL_COBALTITE_ORE,     BlockType.CRUSHED_COBALTITE, null);
+        // Sulfur-chain small ores
+        registerOreDrop(BlockType.SMALL_PYRITE_ORE,        BlockType.CRUSHED_PYRITE, null);
+        registerOreDrop(BlockType.SMALL_ARSENOPYRITE_ORE,  BlockType.CRUSHED_ARSENOPYRITE, null);
+        registerOreDrop(BlockType.SMALL_SULFUR_ORE,        BlockType.CRUSHED_SULFUR, null);
+        registerOreDrop(BlockType.SMALL_CINNABAR_ORE,      BlockType.CRUSHED_CINNABAR, null);
+        registerOreDrop(BlockType.SMALL_CASSITERITE_ORE,   BlockType.CRUSHED_CASSITERITE, null);
+        // Tungsten/Chromium small ores
+        registerOreDrop(BlockType.SMALL_SCHEELITE_ORE,     BlockType.CRUSHED_SCHEELITE, null);
+        registerOreDrop(BlockType.SMALL_WOLFRAMITE_ORE,    BlockType.CRUSHED_WOLFRAMITE, null);
+        registerOreDrop(BlockType.SMALL_MOLYBDENITE_ORE,   BlockType.CRUSHED_MOLYBDENITE, null);
+        registerOreDrop(BlockType.SMALL_CHROMITE_ORE,      BlockType.CRUSHED_CHROMITE, null);
+        registerOreDrop(BlockType.SMALL_ILMENITE_ORE,      BlockType.CRUSHED_ILMENITE, null);
+        registerOreDrop(BlockType.SMALL_RUTILE_ORE,        BlockType.CRUSHED_RUTILE, null);
+        // Uranium/Rare earth small ores
+        registerOreDrop(BlockType.SMALL_URANINITE_ORE,     BlockType.CRUSHED_URANINITE, null);
+        registerOreDrop(BlockType.SMALL_PITCHBLENDE_ORE,   BlockType.CRUSHED_PITCHBLENDE, null);
+        registerOreDrop(BlockType.SMALL_MONAZITE_ORE,      BlockType.CRUSHED_MONAZITE, null);
+        // GTNH exotic small ores
+        registerOreDrop(BlockType.SMALL_NAQUADAH_ORE,      BlockType.CRUSHED_NAQUADAH, null);
+        registerOreDrop(BlockType.SMALL_TRINIUM_ORE,       BlockType.CRUSHED_TRINIUM, null);
+        // PGM/Gemstone small ores
+        registerOreDrop(BlockType.SMALL_OSMIUM_ORE,        BlockType.CRUSHED_OSMIUM, null);
+        registerOreDrop(BlockType.SMALL_PALLADIUM_ORE,     BlockType.CRUSHED_PALLADIUM, null);
+        registerOreDrop(BlockType.SMALL_RUBY_ORE,          BlockType.CRUSHED_RUBY, null);
+        // Note: SMALL_SAPPHIRE_ORE, SMALL_GREEN_SAPPHIRE_ORE, SMALL_SODALITE_ORE, SMALL_LAZURITE_ORE
+        // not yet added to BlockType — only the vein forms exist.
+        registerOreDrop(BlockType.SMALL_NEODYMIUM_ORE,     BlockType.CRUSHED_NEODYMIUM, null);
+        registerOreDrop(BlockType.SMALL_CERIUM_ORE,        BlockType.CRUSHED_CERIUM, null);
+        registerOreDrop(BlockType.SMALL_PYROLUSITE_ORE,    BlockType.CRUSHED_PYROLUSITE, null);
+        registerOreDrop(BlockType.SMALL_GRAPHITE_ORE,      BlockType.CRUSHED_GRAPHITE, null);
+        registerOreDrop(BlockType.SMALL_LITHIUM_ORE,       BlockType.CRUSHED_LITHIUM, null);
+        registerOreDrop(BlockType.SMALL_VANADINITE_ORE,    BlockType.CRUSHED_VANADINITE, null);
+        registerOreDrop(BlockType.SMALL_BASTNASITE_ORE,    BlockType.CRUSHED_BASTNASITE, null);
     }
 
     private OreDrops() {
