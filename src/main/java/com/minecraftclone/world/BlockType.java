@@ -206,6 +206,13 @@ public enum BlockType {
     // 1.5-block-tall box (the post is taller than a block), so neither the
     // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
     WOODEN_FENCE(132, 11, false, true, 1.5f),
+    // Beds: a 1x2 sleeping surface (like Minecraft). BED is the foot end, BED_HEAD
+    // is the pillow/head end. Both halves are solid, directional, and half-height.
+    // Beds cannot be placed in the Nether or End (they explode in nether like vanilla).
+    BED(133, 60, 61, 60, 62, 62, 0.5f),              // foot end: blanket top/side, foot texture, half height
+    BED_HEAD(134, 63, 63, 63, 63, 63, 0.5f),         // head end: pillow texture, half height
+    BED_OCCUPIED(135, 60, 61, 60, 62, 62, 0.5f),     // occupied foot end
+    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f), // occupied head end
 
     public final byte id;
     public final boolean solid;
@@ -381,14 +388,6 @@ public enum BlockType {
         this.lightLevel = 0;
         this.collisionHeight = 1.0f;
     }
-
-    // Beds: a 1x2 sleeping surface (like Minecraft). BED is the foot end, BED_HEAD
-    // is the pillow/head end. Both halves are solid, directional, and half-height.
-    // Beds cannot be placed in the Nether or End (they explode in nether like vanilla).
-    BED(133, 60, 61, 60, 62, 62, 0.5f),              // foot end: blanket top/side, foot texture, half height
-    BED_HEAD(134, 63, 63, 63, 63, 63, 0.5f),         // head end: pillow texture, half height
-    BED_OCCUPIED(135, 60, 61, 60, 62, 62, 0.5f),     // occupied foot end
-    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f), // occupied head end
 
     // Sparse id lookup over the whole unsigned-byte range (0-255). Block ids are
     // persisted as raw bytes, so ids above 127 wrap negative as Java bytes but
