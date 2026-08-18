@@ -287,8 +287,23 @@ public class InventoryController {
             click(dragStart, false, false);
         }
         if (!hasCursorItem()) return;
+
+        // Check if we're dragging to crafting grid cells - if so, don't place items back in source
+        boolean dragToCraftingGrid = false;
         for (int i = 0; i < dragVisited.length; i++) {
+            if (dragVisited[i] && gui.isGridSlot(i)) {
+                dragToCraftingGrid = true;
+                break;
+            }
+        }
+
+        for (int i = 0; i < dragVisited.length; i++) {
+            // Skip the output slot and any unvisited slots
             if (!gui.isOutputSlot(i) && dragVisited[i]) {
+                // When dragging to crafting grid, skip the source slot to prevent items going back there
+                if (dragToCraftingGrid && i == dragStart) {
+                    continue;
+                }
                 depositOne(i);
             }
         }
