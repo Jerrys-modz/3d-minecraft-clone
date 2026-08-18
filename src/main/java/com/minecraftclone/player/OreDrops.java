@@ -41,6 +41,7 @@ public final class OreDrops {
         registerOreDrop(BlockType.URANIUM_ORE, BlockType.CRUSHED_URANIUM);
         registerOreDrop(BlockType.THORIUM_ORE, BlockType.CRUSHED_THORIUM);
         registerOreDrop(BlockType.PLUTONIUM_ORE, BlockType.CRUSHED_PLUTONIUM);
+        registerOreDrop(BlockType.IRIDIUM_ORE, BlockType.CRUSHED_IRIDIUM);
     }
 
     private OreDrops() {

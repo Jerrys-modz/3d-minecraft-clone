@@ -313,7 +313,12 @@ public enum BlockType {
     PLUTONIUM_ORE(210, true, false, 4, 4, 4),
     CRUSHED_PLUTONIUM(211, 0),
     PLUTONIUM_DUST(212, 0),
-    PLUTONIUM_INGOT(213, 0);
+    PLUTONIUM_INGOT(213, 0),
+
+    IRIDIUM_ORE(214, true, false, 4, 4, 4),
+    CRUSHED_IRIDIUM(215, 0),
+    IRIDIUM_DUST(216, 0),
+    IRIDIUM_INGOT(217, 0);
 
     public final byte id;
     public final boolean solid;
