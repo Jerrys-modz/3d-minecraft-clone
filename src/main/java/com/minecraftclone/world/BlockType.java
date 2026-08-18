@@ -69,7 +69,7 @@ public enum BlockType {
     MUSHROOM_RED(55, false, true, 35),
     MUSHROOM_BROWN(56, false, true, 36),
     VINE(57, false, true, 39),
-    CHERRY_LEAVES(58, true, true, 40),
+    CHERRY_LEAVES(58, true, true, 40, 40, 40),
     PACKED_ICE(59, true, false, 41),
     BAMBOO(60, false, true, 42),
     LILY_PAD(61, false, true, 43),
