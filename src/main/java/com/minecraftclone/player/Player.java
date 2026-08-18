@@ -94,6 +94,7 @@ public class Player {
     private boolean invertMouseY = false;
     private boolean viewBobbing = true;
     private float bobPhase = 0f;
+    private boolean sleeping = false;
 
     public void setKeyBinds(KeyBindings keyBinds) {
         this.keyBinds = keyBinds;
@@ -140,7 +141,7 @@ public class Player {
         int surfaceY = world.getSurfaceHeight((int) Math.floor(x), (int) Math.floor(z));
         position.set(x, surfaceY + 2, z);
         velocity.set(0, 0, 0);
-        camera.setPosition(x, position.y + EYE_HEIGHT, z);
+        camera.setPosition(x, position.y + getEyeHeight(), z);
         landingArmed = false; // disarm landing detection until the first real ground contact
     }
 
@@ -158,7 +159,7 @@ public class Player {
     public void teleportTo(float x, float y, float z) {
         position.set(x, y, z);
         velocity.set(0, 0, 0);
-        camera.setPosition(x, y + EYE_HEIGHT, z);
+        camera.setPosition(x, y + getEyeHeight(), z);
         onGround = false;
         lastFallImpactSpeed = 0f;
     }
@@ -185,7 +186,7 @@ public class Player {
 
     /** Eye (camera) position: feet position plus the eye height. Returns a reused vector - copy before retaining. */
     public Vector3f getEyePosition() {
-        return eyePosition.set(position.x, position.y + EYE_HEIGHT, position.z);
+        return eyePosition.set(position.x, position.y + getEyeHeight(), position.z);
     }
 
     public boolean isFlying() {
@@ -274,6 +275,18 @@ public class Player {
      */
     public void update(float dt, Input input, World world, float coldFactor) {
         updateLook(input);
+        // Skip movement while sleeping - player is in bed, time is being skipped
+        if (sleeping) {
+            lastFallImpactSpeed = 0f;
+            justJumped = false;
+            justLanded = false;
+            movingOnGround = false;
+            swimmingAndMoving = false;
+            inWater = false;
+            swimming = false;
+            submerged = false;
+            return;
+        }
         if (gameMode.isSpectator()) {
             flying = true; // always in no-clip flight
         } else if (gameMode.isCreative()) {
@@ -297,7 +310,7 @@ public class Player {
         wasOnGround = onGround;
 
         submerged = world.getBlock(
-                (int) Math.floor(position.x), (int) Math.floor(position.y + EYE_HEIGHT), (int) Math.floor(position.z))
+                (int) Math.floor(position.x), (int) Math.floor(position.y + getEyeHeight()), (int) Math.floor(position.z))
                 .isWater();
 
         if (gameMode.isInvulnerable()) {
@@ -327,7 +340,7 @@ public class Player {
             } else {
                 // Not fully sealed: a roof alone still breaks the wind a little.
                 if (hasRoofAbove(world, (int) Math.floor(position.x), (int) Math.floor(position.z),
-                        (int) Math.floor(position.y + EYE_HEIGHT))) {
+                        (int) Math.floor(position.y + getEyeHeight()))) {
                     coldness *= 0.5f;
                 }
             }
@@ -532,6 +545,21 @@ public class Player {
         return swimmingAndMoving;
     }
 
+    /** True while the player is sleeping in a bed (time is being skipped). */
+    public boolean isSleeping() {
+        return sleeping;
+    }
+
+    /** Sets the player's sleeping state (true = sleeping in bed, false = awake). */
+    public void setSleeping(boolean sleeping) {
+        this.sleeping = sleeping;
+    }
+
+    /** Returns the eye height - reduced when sleeping to simulate lying down in bed. */
+    private float getEyeHeight() {
+        return sleeping ? 0.5f : EYE_HEIGHT;
+    }
+
     /** The block directly under the player's feet - what a footstep sound should sound like. */
     public BlockType blockUnderfoot(World world) {
         return world.getBlock((int) Math.floor(position.x), (int) Math.floor(position.y) - 1, (int) Math.floor(position.z));
@@ -732,7 +760,7 @@ public class Player {
         }
         float bobY = (float) Math.sin(bobPhase) * 0.035f;
         float bobX = (float) Math.cos(bobPhase) * 0.02f;
-        camera.setPosition(position.x + bobX, position.y + EYE_HEIGHT + bobY, position.z);
+        camera.setPosition(position.x + bobX, position.y + getEyeHeight() + bobY, position.z);
     }
 
     private AABB aabbAt(Vector3f pos) {

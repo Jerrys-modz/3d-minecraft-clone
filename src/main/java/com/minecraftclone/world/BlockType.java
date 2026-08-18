@@ -205,7 +205,15 @@ public enum BlockType {
     // and solid blocks. One tile (planks) for the whole mesh. Collision is a
     // 1.5-block-tall box (the post is taller than a block), so neither the
     // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
-    WOODEN_FENCE(132, 11, false, true, 1.5f);
+    WOODEN_FENCE(132, 11, false, true, 1.5f),
+
+    // Beds: a 1x2 sleeping surface (like Minecraft). BED is the foot end, BED_HEAD
+    // is the pillow/head end. Both halves are solid, directional, and half-height.
+    // Beds cannot be placed in the Nether or End (they explode in nether like vanilla).
+    BED(133, 60, 61, 60, 62, 62, 0.5f),
+    BED_HEAD(134, 63, 63, 63, 63, 63, 0.5f),
+    BED_OCCUPIED(135, 60, 61, 60, 62, 62, 0.5f),
+    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f);
 
     public final byte id;
     public final boolean solid;
@@ -311,6 +319,26 @@ public enum BlockType {
         this.bottomTile = tile;
         this.frontTile = tile;
         this.litFrontTile = tile;
+        this.foodValue = 0;
+        this.isItem = false;
+        this.lightLevel = 0;
+        this.collisionHeight = collisionHeight;
+    }
+
+    /** Half-height directional block (like a bed): distinct front face, half collision height. */
+    BlockType(int id, int topTile, int sideTile, int bottomTile, int frontTile, int litFrontTile, float collisionHeight) {
+        this.id = (byte) id;
+        this.solid = true;
+        this.transparent = false;
+        this.cross = false;
+        this.slab = false;
+        this.stair = false;
+        this.fence = false;
+        this.topTile = topTile;
+        this.sideTile = sideTile;
+        this.bottomTile = bottomTile;
+        this.frontTile = frontTile;
+        this.litFrontTile = litFrontTile;
         this.foodValue = 0;
         this.isItem = false;
         this.lightLevel = 0;
@@ -521,6 +549,16 @@ public enum BlockType {
     /** True for a fence (thin post with auto-connecting rails). */
     public boolean isFence() {
         return fence;
+    }
+
+    /** True for either half of a functional door (closed solid, or open walk-through). */
+    public boolean isBed() {
+        return this == BED || this == BED_HEAD || this == BED_OCCUPIED || this == BED_HEAD_OCCUPIED;
+    }
+
+    /** True if this is the foot end of a bed (as opposed to the head/pillow end). */
+    public boolean isBedFoot() {
+        return this == BED || this == BED_OCCUPIED;
     }
 
     /** True for any partial-cube block that needs its own meshing (stairs, fences). */
