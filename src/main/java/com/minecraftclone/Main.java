@@ -549,6 +549,8 @@ public class Main {
         MapRenderer[] mapRenderer = {null}; // initialized when world is created
         int[] lastChunkX = {Integer.MIN_VALUE}; // last explored chunk X (to detect chunk changes)
         int[] lastChunkZ = {Integer.MIN_VALUE}; // last explored chunk Z
+        boolean[] mapOpen = {false};             // true while the full-screen map is visible
+        java.nio.file.Path[] currentWorldDir = {null}; // set whenever a world is loaded, for map persistence
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
         float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
         float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
@@ -636,6 +638,11 @@ public class Main {
             }
             currentDim[0] = DimensionType.OVERWORLD;
             world = worlds[currentDim[0].ordinal()];
+            currentWorldDir[0] = autoDir;
+            for (DimensionType dim : DimensionType.values()) {
+                worlds[dim.ordinal()].getMapData().loadFrom(
+                    autoDir.resolve(dim.saveFolder()).resolve("map.dat"));
+            }
             mapRenderer[0] = new MapRenderer(world.getMapData());
             hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
             startCalendar(dayNightCycle, calendar, genSettings);
@@ -1148,6 +1155,11 @@ public class Main {
                                 }
                                 currentDim[0] = DimensionType.OVERWORLD;
                                 world = worlds[currentDim[0].ordinal()];
+                                currentWorldDir[0] = worldDir;
+                                for (DimensionType dim : DimensionType.values()) {
+                                    worlds[dim.ordinal()].getMapData().loadFrom(
+                                        worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
+                                }
                                 mapRenderer[0] = new MapRenderer(world.getMapData());
                                 hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
                                 startCalendar(dayNightCycle, calendar, genSettings);
@@ -1210,6 +1222,11 @@ public class Main {
                             }
                             currentDim[0] = DimensionType.OVERWORLD;
                             world = worlds[currentDim[0].ordinal()];
+                            currentWorldDir[0] = worldDir;
+                            for (DimensionType dim : DimensionType.values()) {
+                                worlds[dim.ordinal()].getMapData().loadFrom(
+                                    worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
+                            }
                             mapRenderer[0] = new MapRenderer(world.getMapData());
                             hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
                             startCalendar(dayNightCycle, calendar, genSettings);
@@ -1278,6 +1295,9 @@ public class Main {
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 if (bindingAction[0] >= 0) {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
+                } else if (mapOpen[0]) {
+                    mapOpen[0] = false;
+                    hud.renderFullMap(null); // clear GL texture cache
                 } else if (inventoryOpen[0]) {
                     closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                 } else if (creativeOpen[0]) {
@@ -1285,7 +1305,7 @@ public class Main {
                 } else {
                     menuOpen[0] = !menuOpen[0];
                 }
-                window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
+                window.setCursorCaptured(!mapOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
                 input.resetMouseDelta();
             }
 
@@ -1407,7 +1427,25 @@ public class Main {
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.FORECAST))) {
                 forecastOpen[0] = !forecastOpen[0];
             }
+            if (mapRenderer[0] != null && input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.MAP))) {
+                mapOpen[0] = !mapOpen[0];
+                if (!mapOpen[0]) hud.renderFullMap(null); // clear GL texture cache on close
+                window.setCursorCaptured(!mapOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
+                input.resetMouseDelta();
+            }
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
+
+            // Full-screen map controls (WASD pan, scroll zoom, R reset)
+            if (mapOpen[0] && mapRenderer[0] != null) {
+                float panSpeed = 20f * dt;
+                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.FORWARD))) mapRenderer[0].pan(0, -panSpeed);
+                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.BACK)))    mapRenderer[0].pan(0,  panSpeed);
+                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.LEFT)))    mapRenderer[0].pan(-panSpeed, 0);
+                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.RIGHT)))   mapRenderer[0].pan( panSpeed, 0);
+                double scroll = input.getScrollDelta();
+                if (scroll != 0) mapRenderer[0].zoom((float) Math.pow(1.2, scroll));
+                if (input.isKeyJustPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_R)) mapRenderer[0].resetView();
+            }
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 // Cold exposure factor, driven by the LOCAL temperature at the
@@ -1917,9 +1955,11 @@ public class Main {
                 }
                 hud.renderCrosshair(window.getAspectRatio());
                 hud.renderHotbar(atlas, itemTextures, player.getDurability(), player.getInventory(), selectedSlot[0], window.getAspectRatio());
-                // Render mini-map in top-right corner
-                if (mapRenderer[0] != null) {
-                    java.awt.image.BufferedImage miniMapImage = mapRenderer[0].renderMiniMap(player.getPosition().x, player.getPosition().z);
+                // Render mini-map in top-right corner (hidden while full-screen map is open)
+                if (mapRenderer[0] != null && !mapOpen[0]) {
+                    java.awt.image.BufferedImage miniMapImage = mapRenderer[0].renderMiniMap(
+                            player.getPosition().x, player.getPosition().z,
+                            player.getCamera().getYaw());
                     hud.renderMiniMap(miniMapImage, 0.2f, 0.2f, 0.9f, 0.9f, window.getAspectRatio());
                 }
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
@@ -1943,6 +1983,14 @@ public class Main {
             hud.renderMessages(messages, window.getAspectRatio());
             if (started[0] && forecastOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 hud.renderForecast(climate, calendar, window.getAspectRatio());
+            }
+            // Full-screen map overlay (drawn after HUD, covers the screen)
+            if (started[0] && mapOpen[0] && mapRenderer[0] != null) {
+                java.awt.image.BufferedImage fullMapImage = mapRenderer[0].renderFullMap(
+                        window.getWidth(), window.getHeight(),
+                        player.getPosition().x, player.getPosition().z,
+                        player.getCamera().getYaw());
+                hud.renderFullMap(fullMapImage);
             }
             if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();
@@ -2094,6 +2142,13 @@ public class Main {
         if (worlds != null) {
             for (World w : worlds) {
                 w.saveAllModified();
+            }
+        }
+        // Persist map exploration data for all dimensions
+        if (worlds != null && currentWorldDir[0] != null) {
+            for (DimensionType dim : DimensionType.values()) {
+                worlds[dim.ordinal()].getMapData().saveTo(
+                        currentWorldDir[0].resolve(dim.saveFolder()).resolve("map.dat"));
             }
         }
         settings.save(settingsFile);
