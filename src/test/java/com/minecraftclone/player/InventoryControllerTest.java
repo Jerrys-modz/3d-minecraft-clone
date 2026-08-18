@@ -301,16 +301,15 @@ class InventoryControllerTest {
         InventoryController c = new InventoryController(inv, grid);  // Creates a ContainerGui internally
         inv.setSlot(10, BlockType.PLANKS, 5);
 
-        // Shift-click should place items into the crafting grid
+        // Shift-click should place items into the crafting grid (2x2 has 4 cells, so 5 items -> 4 placed, 1 stays)
         c.click(10, false, true);
 
-        // Verify: 5 items from inventory should be placed in 5 grid cells
+        // Verify: 4 items from inventory should be placed in 4 grid cells, 1 item remains in slot
         assertEquals(BlockType.PLANKS, grid.get(0), "first grid cell should have 1 plank");
         assertEquals(BlockType.PLANKS, grid.get(1), "second grid cell should have 1 plank");
         assertEquals(BlockType.PLANKS, grid.get(2), "third grid cell should have 1 plank");
         assertEquals(BlockType.PLANKS, grid.get(3), "fourth grid cell should have 1 plank");
-        assertEquals(BlockType.PLANKS, grid.get(4), "fifth grid cell should have 1 plank");
-        assertTrue(inv.isEmpty(10), "inventory slot should be empty");
+        assertEquals(1, inv.getCount(BlockType.PLANKS), "1 plank should remain in inventory (grid is full)");
     }
 
     @Test
@@ -318,29 +317,21 @@ class InventoryControllerTest {
         Inventory inv = new Inventory();
         CraftingGrid grid = new CraftingGrid();
         InventoryController c = new InventoryController(inv, grid);
-        inv.setSlot(10, BlockType.DIRT, 5);
+        inv.setSlot(10, BlockType.DIRT, 4);
 
-        // Drag from inventory slot with 5 dirt to 5 different grid cells
+        // Drag from inventory slot with 4 dirt to 4 different grid cells (2x2 grid)
         c.beginDrag(10, false);
         c.continueDrag(ContainerGui.GRID_START + 0);  // Grid cell 0
         c.continueDrag(ContainerGui.GRID_START + 1);  // Grid cell 1
         c.continueDrag(ContainerGui.GRID_START + 2);  // Grid cell 2
-        c.continueDrag(ContainerGui.GRID_START + 3);  // Grid cell 3
-        c.endDrag(ContainerGui.GRID_START + 4);       // Grid cell 4
+        c.endDrag(ContainerGui.GRID_START + 3);       // Grid cell 3
 
-        // Debug: check how many cells actually have items
-        int cellsWithItems = 0;
-        for (int i = 0; i < 9; i++) {
-            if (grid.get(i) != null) cellsWithItems++;
-        }
-
-        // Should place 1 dirt in each of the 5 cells
+        // Should place 1 dirt in each of the 4 cells
         assertEquals(BlockType.DIRT, grid.get(0), "grid cell 0 should have dirt");
         assertEquals(BlockType.DIRT, grid.get(1), "grid cell 1 should have dirt");
         assertEquals(BlockType.DIRT, grid.get(2), "grid cell 2 should have dirt");
         assertEquals(BlockType.DIRT, grid.get(3), "grid cell 3 should have dirt");
-        assertEquals(BlockType.DIRT, grid.get(4), "grid cell 4 should have dirt (only " + cellsWithItems + " cells filled)");
-        assertFalse(c.hasCursorItem(), "cursor should be empty after placing all 5 items");
+        assertFalse(c.hasCursorItem(), "cursor should be empty after placing all 4 items");
     }
 
     @Test
@@ -349,24 +340,22 @@ class InventoryControllerTest {
         CraftingGrid grid = new CraftingGrid();
         InventoryController c = new InventoryController(inv, grid);
         // Pre-populate cursor with planks (not lifted from dragStart)
-        inv.setSlot(10, BlockType.PLANKS, 5);
+        inv.setSlot(10, BlockType.PLANKS, 4);
         c.click(10, false, false); // Lift the stack onto the cursor
         assertTrue(c.hasCursorItem(), "cursor should hold planks");
-        assertEquals(5, c.cursorCount(), "cursor should have 5 planks");
+        assertEquals(4, c.cursorCount(), "cursor should have 4 planks");
 
         // Start drag on a crafting grid cell (dragStart is a destination, not source)
         c.beginDrag(ContainerGui.GRID_START + 0, false);
         c.continueDrag(ContainerGui.GRID_START + 1);
         c.continueDrag(ContainerGui.GRID_START + 2);
-        c.continueDrag(ContainerGui.GRID_START + 3);
-        c.endDrag(ContainerGui.GRID_START + 4);
+        c.endDrag(ContainerGui.GRID_START + 3);
 
-        // All 5 visited cells should receive 1 plank each, including dragStart (cell 0)
+        // All 4 visited cells should receive 1 plank each, including dragStart (cell 0)
         assertEquals(BlockType.PLANKS, grid.get(0), "grid cell 0 (dragStart) should have plank");
         assertEquals(BlockType.PLANKS, grid.get(1), "grid cell 1 should have plank");
         assertEquals(BlockType.PLANKS, grid.get(2), "grid cell 2 should have plank");
         assertEquals(BlockType.PLANKS, grid.get(3), "grid cell 3 should have plank");
-        assertEquals(BlockType.PLANKS, grid.get(4), "grid cell 4 should have plank");
-        assertFalse(c.hasCursorItem(), "cursor should be empty after placing all 5 items");
+        assertFalse(c.hasCursorItem(), "cursor should be empty after placing all 4 items");
     }
 }
