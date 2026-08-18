@@ -68,6 +68,23 @@ public class MapRenderer {
     private float mapOffsetX = 0f;
     private float mapOffsetZ = 0f;
 
+    // Cached mini-map
+    private BufferedImage cachedMiniMapImage;
+    private int lastMiniMapPlayerChunkX = Integer.MAX_VALUE;
+    private int lastMiniMapPlayerChunkZ = Integer.MAX_VALUE;
+    private float lastMiniMapPlayerYaw = Float.NaN;
+
+    // Cached full-screen map
+    private BufferedImage cachedFullMapImage;
+    private int lastFullMapWidth = -1;
+    private int lastFullMapHeight = -1;
+    private int lastFullMapPlayerChunkX = Integer.MAX_VALUE;
+    private int lastFullMapPlayerChunkZ = Integer.MAX_VALUE;
+    private float lastFullMapPlayerYaw = Float.NaN;
+    private float lastFullMapScale = Float.NaN;
+    private float lastFullMapOffsetX = Float.NaN;
+    private float lastFullMapOffsetZ = Float.NaN;
+
     public MapRenderer(MapData mapData) {
         this.mapData = mapData;
     }
@@ -84,7 +101,30 @@ public class MapRenderer {
      * @param playerYaw    camera yaw in degrees (−90 = North/−Z, 0 = East/+X)
      */
     public BufferedImage renderMiniMap(float playerWorldX, float playerWorldZ, float playerYaw) {
-        BufferedImage img = new BufferedImage(MINI_MAP_WIDTH, MINI_MAP_HEIGHT, BufferedImage.TYPE_INT_RGB);
+        int[] playerChunk = MapData.getChunkCoords(playerWorldX, playerWorldZ);
+        int playerChunkX = playerChunk[0];
+        int playerChunkZ = playerChunk[1];
+
+        // Return cached image if nothing has changed
+        if (cachedMiniMapImage != null
+                && lastMiniMapPlayerChunkX == playerChunkX
+                && lastMiniMapPlayerChunkZ == playerChunkZ
+                && lastMiniMapPlayerYaw == playerYaw) {
+            return cachedMiniMapImage;
+        }
+
+        // Update cache state
+        lastMiniMapPlayerChunkX = playerChunkX;
+        lastMiniMapPlayerChunkZ = playerChunkZ;
+        lastMiniMapPlayerYaw = playerYaw;
+
+        // Reuse the cached image buffer if available
+        BufferedImage img = cachedMiniMapImage;
+        if (img == null || img.getWidth() != MINI_MAP_WIDTH || img.getHeight() != MINI_MAP_HEIGHT) {
+            img = new BufferedImage(MINI_MAP_WIDTH, MINI_MAP_HEIGHT, BufferedImage.TYPE_INT_RGB);
+            cachedMiniMapImage = img;
+        }
+
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -92,10 +132,6 @@ public class MapRenderer {
         // Background
         g.setColor(new Color(20, 20, 20));
         g.fillRect(0, 0, MINI_MAP_WIDTH, MINI_MAP_HEIGHT);
-
-        int[] playerChunk = MapData.getChunkCoords(playerWorldX, playerWorldZ);
-        int playerChunkX = playerChunk[0];
-        int playerChunkZ = playerChunk[1];
 
         int radius = 10;
         for (int cx = playerChunkX - radius; cx <= playerChunkX + radius; cx++) {
@@ -168,11 +204,44 @@ public class MapRenderer {
     public BufferedImage renderFullMap(int width, int height,
                                        float playerWorldX, float playerWorldZ,
                                        float playerYaw) {
+        int[] playerChunk = MapData.getChunkCoords(playerWorldX, playerWorldZ);
+        int playerChunkX = playerChunk[0];
+        int playerChunkZ = playerChunk[1];
+
+        // Return cached image if nothing has changed
+        if (cachedFullMapImage != null
+                && lastFullMapWidth == width
+                && lastFullMapHeight == height
+                && lastFullMapPlayerChunkX == playerChunkX
+                && lastFullMapPlayerChunkZ == playerChunkZ
+                && lastFullMapPlayerYaw == playerYaw
+                && lastFullMapScale == mapScale
+                && lastFullMapOffsetX == mapOffsetX
+                && lastFullMapOffsetZ == mapOffsetZ) {
+            return cachedFullMapImage;
+        }
+
+        // Update cache state
+        lastFullMapWidth = width;
+        lastFullMapHeight = height;
+        lastFullMapPlayerChunkX = playerChunkX;
+        lastFullMapPlayerChunkZ = playerChunkZ;
+        lastFullMapPlayerYaw = playerYaw;
+        lastFullMapScale = mapScale;
+        lastFullMapOffsetX = mapOffsetX;
+        lastFullMapOffsetZ = mapOffsetZ;
+
         // Legend panel on the right; map fills the rest.
         int legendW = Math.min(180, width / 5);
         int mapW    = width - legendW;
 
-        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        // Reuse the cached image buffer if size matches
+        BufferedImage img = cachedFullMapImage;
+        if (img == null || img.getWidth() != width || img.getHeight() != height) {
+            img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            cachedFullMapImage = img;
+        }
+
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -180,10 +249,6 @@ public class MapRenderer {
         // ── Map background ──────────────────────────────────────────────────
         g.setColor(new Color(20, 20, 25));
         g.fillRect(0, 0, mapW, height);
-
-        int[] playerChunk = MapData.getChunkCoords(playerWorldX, playerWorldZ);
-        int playerChunkX = playerChunk[0];
-        int playerChunkZ = playerChunk[1];
 
         int chunkPx = Math.max(2, (int) (CHUNK_PIXEL_SIZE * mapScale));
         int cx0 = mapW / 2;
