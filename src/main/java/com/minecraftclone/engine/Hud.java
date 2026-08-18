@@ -399,7 +399,8 @@ public class Hud {
             hotbarItemIcon.render();
             hudShader.unbind();
         } else {
-            addQuad(cx - half, cy - half, cx + half, cy + half, atlas.getUV(type.topTile));
+            // Render as 3D isometric block
+            addIsometricBlock(cx, cy, half, type, atlas);
         }
 
         if (count > 1) {
@@ -1174,6 +1175,39 @@ public class Hud {
         out.add(minX); out.add(minY); out.add(0);
         out.add(maxX); out.add(maxY); out.add(0);
         out.add(minX); out.add(maxY); out.add(0);
+    }
+
+    /**
+     * Renders a block as a 3D isometric cube in an inventory slot.
+     * Creates the illusion of depth by rendering three quads: the top face and two side faces
+     * in an isometric projection (45° rotation, 35° tilt).
+     */
+    private void addIsometricBlock(float cx, float cy, float half, BlockType type, TextureAtlas atlas) {
+        // The isometric projection creates depth by offsetting side faces
+        float depth = half * 0.32f;  // Depth of the side faces (how much they extend)
+
+        // Draw in back-to-front order for correct overlap (though z-ordering doesn't matter for 2D HUD)
+
+        // Left side face (X- in world space, shows as left in isometric)
+        float leftX0 = cx - half;
+        float leftX1 = cx - half + depth;
+        float leftY0 = cy - half + depth;
+        float leftY1 = cy + half - depth;
+        addQuad(leftX0, leftY0, leftX1, leftY1, atlas.getUV(type.sideTile));
+
+        // Right side face (Z+ in world space, shows as right in isometric)
+        float rightX0 = cx + half - depth;
+        float rightX1 = cx + half;
+        float rightY0 = cy - half + depth;
+        float rightY1 = cy + half - depth;
+        addQuad(rightX0, rightY0, rightX1, rightY1, atlas.getUV(type.sideTile));
+
+        // Top face (Y+ in world space) - draw last so it appears on top
+        float topX0 = cx - half + depth;
+        float topX1 = cx + half - depth;
+        float topY0 = cy - half;
+        float topY1 = cy - half + depth;
+        addQuad(topX0, topY0, topX1, topY1, atlas.getUV(type.topTile));
     }
 
     private static float[] outlineLines(float cx, float cy, float half) {
