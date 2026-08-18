@@ -97,12 +97,6 @@ public final class Crafting {
         shaped2x2("I.", "I.", BlockType.IRON_PICKAXE, 1);            // simple iron pickaxe
         shaped2x2("D.", "D.", BlockType.DIAMOND_PICKAXE, 1);         // simple diamond pickaxe
 
-        // 2x2 swords (distinct from pickaxes with mirrored vertical orientation)
-        shaped2x2(".W", ".W", BlockType.WOOD_SWORD, 1);              // wooden sword
-        shaped2x2(".K", ".K", BlockType.STONE_SWORD, 1);             // stone sword
-        shaped2x2(".I", ".I", BlockType.IRON_SWORD, 1);              // iron sword
-        shaped2x2(".D", ".D", BlockType.DIAMOND_SWORD, 1);           // diamond sword
-
         // 3x3 recipes from crafting table
         // Stairs: a 6-material "K.. / KK. / KKK" wedge -> 4 stairs.
         shaped3x3("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);
@@ -123,17 +117,24 @@ public final class Crafting {
         shapeless2x2(BlockType.OBSIDIAN, 1, BlockType.LAVA_SOURCE, BlockType.WATER_SOURCE); // quench lava -> obsidian
 
         // --- 3x3 Crafting Table Recipes ---
-        // Complex armor recipes
-        shaped3x3("UUU", "U.U", "...", BlockType.FUR_HELMET, 1);                         // 5 wool -> helmet
-        shaped3x3("VVV", "V.V", "VVV", BlockType.WOLF_CHESTPLATE, 1);                    // 8 wolf pelt -> chestplate
-        shaped3x3("BBB", "B.B", "BBB", BlockType.BEAR_CHESTPLATE, 1);                    // 8 bear hide -> chestplate
-        shaped3x3("III", "I.I", "III", BlockType.IRON_CHESTPLATE, 1);                    // 8 iron -> chestplate
-        shaped3x3("DDD", "D.D", "...", BlockType.DIAMOND_HELMET, 1);                     // 5 diamond -> helmet
-        shaped3x3("PPP", "P.P", "P.P", BlockType.WOOD_LEGGINGS, 1);                       // 7 planks -> leggings
-        shaped3x3("KKK", "K.K", "K.K", BlockType.STONE_BOOTS, 1);                        // 6 stone -> boots
+        // Tools (mirrored matching lets an axe be built either way round).
+        tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD,
+                BlockType.WOOD_SHOVEL, BlockType.WOOD_HAMMER, BlockType.WOOD_BROADAXE);
+        tools('K', BlockType.STONE_PICKAXE, BlockType.STONE_AXE, BlockType.STONE_SWORD,
+                BlockType.STONE_SHOVEL, BlockType.STONE_HAMMER, BlockType.STONE_BROADAXE);
+        tools('I', BlockType.IRON_PICKAXE, BlockType.IRON_AXE, BlockType.IRON_SWORD,
+                BlockType.IRON_SHOVEL, BlockType.IRON_HAMMER, BlockType.IRON_BROADAXE);
+        tools('D', BlockType.DIAMOND_PICKAXE, BlockType.DIAMOND_AXE, BlockType.DIAMOND_SWORD,
+                BlockType.DIAMOND_SHOVEL, BlockType.DIAMOND_HAMMER, BlockType.DIAMOND_BROADAXE);
 
-        // Tool recipes with mirroring
-        shaped3x3("II.", "IS.", ".S.", BlockType.IRON_AXE, 1);                           // iron axe
+        // Armor: helmet (5), chestplate (8), leggings (7), boots (4) of each material.
+        armor('P', BlockType.WOOD_HELMET, BlockType.WOOD_CHESTPLATE, BlockType.WOOD_LEGGINGS, BlockType.WOOD_BOOTS);
+        armor('K', BlockType.STONE_HELMET, BlockType.STONE_CHESTPLATE, BlockType.STONE_LEGGINGS, BlockType.STONE_BOOTS);
+        armor('I', BlockType.IRON_HELMET, BlockType.IRON_CHESTPLATE, BlockType.IRON_LEGGINGS, BlockType.IRON_BOOTS);
+        armor('D', BlockType.DIAMOND_HELMET, BlockType.DIAMOND_CHESTPLATE, BlockType.DIAMOND_LEGGINGS, BlockType.DIAMOND_BOOTS);
+        armor('U', BlockType.FUR_HELMET, BlockType.FUR_CHESTPLATE, BlockType.FUR_LEGGINGS, BlockType.FUR_BOOTS);
+        armor('V', BlockType.WOLF_HELMET, BlockType.WOLF_CHESTPLATE, BlockType.WOLF_LEGGINGS, BlockType.WOLF_BOOTS);
+        armor('B', BlockType.BEAR_HELMET, BlockType.BEAR_CHESTPLATE, BlockType.BEAR_LEGGINGS, BlockType.BEAR_BOOTS);
 
         // Stairs (wedge pattern: K.. / KK. / KKK)
         shaped3x3("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);                       // 6 stone -> 4 stairs
@@ -186,6 +187,45 @@ public final class Crafting {
     /** Registers a shapeless 5x5 recipe that matches any arrangement of {@code ingredients}. */
     private static void shapeless5x5(BlockType output, int amount, BlockType... ingredients) {
         RECIPES_5x5.add(new ShapelessRecipe(ingredients, output, amount));
+    }
+
+    /** Registers 3x3 tool recipes (pickaxe, axe, sword, shovel, hammer, broadaxe) for a material. */
+    private static void tools(char material, BlockType pickaxe, BlockType axe, BlockType sword,
+                              BlockType shovel, BlockType hammer, BlockType broadaxe) {
+        // Pickaxe: XXX / XSX / .S. (top 3 same, middle stick in center, stick below)
+        shaped3x3(String.valueOf(material) + String.valueOf(material) + String.valueOf(material),
+                  String.valueOf(material) + "S" + String.valueOf(material),
+                  ".S.", pickaxe, 1);
+        // Axe: XX. / XSX / .S. (left 2 top, stick in middle+center, stick below)
+        shaped3x3(String.valueOf(material) + String.valueOf(material) + ".",
+                  String.valueOf(material) + "S" + String.valueOf(material),
+                  ".S.", axe, 1);
+        // Sword: X / X / S (vertical line, 1 wide)
+        shaped3x3(".X.", ".X.", ".S.", sword, 1);
+        // Shovel: X / S / S (material on top, 2 sticks below)
+        shaped3x3(".X.", ".S.", ".S.", shovel, 1);
+        // Hammer: XX. / XSX / .S. (like pickaxe but wider)
+        shaped3x3(String.valueOf(material) + String.valueOf(material) + ".",
+                  String.valueOf(material) + "S" + String.valueOf(material),
+                  ".S.", hammer, 1);
+        // Broadaxe: .XX / XSX / .S. (right side heavy for axe, stick in middle, stick below)
+        shaped3x3("." + String.valueOf(material) + String.valueOf(material),
+                  String.valueOf(material) + "S" + String.valueOf(material),
+                  ".S.", broadaxe, 1);
+    }
+
+    /** Registers 3x3 armor recipes (helmet, chestplate, leggings, boots) for a material. */
+    private static void armor(char material, BlockType helmet, BlockType chestplate,
+                              BlockType leggings, BlockType boots) {
+        String m = String.valueOf(material);
+        // Helmet: XXX / X.X / ... (5 pieces, hollow top)
+        shaped3x3(m + m + m, m + "." + m, "...", helmet, 1);
+        // Chestplate: X.X / XXX / XXX (8 pieces)
+        shaped3x3(m + "." + m, m + m + m, m + m + m, chestplate, 1);
+        // Leggings: XXX / X.X / X.X (7 pieces)
+        shaped3x3(m + m + m, m + "." + m, m + "." + m, leggings, 1);
+        // Boots: X.X / X.X / ... (4 pieces)
+        shaped3x3(m + "." + m, m + "." + m, "...", boots, 1);
     }
 
 
