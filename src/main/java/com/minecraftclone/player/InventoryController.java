@@ -400,7 +400,8 @@ public class InventoryController {
                 return;
             }
         } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE) {
-            for (int i = 0; i < CraftingGrid.SIZE && count > 0; i++) {
+            // Fill crafting grid cells (3x3 for crafting table)
+            for (int i = 0; i < gui.gridSize() && count > 0; i++) {
                 if (gui.grid().get(i) == null) {
                     gui.grid().set(i, t);
                     count--;
@@ -478,7 +479,7 @@ public class InventoryController {
     /** Returns grid contents to the inventory (keeping any that don't fit) - called when the screen closes. */
     public void returnGridToInventory() {
         if (!gui.hasGrid()) return;
-        for (int i = 0; i < CraftingGrid.SIZE; i++) {
+        for (int i = 0; i < gui.gridSize(); i++) {
             BlockType t = gui.grid().get(i);
             if (t != null && inventory.add(t, 1) == 0) {
                 gui.grid().set(i, null);

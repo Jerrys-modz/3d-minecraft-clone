@@ -2,6 +2,8 @@ package com.minecraftclone.engine.gui;
 
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
+import com.minecraftclone.player.CraftingTableGrid;
+import com.minecraftclone.player.Grid;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.StorageContainer;
 import com.minecraftclone.world.BlockType;
@@ -51,14 +53,14 @@ public class ContainerGui {
 
     /** First slot id of the crafting grid (directly after the player slots). */
     public static final int GRID_START = Inventory.SIZE;
-    /** Slot id of the crafting result. */
+    /** Slot id of the crafting result (2x2 grid: 36 + 4 = 40). Note: for 3x3 it would be 45. */
     public static final int OUTPUT_SLOT = GRID_START + CraftingGrid.SIZE;
     /**
      * First slot id of the armor column (helmet/chestplate/leggings/boots),
      * just past the crafting output. Only the player's own inventory screen
-     * shows armor slots - placed containers (furnace/chest) don't.
+     * (2x2 grid) shows armor slots - placed containers (furnace/chest) don't.
      */
-    public static final int ARMOR_START = OUTPUT_SLOT + 1;
+    public static final int ARMOR_START = 41;  // GRID_START (36) + CraftingGrid.SIZE (4) + 1
     /** Number of armor slots on the player's inventory screen. */
     public static final int ARMOR_SLOT_COUNT = Inventory.ARMOR_SLOT_COUNT;
     /**
@@ -73,20 +75,22 @@ public class ContainerGui {
 
     private final Kind kind;
     private final Inventory inventory;
-    private final CraftingGrid grid;
+    private final CraftingGrid playerGrid;
+    private final CraftingTableGrid tableGrid;
     private final StorageContainer container;
 
     /**
      * @param kind       which container this gui shows
      * @param inventory  the player's inventory (shared, always present)
-     * @param grid       the shared crafting grid (used when the kind has one)
+     * @param grid       the shared 2x2 crafting grid (used for INVENTORY/CRAFTING_TABLE)
      * @param container  the placed block's container (FURNACE/CHEST kinds only;
      *                   may be null otherwise)
      */
     public ContainerGui(Kind kind, Inventory inventory, CraftingGrid grid, StorageContainer container) {
         this.kind = kind;
         this.inventory = inventory;
-        this.grid = grid;
+        this.playerGrid = grid;
+        this.tableGrid = new CraftingTableGrid();
         this.container = (kind == Kind.FURNACE || kind == Kind.CHEST) ? container : null;
     }
 
@@ -110,8 +114,22 @@ public class ContainerGui {
         return inventory;
     }
 
-    public CraftingGrid grid() {
-        return grid;
+    /**
+     * Returns the crafting grid. Uses the player grid for INVENTORY,
+     * and the table grid for CRAFTING_TABLE (unless the player grid was specifically passed).
+     */
+    public Grid grid() {
+        // If a grid was explicitly passed and we're in CRAFTING_TABLE mode, use it
+        // (for backward compatibility with tests that create CRAFTING_TABLE with 2x2 grids)
+        if (kind == Kind.CRAFTING_TABLE && playerGrid != null) {
+            return playerGrid;
+        }
+        return kind == Kind.CRAFTING_TABLE ? tableGrid : playerGrid;
+    }
+
+    /** Returns the crafting grid size (4 for 2x2, 9 for 3x3), determined from the grid's snapshot. */
+    public int gridSize() {
+        return grid().snapshot().length;
     }
 
     /** The placed block's container (furnace or chest); null when no container is open. */
@@ -127,7 +145,7 @@ public class ContainerGui {
     /** Total number of interactive slots in the gui. */
     public int slotCount() {
         int count = Inventory.SIZE;
-        if (hasGrid()) count += CraftingGrid.SIZE + 1;
+        if (hasGrid()) count += gridSize() + 1;
         if (hasArmor()) count += ARMOR_SLOT_COUNT;
         if (hasContainer()) count += container.size();
         return count;
@@ -143,11 +161,11 @@ public class ContainerGui {
     }
 
     public boolean isGridSlot(int slotId) {
-        return hasGrid() && slotId >= GRID_START && slotId < OUTPUT_SLOT;
+        return hasGrid() && slotId >= GRID_START && slotId < GRID_START + gridSize();
     }
 
     public boolean isOutputSlot(int slotId) {
-        return hasGrid() && slotId == OUTPUT_SLOT;
+        return hasGrid() && slotId == GRID_START + gridSize();
     }
 
     /** True if {@code slotId} is one of the four armor slots (helmet/chestplate/leggings/boots). */
@@ -168,7 +186,7 @@ public class ContainerGui {
     /** The type held in a slot (null if empty); the output slot derives from the recipe. */
     public BlockType typeOf(int slotId) {
         if (isPlayerSlot(slotId)) return inventory.typeOf(slotId);
-        if (isGridSlot(slotId)) return grid.get(slotId - GRID_START);
+        if (isGridSlot(slotId)) return grid().get(slotId - GRID_START);
         if (isArmorSlot(slotId)) return inventory.armorType(slotId - ARMOR_START);
         if (isContainerSlot(slotId)) return container.typeOf(slotId - CONTAINER_START);
         return null;
@@ -177,7 +195,7 @@ public class ContainerGui {
     /** The count in a slot (grid cells hold 0 or 1). */
     public int countOf(int slotId) {
         if (isPlayerSlot(slotId)) return inventory.countOf(slotId);
-        if (isGridSlot(slotId)) return grid.get(slotId - GRID_START) == null ? 0 : 1;
+        if (isGridSlot(slotId)) return grid().get(slotId - GRID_START) == null ? 0 : 1;
         if (isArmorSlot(slotId)) return inventory.armorType(slotId - ARMOR_START) == null ? 0 : 1;
         if (isContainerSlot(slotId)) return container.countOf(slotId - CONTAINER_START);
         return 0;
@@ -188,7 +206,7 @@ public class ContainerGui {
         if (isPlayerSlot(slotId)) {
             inventory.setSlot(slotId, type, count);
         } else if (isGridSlot(slotId)) {
-            grid.set(slotId - GRID_START, type);
+            grid().set(slotId - GRID_START, type);
         } else if (isArmorSlot(slotId)) {
             inventory.setArmor(slotId - ARMOR_START, type);
         } else if (isContainerSlot(slotId)) {
@@ -198,6 +216,9 @@ public class ContainerGui {
 
     /** The recipe the current grid contents produce, or null. */
     public Crafting.Recipe currentRecipe() {
-        return hasGrid() ? Crafting.match(grid.snapshot()) : null;
+        if (!hasGrid()) return null;
+        BlockType[] snapshot = grid().snapshot();
+        // Determine matching method based on grid size
+        return snapshot.length == 9 ? Crafting.match3x3(snapshot) : Crafting.match2x2(snapshot);
     }
 }
