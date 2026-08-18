@@ -4,6 +4,7 @@ import com.minecraftclone.Settings;
 import com.minecraftclone.engine.GamepadBindings;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.GLTexture;
 import com.minecraftclone.engine.graphics.GuiTextures;
 import com.minecraftclone.engine.graphics.IconMesh;
 import com.minecraftclone.engine.graphics.ItemTextures;
@@ -31,6 +32,8 @@ import org.joml.Vector4f;
 import java.util.List;
 
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
+import static org.lwjgl.opengl.GL13.glActiveTexture;
 
 /**
  * Draws all 2D overlay elements: the crosshair, the wireframe outline around
@@ -152,6 +155,11 @@ public class Hud {
     private final IconMesh guiQuadMesh = new IconMesh();
     private final FloatArray guiVerts = new FloatArray(512);
     private final IntArray guiInds = new IntArray(256);
+
+    // Cached mini-map resources to avoid recreating every frame.
+    private java.awt.image.BufferedImage cachedMiniMapImage;
+    private int cachedMiniMapTextureId = -1;
+    private final IconMesh miniMapMesh = new IconMesh();
 
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
@@ -1983,6 +1991,60 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    /**
+     * Renders a mini-map image in the top-right corner of the screen.
+     * Caches the texture and mesh to avoid recreating them every frame.
+     * Call with null image to clear the cache (e.g., when changing worlds).
+     */
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, float sizeX, float sizeY, float offsetX, float offsetY, float aspectRatio) {
+        if (miniMapImage == null) {
+            // Clear cache when no image provided
+            if (cachedMiniMapTextureId >= 0) {
+                glDeleteTextures(cachedMiniMapTextureId);
+                cachedMiniMapTextureId = -1;
+                miniMapMesh.destroy();
+            }
+            cachedMiniMapImage = null;
+            return;
+        }
+
+        // Recreate texture only if the image has changed
+        if (cachedMiniMapImage != miniMapImage) {
+            if (cachedMiniMapTextureId >= 0) {
+                glDeleteTextures(cachedMiniMapTextureId);
+            }
+            cachedMiniMapTextureId = GLTexture.upload(miniMapImage);
+            cachedMiniMapImage = miniMapImage;
+
+            // Recreate mesh with the correct position and UV coordinates
+            float minX = offsetX - sizeX / 2f;
+            float maxX = offsetX + sizeX / 2f;
+            float minY = offsetY - sizeY / 2f;
+            float maxY = offsetY + sizeY / 2f;
+
+            float[] verts = {
+                minX, minY, 0, 0, 0,  // bottom-left
+                maxX, minY, 0, 1, 0,  // bottom-right
+                maxX, maxY, 0, 1, 1,  // top-right
+                minX, maxY, 0, 0, 1,  // top-left
+            };
+            int[] inds = {0, 1, 2, 0, 2, 3};
+            miniMapMesh.upload(verts, inds);
+        }
+
+        glDisable(GL_DEPTH_TEST);
+        hudShader.bind();
+        hudShader.setUniform("transform", new Matrix4f().identity().scale(1f / aspectRatio, 1f, 1f));
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, cachedMiniMapTextureId);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", new Vector4f(1f, 1f, 1f, 1f));
+        miniMapMesh.render();
+        hudShader.unbind();
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glEnable(GL_DEPTH_TEST);
+    }
+
     public void destroy() {
         crosshair.destroy();
         cubeOutline.destroy();
@@ -2004,5 +2066,10 @@ public class Hud {
         settingsFill.destroy();
         guiQuadMesh.destroy();
         frostOverlay.destroy();
+        if (cachedMiniMapTextureId >= 0) {
+            glDeleteTextures(cachedMiniMapTextureId);
+            cachedMiniMapTextureId = -1;
+        }
+        miniMapMesh.destroy();
     }
 }
