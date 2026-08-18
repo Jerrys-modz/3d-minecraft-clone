@@ -36,7 +36,7 @@ class NetherGeneratorTest {
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 assertEquals(BlockType.BEDROCK, chunk.getLocal(x, 0, z), "floor");
-                // The roof is sealed from the BEDROCK_TOP layer up (125..127);
+                // The roof is sealed from the BEDROCK_TOP layer up (250..255);
                 // below that is the netherrack filler that hides the void.
                 for (int y = Chunk.HEIGHT - 3; y < Chunk.HEIGHT; y++) {
                     assertEquals(BlockType.BEDROCK, chunk.getLocal(x, y, z), "ceiling at y=" + y);
@@ -51,7 +51,8 @@ class NetherGeneratorTest {
         boolean foundNetherrack = false;
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
-                for (int y = 1; y < Chunk.HEIGHT - 4; y++) {
+                // Check only the nether cavern space, not the ceiling (which is bedrock/netherrack filler from CEILING_START=220 up)
+                for (int y = 1; y < 220; y++) {
                     BlockType t = chunk.getLocal(x, y, z);
                     if (t == BlockType.NETHERRACK || t == BlockType.SOUL_SAND || t == BlockType.LAVA
                             || t == BlockType.GLOWSTONE || t == BlockType.AIR) {

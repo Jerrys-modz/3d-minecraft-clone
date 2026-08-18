@@ -16,7 +16,7 @@ import java.util.List;
 public class Chunk implements ChunkStorage.PersistableChunk {
 
     public static final int SIZE = 16;
-    public static final int HEIGHT = 128;
+    public static final int HEIGHT = 256;
 
     // Face shading factors, faking simple fixed directional lighting.
     private static final float LIGHT_TOP = 1.0f;
