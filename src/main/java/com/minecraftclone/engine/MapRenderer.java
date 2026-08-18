@@ -154,6 +154,8 @@ public class MapRenderer {
     private int lastMiniMapPlayerChunkX = Integer.MAX_VALUE;
     private int lastMiniMapPlayerChunkZ = Integer.MAX_VALUE;
     private float lastMiniMapPlayerYaw = Float.NaN;
+    /** Incremented each time the mini-map image is redrawn so Hud can re-upload the GPU texture. */
+    private int miniMapVersion = 0;
 
     // Cached full-screen map
     private BufferedImage cachedFullMapImage;
@@ -165,6 +167,8 @@ public class MapRenderer {
     private float lastFullMapScale = Float.NaN;
     private float lastFullMapOffsetX = Float.NaN;
     private float lastFullMapOffsetZ = Float.NaN;
+    /** Incremented each time the full-map image is redrawn so Hud can re-upload the GPU texture. */
+    private int fullMapVersion = 0;
 
     public MapRenderer(MapData mapData) {
         this.mapData = mapData;
@@ -265,7 +269,13 @@ public class MapRenderer {
         g.drawRect(1, 1, MINI_MAP_WIDTH - 3, MINI_MAP_HEIGHT - 3);
 
         g.dispose();
+        miniMapVersion++;
         return img;
+    }
+
+    /** Returns the version counter that increments each time the mini-map image is redrawn. */
+    public int getMiniMapVersion() {
+        return miniMapVersion;
     }
 
     // ── Full-screen map ───────────────────────────────────────────────────────
@@ -335,9 +345,12 @@ public class MapRenderer {
         int cx0 = mapW / 2;
         int cz0 = height / 2;
 
-        // Visible chunk radius
-        int radiusX = mapW  / chunkPx / 2 + 2;
-        int radiusZ = height / chunkPx / 2 + 2;
+        // Visible chunk radius — extend by the pan offset converted to chunk units so
+        // panning never leaves the iterated range empty.
+        int panChunkX = (int) Math.ceil(Math.abs(mapOffsetX) / chunkPx) + 1;
+        int panChunkZ = (int) Math.ceil(Math.abs(mapOffsetZ) / chunkPx) + 1;
+        int radiusX = mapW  / chunkPx / 2 + 2 + panChunkX;
+        int radiusZ = height / chunkPx / 2 + 2 + panChunkZ;
 
         // Track which ore types actually appear in the visible/explored area.
         Set<BlockType> seenOres = new LinkedHashSet<>();
@@ -469,7 +482,13 @@ public class MapRenderer {
         }
 
         g.dispose();
+        fullMapVersion++;
         return img;
+    }
+
+    /** Returns the version counter that increments each time the full-map image is redrawn. */
+    public int getFullMapVersion() {
+        return fullMapVersion;
     }
 
     // ── Zoom / Pan / Reset ────────────────────────────────────────────────────

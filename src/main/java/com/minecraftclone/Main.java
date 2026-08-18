@@ -644,7 +644,7 @@ public class Main {
                     autoDir.resolve(dim.saveFolder()).resolve("map.dat"));
             }
             mapRenderer[0] = new MapRenderer(world.getMapData());
-            hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
+            hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
             startCalendar(dayNightCycle, calendar, genSettings);
             for (World w : worlds) {
                 w.setRenderDistance(settings.getRenderDistance());
@@ -1161,7 +1161,7 @@ public class Main {
                                         worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
                                 }
                                 mapRenderer[0] = new MapRenderer(world.getMapData());
-                                hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
+                                hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
                                 startCalendar(dayNightCycle, calendar, genSettings);
                                 for (World w : worlds) {
                                     w.setRenderDistance(settings.getRenderDistance());
@@ -1228,7 +1228,7 @@ public class Main {
                                     worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
                             }
                             mapRenderer[0] = new MapRenderer(world.getMapData());
-                            hud.renderMiniMap(null, 0, 0, 0, 0, 1); // Clear mini-map cache
+                            hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
                             startCalendar(dayNightCycle, calendar, genSettings);
                             for (World w : worlds) {
                                 w.setRenderDistance(settings.getRenderDistance());
@@ -1297,7 +1297,7 @@ public class Main {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
                 } else if (mapOpen[0]) {
                     mapOpen[0] = false;
-                    hud.renderFullMap(null); // clear GL texture cache
+                    hud.renderFullMap(null, -1); // clear GL texture cache
                 } else if (inventoryOpen[0]) {
                     closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                 } else if (creativeOpen[0]) {
@@ -1430,7 +1430,7 @@ public class Main {
             if (mapRenderer[0] != null && input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.MAP))
                     && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 mapOpen[0] = !mapOpen[0];
-                if (!mapOpen[0]) hud.renderFullMap(null); // clear GL texture cache on close
+                if (!mapOpen[0]) hud.renderFullMap(null, -1); // clear GL texture cache on close
                 window.setCursorCaptured(!mapOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
                 input.resetMouseDelta();
             }
@@ -1961,7 +1961,8 @@ public class Main {
                     java.awt.image.BufferedImage miniMapImage = mapRenderer[0].renderMiniMap(
                             player.getPosition().x, player.getPosition().z,
                             player.getCamera().getYaw());
-                    hud.renderMiniMap(miniMapImage, 0.2f, 0.2f, 0.9f, 0.9f, window.getAspectRatio());
+                    hud.renderMiniMap(miniMapImage, mapRenderer[0].getMiniMapVersion(),
+                            0.2f, 0.2f, 0.9f, 0.9f, window.getAspectRatio());
                 }
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
                 if (!settings.getGameMode().isInvulnerable()) {
@@ -1991,7 +1992,7 @@ public class Main {
                         window.getWidth(), window.getHeight(),
                         player.getPosition().x, player.getPosition().z,
                         player.getCamera().getYaw());
-                hud.renderFullMap(fullMapImage);
+                hud.renderFullMap(fullMapImage, mapRenderer[0].getFullMapVersion());
             }
             if (showDebug[0] && world != null) {
                 Vector3f pos = player.getPosition();

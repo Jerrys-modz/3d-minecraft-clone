@@ -126,7 +126,8 @@ public class MapData {
      */
     public void saveTo(Path file) {
         try {
-            Files.createDirectories(file.getParent());
+            Path parent = file.getParent();
+            if (parent != null) Files.createDirectories(parent);
             try (DataOutputStream out = new DataOutputStream(
                     new BufferedOutputStream(Files.newOutputStream(file)))) {
                 out.writeInt(SAVE_VERSION);
@@ -181,6 +182,10 @@ public class MapData {
             for (int i = 0; i < veinChunkCount; i++) {
                 long key = in.readLong();
                 int veinCount = in.readInt();
+                if (veinCount < 0 || veinCount > 100_000) {
+                    System.err.println("Corrupt map data: invalid vein count " + veinCount + ", skipping.");
+                    return;
+                }
                 List<OreVeinRecord> veins = new ArrayList<>(veinCount);
                 for (int j = 0; j < veinCount; j++) {
                     int x = in.readInt();

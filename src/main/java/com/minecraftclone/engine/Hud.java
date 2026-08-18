@@ -159,11 +159,13 @@ public class Hud {
     // Cached mini-map resources to avoid recreating every frame.
     private java.awt.image.BufferedImage cachedMiniMapImage;
     private int cachedMiniMapTextureId = -1;
+    private int cachedMiniMapVersion = -1;
     private final IconMesh miniMapMesh = new IconMesh();
     private float cachedMiniMapSizeX, cachedMiniMapSizeY, cachedMiniMapOffsetX, cachedMiniMapOffsetY;
 
     // Cached full-screen map resources.
     private java.awt.image.BufferedImage cachedFullMapImage;
+    private int cachedFullMapVersion = -1;
     private int cachedFullMapTextureId = -1;
     private final IconMesh fullMapMesh = new IconMesh();
 
@@ -2000,9 +2002,12 @@ public class Hud {
     /**
      * Renders a mini-map image in the top-right corner of the screen.
      * Caches the texture and mesh to avoid recreating them every frame.
-     * Call with null image to clear the cache (e.g., when changing worlds).
+     * Pass {@code null} image to clear the cache (e.g., when changing worlds).
+     * {@code imageVersion} comes from {@link com.minecraftclone.engine.MapRenderer#getMiniMapVersion()}
+     * and increments each time the renderer redraws into its cached image; Hud uses it
+     * to detect pixel changes that don't change the image reference.
      */
-    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, float sizeX, float sizeY, float offsetX, float offsetY, float aspectRatio) {
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion, float sizeX, float sizeY, float offsetX, float offsetY, float aspectRatio) {
         if (miniMapImage == null) {
             // Clear cache when no image provided
             if (cachedMiniMapTextureId >= 0) {
@@ -2011,21 +2016,23 @@ public class Hud {
                 miniMapMesh.destroy();
             }
             cachedMiniMapImage = null;
+            cachedMiniMapVersion = -1;
             return;
         }
 
-        // Check if image or layout has changed
-        boolean imageChanged = cachedMiniMapImage != miniMapImage;
+        // Check if image pixels or layout has changed
+        boolean imageChanged = cachedMiniMapImage != miniMapImage || cachedMiniMapVersion != imageVersion;
         boolean layoutChanged = cachedMiniMapSizeX != sizeX || cachedMiniMapSizeY != sizeY
                              || cachedMiniMapOffsetX != offsetX || cachedMiniMapOffsetY != offsetY;
 
-        // Recreate texture if image has changed
+        // Re-upload texture whenever the renderer has redrawn
         if (imageChanged) {
             if (cachedMiniMapTextureId >= 0) {
                 glDeleteTextures(cachedMiniMapTextureId);
             }
             cachedMiniMapTextureId = GLTexture.upload(miniMapImage);
             cachedMiniMapImage = miniMapImage;
+            cachedMiniMapVersion = imageVersion;
         }
 
         // Rebuild mesh if image or layout has changed
@@ -2066,8 +2073,10 @@ public class Hud {
     /**
      * Renders the full-screen map image, filling the entire viewport.
      * Pass {@code null} to clear the cached texture (e.g. when closing the map).
+     * {@code imageVersion} comes from {@link com.minecraftclone.engine.MapRenderer#getFullMapVersion()}
+     * and increments each time the renderer redraws into its cached image.
      */
-    public void renderFullMap(java.awt.image.BufferedImage mapImage) {
+    public void renderFullMap(java.awt.image.BufferedImage mapImage, int imageVersion) {
         if (mapImage == null) {
             if (cachedFullMapTextureId >= 0) {
                 glDeleteTextures(cachedFullMapTextureId);
@@ -2075,15 +2084,17 @@ public class Hud {
                 fullMapMesh.destroy();
             }
             cachedFullMapImage = null;
+            cachedFullMapVersion = -1;
             return;
         }
 
-        if (cachedFullMapImage != mapImage) {
+        if (cachedFullMapImage != mapImage || cachedFullMapVersion != imageVersion) {
             if (cachedFullMapTextureId >= 0) {
                 glDeleteTextures(cachedFullMapTextureId);
             }
             cachedFullMapTextureId = GLTexture.upload(mapImage);
             cachedFullMapImage = mapImage;
+            cachedFullMapVersion = imageVersion;
 
             // Full-screen quad: NDC −1..+1 in both axes, UV 0..1 with v flipped
             float[] verts = {

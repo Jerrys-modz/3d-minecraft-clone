@@ -24,6 +24,96 @@ public final class Smelting {
         smelt(BlockType.DIAMOND_ORE, BlockType.DIAMOND);
         smelt(BlockType.COAL_ORE, BlockType.COAL);
         smelt(BlockType.SAND, BlockType.GLASS);
+
+        // GTNH ore chain: crushed ore → ingot (stage 2 of ore → crushed → ingot).
+        // Vanilla-style ores with ingot counterparts.
+        smelt(BlockType.CRUSHED_COPPER,    BlockType.COPPER_INGOT);
+        smelt(BlockType.CRUSHED_TIN,       BlockType.TIN_INGOT);
+        smelt(BlockType.CRUSHED_LEAD,      BlockType.LEAD_INGOT);
+        smelt(BlockType.CRUSHED_SILVER,    BlockType.SILVER_INGOT);
+        smelt(BlockType.CRUSHED_ZINC,      BlockType.ZINC_INGOT);
+        smelt(BlockType.CRUSHED_NICKEL,    BlockType.NICKEL_INGOT);
+        smelt(BlockType.CRUSHED_COBALT,    BlockType.COBALT_INGOT);
+        smelt(BlockType.CRUSHED_TUNGSTEN,  BlockType.TUNGSTEN_INGOT);
+        smelt(BlockType.CRUSHED_MOLYBDENUM,BlockType.MOLYBDENUM_INGOT);
+        smelt(BlockType.CRUSHED_PLATINUM,  BlockType.PLATINUM_INGOT);
+        smelt(BlockType.CRUSHED_CHROMIUM,  BlockType.CHROMIUM_INGOT);
+        smelt(BlockType.CRUSHED_MANGANESE, BlockType.MANGANESE_INGOT);
+        smelt(BlockType.CRUSHED_VANADIUM,  BlockType.VANADIUM_INGOT);
+        smelt(BlockType.CRUSHED_BERYLLIUM, BlockType.BERYLLIUM_INGOT);
+        smelt(BlockType.CRUSHED_TITANIUM,  BlockType.TITANIUM_INGOT);
+        smelt(BlockType.CRUSHED_URANIUM,   BlockType.URANIUM_INGOT);
+        smelt(BlockType.CRUSHED_THORIUM,   BlockType.THORIUM_INGOT);
+        smelt(BlockType.CRUSHED_PLUTONIUM, BlockType.PLUTONIUM_INGOT);
+        smelt(BlockType.CRUSHED_IRIDIUM,   BlockType.IRIDIUM_INGOT);
+        smelt(BlockType.CRUSHED_BAUXITE,   BlockType.TIN_INGOT); // aluminium not yet defined; tin is the closest light metal
+
+        // Extended GTNH ore pack — crushed ore → ingot (outputs limited to existing BlockType constants).
+        // Iron-bearing minerals → IRON_INGOT
+        smelt(BlockType.CRUSHED_MAGNETITE,          BlockType.IRON_INGOT);
+        smelt(BlockType.CRUSHED_HEMATITE,           BlockType.IRON_INGOT);
+        smelt(BlockType.CRUSHED_BROWN_LIMONITE,     BlockType.IRON_INGOT);
+        smelt(BlockType.CRUSHED_YELLOW_LIMONITE,    BlockType.IRON_INGOT);
+        smelt(BlockType.CRUSHED_BANDED_IRON,        BlockType.IRON_INGOT);
+        smelt(BlockType.CRUSHED_VANADIUM_MAGNETITE, BlockType.VANADIUM_INGOT);
+        smelt(BlockType.CRUSHED_PYRITE,             BlockType.IRON_INGOT);
+        smelt(BlockType.CRUSHED_ARSENOPYRITE,       BlockType.IRON_INGOT);
+        // Copper-bearing minerals → COPPER_INGOT
+        smelt(BlockType.CRUSHED_CHALCOPYRITE,  BlockType.COPPER_INGOT);
+        smelt(BlockType.CRUSHED_TETRAHEDRITE,  BlockType.COPPER_INGOT);
+        smelt(BlockType.CRUSHED_MALACHITE,     BlockType.COPPER_INGOT);
+        // Lead / Zinc
+        smelt(BlockType.CRUSHED_GALENA,        BlockType.LEAD_INGOT);
+        smelt(BlockType.CRUSHED_SPHALERITE,    BlockType.ZINC_INGOT);
+        // Nickel / Cobalt
+        smelt(BlockType.CRUSHED_GARNIERITE,    BlockType.NICKEL_INGOT);
+        smelt(BlockType.CRUSHED_PENTLANDITE,   BlockType.NICKEL_INGOT);
+        smelt(BlockType.CRUSHED_COBALTITE,     BlockType.COBALT_INGOT);
+        // Tin / Tungsten / Chromium / Titanium
+        smelt(BlockType.CRUSHED_CASSITERITE,   BlockType.TIN_INGOT);
+        smelt(BlockType.CRUSHED_SCHEELITE,     BlockType.TUNGSTEN_INGOT);
+        smelt(BlockType.CRUSHED_WOLFRAMITE,    BlockType.TUNGSTEN_INGOT);
+        smelt(BlockType.CRUSHED_MOLYBDENITE,   BlockType.MOLYBDENUM_INGOT);
+        smelt(BlockType.CRUSHED_FERBERITE,     BlockType.TUNGSTEN_INGOT);
+        smelt(BlockType.CRUSHED_CHROMITE,      BlockType.CHROMIUM_INGOT);
+        smelt(BlockType.CRUSHED_ILMENITE,      BlockType.TITANIUM_INGOT);
+        smelt(BlockType.CRUSHED_RUTILE,        BlockType.TITANIUM_INGOT);
+        // Uranium / Thorium
+        smelt(BlockType.CRUSHED_URANINITE,     BlockType.URANIUM_INGOT);
+        smelt(BlockType.CRUSHED_PITCHBLENDE,   BlockType.URANIUM_INGOT);
+        // Vanadium / Manganese
+        smelt(BlockType.CRUSHED_VANADINITE,    BlockType.VANADIUM_INGOT);
+        smelt(BlockType.CRUSHED_PYROLUSITE,    BlockType.MANGANESE_INGOT);
+        // Rare earth / PGM (mapped to the nearest existing precious metal)
+        smelt(BlockType.CRUSHED_MONAZITE,          BlockType.PLATINUM_INGOT);
+        smelt(BlockType.CRUSHED_BASTNASITE,         BlockType.PLATINUM_INGOT);
+        smelt(BlockType.CRUSHED_NEODYMIUM,          BlockType.PLATINUM_INGOT);
+        smelt(BlockType.CRUSHED_CERIUM,             BlockType.PLATINUM_INGOT);
+        smelt(BlockType.CRUSHED_OSMIUM,             BlockType.IRIDIUM_INGOT);
+        smelt(BlockType.CRUSHED_PALLADIUM,          BlockType.PLATINUM_INGOT);
+        smelt(BlockType.CRUSHED_NAQUADAH,          BlockType.IRIDIUM_INGOT);
+        smelt(BlockType.CRUSHED_NAQUADAH_ENRICHED, BlockType.IRIDIUM_INGOT);
+        smelt(BlockType.CRUSHED_TRINIUM,           BlockType.IRIDIUM_INGOT);
+        // Light metals / gemstone hosts (mapped to nearest existing ingot/gem)
+        smelt(BlockType.CRUSHED_LEPIDOLITE,    BlockType.BERYLLIUM_INGOT);
+        smelt(BlockType.CRUSHED_LITHIUM,       BlockType.BERYLLIUM_INGOT);
+        smelt(BlockType.CRUSHED_CINNABAR,      BlockType.SILVER_INGOT); // mercury → silver (placeholder)
+        // Gemstones (no standalone gem items yet; map to DIAMOND as the nearest gem output)
+        smelt(BlockType.CRUSHED_RUBY,          BlockType.DIAMOND);     // ruby → diamond (gem placeholder)
+        smelt(BlockType.CRUSHED_SAPPHIRE,      BlockType.DIAMOND);     // sapphire → diamond
+        smelt(BlockType.CRUSHED_GREEN_SAPPHIRE,BlockType.DIAMOND);     // green sapphire → diamond
+        smelt(BlockType.CRUSHED_PYROPE,        BlockType.DIAMOND);     // garnet → diamond (closest gem)
+        smelt(BlockType.CRUSHED_SPESSARTINE,   BlockType.DIAMOND);     // garnet → diamond
+        // Non-metal minerals → COAL (gives back a fuel as a practical placeholder)
+        smelt(BlockType.CRUSHED_SULFUR,        BlockType.COAL);
+        smelt(BlockType.CRUSHED_GRAPHITE,      BlockType.COAL);
+        smelt(BlockType.CRUSHED_CALCITE,       BlockType.COAL);
+        smelt(BlockType.CRUSHED_APATITE,       BlockType.COAL);
+        smelt(BlockType.CRUSHED_PHOSPHATE,     BlockType.COAL);
+        smelt(BlockType.CRUSHED_PYROCHLORE,    BlockType.TUNGSTEN_INGOT); // niobium source → tungsten (placeholder)
+        // Lapis minerals → DIAMOND (blue gem placeholder)
+        smelt(BlockType.CRUSHED_SODALITE,      BlockType.DIAMOND);
+        smelt(BlockType.CRUSHED_LAZURITE,      BlockType.DIAMOND);
     }
 
     private Smelting() {
