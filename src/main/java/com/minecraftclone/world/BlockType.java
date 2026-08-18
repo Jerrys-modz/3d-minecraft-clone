@@ -318,7 +318,36 @@ public enum BlockType {
     IRIDIUM_ORE(214, true, false, 99, 99, 99),
     CRUSHED_IRIDIUM(215, 0),
     IRIDIUM_DUST(216, 0),
-    IRIDIUM_INGOT(217, 0);
+    IRIDIUM_INGOT(217, 0),
+
+    // --- Small Ores: Indicator ores mineable at -1 tier (tiles 100-119) ---
+    // Early-game small ores (striped appearance, mineable with stone tools)
+    SMALL_COPPER_ORE(218, true, false, 100, 100, 100),
+    SMALL_TIN_ORE(219, true, false, 101, 101, 101),
+    SMALL_BAUXITE_ORE(220, true, false, 102, 102, 102),
+    SMALL_ZINC_ORE(221, true, false, 103, 103, 103),
+    SMALL_LEAD_ORE(222, true, false, 104, 104, 104),
+    SMALL_SILVER_ORE(223, true, false, 105, 105, 105),
+
+    // Mid-game small ores (mineable with iron tools)
+    SMALL_NICKEL_ORE(224, true, false, 106, 106, 106),
+    SMALL_COBALT_ORE(225, true, false, 107, 107, 107),
+    SMALL_TUNGSTEN_ORE(226, true, false, 108, 108, 108),
+    SMALL_MOLYBDENUM_ORE(227, true, false, 109, 109, 109),
+    SMALL_PLATINUM_ORE(228, true, false, 110, 110, 110),
+
+    // Advanced small ores (mineable with diamond tools)
+    SMALL_CHROMIUM_ORE(229, true, false, 111, 111, 111),
+    SMALL_MANGANESE_ORE(230, true, false, 112, 112, 112),
+    SMALL_VANADIUM_ORE(231, true, false, 113, 113, 113),
+    SMALL_BERYLLIUM_ORE(232, true, false, 114, 114, 114),
+    SMALL_TITANIUM_ORE(233, true, false, 115, 115, 115),
+
+    // Late-game small ores (mineable with diamond tools)
+    SMALL_URANIUM_ORE(234, true, false, 116, 116, 116),
+    SMALL_THORIUM_ORE(235, true, false, 117, 117, 117),
+    SMALL_PLUTONIUM_ORE(236, true, false, 118, 118, 118),
+    SMALL_IRIDIUM_ORE(237, true, false, 119, 119, 119);
 
     public final byte id;
     public final boolean solid;
