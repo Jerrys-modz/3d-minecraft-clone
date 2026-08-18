@@ -93,6 +93,10 @@ public final class Mining {
         put(BlockType.DOOR_OPEN, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.TRAPDOOR, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.TRAPDOOR_OPEN, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.BED, 1.0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.BED_HEAD, 1.0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.BED_OCCUPIED, 1.0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.BED_HEAD_OCCUPIED, 1.0f, ToolKind.NONE, TIER_HAND);
 
         // Biome surface blocks - a shovel helps, nothing required.
         put(BlockType.SWAMP_GRASS, 0.6f, ToolKind.SHOVEL, TIER_HAND);
@@ -117,6 +121,9 @@ public final class Mining {
         put(BlockType.BARREL, 1.2f, ToolKind.BROADAXE, TIER_HAND);
         put(BlockType.PLANKS_STAIRS, 1.0f, ToolKind.BROADAXE, TIER_HAND);
         put(BlockType.WOODEN_FENCE, 1.0f, ToolKind.BROADAXE, TIER_HAND);
+
+        // Textiles - soft blocks.
+        put(BlockType.WOOL, 0.8f, ToolKind.NONE, TIER_HAND);
 
         // Stone and masonry - a hammer is the builder's tool (bare hands still work, just slow).
         put(BlockType.STONE, 2.5f, ToolKind.HAMMER, TIER_HAND);

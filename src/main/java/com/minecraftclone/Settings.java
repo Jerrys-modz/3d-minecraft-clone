@@ -1,5 +1,6 @@
 package com.minecraftclone;
 
+import com.minecraftclone.engine.GamepadBindings;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.world.gen.WorldGenSettings;
 
@@ -45,14 +46,16 @@ public class Settings {
     public static final int ROW_COUNT = 20;
 
     // Settings tabs: each owns a contiguous slice of the rows above. The
-    // Controls tab has no Settings rows - it shows the keybind list instead.
+    // Controls and Controller tabs have no Settings rows - they show the
+    // keybind/gamepad-binding lists instead.
     public static final int TAB_GRAPHICS = 0;
     public static final int TAB_GAMEPLAY = 1;
     public static final int TAB_AUDIO = 2;
     public static final int TAB_CONTROLS = 3;
-    public static final int TAB_COUNT = 4;
-    private static final int[] TAB_ROW_START = {LEAVES_TRANSPARENT, GAME_MODE, SOUND_VOLUME, ROW_COUNT};
-    private static final int[] TAB_ROW_END = {GAME_MODE, SOUND_VOLUME, ROW_COUNT, ROW_COUNT};
+    public static final int TAB_CONTROLLER = 4;
+    public static final int TAB_COUNT = 5;
+    private static final int[] TAB_ROW_START = {LEAVES_TRANSPARENT, GAME_MODE, SOUND_VOLUME, ROW_COUNT, ROW_COUNT};
+    private static final int[] TAB_ROW_END = {GAME_MODE, SOUND_VOLUME, ROW_COUNT, ROW_COUNT, ROW_COUNT};
 
     /** Display name of a settings tab, for the tab bar. */
     public static String tabLabel(int tab) {
@@ -61,6 +64,7 @@ public class Settings {
             case TAB_GAMEPLAY -> "Gameplay";
             case TAB_AUDIO -> "Audio";
             case TAB_CONTROLS -> "Controls";
+            case TAB_CONTROLLER -> "Controller";
             default -> "?";
         };
     }
@@ -78,6 +82,7 @@ public class Settings {
     private final boolean[] toggles = new boolean[ROW_COUNT];
     private final float[] ranges = new float[ROW_COUNT];
     private final KeyBindings keyBinds = new KeyBindings();
+    private final GamepadBindings gamepadBinds = new GamepadBindings();
     private final WorldGenSettings worldGen = new WorldGenSettings();
 
     public Settings() {
@@ -275,6 +280,7 @@ public class Settings {
         lines.add("player_volume=" + ranges[PLAYER_VOLUME]);
         lines.add("ui_volume=" + ranges[UI_VOLUME]);
         keyBinds.saveLines(lines);
+        gamepadBinds.saveLines(lines);
         worldGen.saveLines(lines);
         try {
             if (file.getParent() != null) {
@@ -324,6 +330,7 @@ public class Settings {
                         case "ui_volume" -> loadFiniteRange(s, UI_VOLUME, value);
                         default -> {
                             s.keyBinds.loadEntry(key, value);
+                            s.gamepadBinds.loadEntry(key, value);
                             s.worldGen.loadEntry(key, value);
                         }
                     }
@@ -455,5 +462,10 @@ public class Settings {
     /** Remappable gameplay key bindings (see {@link KeyBindings}). */
     public KeyBindings getKeyBinds() {
         return keyBinds;
+    }
+
+    /** Remappable gamepad button bindings (see {@link GamepadBindings}). */
+    public GamepadBindings getGamepadBinds() {
+        return gamepadBinds;
     }
 }

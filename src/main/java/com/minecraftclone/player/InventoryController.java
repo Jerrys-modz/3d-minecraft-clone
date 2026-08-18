@@ -283,12 +283,29 @@ public class InventoryController {
      * holding a different item, like Minecraft's drag).
      */
     private void resolveDrag() {
+        boolean liftedFromDragStart = false;
         if (!hasCursorItem() && !gui.isOutputSlot(dragStart) && slotType(dragStart) != null) {
             click(dragStart, false, false);
+            liftedFromDragStart = true;
         }
         if (!hasCursorItem()) return;
+
+        // Check if we're dragging to crafting grid cells - if so, don't place items back in source
+        boolean dragToCraftingGrid = false;
         for (int i = 0; i < dragVisited.length; i++) {
+            if (dragVisited[i] && gui.isGridSlot(i)) {
+                dragToCraftingGrid = true;
+                break;
+            }
+        }
+
+        for (int i = 0; i < dragVisited.length; i++) {
+            // Skip the output slot and any unvisited slots
             if (!gui.isOutputSlot(i) && dragVisited[i]) {
+                // When dragging to crafting grid, skip dragStart only if it was the pickup source
+                if (dragToCraftingGrid && i == dragStart && liftedFromDragStart) {
+                    continue;
+                }
                 depositOne(i);
             }
         }
@@ -375,7 +392,7 @@ public class InventoryController {
         }
 
         // Prefer the open container: ore/fuel into a furnace, anything into a
-        // chest, items into empty crafting-table cells.
+        // chest, items into empty crafting-grid cells.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
             int target = -1;
             if (Smelting.isSmeltable(t)) {
@@ -399,8 +416,10 @@ public class InventoryController {
                 inventory.setSlot(slotId, null, 0);
                 return;
             }
-        } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE) {
-            // Fill crafting grid cells (3x3 for crafting table)
+        } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE ||
+                   (gui.kind() == ContainerGui.Kind.INVENTORY && slotId >= Inventory.HOTBAR_SIZE)) {
+            // For a dedicated crafting table, or when shift-clicking from main inventory to the crafting grid,
+            // place items into empty crafting-grid cells.
             for (int i = 0; i < gui.gridSize() && count > 0; i++) {
                 if (gui.grid().get(i) == null) {
                     gui.grid().set(i, t);

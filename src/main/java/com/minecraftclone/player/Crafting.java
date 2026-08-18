@@ -96,11 +96,26 @@ public final class Crafting {
         shaped2x2("I.", "I.", BlockType.IRON_PICKAXE, 1);            // simple iron pickaxe
         shaped2x2("D.", "D.", BlockType.DIAMOND_PICKAXE, 1);         // simple diamond pickaxe
 
-        // Simple 2x2 swords and tools
+        // 2x2 swords (distinct from pickaxes with mirrored vertical orientation)
         shaped2x2(".W", ".W", BlockType.WOOD_SWORD, 1);              // wooden sword
         shaped2x2(".K", ".K", BlockType.STONE_SWORD, 1);             // stone sword
         shaped2x2(".I", ".I", BlockType.IRON_SWORD, 1);              // iron sword
         shaped2x2(".D", ".D", BlockType.DIAMOND_SWORD, 1);           // diamond sword
+
+        // 3x3 recipes from crafting table
+        // Stairs: a 6-material "K.. / KK. / KKK" wedge -> 4 stairs.
+        shaped3x3("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);
+        shaped3x3("P..", "PP.", "PPP", BlockType.PLANKS_STAIRS, 4);
+        // Fence: 4 planks + 2 sticks (PSP / PSP / ...) -> 3 fence posts.
+        shaped3x3("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);
+        // Bed: 3 wool on top, 2 planks below -> 1 bed
+        shaped3x3("UUU", "PPP", "...", BlockType.BED, 1);
+
+        // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
+        // itself is made by quenching a lava source with a water source (see
+        // shapeless below), so the Nether is reachable from raw overworld finds.
+        shaped3x3("OOO", "O.O", "OOO", BlockType.NETHER_PORTAL, 1); // obsidian ring -> nether portal
+        shaped3x3("OLO", "L.L", "OLO", BlockType.END_PORTAL, 1);    // obsidian + glowstone ring -> end portal
 
         // --- Shapeless recipes: any arrangement of the given ingredients. ---
         shapeless2x2(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
