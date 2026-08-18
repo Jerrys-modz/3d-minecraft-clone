@@ -1,6 +1,7 @@
 package com.minecraftclone.engine.gui;
 
 import com.minecraftclone.player.CraftingGrid;
+import com.minecraftclone.player.Grid;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.JoinedStorage;
@@ -119,13 +120,20 @@ class ContainerGuiTest {
         CraftingGrid grid = new CraftingGrid();
         ContainerGui gui = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, inv, grid, null);
         InventoryController c = new InventoryController(gui);
-        grid.set(0, BlockType.PLANKS);
-        grid.set(3, BlockType.PLANKS);
-        assertEquals(BlockType.STICK, gui.currentRecipe().output());
-        c.click(ContainerGui.OUTPUT_SLOT, false, false);
-        assertEquals(BlockType.STICK, c.cursorType());
+        // 3x3 table grid: test with a simple recipe that works in 3x3
+        // Use stone stairs pattern (K.. / KK. / KKK)
+        Grid tableGrid = gui.grid();
+        tableGrid.set(0, BlockType.STONE);
+        tableGrid.set(3, BlockType.STONE);
+        tableGrid.set(4, BlockType.STONE);
+        tableGrid.set(6, BlockType.STONE);
+        tableGrid.set(7, BlockType.STONE);
+        tableGrid.set(8, BlockType.STONE);
+        assertEquals(BlockType.STONE_STAIRS, gui.currentRecipe().output());
+        c.click(ContainerGui.GRID_START + 9, false, false);  // output slot for 3x3 is at GRID_START + 9
+        assertEquals(BlockType.STONE_STAIRS, c.cursorType());
         assertEquals(4, c.cursorCount());
-        assertTrue(grid.isEmpty());
+        assertTrue(tableGrid.isEmpty());
     }
 
     @Test
@@ -134,13 +142,15 @@ class ContainerGuiTest {
         CraftingGrid grid = new CraftingGrid();
         ContainerGui gui = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, inv, grid, null);
         InventoryController c = new InventoryController(gui);
-        inv.setSlot(0, BlockType.PLANKS, 5);
+        inv.setSlot(0, BlockType.PLANKS, 10);
         c.click(0, false, true);
-        for (int i = 0; i < 5; i++) {
-            assertEquals(BlockType.PLANKS, grid.get(i), "cell " + i + " filled");
+        // 3x3 crafting table grid has 9 cells, so 9 planks fit
+        Grid tableGrid = gui.grid();
+        for (int i = 0; i < 9; i++) {
+            assertEquals(BlockType.PLANKS, tableGrid.get(i), "cell " + i + " filled");
         }
-        assertEquals(0, inv.getCount(BlockType.PLANKS), "stack moved entirely into the grid");
-        assertTrue(inv.isEmpty(0));
+        assertEquals(1, inv.getCount(BlockType.PLANKS), "10th plank stays in inventory (grid full)");
+        assertFalse(inv.isEmpty(0));
     }
 
     @Test
