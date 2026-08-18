@@ -212,8 +212,18 @@ public final class Crafting {
         return null;
     }
 
-    /** Finds the recipe matching the given grid (row-major, null = empty), or null. Defaults to 2x2. */
+    /**
+     * Finds the recipe matching the given 2x2 grid (row-major, null = empty), or null.
+     * Enforces that the grid is exactly 4 cells (2x2).
+     *
+     * @param grid a 4-element array representing a 2x2 crafting grid
+     * @return the matching recipe, or null if no recipe matches
+     * @throws IllegalArgumentException if grid.length != 4
+     */
     public static Recipe match(BlockType[] grid) {
+        if (grid == null || grid.length != 4) {
+            throw new IllegalArgumentException("Grid must be a 2x2 grid (4 cells), got " + (grid == null ? "null" : grid.length));
+        }
         return match2x2(grid);
     }
 
