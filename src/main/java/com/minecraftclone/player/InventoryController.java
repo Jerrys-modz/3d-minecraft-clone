@@ -417,15 +417,21 @@ public class InventoryController {
                 return;
             }
         } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE ||
+                   gui.kind() == ContainerGui.Kind.ADVANCED_CRAFTING_TABLE ||
                    (gui.kind() == ContainerGui.Kind.INVENTORY && slotId >= Inventory.HOTBAR_SIZE)) {
-            // For a dedicated crafting table, or when shift-clicking from main inventory to the crafting grid,
+            // For a dedicated crafting table (3x3 or 5x5), or when shift-clicking from main inventory to the crafting grid,
             // place items into empty crafting-grid cells.
-            for (int i = 0; i < CraftingGrid.SIZE && count > 0; i++) {
+            for (int i = 0; i < gui.gridSize() && count > 0; i++) {
                 if (gui.grid().get(i) == null) {
                     gui.grid().set(i, t);
                     count--;
                 }
             }
+            // Update the slot with remaining items and return (don't redistribute to other inventory slots)
+            if (count < original) {
+                inventory.setSlot(slotId, count == 0 ? null : t, count);
+            }
+            return;
         }
 
         // Anything left hops between hotbar and main inventory.
@@ -493,7 +499,7 @@ public class InventoryController {
     /** Returns grid contents to the inventory (keeping any that don't fit) - called when the screen closes. */
     public void returnGridToInventory() {
         if (!gui.hasGrid()) return;
-        for (int i = 0; i < CraftingGrid.SIZE; i++) {
+        for (int i = 0; i < gui.gridSize(); i++) {
             BlockType t = gui.grid().get(i);
             if (t != null && inventory.add(t, 1) == 0) {
                 gui.grid().set(i, null);
