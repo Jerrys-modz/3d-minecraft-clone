@@ -88,6 +88,24 @@ public class Hud {
     private static final float FURNACE_ARROW_X0 = FURNACE_FLAME_X + 0.035f;
     private static final float FURNACE_ARROW_X1 = FURNACE_OUTPUT_X - 0.09f;
 
+    // Part Builder GUI layout. Material slot on the left, 8 shape buttons in a
+    // 2-column grid in the centre, output slot on the right — all above the
+    // player's inventory rows.
+    private static final float PB_MAT_X       = -0.72f;
+    private static final float PB_MAT_Y       = INV_TOP_ROW_Y + 2 * INV_STEP - 0.01f;
+    private static final float PB_SHAPE_X0    = -0.33f;        // shape grid left column x
+    private static final float PB_SHAPE_X1    = PB_SHAPE_X0 + INV_STEP;
+    private static final float PB_SHAPE_TOP_Y = PB_MAT_Y + INV_STEP;
+    private static final float PB_OUT_X       = 0.55f;
+    private static final float PB_OUT_Y       = PB_MAT_Y;
+
+    // Tool Station GUI layout. Five input slots in a horizontal row on the
+    // left/centre, output slot on the right.
+    private static final float TS_SLOTS_LEFT_X = -0.55f;
+    private static final float TS_SLOTS_Y      = INV_TOP_ROW_Y + 2 * INV_STEP - 0.01f;
+    private static final float TS_OUT_X        = 0.55f;
+    private static final float TS_OUT_Y        = TS_SLOTS_Y;
+
     // Chest GUI layout: a grid of the chest's slots (3x9 single, 6x9 double)
     // stacked directly above the player's 3x9 main grid (the hotbar sits below
     // that as row 3). The top row rises to fit however many rows the container
@@ -1343,6 +1361,23 @@ public class Hud {
 
     /** Center (logical x, y) of the given slot id in the open gui; see {@link ContainerGui} for numbering. */
     private float[] slotCenter(ContainerGui gui, int slotId) {
+        // Part Builder slots
+        if (gui.isPbMaterialSlot(slotId))  return new float[]{PB_MAT_X, PB_MAT_Y};
+        if (gui.isPbOutputSlot(slotId))    return new float[]{PB_OUT_X, PB_OUT_Y};
+        if (gui.isPbShapeSlot(slotId)) {
+            int i = slotId - ContainerGui.PB_SHAPE_SLOT_0;
+            int row = i / 2, col = i % 2;
+            float x = col == 0 ? PB_SHAPE_X0 : PB_SHAPE_X1;
+            float y = PB_SHAPE_TOP_Y - row * INV_STEP;
+            return new float[]{x, y};
+        }
+        // Tool Station slots
+        if (gui.isTsInputSlot(slotId)) {
+            int i = slotId - ContainerGui.TS_SLOT_0;
+            return new float[]{TS_SLOTS_LEFT_X + i * INV_STEP, TS_SLOTS_Y};
+        }
+        if (gui.isTsOutputSlot(slotId))    return new float[]{TS_OUT_X, TS_OUT_Y};
+
         if (gui.isOutputSlot(slotId)) {
             return new float[]{OUTPUT_X, OUTPUT_Y};
         }
@@ -1529,15 +1564,28 @@ public class Hud {
         // crafting grid. Tall chests shift the whole screen down so every slot
         // stays the same size.
         float gridW = invGridWidth();
-        boolean chest = gui.kind() == ContainerGui.Kind.CHEST;
+        boolean chest  = gui.kind() == ContainerGui.Kind.CHEST;
+        boolean tinkers = gui.kind() == ContainerGui.Kind.PART_BUILDER
+                       || gui.kind() == ContainerGui.Kind.TOOL_STATION;
         float shift = chestLayoutShift(gui);
-        float panelLeft = chest
-                ? INV_GRID_CENTER_X - gridW / 2f - 0.03f
-                : CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
-        float panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
-        float panelTop = chest
-                ? chestTopRowY(gui) + INV_SLOT / 2f + 0.055f - shift
-                : INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
+        float panelLeft, panelRight, panelTop;
+        if (chest) {
+            panelLeft  = INV_GRID_CENTER_X - gridW / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = chestTopRowY(gui) + INV_SLOT / 2f + 0.055f - shift;
+        } else if (gui.kind() == ContainerGui.Kind.PART_BUILDER) {
+            panelLeft  = PB_MAT_X - INV_SLOT / 2f - 0.04f;
+            panelRight = PB_OUT_X + INV_SLOT / 2f + 0.04f;
+            panelTop   = PB_SHAPE_TOP_Y + INV_SLOT / 2f + 0.055f;
+        } else if (gui.kind() == ContainerGui.Kind.TOOL_STATION) {
+            panelLeft  = TS_SLOTS_LEFT_X - INV_SLOT / 2f - 0.04f;
+            panelRight = TS_OUT_X + INV_SLOT / 2f + 0.04f;
+            panelTop   = TS_SLOTS_Y + INV_SLOT / 2f + 0.055f;
+        } else {
+            panelLeft  = CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
+        }
         float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f - shift;
 
         // Minecraft-style textured panel (9-slice) behind the whole screen.
@@ -1586,6 +1634,16 @@ public class Hud {
         // Furnace decorations (flame + arrow) behind the slot icons.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
             renderFurnaceProgress(gui.furnace());
+        }
+
+        // Part Builder decorations: selected-shape highlight + arrow.
+        if (gui.kind() == ContainerGui.Kind.PART_BUILDER) {
+            renderPartBuilderDecorations(gui);
+        }
+
+        // Tool Station decorations: arrow from inputs to output.
+        if (gui.kind() == ContainerGui.Kind.TOOL_STATION) {
+            renderToolStationDecorations(gui);
         }
 
         // A solid divider band between the chest's grid and the player's
@@ -1652,12 +1710,40 @@ public class Hud {
 
         // Tooltip for the hovered slot.
         BlockType tip = null;
-        if (gui.isOutputSlot(hoveredSlot)) {
+        String[] tinkersTooltip = null;
+        if (gui.isPbShapeSlot(hoveredSlot)) {
+            int idx = hoveredSlot - ContainerGui.PB_SHAPE_SLOT_0;
+            com.minecraftclone.world.tinkers.ToolPartType shape = com.minecraftclone.world.tinkers.ToolPartType.values()[idx];
+            tinkersTooltip = new String[]{"Shape: " + shape.name()
+                    .replace('_', ' ').toLowerCase(java.util.Locale.ROOT)};
+        } else if (gui.isPbOutputSlot(hoveredSlot)) {
+            ItemStack out = gui.partBuilderGui() != null ? gui.partBuilderGui().currentOutput() : ItemStack.EMPTY;
+            if (!out.isEmpty() && out.isTinkersPart()) {
+                com.minecraftclone.world.tinkers.TinkersItem.Part p = out.tinkersPart();
+                if (p != null) {
+                    tinkersTooltip = new String[]{"Tinkers Part",
+                            p.shape.name().replace('_', ' ').toLowerCase(java.util.Locale.ROOT)
+                            + " / " + p.material.displayName()};
+                }
+            }
+        } else if (gui.isTsOutputSlot(hoveredSlot)) {
+            ItemStack out = gui.toolStationGui() != null ? gui.toolStationGui().currentOutput() : ItemStack.EMPTY;
+            if (!out.isEmpty() && out.isTinkersTool()) {
+                com.minecraftclone.world.tinkers.TinkersItem.Tool t = out.tinkersTool();
+                if (t != null) {
+                    tinkersTooltip = new String[]{"Tinkers Tool",
+                            t.kind.name().toLowerCase(java.util.Locale.ROOT),
+                            "Durability: " + t.remaining() + "/" + t.maxDurability};
+                }
+            }
+        } else if (gui.isOutputSlot(hoveredSlot)) {
             tip = recipe != null ? recipe.output() : null;
         } else if (hoveredSlot >= 0) {
             tip = gui.typeOf(hoveredSlot);
         }
-        if (tip != null) {
+        if (tinkersTooltip != null) {
+            renderTooltip(tinkersTooltip, cursorLx, cursorLy, aspectRatio);
+        } else if (tip != null) {
             renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
         }
 
@@ -1724,6 +1810,116 @@ public class Hud {
         }
 
         lineShader.unbind();
+    }
+
+    /**
+     * Draws Part Builder decorations: a gold selection border around the active shape button,
+     * a "→" arrow between the material slot and output slot, and shape-name text labels.
+     */
+    private void renderPartBuilderDecorations(ContainerGui gui) {
+        com.minecraftclone.world.tinkers.PartBuilderGui pb = gui.partBuilderGui();
+        if (pb == null) return;
+
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
+        // Gold border around selected shape button.
+        com.minecraftclone.world.tinkers.ToolPartType sel = pb.selectedShape();
+        if (sel != null) {
+            com.minecraftclone.world.tinkers.ToolPartType[] shapes =
+                    com.minecraftclone.world.tinkers.ToolPartType.values();
+            for (int i = 0; i < shapes.length; i++) {
+                if (shapes[i] == sel) {
+                    int row = i / 2, col = i % 2;
+                    float sx = col == 0 ? PB_SHAPE_X0 : PB_SHAPE_X1;
+                    float sy = PB_SHAPE_TOP_Y - row * INV_STEP;
+                    float h = INV_SLOT / 2f + 0.005f;
+                    inventoryHover.upload(outlineLines(sx, sy, h));
+                    lineShader.setUniform("color", new Vector4f(1.0f, 0.82f, 0.1f, 1f));
+                    glLineWidth(2.5f);
+                    inventoryHover.render();
+                    break;
+                }
+            }
+        }
+
+        // Arrow from material → output.
+        float arrowHalf = 0.016f;
+        float arrowMidY = PB_MAT_Y;
+        float arrowX0 = PB_MAT_X + INV_SLOT / 2f + 0.06f;
+        float arrowX1 = PB_OUT_X - INV_SLOT / 2f - 0.06f;
+        furnaceDeco.clear();
+        addQuad3(furnaceDeco, arrowX0, arrowMidY - arrowHalf, arrowX1, arrowMidY + arrowHalf);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
+        inventoryPanel.render();
+
+        lineShader.unbind();
+
+        // Shape-name text labels next to each button.
+        text.begin();
+        com.minecraftclone.world.tinkers.ToolPartType[] shapes =
+                com.minecraftclone.world.tinkers.ToolPartType.values();
+        for (int i = 0; i < shapes.length; i++) {
+            int row = i / 2, col = i % 2;
+            float sx = col == 0 ? PB_SHAPE_X0 : PB_SHAPE_X1;
+            float sy = PB_SHAPE_TOP_Y - row * INV_STEP;
+            float labelX = sx - INV_SLOT / 2f + 0.002f;
+            float labelY = sy + INV_SLOT / 2f + 0.004f;
+            String label = shapes[i].name().replace('_', ' ').toLowerCase(java.util.Locale.ROOT);
+            text.add(label, labelX, labelY, 0.018f);
+        }
+        text.render(hudTransform, new Vector4f(0.9f, 0.9f, 0.9f, 1f));
+    }
+
+    /**
+     * Draws Tool Station decorations: an arrow between the last input slot and the output slot,
+     * and slot-role labels (Head, Rod, Extra) above each input slot.
+     */
+    private void renderToolStationDecorations(ContainerGui gui) {
+        com.minecraftclone.world.tinkers.ToolStationGui ts = gui.toolStationGui();
+        if (ts == null) return;
+
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
+        // Arrow from last input slot → output slot.
+        float arrowHalf = 0.016f;
+        float lastSlotX = TS_SLOTS_LEFT_X + (com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS - 1) * INV_STEP;
+        float arrowX0 = lastSlotX + INV_SLOT / 2f + 0.04f;
+        float arrowX1 = TS_OUT_X - INV_SLOT / 2f - 0.04f;
+        furnaceDeco.clear();
+        addQuad3(furnaceDeco, arrowX0, TS_SLOTS_Y - arrowHalf, arrowX1, TS_SLOTS_Y + arrowHalf);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
+        inventoryPanel.render();
+
+        // "Ready!" highlight on output when assembly is possible.
+        if (ts.canAssemble()) {
+            float h = INV_SLOT / 2f + 0.005f;
+            inventoryHover.upload(outlineLines(TS_OUT_X, TS_OUT_Y, h));
+            lineShader.setUniform("color", new Vector4f(0.2f, 1f, 0.2f, 1f));
+            glLineWidth(2.5f);
+            inventoryHover.render();
+        }
+
+        lineShader.unbind();
+
+        // Slot-role text labels above each input slot.
+        String[] roles = {"Head", "Rod", "Extra", "Extra", "Extra"};
+        text.begin();
+        for (int i = 0; i < roles.length; i++) {
+            float slotX = TS_SLOTS_LEFT_X + i * INV_STEP;
+            float labelX = slotX - INV_SLOT / 2f + 0.002f;
+            float labelY = TS_SLOTS_Y + INV_SLOT / 2f + 0.006f;
+            text.add(roles[i], labelX, labelY, 0.018f);
+        }
+        text.add("Output", TS_OUT_X - INV_SLOT / 2f + 0.002f, TS_OUT_Y + INV_SLOT / 2f + 0.006f, 0.018f);
+        text.render(hudTransform, new Vector4f(0.9f, 0.9f, 0.9f, 1f));
     }
 
     /** Draws the cursor stack (icon + count) at the given logical position, above everything else. */

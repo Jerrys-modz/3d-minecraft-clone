@@ -473,6 +473,24 @@ public class World implements BlockAccessor {
         return furnace;
     }
 
+    /** Returns the Part Builder entity at a position, creating (and registering) it on first use. */
+    public com.minecraftclone.world.tinkers.PartBuilderEntity getOrCreatePartBuilder(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof com.minecraftclone.world.tinkers.PartBuilderEntity pb) return pb;
+        com.minecraftclone.world.tinkers.PartBuilderEntity pb = new com.minecraftclone.world.tinkers.PartBuilderEntity();
+        blockEntities.put(blockKey(x, y, z), pb);
+        return pb;
+    }
+
+    /** Returns the Tool Station entity at a position, creating (and registering) it on first use. */
+    public com.minecraftclone.world.tinkers.ToolStationEntity getOrCreateToolStation(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof com.minecraftclone.world.tinkers.ToolStationEntity ts) return ts;
+        com.minecraftclone.world.tinkers.ToolStationEntity ts = new com.minecraftclone.world.tinkers.ToolStationEntity();
+        blockEntities.put(blockKey(x, y, z), ts);
+        return ts;
+    }
+
     /** Forgets a block entity - call when its block is mined or removed. */
     public void removeBlockEntity(int x, int y, int z) {
         blockEntities.remove(blockKey(x, y, z));

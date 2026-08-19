@@ -2,6 +2,9 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.tinkers.PartBuilderGui;
+import com.minecraftclone.world.tinkers.ToolPartType;
+import com.minecraftclone.world.tinkers.ToolStationGui;
 
 /**
  * Drives the mouse interaction on any container screen, Minecraft-style. It
@@ -135,6 +138,29 @@ public class InventoryController {
      */
     public void click(int slotId, boolean right, boolean shift) {
         if (slotId < 0 || slotId >= gui.slotCount()) return;
+
+        // Tinkers GUI: shape-button click - select/deselect the shape.
+        if (gui.isPbShapeSlot(slotId)) {
+            int shapeIdx = slotId - ContainerGui.PB_SHAPE_SLOT_0;
+            gui.partBuilderGui().toggleShape(ToolPartType.values()[shapeIdx]);
+            return;
+        }
+        // Tinkers GUI: output clicks trigger craft/assemble rather than pick-up.
+        if (gui.isPbOutputSlot(slotId)) {
+            if (shift) craftPartBuilderToInventory(); else craftPartBuilder();
+            return;
+        }
+        if (gui.isTsOutputSlot(slotId)) {
+            if (shift) assembleToolStationToInventory(); else assembleToolStation();
+            return;
+        }
+        // Tinkers GUI: Tool Station input slots only accept Tinkers parts.
+        if (gui.isTsInputSlot(slotId)) {
+            if (shift) { quickMove(slotId); return; }
+            clickToolStationSlot(slotId, right);
+            return;
+        }
+
         if (shift) {
             quickMove(slotId);
             return;
@@ -370,6 +396,35 @@ public class InventoryController {
      * and main inventory.
      */
     private void quickMove(int slotId) {
+        // Tinkers: Part Builder output shift-click.
+        if (gui.isPbOutputSlot(slotId)) {
+            craftPartBuilderToInventory();
+            return;
+        }
+        // Tinkers: Part Builder material slot shift-click returns to inventory.
+        if (gui.isPbMaterialSlot(slotId)) {
+            ItemStack mat = gui.partBuilderGui().materialSlot();
+            if (!mat.isEmpty()) {
+                int leftover = inventory.add(mat.type(), mat.count());
+                gui.partBuilderGui().setMaterial(leftover > 0 ? mat.withCount(leftover) : ItemStack.EMPTY);
+            }
+            return;
+        }
+        // Tinkers: Tool Station output shift-click.
+        if (gui.isTsOutputSlot(slotId)) {
+            assembleToolStationToInventory();
+            return;
+        }
+        // Tinkers: Tool Station input slot shift-click returns part to inventory.
+        if (gui.isTsInputSlot(slotId)) {
+            ItemStack part = gui.toolStationGui().slot(slotId - ContainerGui.TS_SLOT_0);
+            if (!part.isEmpty()) {
+                inventory.addStack(part);
+                gui.toolStationGui().setSlot(slotId - ContainerGui.TS_SLOT_0, ItemStack.EMPTY);
+            }
+            return;
+        }
+
         if (gui.isOutputSlot(slotId)) {
             // Craft repeatedly into the inventory while the grid keeps matching.
             Crafting.Recipe recipe = gui.currentRecipe();
@@ -416,6 +471,34 @@ public class InventoryController {
                 gui.setSlot(armorId, t, 1);
                 return;
             }
+        }
+
+        // Tinkers Part Builder: shift-click a material from inventory → material slot.
+        if (gui.kind() == ContainerGui.Kind.PART_BUILDER
+                && gui.partBuilderGui() != null
+                && com.minecraftclone.world.tinkers.TinkersRegistry.isMaterial(t)) {
+            if (gui.partBuilderGui().materialSlot().isEmpty()) {
+                int moved = Math.min(count, Inventory.maxStack(t));
+                gui.partBuilderGui().setMaterial(ItemStack.of(t, moved));
+                inventory.setSlot(slotId, count - moved == 0 ? null : t, count - moved);
+            }
+            return;
+        }
+
+        // Tinkers Tool Station: shift-click a Tinkers part from inventory → first empty input slot.
+        if (gui.kind() == ContainerGui.Kind.TOOL_STATION && gui.toolStationGui() != null) {
+            ItemStack stack = inventory.stackOf(slotId);
+            if (stack.isTinkersPart()) {
+                ToolStationGui ts = gui.toolStationGui();
+                for (int i = 0; i < ToolStationGui.INPUT_SLOTS; i++) {
+                    if (ts.slot(i).isEmpty()) {
+                        ts.setSlot(i, stack.withCount(1));
+                        inventory.setSlot(slotId, null, 0);
+                        break;
+                    }
+                }
+            }
+            return;
         }
 
         // Prefer the open container: ore/fuel into a furnace, anything into a
@@ -496,6 +579,81 @@ public class InventoryController {
         int add = Math.min(space, count);
         f.setSlot(fs, t, current + add);
         return add;
+    }
+
+    // -----------------------------------------------------------------------
+    // Tinkers GUI craft / assemble helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * Tool Station input slot click: only accepts Tinkers parts (or the vanilla
+     * pick-up/place logic when the cursor is empty).
+     */
+    private void clickToolStationSlot(int slotId, boolean right) {
+        ItemStack slotItem = slotStack(slotId);
+        if (!hasCursorItem()) {
+            // Pick up whatever is in the slot.
+            if (!slotItem.isEmpty()) {
+                cursor = slotItem;
+                setStack(slotId, ItemStack.EMPTY);
+            }
+        } else {
+            // Place cursor into slot — only Tinkers parts are accepted.
+            if (!cursor.isTinkersPart()) return;
+            if (slotItem.isEmpty()) {
+                setStack(slotId, cursor.withCount(1));
+                cursor = cursor.withCount(cursor.count() - 1);
+                if (cursor.isEmpty()) clearCursor();
+            } else {
+                // Swap cursor with existing part.
+                ItemStack prev = slotItem;
+                setStack(slotId, cursor.withCount(1));
+                cursor = prev;
+            }
+        }
+    }
+
+    /** Crafts one part from the Part Builder into the cursor; the material is consumed. */
+    private void craftPartBuilder() {
+        PartBuilderGui pb = gui.partBuilderGui();
+        if (pb == null || !pb.canCraft()) return;
+        ItemStack result = pb.craft();
+        if (result.isEmpty()) return;
+        if (cursor.isEmpty()) {
+            cursor = result;
+        } else {
+            // Cursor already holds something - add to inventory if possible.
+            inventory.addStack(result);
+        }
+    }
+
+    /** Shift-click on Part Builder output: craft and deposit directly into inventory. */
+    private void craftPartBuilderToInventory() {
+        PartBuilderGui pb = gui.partBuilderGui();
+        if (pb == null || !pb.canCraft()) return;
+        ItemStack result = pb.craft();
+        if (!result.isEmpty()) inventory.addStack(result);
+    }
+
+    /** Assembles the current Tool Station parts into the cursor. */
+    private void assembleToolStation() {
+        ToolStationGui ts = gui.toolStationGui();
+        if (ts == null || !ts.canAssemble()) return;
+        ItemStack result = ts.assemble();
+        if (result.isEmpty()) return;
+        if (cursor.isEmpty()) {
+            cursor = result;
+        } else {
+            inventory.addStack(result);
+        }
+    }
+
+    /** Shift-click on Tool Station output: assemble and deposit directly into inventory. */
+    private void assembleToolStationToInventory() {
+        ToolStationGui ts = gui.toolStationGui();
+        if (ts == null || !ts.canAssemble()) return;
+        ItemStack result = ts.assemble();
+        if (!result.isEmpty()) inventory.addStack(result);
     }
 
     /** Crafts the current grid match into the cursor (if there's room), consuming the ingredients. */

@@ -1825,6 +1825,18 @@ public class Main {
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.PART_BUILDER) {
+                        // Right-click a Part Builder to open the Tinkers' part-crafting gui.
+                        com.minecraftclone.world.tinkers.PartBuilderEntity pbEntity =
+                                world.getOrCreatePartBuilder(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = ContainerGui.forPartBuilder(player.getInventory(), pbEntity.gui());
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.TOOL_STATION) {
+                        // Right-click a Tool Station to open the Tinkers' assembly gui.
+                        com.minecraftclone.world.tinkers.ToolStationEntity tsEntity =
+                                world.getOrCreateToolStation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted.isBed()) {
                         // Right-click a bed to sleep in it (if it's night and not in nether/end)
                         // Spectators cannot interact with beds (no world mutation or time advancement).
