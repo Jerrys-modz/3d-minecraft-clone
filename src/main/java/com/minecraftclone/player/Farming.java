@@ -175,12 +175,16 @@ public final class Farming {
     public static boolean canSugarCaneStand(World world, int wx, int wy, int wz) {
         BlockType below = world.getBlock(wx, wy - 1, wz);
         if (below == null) return false;
-        // Stacking on another cane is always allowed as long as the column base is valid.
+        // Stacking on another cane is allowed only if the column base has valid soil and water.
         if (below == BlockType.SUGAR_CANE) {
-            // Walk down to the soil block.
+            // Walk down to the bottom cane block.
             int baseY = wy - 1;
             while (baseY > 0 && world.getBlock(wx, baseY - 1, wz) == BlockType.SUGAR_CANE) baseY--;
-            return isAdjacentToWater(world, wx, baseY - 1, wz);
+            // Check the soil block beneath the bottom cane.
+            BlockType soil = world.getBlock(wx, baseY - 1, wz);
+            if (soil == null) return false;
+            boolean validSoil = soil == BlockType.DIRT || soil == BlockType.GRASS || soil == BlockType.SAND;
+            return validSoil && isAdjacentToWater(world, wx, baseY - 1, wz);
         }
         // Soil block: must be dirt/grass/sand AND adjacent to water.
         boolean validSoil = below == BlockType.DIRT || below == BlockType.GRASS || below == BlockType.SAND;

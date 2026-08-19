@@ -1894,7 +1894,8 @@ public class Main {
                         // (or on top of another sugar cane whose base is adjacent to water).
                         int px = hit.placePos.x, py = hit.placePos.y, pz = hit.placePos.z;
                         if (world.getBlock(px, py, pz) == BlockType.AIR
-                                && com.minecraftclone.player.Farming.canSugarCaneStand(world, px, py, pz)) {
+                                && com.minecraftclone.player.Farming.canSugarCaneStand(world, px, py, pz)
+                                && !intersectsPlayer(player, new Vector3i(px, py, pz))) {
                             world.setBlock(px, py, pz, BlockType.SUGAR_CANE);
                             if (!mode.isCreative()) player.getInventory().remove(BlockType.SUGAR_CANE, 1);
                             handRenderer.triggerSwing();
