@@ -1,9 +1,11 @@
 package com.minecraftclone.engine.graphics;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.tinkers.TinkersItem;
 
 import java.awt.image.BufferedImage;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
@@ -23,6 +25,8 @@ public class ItemTextures {
     private static final int SIZE = 16;
 
     private final Map<BlockType, Integer> textureIds = new EnumMap<>(BlockType.class);
+    /** Per-item textures for Tinkers parts and tools, keyed by visual fingerprint. */
+    private final Map<String, Integer> tinkersTextureIds = new HashMap<>();
 
     /** Generates (and uploads to the GPU) the texture for every item-type {@link BlockType}. */
     public void generate() {
@@ -1110,18 +1114,39 @@ public class ItemTextures {
     }
 
     /**
-     * Wooden tool rod — a short diagonal rod (looks like a stick but oriented
-     * bottom-left to centre-right, leaving room for a head to attach later).
+     * Tool rod part texture — a short diagonal rod tinted by {@code color}.
+     * When the material is wood the result looks like a plain stick; other
+     * materials produce a tinted rod of the appropriate colour.
      */
-    private static BufferedImage paintToolRod() {
+    private static BufferedImage paintToolRod(int color) {
         BufferedImage img = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
-        int wood = 0xA9814F, dark = 0x7A5A2A;
+        int dark = shade(color, 0.6f);
         // Diagonal handle line, 7 pixels long, starting from lower-left
         for (int i = 0; i < 7; i++) {
             int x = 4 + i;
             int y = 12 - i;
-            img.setRGB(x,     y, 0xFF000000 | wood);
+            img.setRGB(x,     y, 0xFF000000 | color);
             img.setRGB(x + 1, y, 0xFF000000 | dark);
+        }
+        return img;
+    }
+
+    /**
+     * Simple rectangular plate silhouette for Binding and Large Plate parts.
+     * These have no dedicated silhouette painter, so a flat ingot-like bar
+     * with the material's colour is used.
+     */
+    private static BufferedImage paintPlate(int color) {
+        BufferedImage img = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
+        int lit  = lighten(color);
+        int dark = darken(color);
+        for (int y = 5; y <= 11; y++) {
+            for (int x = 3; x <= 12; x++) {
+                int c = (y == 5) ? lit : (y == 11) ? dark : color;
+                if (x == 3)  c = shade(c, 0.85f);
+                if (x == 12) c = dark;
+                img.setRGB(x, y, 0xFF000000 | c);
+            }
         }
         return img;
     }
@@ -1144,9 +1169,89 @@ public class ItemTextures {
         glBindTexture(GL_TEXTURE_2D, id);
     }
 
-    public void destroy() {
-        for (int id : textureIds.values()) {
-            glDeleteTextures(id);
+    /**
+     * Generates (lazily) and binds the texture for a specific {@link TinkersItem}
+     * to texture unit 0.  Unlike {@link #bind(BlockType)}, which uses the grey
+     * sentinel placeholder for the TINKERS_PART / TINKERS_TOOL sentinel types,
+     * this method uses the item's actual material colour and part shape to produce
+     * a distinct per-item texture.  Textures are cached by visual fingerprint so
+     * each unique {@code (shape, material)} or {@code (kind, layers)} combination
+     * is only generated once.
+     *
+     * @param item the Tinkers part or tool to render (must not be {@code null})
+     */
+    public void bindTinkersItem(TinkersItem item) {
+        String key = tinkersKey(item);
+        int id = tinkersTextureIds.computeIfAbsent(key,
+                k -> GLTexture.upload(paintTinkersItem(item)));
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, id);
+    }
+
+    /**
+     * A stable cache key for a Tinkers item that encodes only its visual
+     * properties (shape + material for parts; kind + layers for tools).
+     */
+    private static String tinkersKey(TinkersItem item) {
+        if (item instanceof TinkersItem.Part p) {
+            return "P:" + p.shape.name() + ":" + p.material.name();
+        } else if (item instanceof TinkersItem.Tool t) {
+            StringBuilder sb = new StringBuilder("T:").append(t.kind.name());
+            for (TinkersItem.ToolLayer l : t.layers) {
+                sb.append(':').append(l.shape().name()).append('/').append(l.material().name());
+            }
+            return sb.toString();
         }
+        return "?";
+    }
+
+    /** Dispatches to the right Tinkers texture painter. */
+    private static BufferedImage paintTinkersItem(TinkersItem item) {
+        if (item instanceof TinkersItem.Part p) return paintTinkersPart(p);
+        if (item instanceof TinkersItem.Tool t) return paintTinkersTool(t);
+        return paintPlaceholder(0x808080);
+    }
+
+    /**
+     * Tool-part item texture: head silhouette tinted by material colour, or a
+     * rod / generic shape for non-head parts.  Uses {@link ToolPartType#paintStyle}
+     * which already matches the {@code HEAD_*} constants (0=PICK, 1=AXE, 2=SWORD,
+     * 3=SHOVEL) so no extra mapping is needed.
+     */
+    private static BufferedImage paintTinkersPart(TinkersItem.Part part) {
+        int color = part.color();
+        int style = part.shape.paintStyle;
+        // Styles 0-3 are head shapes that map 1:1 to HEAD_PICK/AXE/SWORD/SHOVEL.
+        if (style >= HEAD_PICK && style <= HEAD_SHOVEL) {
+            return paintToolHead(color, style);
+        }
+        // Rod shapes (TOOL_ROD, TOUGH_ROD) share the rod painter.
+        if (part.shape.isRod()) {
+            return paintToolRod(color);
+        }
+        // Binding (style 5) and Large Plate (style 6): use a simple plate silhouette.
+        return paintPlate(color);
+    }
+
+    /**
+     * Assembled-tool item texture: full tool silhouette tinted by the head layer's
+     * material colour (the same colour logic as vanilla tier-based tools).
+     */
+    private static BufferedImage paintTinkersTool(TinkersItem.Tool tool) {
+        int headColor = tool.color();
+        return switch (tool.kind) {
+            case PICKAXE  -> paintPickaxe(headColor);
+            case AXE      -> paintAxe(headColor);
+            case SWORD    -> paintSword(headColor);
+            case SHOVEL   -> paintShovel(headColor);
+            case HAMMER   -> paintHammer(headColor);
+            case BROADAXE -> paintBroadaxe(headColor);
+            default       -> paintPlaceholder(headColor);
+        };
+    }
+
+    public void destroy() {
+        for (int id : textureIds.values())        glDeleteTextures(id);
+        for (int id : tinkersTextureIds.values()) glDeleteTextures(id);
     }
 }

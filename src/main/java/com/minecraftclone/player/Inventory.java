@@ -121,8 +121,14 @@ public class Inventory implements StorageContainer {
         return true;
     }
 
-    /** Maximum items a single stack of {@code type} can hold (1 for tools/armor, else {@link #STACK_MAX}). */
+    /**
+     * Maximum items a single stack of {@code type} can hold.
+     * Tools, armor, and Tinkers items (parts and assembled tools) all have a
+     * max stack of 1 because each is a unique item.  Everything else is 64.
+     */
     public static int maxStack(BlockType type) {
+        if (type == null) return 1;
+        if (type.isTinkersToolPart() || type.isTinkersTool()) return 1;
         return (Mining.isTool(type) || Armor.isArmor(type)) ? 1 : STACK_MAX;
     }
 
@@ -133,6 +139,32 @@ public class Inventory implements StorageContainer {
 
     public void clearSlot(int slot) {
         slots[slot] = null;
+    }
+
+    /**
+     * Adds a full {@link ItemStack} (including any {@link com.minecraftclone.world.tinkers.TinkersItem}
+     * payload) to the first available inventory slot.  Unlike {@link #add(BlockType, int)}, this
+     * method preserves the Tinkers payload and never merges with an existing stack (Tinkers items
+     * are always count=1 and unique).  Returns the stack unchanged if no space is available.
+     *
+     * @param stack the stack to place (must not be empty)
+     * @return {@link ItemStack#EMPTY} on success, {@code stack} if the inventory is full
+     */
+    public ItemStack addStack(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return ItemStack.EMPTY;
+        // Vanilla items: delegate to the existing merge+fill logic.
+        if (!stack.isTinkers()) {
+            int leftover = add(stack.type(), stack.count());
+            return leftover <= 0 ? ItemStack.EMPTY : stack.withCount(leftover);
+        }
+        // Tinkers items: find the first empty slot (they never merge with other stacks).
+        for (int i = 0; i < SIZE; i++) {
+            if (slots[i] == null) {
+                slots[i] = stack;
+                return ItemStack.EMPTY;
+            }
+        }
+        return stack; // inventory full
     }
 
     @Override

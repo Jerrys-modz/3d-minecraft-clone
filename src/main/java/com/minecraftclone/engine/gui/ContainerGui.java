@@ -204,6 +204,52 @@ public class ContainerGui {
         return 0;
     }
 
+    /**
+     * The full {@link com.minecraftclone.player.ItemStack} at {@code slotId}, including any
+     * Tinkers' Construct payload.  Prefer this over {@link #typeOf}/{@link #countOf} when you
+     * need to distinguish Tinkers items from vanilla ones (e.g. in drag/click logic).
+     *
+     * @return the stack in the slot, or {@link com.minecraftclone.player.ItemStack#EMPTY}
+     */
+    public com.minecraftclone.player.ItemStack stackOf(int slotId) {
+        if (isPlayerSlot(slotId)) return inventory.stackOf(slotId);
+        if (isGridSlot(slotId)) {
+            BlockType t = grid().get(slotId - GRID_START);
+            return t == null ? com.minecraftclone.player.ItemStack.EMPTY
+                             : com.minecraftclone.player.ItemStack.of(t, 1);
+        }
+        if (isArmorSlot(slotId)) {
+            BlockType t = inventory.armorType(slotId - ARMOR_START);
+            return t == null ? com.minecraftclone.player.ItemStack.EMPTY
+                             : com.minecraftclone.player.ItemStack.of(t, 1);
+        }
+        if (isContainerSlot(slotId)) {
+            int cs = slotId - CONTAINER_START;
+            BlockType t = container.typeOf(cs);
+            int cnt = container.countOf(cs);
+            return (t == null || cnt <= 0) ? com.minecraftclone.player.ItemStack.EMPTY
+                                           : com.minecraftclone.player.ItemStack.of(t, cnt);
+        }
+        return com.minecraftclone.player.ItemStack.EMPTY;
+    }
+
+    /**
+     * Writes a full {@link com.minecraftclone.player.ItemStack} to {@code slotId}, preserving any
+     * Tinkers' payload for player-inventory slots.  Grid/armor/container slots only support vanilla
+     * {@link BlockType} items and fall back to the type-only path.
+     *
+     * @param stack the stack to write; pass {@link com.minecraftclone.player.ItemStack#EMPTY} to clear
+     */
+    public void setStack(int slotId, com.minecraftclone.player.ItemStack stack) {
+        if (stack == null) stack = com.minecraftclone.player.ItemStack.EMPTY;
+        if (isPlayerSlot(slotId)) {
+            inventory.setStack(slotId, stack);
+        } else {
+            // Non-player slots (grid, armor, container) only support vanilla types.
+            setSlot(slotId, stack.isEmpty() ? null : stack.type(), stack.count());
+        }
+    }
+
     /** Writes a whole stack to a slot; grid cells ignore {@code count} and just record the type. */
     public void setSlot(int slotId, BlockType type, int count) {
         if (isPlayerSlot(slotId)) {
