@@ -5,27 +5,26 @@ import com.minecraftclone.world.Mining.ToolKind;
 /**
  * The shape of a Tinkers' Construct tool part.
  *
- * <p>Each value bundles the crafting-grid template (with {@code 'M'} as a
- * placeholder for the material ingredient), the {@link ToolKind} the finished
- * tool produces, and an index constant used as the {@code paintHead} style in
- * {@link com.minecraftclone.engine.graphics.ItemTextures}.
+ * <p>Each value names the {@link ToolKind} produced when this head is assembled
+ * with a tool rod at the Tool Station, plus a paint-style index used by
+ * {@link com.minecraftclone.engine.graphics.ItemTextures} to give each shape
+ * a distinct silhouette.
  *
- * <p>Adding a new part shape is a one-liner here; crafting recipes and
- * Creative Catalog entries update automatically via
- * {@link com.minecraftclone.world.BlockType#toolPart}.
+ * <p>Parts are assembled at the Tool Station only — there are no crafting-table
+ * recipes for them; {@code patternRows} has been intentionally removed.
  */
 public enum ToolPartType {
 
-    //               assembledKind          style  patternRows (3×3, 'M'=material, '.'=empty)
-    PICK_HEAD   (ToolKind.PICKAXE,   0,  "MM.", "M..", "..."),  // L-shape prongs
-    AXE_HEAD    (ToolKind.AXE,       1,  "MM.", "MM.", "..."),  // solid 2×2 blade
-    SWORD_BLADE (ToolKind.SWORD,     2,  "M..", "M..", "..."),  // vertical bar
-    SHOVEL_HEAD (ToolKind.SHOVEL,    3,  ".M.", ".M.", "..."),  // narrow paddle
-    TOOL_ROD    (null,               4,  ".P.", ".P.", "...");  // planks-only handle
+    //               assembledKind        style
+    PICK_HEAD   (ToolKind.PICKAXE,   0),
+    AXE_HEAD    (ToolKind.AXE,       1),
+    SWORD_BLADE (ToolKind.SWORD,     2),
+    SHOVEL_HEAD (ToolKind.SHOVEL,    3),
+    TOOL_ROD    (null,               4);
 
     /**
-     * The tool kind produced by assembling this head with a TOOL_ROD, or
-     * {@code null} for TOOL_ROD itself.
+     * The tool kind produced by assembling this head with a TOOL_ROD at the
+     * Tool Station, or {@code null} for TOOL_ROD itself.
      */
     public final ToolKind assembledKind;
     /**
@@ -34,18 +33,10 @@ public enum ToolPartType {
      * has a distinct silhouette.
      */
     public final int paintStyle;
-    /**
-     * Three-row crafting grid template.  {@code 'M'} is replaced at recipe
-     * registration time with the material's
-     * {@link TinkersMaterial#craftingChar}.  {@code 'P'} stays literal
-     * (planks) for TOOL_ROD.
-     */
-    public final String[] patternRows;
 
-    ToolPartType(ToolKind assembledKind, int paintStyle, String... patternRows) {
+    ToolPartType(ToolKind assembledKind, int paintStyle) {
         this.assembledKind = assembledKind;
         this.paintStyle    = paintStyle;
-        this.patternRows   = patternRows;
     }
 
     /** True for head-shaped parts that can be assembled into a tool. */

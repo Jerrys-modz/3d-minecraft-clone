@@ -1,8 +1,6 @@
 package com.minecraftclone.engine.graphics;
 
 import com.minecraftclone.world.BlockType;
-import com.minecraftclone.world.tinkers.TinkersMaterial;
-import com.minecraftclone.world.tinkers.ToolPartType;
 
 import java.awt.image.BufferedImage;
 import java.util.EnumMap;
@@ -307,38 +305,41 @@ public class ItemTextures {
             case DIAMOND_HOE -> paintHoe(0x5FE0E0);
 
             // ----------------------------------------------------------------
-            // Phase 0.5: Tinkers' Construct tool parts + assembled tools
-            // Dispatched through TinkersMaterial/ToolPartType so adding a
-            // new material requires zero changes here.
+            // Phase 0.5: Tinkers' Construct sentinels.
+            // The per-item colour/shape data lives in the TinkersItem payload
+            // inside ItemStack; the sentinel alone is only rendered as a grey
+            // placeholder.  A full bindTinkersItem(TinkersItem) path will be
+            // added when the Part Builder / Tool Station GUIs go live.
             // ----------------------------------------------------------------
-            default -> {
-                if (type.isTinkersToolPart()) {
-                    TinkersMaterial mat  = type.tinkersMaterial();
-                    ToolPartType    part = type.tinkersPartType();
-                    if (part == ToolPartType.TOOL_ROD) {
-                        yield paintToolRod();
-                    } else {
-                        yield paintToolHead(mat.color, part.paintStyle);
-                    }
-                } else if (type.isTinkersTool()) {
-                    TinkersMaterial mat = type.tinkersMaterial();
-                    int kindIdx         = type.tinkersToolKindIdx();
-                    yield switch (kindIdx) {
-                        case 0 -> paintPickaxe(mat.color);
-                        case 1 -> paintAxe(mat.color);
-                        case 2 -> paintSword(mat.color);
-                        case 3 -> paintShovel(mat.color);
-                        default -> throw new IllegalArgumentException("Unknown Tinkers tool kind idx " + kindIdx);
-                    };
-                } else {
-                    throw new IllegalArgumentException("No item texture generator for " + type);
-                }
-            }
+            case TINKERS_PART -> paintPlaceholder(0x808080);
+            case TINKERS_TOOL -> paintPlaceholder(0x404040);
+
+            default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
     }
 
     private static BufferedImage blank() {
         return new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
+    }
+
+    /**
+     * Grey placeholder tile for Tinkers' sentinel BlockTypes ({@code TINKERS_PART},
+     * {@code TINKERS_TOOL}).  The real per-item texture is produced when the
+     * {@code TinkersItem} payload is bound (future Part Builder / Tool Station GUI).
+     */
+    private static BufferedImage paintPlaceholder(int color) {
+        BufferedImage img = blank();
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                // Checkerboard so sentinel items are visually distinct from air.
+                if ((x + y) % 2 == 0) {
+                    img.setRGB(x, y, 0xFF000000 | color);
+                } else {
+                    img.setRGB(x, y, 0xFF000000 | shade(color, 0.6f));
+                }
+            }
+        }
+        return img;
     }
 
     /** A short diagonal brown stick - the basic tool-crafting ingredient. */

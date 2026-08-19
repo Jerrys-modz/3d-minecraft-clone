@@ -1,8 +1,6 @@
 package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
-import com.minecraftclone.world.tinkers.TinkersMaterial;
-import com.minecraftclone.world.tinkers.ToolPartType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -196,9 +194,9 @@ public final class CreativeCatalog {
     };
 
     /**
-     * Builds the Tools tab item array, combining the fixed vanilla tools with the
-     * full Tinkers' Construct material × part/tool matrix.  Adding a new
-     * {@link TinkersMaterial} automatically adds all its parts and assembled tools.
+     * Builds the Tools tab item array with all vanilla tools.
+     * Tinkers' Construct parts and assembled tools are dynamic (infinite
+     * material combinations) and will get their own creative tab later.
      */
     private static BlockType[] buildToolsTab() {
         List<BlockType> list = new ArrayList<>();
@@ -215,20 +213,6 @@ public final class CreativeCatalog {
         list.add(BlockType.IRON_BROADAXE);   list.add(BlockType.DIAMOND_BROADAXE);
         list.add(BlockType.WOOD_HOE);        list.add(BlockType.STONE_HOE);
         list.add(BlockType.IRON_HOE);        list.add(BlockType.DIAMOND_HOE);
-        // Phase 0.5: Tinkers' parts (all materials × all part types)
-        for (TinkersMaterial mat : TinkersMaterial.values()) {
-            for (ToolPartType part : ToolPartType.values()) {
-                BlockType bt = BlockType.toolPart(mat, part);
-                if (bt != null) list.add(bt);
-            }
-        }
-        // Phase 0.5: Tinkers' assembled tools (all materials × 4 tool kinds)
-        for (TinkersMaterial mat : TinkersMaterial.values()) {
-            for (int k = 0; k < 4; k++) {
-                BlockType bt = BlockType.assembledTool(mat, k);
-                if (bt != null) list.add(bt);
-            }
-        }
         return list.toArray(new BlockType[0]);
     }
 

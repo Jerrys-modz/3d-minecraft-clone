@@ -2,8 +2,6 @@ package com.minecraftclone.world;
 
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.util.AABB;
-import com.minecraftclone.world.tinkers.TinkersMaterial;
-import com.minecraftclone.world.tinkers.ToolPartType;
 
 /**
  * All placeable/generatable block types. Each entry defines which tile of
@@ -735,53 +733,17 @@ public enum BlockType {
     TOOL_STATION(454, true, false, 243),
 
     // -----------------------------------------------------------------------
-    // Tinkers' Construct tool parts — generated layout:
-    //   IDs 455-479  =  TINKERS_PART_BASE + material.ordinal()*5 + partType.ordinal()
-    //   Materials  (ordinal 0-4): WOOD, STONE, IRON, GOLD, DIAMOND
-    //   Part types (ordinal 0-4): PICK_HEAD, AXE_HEAD, SWORD_BLADE, SHOVEL_HEAD, TOOL_ROD
-    //
-    // To add a new material: add one value to TinkersMaterial — all enum entries
-    // below, crafting recipes, Mining stats, and Creative Catalog entries are
-    // derived generically from that enum via BlockType.toolPart(mat, part).
+    // Tinkers' Construct sentinels: two inventory-item slots that carry the
+    // real part/tool data in a TinkersItem payload inside ItemStack.
+    // All materials are supported dynamically via TinkersRegistry — no per-
+    // material enum entries are needed.
     // -----------------------------------------------------------------------
 
-    // WOOD parts (ordinal 0)
-    WOOD_PICK_HEAD(455,0), WOOD_AXE_HEAD(456,0), WOOD_SWORD_BLADE(457,0),
-    WOOD_SHOVEL_HEAD(458,0), WOOD_TOOL_ROD(459,0),
-    // STONE parts (ordinal 1)
-    STONE_PICK_HEAD(460,0), STONE_AXE_HEAD(461,0), STONE_SWORD_BLADE(462,0),
-    STONE_SHOVEL_HEAD(463,0), STONE_TOOL_ROD(464,0),
-    // IRON parts (ordinal 2)
-    IRON_PICK_HEAD(465,0), IRON_AXE_HEAD(466,0), IRON_SWORD_BLADE(467,0),
-    IRON_SHOVEL_HEAD(468,0), IRON_TOOL_ROD(469,0),
-    // GOLD parts (ordinal 3)
-    GOLD_PICK_HEAD(470,0), GOLD_AXE_HEAD(471,0), GOLD_SWORD_BLADE(472,0),
-    GOLD_SHOVEL_HEAD(473,0), GOLD_TOOL_ROD(474,0),
-    // DIAMOND parts (ordinal 4)
-    DIAMOND_PICK_HEAD(475,0), DIAMOND_AXE_HEAD(476,0), DIAMOND_SWORD_BLADE(477,0),
-    DIAMOND_SHOVEL_HEAD(478,0), DIAMOND_TOOL_ROD(479,0),
+    /** Sentinel for any Tinkers' tool part; the real data lives in {@code ItemStack.tinkersItem()}. */
+    TINKERS_PART(500, 0),
 
-    // -----------------------------------------------------------------------
-    // Tinkers' assembled tools — generated layout:
-    //   IDs 480-499  =  TINKERS_TOOL_BASE + material.ordinal()*4 + toolKindIdx
-    //   Tool kinds (idx 0-3): PICKAXE, AXE, SWORD, SHOVEL
-    // -----------------------------------------------------------------------
-
-    // WOOD assembled (ordinal 0)
-    TINKERS_WOOD_PICKAXE(480,0), TINKERS_WOOD_AXE(481,0),
-    TINKERS_WOOD_SWORD(482,0), TINKERS_WOOD_SHOVEL(483,0),
-    // STONE assembled (ordinal 1)
-    TINKERS_STONE_PICKAXE(484,0), TINKERS_STONE_AXE(485,0),
-    TINKERS_STONE_SWORD(486,0), TINKERS_STONE_SHOVEL(487,0),
-    // IRON assembled (ordinal 2)
-    TINKERS_IRON_PICKAXE(488,0), TINKERS_IRON_AXE(489,0),
-    TINKERS_IRON_SWORD(490,0), TINKERS_IRON_SHOVEL(491,0),
-    // GOLD assembled (ordinal 3)
-    TINKERS_GOLD_PICKAXE(492,0), TINKERS_GOLD_AXE(493,0),
-    TINKERS_GOLD_SWORD(494,0), TINKERS_GOLD_SHOVEL(495,0),
-    // DIAMOND assembled (ordinal 4)
-    TINKERS_DIAMOND_PICKAXE(496,0), TINKERS_DIAMOND_AXE(497,0),
-    TINKERS_DIAMOND_SWORD(498,0), TINKERS_DIAMOND_SHOVEL(499,0);
+    /** Sentinel for any assembled Tinkers' modular tool; the real data lives in {@code ItemStack.tinkersItem()}. */
+    TINKERS_TOOL(501, 0);
 
     public final short id;
     public final boolean solid;
@@ -984,64 +946,6 @@ public enum BlockType {
         return type == null ? AIR : type;
     }
 
-    // -----------------------------------------------------------------------
-    // Tinkers' Construct part / tool lookup helpers
-    //
-    // ID layout (see enum entries above):
-    //   parts: TINKERS_PART_BASE + material.ordinal()*5 + partType.ordinal()
-    //   tools: TINKERS_TOOL_BASE + material.ordinal()*4 + toolKindIdx
-    //          toolKindIdx: 0=PICKAXE, 1=AXE, 2=SWORD, 3=SHOVEL
-    // -----------------------------------------------------------------------
-    private static final int TINKERS_PART_BASE       = 455;
-    private static final int TINKERS_PART_TYPE_COUNT  = 5;  // ToolPartType.values().length
-    private static final int TINKERS_MAT_COUNT        = 5;  // TinkersMaterial.values().length
-    private static final int TINKERS_TOOL_BASE        = 480;
-    private static final int TINKERS_TOOL_KIND_COUNT  = 4;  // PICKAXE, AXE, SWORD, SHOVEL
-
-    /**
-     * Returns the BlockType for the tool part with the given material and shape,
-     * e.g. {@code toolPart(TinkersMaterial.IRON, ToolPartType.PICK_HEAD)}.
-     */
-    public static BlockType toolPart(TinkersMaterial mat, ToolPartType part) {
-        int id = TINKERS_PART_BASE + mat.ordinal() * TINKERS_PART_TYPE_COUNT + part.ordinal();
-        return BY_ID[id];
-    }
-
-    /**
-     * Returns the assembled Tinkers' tool BlockType for the given material and
-     * tool-kind index (0=PICKAXE, 1=AXE, 2=SWORD, 3=SHOVEL).
-     */
-    public static BlockType assembledTool(TinkersMaterial mat, int toolKindIdx) {
-        int id = TINKERS_TOOL_BASE + mat.ordinal() * TINKERS_TOOL_KIND_COUNT + toolKindIdx;
-        return BY_ID[id];
-    }
-
-    /** The {@link TinkersMaterial} of this part or assembled tool, or {@code null} if not a Tinkers' item. */
-    public TinkersMaterial tinkersMaterial() {
-        if (isTinkersToolPart()) {
-            return TinkersMaterial.values()[(id - TINKERS_PART_BASE) / TINKERS_PART_TYPE_COUNT];
-        }
-        if (isTinkersTool()) {
-            return TinkersMaterial.values()[(id - TINKERS_TOOL_BASE) / TINKERS_TOOL_KIND_COUNT];
-        }
-        return null;
-    }
-
-    /** The {@link ToolPartType} of this item, or {@code null} if not a Tinkers' part. */
-    public ToolPartType tinkersPartType() {
-        if (!isTinkersToolPart()) return null;
-        return ToolPartType.values()[(id - TINKERS_PART_BASE) % TINKERS_PART_TYPE_COUNT];
-    }
-
-    /**
-     * Tool-kind index (0=PICKAXE, 1=AXE, 2=SWORD, 3=SHOVEL) for an assembled
-     * Tinkers' tool, or -1 if this is not an assembled tool.
-     */
-    public int tinkersToolKindIdx() {
-        if (!isTinkersTool()) return -1;
-        return (id - TINKERS_TOOL_BASE) % TINKERS_TOOL_KIND_COUNT;
-    }
-
     /** True if this block stops the player / blocks a raycast. */
     public boolean isCollidable() {
         return solid;
@@ -1231,20 +1135,21 @@ public enum BlockType {
     }
 
     /**
-     * True for any Tinkers' Construct tool part item (shaped but not yet
-     * assembled into a tool).  Covers all materials and shapes.
+     * True for the {@link #TINKERS_PART} sentinel — the item is a Tinkers'
+     * tool part whose real data (shape + material) lives in the
+     * {@code TinkersItem.Part} carried by its {@code ItemStack}.
      */
     public boolean isTinkersToolPart() {
-        return (id & 0xFFFF) >= TINKERS_PART_BASE
-            && (id & 0xFFFF) < TINKERS_PART_BASE + TINKERS_MAT_COUNT * TINKERS_PART_TYPE_COUNT;
+        return this == TINKERS_PART;
     }
 
     /**
-     * True for any assembled Tinkers' modular tool.  Covers all materials.
+     * True for the {@link #TINKERS_TOOL} sentinel — the item is an assembled
+     * Tinkers' modular tool whose real data (layers + durability) lives in the
+     * {@code TinkersItem.Tool} carried by its {@code ItemStack}.
      */
     public boolean isTinkersTool() {
-        return (id & 0xFFFF) >= TINKERS_TOOL_BASE
-            && (id & 0xFFFF) < TINKERS_TOOL_BASE + TINKERS_MAT_COUNT * TINKERS_TOOL_KIND_COUNT;
+        return this == TINKERS_TOOL;
     }
 
     /**

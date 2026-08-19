@@ -1,7 +1,7 @@
 package com.minecraftclone.world;
 
-import com.minecraftclone.world.tinkers.TinkersMaterial;
-import com.minecraftclone.world.tinkers.ToolPartType;
+import com.minecraftclone.player.ItemStack;
+import com.minecraftclone.world.tinkers.TinkersItem;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -74,17 +74,9 @@ public final class Mining {
         TOOLS.put(BlockType.IRON_HOE,    new ToolStats(ToolKind.SHOVEL, TIER_IRON,   251));
         TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.SHOVEL, TIER_DIAMOND, 1562));
 
-        // Phase 0.5: Tinkers' Construct assembled tools — one loop covers all materials.
-        // Tool-kind index: 0=PICKAXE, 1=AXE, 2=SWORD, 3=SHOVEL (matches BlockType.assembledTool).
-        ToolKind[] tinkerKinds = {ToolKind.PICKAXE, ToolKind.AXE, ToolKind.SWORD, ToolKind.SHOVEL};
-        for (TinkersMaterial mat : TinkersMaterial.values()) {
-            for (int k = 0; k < tinkerKinds.length; k++) {
-                BlockType tool = BlockType.assembledTool(mat, k);
-                if (tool != null) {
-                    TOOLS.put(tool, new ToolStats(tinkerKinds[k], mat.miningTier, mat.durability));
-                }
-            }
-        }
+        // Phase 0.5: Tinkers' Construct assembled tools are handled dynamically via
+        // TinkersItem.Tool and TinkersRegistry — no static TOOLS entries needed.
+        // Mining speed / tier for Tinkers tools is read from toolStatsFor(ItemStack).
 
         // Phase 0.5: Tinkers' Construct structure blocks (pickaxe required; moderate hardness)
         put(BlockType.SEARED_BRICK,         3.0f, ToolKind.PICKAXE, TIER_STONE);
@@ -389,11 +381,37 @@ public final class Mining {
     }
 
     public static boolean isTool(BlockType type) {
-        return TOOLS.containsKey(type);
+        return TOOLS.containsKey(type) || (type != null && type.isTinkersTool());
+    }
+
+    /**
+     * True if the held {@link ItemStack} is a tool (vanilla or Tinkers').
+     */
+    public static boolean isTool(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        return isTool(stack.type());
     }
 
     public static ToolStats toolStats(BlockType type) {
         return TOOLS.get(type);
+    }
+
+    /**
+     * Returns synthetic {@link ToolStats} for a Tinkers' assembled tool read
+     * from the {@link TinkersItem.Tool} payload, or {@code null} for non-tools.
+     */
+    public static ToolStats toolStatsFor(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        // Vanilla tool — look up the static table.
+        ToolStats vanillaStats = TOOLS.get(stack.type());
+        if (vanillaStats != null) return vanillaStats;
+        // Tinkers' tool — derive stats from the item payload.
+        TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) {
+            ToolKind kind = tool.kind;
+            return new ToolStats(kind, tool.miningTier(), tool.maxDurability);
+        }
+        return null;
     }
 
     private static BlockInfo infoFor(BlockType block) {
@@ -406,6 +424,23 @@ public final class Mining {
         if (info.requiredTier() <= TIER_HAND) return true;
         ToolStats held = TOOLS.get(heldItem);
         return held != null && held.kind() == info.effectiveTool() && held.tier() >= info.requiredTier();
+    }
+
+    /**
+     * True if the held {@link ItemStack} (vanilla or Tinkers') is sufficient
+     * to break {@code block} at all (ignoring speed).
+     */
+    public static boolean canBreak(BlockType block, ItemStack heldItem) {
+        if (heldItem == null || heldItem.isEmpty()) return canBreak(block, (BlockType) null);
+        // For Tinkers' tools read tier and kind from the payload.
+        TinkersItem.Tool tinkersTool = heldItem.tinkersTool();
+        if (tinkersTool != null) {
+            BlockInfo info = infoFor(block);
+            if (info.requiredTier() <= TIER_HAND) return true;
+            return tinkersTool.kind == info.effectiveTool()
+                && tinkersTool.miningTier() >= info.requiredTier();
+        }
+        return canBreak(block, heldItem.type());
     }
 
     /**
@@ -425,6 +460,31 @@ public final class Mining {
             // a broadaxe is the heavy wood-cutter, one tier of speed stronger.
             int power = held.tier() + (held.kind() == ToolKind.BROADAXE ? 1 : 0);
             speedMultiplier = 1 << power; // wood=2x, stone=4x, iron=8x, diamond=16x (broadaxe: double)
+        }
+        return info.hardnessSeconds() / speedMultiplier;
+    }
+
+    /**
+     * Seconds required to break {@code block} with the held {@link ItemStack}
+     * (vanilla or Tinkers').  Returns {@link Float#POSITIVE_INFINITY} if the
+     * item cannot break the block at all.
+     */
+    public static float breakTimeSeconds(BlockType block, ItemStack heldItem) {
+        if (!canBreak(block, heldItem)) return Float.POSITIVE_INFINITY;
+        BlockInfo info = infoFor(block);
+        if (info.hardnessSeconds() <= 0f) return 0f;
+
+        TinkersItem.Tool tinkersTool = (heldItem != null) ? heldItem.tinkersTool() : null;
+        float speedMultiplier = 1f;
+        if (tinkersTool != null && tinkersTool.kind == info.effectiveTool()) {
+            // Tinkers' speed is a float multiplier from the head material.
+            speedMultiplier = tinkersTool.miningSpeed();
+        } else if (heldItem != null) {
+            ToolStats held = TOOLS.get(heldItem.type());
+            if (held != null && held.kind() == info.effectiveTool()) {
+                int power = held.tier() + (held.kind() == ToolKind.BROADAXE ? 1 : 0);
+                speedMultiplier = 1 << power;
+            }
         }
         return info.hardnessSeconds() / speedMultiplier;
     }

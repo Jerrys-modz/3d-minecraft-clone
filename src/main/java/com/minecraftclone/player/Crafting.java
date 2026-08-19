@@ -1,8 +1,6 @@
 package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
-import com.minecraftclone.world.tinkers.TinkersMaterial;
-import com.minecraftclone.world.tinkers.ToolPartType;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -88,7 +86,6 @@ public final class Crafting {
         CHARS.put('H', BlockType.WHEAT);        // H = wHeat
         // Phase 0.5: Tinkers' Construct ingredient shortcuts
         CHARS.put('Z', BlockType.SEARED_BRICK);       // Z = seared/sintered (kiln)
-        CHARS.put('R', BlockType.WOOD_TOOL_ROD);      // R = Rod (kept for structure recipes)
         CHARS.put('M', BlockType.GOLD_INGOT);         // M = Metal/gold (G is taken by Glass)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
@@ -214,42 +211,8 @@ public final class Crafting {
         // Tool Station: iron ingots on top, planks frame body
         shaped3x3("III", "PZP", "PPP", BlockType.TOOL_STATION, 1);
 
-        // -----------------------------------------------------------------------
-        // Tinkers' Construct tool parts — auto-generated from TinkersMaterial × ToolPartType.
-        // Adding a new material: add it to TinkersMaterial; all recipes appear here automatically.
-        // -----------------------------------------------------------------------
-        BlockType woodRod = BlockType.toolPart(TinkersMaterial.WOOD, ToolPartType.TOOL_ROD);
-        // Tool rod: always wood planks (2 planks stacked → 4 rods)
-        shaped2x2("P.", "P.", woodRod, 4);
-
-        // Head recipes: replace 'M' placeholder with material's crafting char
-        for (TinkersMaterial mat : TinkersMaterial.values()) {
-            char mc = mat.craftingChar;
-            for (ToolPartType part : ToolPartType.values()) {
-                if (!part.isHead()) continue; // TOOL_ROD handled above
-                // Replace the template placeholder with this material's ingredient
-                String r0 = part.patternRows[0].replace('M', mc);
-                String r1 = part.patternRows[1].replace('M', mc);
-                String r2 = part.patternRows[2].replace('M', mc);
-                shaped3x3(r0, r1, r2, BlockType.toolPart(mat, part), 1);
-            }
-        }
-
-        // Tool assembly: head + wood rod → assembled tool, for every material.
-        // Tool-kind index: 0=PICKAXE, 1=AXE, 2=SWORD, 3=SHOVEL
-        ToolPartType[] headParts = {
-            ToolPartType.PICK_HEAD, ToolPartType.AXE_HEAD,
-            ToolPartType.SWORD_BLADE, ToolPartType.SHOVEL_HEAD
-        };
-        for (TinkersMaterial mat : TinkersMaterial.values()) {
-            for (int k = 0; k < headParts.length; k++) {
-                BlockType head = BlockType.toolPart(mat, headParts[k]);
-                BlockType tool = BlockType.assembledTool(mat, k);
-                if (head != null && tool != null) {
-                    shapeless2x2(tool, 1, head, woodRod);
-                }
-            }
-        }
+        // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
+        // the Tool Station — there are no crafting-table recipes for them.
 
         // --- 5x5 Advanced Crafting Table Recipes ---
         // These recipes require the full 5x5 grid and produce advanced items
