@@ -1776,8 +1776,19 @@ public class Main {
 
                 // Right-click: toggle a door/trapdoor, place a block, or eat food.
                 // (Never interact through a mob - check targetedMobRef first.)
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
-                    boolean noMob = targetedMobRef[0] == null;
+                boolean noMob = targetedMobRef[0] == null;
+
+                // Full canteen can be drunk without looking at a block
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && noMob
+                        && heldItem == BlockType.CLAY_CANTEEN_FULL && !mode.isCreative()
+                        && player.getStats().getThirst() < PlayerStats.MAX_THIRST) {
+                    player.getStats().drink(40f);   // restores 40 out of 100 thirst
+                    player.getInventory().remove(BlockType.CLAY_CANTEEN_FULL, 1);
+                    player.getInventory().add(BlockType.CLAY_CANTEEN, 1); // canteen returned empty
+                    handRenderer.triggerSwing();
+                    audio.play(SoundEvent.EAT);
+                    showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
+                } else if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
                     BlockType targeted = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                     if (Door.isDoor(targeted)) {
                         if (noMob && mode.canPlace()) {
@@ -1878,15 +1889,6 @@ public class Main {
                         }
                         handRenderer.triggerSwing();
                         showMessage(messages, "Canteen filled!", new Vector4f(0.3f, 0.6f, 1f, 1f), 1.5f);
-                    } else if (noMob && heldItem == BlockType.CLAY_CANTEEN_FULL && !mode.isCreative()
-                            && player.getStats().getThirst() < PlayerStats.MAX_THIRST) {
-                        // Full canteen used in hand → drink to restore thirst.
-                        player.getStats().drink(40f);   // restores 40 out of 100 thirst
-                        player.getInventory().remove(BlockType.CLAY_CANTEEN_FULL, 1);
-                        player.getInventory().add(BlockType.CLAY_CANTEEN, 1); // canteen returned empty
-                        handRenderer.triggerSwing();
-                        audio.play(SoundEvent.EAT);
-                        showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         // Don't place if clicking on a bed (sleep instead) or if placement spot is a bed
                         BlockType placeTarget = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);

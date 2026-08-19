@@ -140,7 +140,7 @@ public class PlayerStats {
     }
 
     /**
-     * Advances all three stats by one frame.
+     * Advances all four stats (health, hunger, thirst, stamina) by one frame.
      *
      * @param fallImpactSpeed the speed (blocks/sec) the player just landed at this frame, or 0 if not landing.
      */

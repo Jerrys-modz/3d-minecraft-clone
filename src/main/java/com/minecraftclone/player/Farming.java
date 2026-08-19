@@ -97,6 +97,7 @@ public final class Farming {
             case WHEAT_STAGE_4 -> BlockType.WHEAT;
             case POTATO_CROP_3 -> BlockType.POTATO;
             case CARROT_CROP_3 -> BlockType.CARROT;
+            case SUGAR_CANE -> BlockType.SUGAR_CANE;
             // Immature: at least return seeds for wheat, null for others
             case WHEAT_STAGE_1, WHEAT_STAGE_2, WHEAT_STAGE_3 -> BlockType.SEEDS;
             default            -> null; // immature potato/carrot → no drop

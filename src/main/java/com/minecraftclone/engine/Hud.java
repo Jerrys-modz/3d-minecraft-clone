@@ -490,9 +490,9 @@ public class Hud {
     private static final int[] QUAD_INDICES = {0, 1, 2, 0, 2, 3};
 
     /**
-     * Health (red), hunger (orange) and stamina (yellow) bars, stacked above the
-     * hotbar - plus a breath (cyan) bar on top, Minecraft-bubbles-style, but only
-     * while {@code submerged}: it's meaningless (and always full) on dry land, so
+     * Health (red), hunger (orange), thirst (cyan-blue) and stamina (yellow) bars,
+     * stacked above the hotbar - plus a breath (cyan) bar on top, Minecraft-bubbles-style,
+     * but only while {@code submerged}: it's meaningless (and always full) on dry land, so
      * showing it constantly would just be visual noise for a bar that never moves.
      */
     public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
