@@ -345,18 +345,19 @@ public class MapRenderer {
         int cx0 = mapW / 2;
         int cz0 = height / 2;
 
-        // Visible chunk radius — extend by the pan offset converted to chunk units so
-        // panning never leaves the iterated range empty.
-        int panChunkX = (int) Math.ceil(Math.abs(mapOffsetX) / chunkPx) + 1;
-        int panChunkZ = (int) Math.ceil(Math.abs(mapOffsetZ) / chunkPx) + 1;
-        int radiusX = mapW  / chunkPx / 2 + 2 + panChunkX;
-        int radiusZ = height / chunkPx / 2 + 2 + panChunkZ;
+        // Derive the centre chunk coordinates from the current map offsets.
+        int centreChunkX = playerChunkX - (int) Math.round(mapOffsetX / chunkPx);
+        int centreChunkZ = playerChunkZ - (int) Math.round(mapOffsetZ / chunkPx);
+
+        // Viewport-sized radius without extra pan terms.
+        int radiusX = mapW  / chunkPx / 2 + 2;
+        int radiusZ = height / chunkPx / 2 + 2;
 
         // Track which ore types actually appear in the visible/explored area.
         Set<BlockType> seenOres = new LinkedHashSet<>();
 
-        for (int cx = playerChunkX - radiusX; cx <= playerChunkX + radiusX; cx++) {
-            for (int cz = playerChunkZ - radiusZ; cz <= playerChunkZ + radiusZ; cz++) {
+        for (int cx = centreChunkX - radiusX; cx <= centreChunkX + radiusX; cx++) {
+            for (int cz = centreChunkZ - radiusZ; cz <= centreChunkZ + radiusZ; cz++) {
                 int screenX = cx0 + (int) (mapOffsetX + (cx - playerChunkX) * chunkPx);
                 int screenZ = cz0 + (int) (mapOffsetZ + (cz - playerChunkZ) * chunkPx);
 

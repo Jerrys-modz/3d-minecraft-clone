@@ -46,7 +46,7 @@ public final class Smelting {
         smelt(BlockType.CRUSHED_THORIUM,   BlockType.THORIUM_INGOT);
         smelt(BlockType.CRUSHED_PLUTONIUM, BlockType.PLUTONIUM_INGOT);
         smelt(BlockType.CRUSHED_IRIDIUM,   BlockType.IRIDIUM_INGOT);
-        smelt(BlockType.CRUSHED_BAUXITE,   BlockType.TIN_INGOT); // aluminium not yet defined; tin is the closest light metal
+        smelt(BlockType.CRUSHED_BAUXITE,   BlockType.ALUMINUM_INGOT);
 
         // Extended GTNH ore pack — crushed ore → ingot (outputs limited to existing BlockType constants).
         // Iron-bearing minerals → IRON_INGOT

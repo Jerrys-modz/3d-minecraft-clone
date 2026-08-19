@@ -234,46 +234,46 @@ public class TextureAtlas {
         paintOreTile(image, 179, rnd, 0xE07030, 0xC05010); // spessartine
 
         // --- New GTNH small ores (tiles 180-219) ---
-        paintOreTile(image, 180, rnd, 0x4A4A5A, 0x2A2A3A); // small magnetite
-        paintOreTile(image, 181, rnd, 0x8B3A3A, 0x6B1A1A); // small hematite
-        paintOreTile(image, 182, rnd, 0xA0784A, 0x7A5828); // small brown limonite
-        paintOreTile(image, 183, rnd, 0xD4B44A, 0xA88A28); // small yellow limonite
-        paintOreTile(image, 184, rnd, 0x8A6A5A, 0x6A4A3A); // small banded iron
-        paintOreTile(image, 185, rnd, 0x6A6A8A, 0x4A4A6A); // small vanadium magnetite
-        paintOreTile(image, 186, rnd, 0xC89A40, 0x9A7020); // small chalcopyrite
-        paintOreTile(image, 187, rnd, 0x7A8A7A, 0x5A6A5A); // small tetrahedrite
-        paintOreTile(image, 188, rnd, 0x2A8A4A, 0x0A6A2A); // small malachite
-        paintOreTile(image, 189, rnd, 0x8A8AA0, 0x6A6A80); // small galena
-        paintOreTile(image, 190, rnd, 0xB4A080, 0x947A60); // small sphalerite
-        paintOreTile(image, 191, rnd, 0x7AAA7A, 0x5A8A5A); // small garnierite
-        paintOreTile(image, 192, rnd, 0x9A8A5A, 0x7A6A3A); // small pentlandite
-        paintOreTile(image, 193, rnd, 0x4A5A9A, 0x2A3A7A); // small cobaltite
-        paintOreTile(image, 194, rnd, 0xC8B840, 0xA89820); // small pyrite
-        paintOreTile(image, 195, rnd, 0x8A9A7A, 0x6A7A5A); // small arsenopyrite
-        paintOreTile(image, 196, rnd, 0xE8E050, 0xC8C030); // small sulfur
-        paintOreTile(image, 197, rnd, 0xD43A2A, 0xB41A0A); // small cinnabar
-        paintOreTile(image, 198, rnd, 0xD0C8B8, 0xA8A090); // small cassiterite
-        paintOreTile(image, 199, rnd, 0xE8D880, 0xC8B860); // small scheelite
-        paintOreTile(image, 200, rnd, 0x6A5A7A, 0x4A3A5A); // small wolframite
-        paintOreTile(image, 201, rnd, 0x7A7A8A, 0x5A5A6A); // small molybdenite
-        paintOreTile(image, 202, rnd, 0x3A4A3A, 0x1A2A1A); // small chromite
-        paintOreTile(image, 203, rnd, 0x6A5A6A, 0x4A3A4A); // small ilmenite
-        paintOreTile(image, 204, rnd, 0xC87A5A, 0xA85A3A); // small rutile
-        paintOreTile(image, 205, rnd, 0x4A7A3A, 0x2A5A1A); // small uraninite
-        paintOreTile(image, 206, rnd, 0x5A6A3A, 0x3A4A1A); // small pitchblende
-        paintOreTile(image, 207, rnd, 0xC8A870, 0xA88850); // small monazite
-        paintOreTile(image, 208, rnd, 0xD49A60, 0xB47A40); // small bastnasite
-        paintOreTile(image, 209, rnd, 0xD45A3A, 0xB43A1A); // small vanadinite
-        paintOreTile(image, 210, rnd, 0x6A6A7A, 0x4A4A5A); // small pyrolusite
-        paintOreTile(image, 211, rnd, 0x3A3A4A, 0x1A1A2A); // small graphite
-        paintOreTile(image, 212, rnd, 0xD0D8E8, 0xB0B8C8); // small lithium
-        paintOreTile(image, 213, rnd, 0x2A3A2A, 0x0A1A0A); // small naquadah
-        paintOreTile(image, 214, rnd, 0xC0D0D0, 0xA0B0B0); // small trinium
-        paintOreTile(image, 215, rnd, 0x9A8AC8, 0x7A6AA8); // small neodymium
-        paintOreTile(image, 216, rnd, 0xE8D0A0, 0xC8B080); // small cerium
-        paintOreTile(image, 217, rnd, 0x4A5A6A, 0x2A3A4A); // small osmium
-        paintOreTile(image, 218, rnd, 0xD0C0A8, 0xB0A088); // small palladium
-        paintOreTile(image, 219, rnd, 0xD43060, 0xB41040); // small ruby
+        paintSmallOreTile(image, 180, rnd, 0x4A4A5A, 0x2A2A3A); // small magnetite
+        paintSmallOreTile(image, 181, rnd, 0x8B3A3A, 0x6B1A1A); // small hematite
+        paintSmallOreTile(image, 182, rnd, 0xA0784A, 0x7A5828); // small brown limonite
+        paintSmallOreTile(image, 183, rnd, 0xD4B44A, 0xA88A28); // small yellow limonite
+        paintSmallOreTile(image, 184, rnd, 0x8A6A5A, 0x6A4A3A); // small banded iron
+        paintSmallOreTile(image, 185, rnd, 0x6A6A8A, 0x4A4A6A); // small vanadium magnetite
+        paintSmallOreTile(image, 186, rnd, 0xC89A40, 0x9A7020); // small chalcopyrite
+        paintSmallOreTile(image, 187, rnd, 0x7A8A7A, 0x5A6A5A); // small tetrahedrite
+        paintSmallOreTile(image, 188, rnd, 0x2A8A4A, 0x0A6A2A); // small malachite
+        paintSmallOreTile(image, 189, rnd, 0x8A8AA0, 0x6A6A80); // small galena
+        paintSmallOreTile(image, 190, rnd, 0xB4A080, 0x947A60); // small sphalerite
+        paintSmallOreTile(image, 191, rnd, 0x7AAA7A, 0x5A8A5A); // small garnierite
+        paintSmallOreTile(image, 192, rnd, 0x9A8A5A, 0x7A6A3A); // small pentlandite
+        paintSmallOreTile(image, 193, rnd, 0x4A5A9A, 0x2A3A7A); // small cobaltite
+        paintSmallOreTile(image, 194, rnd, 0xC8B840, 0xA89820); // small pyrite
+        paintSmallOreTile(image, 195, rnd, 0x8A9A7A, 0x6A7A5A); // small arsenopyrite
+        paintSmallOreTile(image, 196, rnd, 0xE8E050, 0xC8C030); // small sulfur
+        paintSmallOreTile(image, 197, rnd, 0xD43A2A, 0xB41A0A); // small cinnabar
+        paintSmallOreTile(image, 198, rnd, 0xD0C8B8, 0xA8A090); // small cassiterite
+        paintSmallOreTile(image, 199, rnd, 0xE8D880, 0xC8B860); // small scheelite
+        paintSmallOreTile(image, 200, rnd, 0x6A5A7A, 0x4A3A5A); // small wolframite
+        paintSmallOreTile(image, 201, rnd, 0x7A7A8A, 0x5A5A6A); // small molybdenite
+        paintSmallOreTile(image, 202, rnd, 0x3A4A3A, 0x1A2A1A); // small chromite
+        paintSmallOreTile(image, 203, rnd, 0x6A5A6A, 0x4A3A4A); // small ilmenite
+        paintSmallOreTile(image, 204, rnd, 0xC87A5A, 0xA85A3A); // small rutile
+        paintSmallOreTile(image, 205, rnd, 0x4A7A3A, 0x2A5A1A); // small uraninite
+        paintSmallOreTile(image, 206, rnd, 0x5A6A3A, 0x3A4A1A); // small pitchblende
+        paintSmallOreTile(image, 207, rnd, 0xC8A870, 0xA88850); // small monazite
+        paintSmallOreTile(image, 208, rnd, 0xD49A60, 0xB47A40); // small bastnasite
+        paintSmallOreTile(image, 209, rnd, 0xD45A3A, 0xB43A1A); // small vanadinite
+        paintSmallOreTile(image, 210, rnd, 0x6A6A7A, 0x4A4A5A); // small pyrolusite
+        paintSmallOreTile(image, 211, rnd, 0x3A3A4A, 0x1A1A2A); // small graphite
+        paintSmallOreTile(image, 212, rnd, 0xD0D8E8, 0xB0B8C8); // small lithium
+        paintSmallOreTile(image, 213, rnd, 0x2A3A2A, 0x0A1A0A); // small naquadah
+        paintSmallOreTile(image, 214, rnd, 0xC0D0D0, 0xA0B0B0); // small trinium
+        paintSmallOreTile(image, 215, rnd, 0x9A8AC8, 0x7A6AA8); // small neodymium
+        paintSmallOreTile(image, 216, rnd, 0xE8D0A0, 0xC8B080); // small cerium
+        paintSmallOreTile(image, 217, rnd, 0x4A5A6A, 0x2A3A4A); // small osmium
+        paintSmallOreTile(image, 218, rnd, 0xD0C0A8, 0xB0A088); // small palladium
+        paintSmallOreTile(image, 219, rnd, 0xD43060, 0xB41040); // small ruby
 
         // --- Nether / End dimension blocks ---
         paintNetherrack(image, 52, rnd);

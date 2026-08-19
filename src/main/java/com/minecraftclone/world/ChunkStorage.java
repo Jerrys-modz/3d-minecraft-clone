@@ -148,20 +148,16 @@ public class ChunkStorage {
                     String type = d.readUTF();
                     int x = d.readInt(), y = d.readInt(), z = d.readInt();
                     int payloadLen = d.readInt();
+                    // Read exactly payloadLen bytes into an isolated buffer to bound each entity's decoding.
+                    byte[] payload = new byte[payloadLen];
+                    d.readFully(payload);
                     BlockEntity entity = BlockEntities.create(type);
                     if (entity != null) {
-                        entity.readFrom(d);
+                        DataInputStream entityStream = new DataInputStream(new ByteArrayInputStream(payload));
+                        entity.readFrom(entityStream);
                         entities.add(new BlockEntitySave(x, y, z, entity));
-                    } else {
-                        // Unknown/removed type: skip its payload so the rest of the
-                        // file stays readable.
-                        long remaining = payloadLen;
-                        while (remaining > 0) {
-                            long skipped = d.skipBytes((int) Math.min(Integer.MAX_VALUE, remaining));
-                            if (skipped <= 0) break;
-                            remaining -= skipped;
-                        }
                     }
+                    // If entity is unknown/removed, we've already consumed its bytes, so continue.
                 }
             }
             chunk.markGenerated();
