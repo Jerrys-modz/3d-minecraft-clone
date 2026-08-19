@@ -1,5 +1,8 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.world.tinkers.TinkersMaterial;
+import com.minecraftclone.world.tinkers.ToolPartType;
+
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -71,12 +74,17 @@ public final class Mining {
         TOOLS.put(BlockType.IRON_HOE,    new ToolStats(ToolKind.SHOVEL, TIER_IRON,   251));
         TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.SHOVEL, TIER_DIAMOND, 1562));
 
-        // Phase 0.5: Tinkers' Construct tool items
-        // Modular Tinkers' tools match iron-tier stats (future: per-material stat lookup)
-        TOOLS.put(BlockType.TINKERS_PICKAXE, new ToolStats(ToolKind.PICKAXE, TIER_IRON, 500));
-        TOOLS.put(BlockType.TINKERS_AXE,     new ToolStats(ToolKind.AXE,     TIER_IRON, 500));
-        TOOLS.put(BlockType.TINKERS_SWORD,   new ToolStats(ToolKind.SWORD,   TIER_IRON, 500));
-        TOOLS.put(BlockType.TINKERS_SHOVEL,  new ToolStats(ToolKind.SHOVEL,  TIER_IRON, 500));
+        // Phase 0.5: Tinkers' Construct assembled tools — one loop covers all materials.
+        // Tool-kind index: 0=PICKAXE, 1=AXE, 2=SWORD, 3=SHOVEL (matches BlockType.assembledTool).
+        ToolKind[] tinkerKinds = {ToolKind.PICKAXE, ToolKind.AXE, ToolKind.SWORD, ToolKind.SHOVEL};
+        for (TinkersMaterial mat : TinkersMaterial.values()) {
+            for (int k = 0; k < tinkerKinds.length; k++) {
+                BlockType tool = BlockType.assembledTool(mat, k);
+                if (tool != null) {
+                    TOOLS.put(tool, new ToolStats(tinkerKinds[k], mat.miningTier, mat.durability));
+                }
+            }
+        }
 
         // Phase 0.5: Tinkers' Construct structure blocks (pickaxe required; moderate hardness)
         put(BlockType.SEARED_BRICK,         3.0f, ToolKind.PICKAXE, TIER_STONE);

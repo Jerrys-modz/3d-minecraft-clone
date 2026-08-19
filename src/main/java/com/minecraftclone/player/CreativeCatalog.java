@@ -1,6 +1,11 @@
 package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.tinkers.TinkersMaterial;
+import com.minecraftclone.world.tinkers.ToolPartType;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The creative-mode item catalog, organized into Minecraft-style tabs. Each
@@ -167,21 +172,7 @@ public final class CreativeCatalog {
                     BlockType.GRAPHITE_ORE, BlockType.CRUSHED_GRAPHITE,
                     BlockType.PYROCHLORE_ORE, BlockType.CRUSHED_PYROCHLORE,
             }),
-            new Tab("Tools", new BlockType[]{
-                    BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
-                    BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
-                    BlockType.WOOD_SHOVEL, BlockType.STONE_SHOVEL, BlockType.IRON_SHOVEL, BlockType.DIAMOND_SHOVEL,
-                    BlockType.WOOD_HAMMER, BlockType.STONE_HAMMER, BlockType.IRON_HAMMER, BlockType.DIAMOND_HAMMER,
-                    BlockType.WOOD_BROADAXE, BlockType.STONE_BROADAXE, BlockType.IRON_BROADAXE, BlockType.DIAMOND_BROADAXE,
-                    // Phase 0: hoes
-                    BlockType.WOOD_HOE, BlockType.STONE_HOE, BlockType.IRON_HOE, BlockType.DIAMOND_HOE,
-                    // Phase 0.5: Tinkers' Construct tool parts + assembled tools
-                    BlockType.WOOD_TOOL_ROD,
-                    BlockType.IRON_PICK_HEAD, BlockType.IRON_AXE_HEAD,
-                    BlockType.IRON_SWORD_BLADE, BlockType.IRON_SHOVEL_HEAD,
-                    BlockType.TINKERS_PICKAXE, BlockType.TINKERS_AXE,
-                    BlockType.TINKERS_SWORD, BlockType.TINKERS_SHOVEL,
-            }),
+            new Tab("Tools", buildToolsTab()),
             new Tab("Combat", new BlockType[]{
                     BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD,
             }),
@@ -203,6 +194,43 @@ public final class CreativeCatalog {
                     BlockType.CLAY_BALL, BlockType.CLAY_CANTEEN, BlockType.CLAY_CANTEEN_FULL,
             }),
     };
+
+    /**
+     * Builds the Tools tab item array, combining the fixed vanilla tools with the
+     * full Tinkers' Construct material × part/tool matrix.  Adding a new
+     * {@link TinkersMaterial} automatically adds all its parts and assembled tools.
+     */
+    private static BlockType[] buildToolsTab() {
+        List<BlockType> list = new ArrayList<>();
+        // Vanilla tools
+        list.add(BlockType.WOOD_PICKAXE);    list.add(BlockType.STONE_PICKAXE);
+        list.add(BlockType.IRON_PICKAXE);    list.add(BlockType.DIAMOND_PICKAXE);
+        list.add(BlockType.WOOD_AXE);        list.add(BlockType.STONE_AXE);
+        list.add(BlockType.IRON_AXE);        list.add(BlockType.DIAMOND_AXE);
+        list.add(BlockType.WOOD_SHOVEL);     list.add(BlockType.STONE_SHOVEL);
+        list.add(BlockType.IRON_SHOVEL);     list.add(BlockType.DIAMOND_SHOVEL);
+        list.add(BlockType.WOOD_HAMMER);     list.add(BlockType.STONE_HAMMER);
+        list.add(BlockType.IRON_HAMMER);     list.add(BlockType.DIAMOND_HAMMER);
+        list.add(BlockType.WOOD_BROADAXE);   list.add(BlockType.STONE_BROADAXE);
+        list.add(BlockType.IRON_BROADAXE);   list.add(BlockType.DIAMOND_BROADAXE);
+        list.add(BlockType.WOOD_HOE);        list.add(BlockType.STONE_HOE);
+        list.add(BlockType.IRON_HOE);        list.add(BlockType.DIAMOND_HOE);
+        // Phase 0.5: Tinkers' parts (all materials × all part types)
+        for (TinkersMaterial mat : TinkersMaterial.values()) {
+            for (ToolPartType part : ToolPartType.values()) {
+                BlockType bt = BlockType.toolPart(mat, part);
+                if (bt != null) list.add(bt);
+            }
+        }
+        // Phase 0.5: Tinkers' assembled tools (all materials × 4 tool kinds)
+        for (TinkersMaterial mat : TinkersMaterial.values()) {
+            for (int k = 0; k < 4; k++) {
+                BlockType bt = BlockType.assembledTool(mat, k);
+                if (bt != null) list.add(bt);
+            }
+        }
+        return list.toArray(new BlockType[0]);
+    }
 
     private CreativeCatalog() {
     }

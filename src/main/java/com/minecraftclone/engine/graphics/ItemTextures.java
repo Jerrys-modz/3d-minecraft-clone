@@ -1,6 +1,8 @@
 package com.minecraftclone.engine.graphics;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.tinkers.TinkersMaterial;
+import com.minecraftclone.world.tinkers.ToolPartType;
 
 import java.awt.image.BufferedImage;
 import java.util.EnumMap;
@@ -306,18 +308,32 @@ public class ItemTextures {
 
             // ----------------------------------------------------------------
             // Phase 0.5: Tinkers' Construct tool parts + assembled tools
+            // Dispatched through TinkersMaterial/ToolPartType so adding a
+            // new material requires zero changes here.
             // ----------------------------------------------------------------
-            case IRON_PICK_HEAD    -> paintToolHead(0xE8E8E8, HEAD_PICK);
-            case IRON_AXE_HEAD     -> paintToolHead(0xE8E8E8, HEAD_AXE);
-            case IRON_SWORD_BLADE  -> paintToolHead(0xE8E8E8, HEAD_SWORD);
-            case IRON_SHOVEL_HEAD  -> paintToolHead(0xE8E8E8, HEAD_SHOVEL);
-            case WOOD_TOOL_ROD     -> paintToolRod();
-            case TINKERS_PICKAXE   -> paintPickaxe(0xE8E8E8);   // re-use existing pickaxe painter
-            case TINKERS_AXE       -> paintAxe(0xE8E8E8);
-            case TINKERS_SWORD     -> paintSword(0xE8E8E8);
-            case TINKERS_SHOVEL    -> paintShovel(0xE8E8E8);
-
-            default -> throw new IllegalArgumentException("No item texture generator for " + type);
+            default -> {
+                if (type.isTinkersToolPart()) {
+                    TinkersMaterial mat  = type.tinkersMaterial();
+                    ToolPartType    part = type.tinkersPartType();
+                    if (part == ToolPartType.TOOL_ROD) {
+                        yield paintToolRod();
+                    } else {
+                        yield paintToolHead(mat.color, part.paintStyle);
+                    }
+                } else if (type.isTinkersTool()) {
+                    TinkersMaterial mat = type.tinkersMaterial();
+                    int kindIdx         = type.tinkersToolKindIdx();
+                    yield switch (kindIdx) {
+                        case 0 -> paintPickaxe(mat.color);
+                        case 1 -> paintAxe(mat.color);
+                        case 2 -> paintSword(mat.color);
+                        case 3 -> paintShovel(mat.color);
+                        default -> throw new IllegalArgumentException("Unknown Tinkers tool kind idx " + kindIdx);
+                    };
+                } else {
+                    throw new IllegalArgumentException("No item texture generator for " + type);
+                }
+            }
         };
     }
 

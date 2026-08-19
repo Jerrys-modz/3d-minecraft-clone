@@ -1,6 +1,8 @@
 package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.tinkers.TinkersMaterial;
+import com.minecraftclone.world.tinkers.ToolPartType;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -86,7 +88,8 @@ public final class Crafting {
         CHARS.put('H', BlockType.WHEAT);        // H = wHeat
         // Phase 0.5: Tinkers' Construct ingredient shortcuts
         CHARS.put('Z', BlockType.SEARED_BRICK);       // Z = seared/sintered (kiln)
-        CHARS.put('R', BlockType.WOOD_TOOL_ROD);      // R = Rod
+        CHARS.put('R', BlockType.WOOD_TOOL_ROD);      // R = Rod (kept for structure recipes)
+        CHARS.put('M', BlockType.GOLD_INGOT);         // M = Metal/gold (G is taken by Glass)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -211,22 +214,42 @@ public final class Crafting {
         // Tool Station: iron ingots on top, planks frame body
         shaped3x3("III", "PZP", "PPP", BlockType.TOOL_STATION, 1);
 
-        // Tool rod: 2 planks stacked → 4 wood tool rods (same as vanilla stick recipe but in a rod shape)
-        shaped2x2("P.", "P.", BlockType.WOOD_TOOL_ROD, 4);
+        // -----------------------------------------------------------------------
+        // Tinkers' Construct tool parts — auto-generated from TinkersMaterial × ToolPartType.
+        // Adding a new material: add it to TinkersMaterial; all recipes appear here automatically.
+        // -----------------------------------------------------------------------
+        BlockType woodRod = BlockType.toolPart(TinkersMaterial.WOOD, ToolPartType.TOOL_ROD);
+        // Tool rod: always wood planks (2 planks stacked → 4 rods)
+        shaped2x2("P.", "P.", woodRod, 4);
 
-        // Iron tool heads — each has a distinct 3×3 silhouette:
-        shaped3x3("II.", "I..", "...", BlockType.IRON_PICK_HEAD,   1);  // L-shape = pick prongs
-        shaped3x3("II.", "II.", "...", BlockType.IRON_AXE_HEAD,    1);  // 2×2 square = blade
-        shaped3x3("I..", "I..", "...", BlockType.IRON_SWORD_BLADE, 1);  // vertical bar = blade
-        shaped3x3("I..", ".I.", "...", BlockType.IRON_SHOVEL_HEAD,  1); // angled = paddle/spade
+        // Head recipes: replace 'M' placeholder with material's crafting char
+        for (TinkersMaterial mat : TinkersMaterial.values()) {
+            char mc = mat.craftingChar;
+            for (ToolPartType part : ToolPartType.values()) {
+                if (!part.isHead()) continue; // TOOL_ROD handled above
+                // Replace the template placeholder with this material's ingredient
+                String r0 = part.patternRows[0].replace('M', mc);
+                String r1 = part.patternRows[1].replace('M', mc);
+                String r2 = part.patternRows[2].replace('M', mc);
+                shaped3x3(r0, r1, r2, BlockType.toolPart(mat, part), 1);
+            }
+        }
 
-        // Tinkers' tool assembly — done at the Tool Station via right-click interaction.
-        // These shapeless fallback recipes allow crafting without the Tool Station for now,
-        // so players can get started before building the full smeltery.
-        shapeless2x2(BlockType.TINKERS_PICKAXE, 1, BlockType.IRON_PICK_HEAD,   BlockType.WOOD_TOOL_ROD);
-        shapeless2x2(BlockType.TINKERS_AXE,     1, BlockType.IRON_AXE_HEAD,    BlockType.WOOD_TOOL_ROD);
-        shapeless2x2(BlockType.TINKERS_SWORD,   1, BlockType.IRON_SWORD_BLADE, BlockType.WOOD_TOOL_ROD);
-        shapeless2x2(BlockType.TINKERS_SHOVEL,  1, BlockType.IRON_SHOVEL_HEAD, BlockType.WOOD_TOOL_ROD);
+        // Tool assembly: head + wood rod → assembled tool, for every material.
+        // Tool-kind index: 0=PICKAXE, 1=AXE, 2=SWORD, 3=SHOVEL
+        ToolPartType[] headParts = {
+            ToolPartType.PICK_HEAD, ToolPartType.AXE_HEAD,
+            ToolPartType.SWORD_BLADE, ToolPartType.SHOVEL_HEAD
+        };
+        for (TinkersMaterial mat : TinkersMaterial.values()) {
+            for (int k = 0; k < headParts.length; k++) {
+                BlockType head = BlockType.toolPart(mat, headParts[k]);
+                BlockType tool = BlockType.assembledTool(mat, k);
+                if (head != null && tool != null) {
+                    shapeless2x2(tool, 1, head, woodRod);
+                }
+            }
+        }
 
         // --- 5x5 Advanced Crafting Table Recipes ---
         // These recipes require the full 5x5 grid and produce advanced items
