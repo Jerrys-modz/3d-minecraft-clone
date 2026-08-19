@@ -118,6 +118,9 @@ public final class Farming {
         return crop == BlockType.WHEAT_STAGE_4;
     }
 
+    /** Maximum height a natural sugar cane column can reach (vanilla: 3). */
+    private static final int SUGAR_CANE_MAX_HEIGHT = 3;
+
     // -----------------------------------------------------------------------
     // Hydration
     // -----------------------------------------------------------------------
@@ -142,6 +145,67 @@ public final class Farming {
             }
         }
         return false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Sugar cane helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * True if water (non-lava fluid) is directly adjacent (N/S/E/W, same Y)
+     * to the given block position. Used for sugar cane base validation.
+     */
+    public static boolean isAdjacentToWater(World world, int wx, int wy, int wz) {
+        int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
+        for (int[] d : dirs) {
+            BlockType b = world.getBlock(wx + d[0], wy, wz + d[1]);
+            if (b != null && b.isFluid()
+                    && b != BlockType.LAVA && b != BlockType.LAVA_SOURCE && b != BlockType.LAVA_FLOW) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True if sugar cane can be placed/survive at {@code (wx, wy, wz)}.
+     * The block below must be DIRT, GRASS, or SAND (or another SUGAR_CANE),
+     * and the soil at the bottom of the column must be adjacent to water.
+     */
+    public static boolean canSugarCaneStand(World world, int wx, int wy, int wz) {
+        BlockType below = world.getBlock(wx, wy - 1, wz);
+        if (below == null) return false;
+        // Stacking on another cane is always allowed as long as the column base is valid.
+        if (below == BlockType.SUGAR_CANE) {
+            // Walk down to the soil block.
+            int baseY = wy - 1;
+            while (baseY > 0 && world.getBlock(wx, baseY - 1, wz) == BlockType.SUGAR_CANE) baseY--;
+            return isAdjacentToWater(world, wx, baseY - 1, wz);
+        }
+        // Soil block: must be dirt/grass/sand AND adjacent to water.
+        boolean validSoil = below == BlockType.DIRT || below == BlockType.GRASS || below == BlockType.SAND;
+        return validSoil && isAdjacentToWater(world, wx, wy - 1, wz);
+    }
+
+    /**
+     * Returns the Y of the topmost SUGAR_CANE block in a column starting at (wx, wy, wz).
+     * If the block at wy is not sugar cane, returns wy - 1 (signals "empty").
+     */
+    private static int sugarCaneTop(World world, int wx, int wy, int wz) {
+        int y = wy;
+        while (y + 1 < Chunk.HEIGHT && world.getBlock(wx, y + 1, wz) == BlockType.SUGAR_CANE) y++;
+        return y;
+    }
+
+    /**
+     * Returns the height of the sugar cane column that contains (wx, wy, wz).
+     */
+    private static int sugarCaneHeight(World world, int wx, int wy, int wz) {
+        // Walk to bottom of column.
+        int botY = wy;
+        while (botY > 0 && world.getBlock(wx, botY - 1, wz) == BlockType.SUGAR_CANE) botY--;
+        int topY = sugarCaneTop(world, wx, wy, wz);
+        return topY - botY + 1;
     }
 
     // -----------------------------------------------------------------------
@@ -218,16 +282,37 @@ public final class Farming {
 
                 if (!isCrop(b)) continue;
 
-                // Sugar cane grows on any solid base; other crops need farmland (either variant).
+                // --- Sugar cane: separate growth path ---
+                if (b == BlockType.SUGAR_CANE) {
+                    if (!canSugarCaneStand(world, wx, wy, wz)) {
+                        // Water removed from base — break this cane and everything above it.
+                        int topY = sugarCaneTop(world, wx, wy, wz);
+                        for (int dropY = wy; dropY <= topY; dropY++) {
+                            world.setBlock(wx, dropY, wz, BlockType.AIR);
+                            world.spawnItem(wx, dropY, wz, BlockType.SUGAR_CANE, 1, rnd);
+                        }
+                    } else {
+                        // Only the top-most cane block can grow upward (like vanilla).
+                        if (world.getBlock(wx, wy + 1, wz) == BlockType.SUGAR_CANE) continue;
+                        // Grow upward if below the max height.
+                        if (sugarCaneHeight(world, wx, wy, wz) < SUGAR_CANE_MAX_HEIGHT
+                                && world.getBlock(wx, wy + 1, wz) == BlockType.AIR) {
+                            world.setBlock(wx, wy + 1, wz, BlockType.SUGAR_CANE);
+                        }
+                    }
+                    continue;
+                }
+
+                // --- Normal crops: need farmland base ---
                 BlockType base = world.getBlock(wx, wy - 1, wz);
-                if (b != BlockType.SUGAR_CANE && (base == null || !base.isFarmland())) {
+                if (base == null || !base.isFarmland()) {
                     // Farmland was broken — clear the orphaned crop.
                     world.setBlock(wx, wy, wz, BlockType.AIR);
                     continue;
                 }
 
                 // Crops only grow on HYDRATED farmland (FARMLAND_WET), just like vanilla.
-                if (b != BlockType.SUGAR_CANE && base != BlockType.FARMLAND_WET) continue;
+                if (base != BlockType.FARMLAND_WET) continue;
 
                 BlockType next = nextStage(b);
                 if (next != null) {

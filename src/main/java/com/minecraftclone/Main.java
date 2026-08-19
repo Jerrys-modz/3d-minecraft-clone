@@ -1891,6 +1891,18 @@ public class Main {
                         }
                         handRenderer.triggerSwing();
                         showMessage(messages, "Canteen filled!", new Vector4f(0.3f, 0.6f, 1f, 1f), 1.5f);
+                    } else if (noMob && mode.canPlace() && heldItem == BlockType.SUGAR_CANE) {
+                        // Sugar cane can only be placed on dirt/grass/sand adjacent to water
+                        // (or on top of another sugar cane whose base is adjacent to water).
+                        int px = hit.placePos.x, py = hit.placePos.y, pz = hit.placePos.z;
+                        if (world.getBlock(px, py, pz) == BlockType.AIR
+                                && com.minecraftclone.player.Farming.canSugarCaneStand(world, px, py, pz)) {
+                            world.setBlock(px, py, pz, BlockType.SUGAR_CANE);
+                            if (!mode.isCreative()) player.getInventory().remove(BlockType.SUGAR_CANE, 1);
+                            handRenderer.triggerSwing();
+                            audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
+                                    px + 0.5f, py + 0.5f, pz + 0.5f, 0.8f);
+                        }
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         // Don't place if clicking on a bed (sleep instead) or if placement spot is a bed
                         BlockType placeTarget = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
