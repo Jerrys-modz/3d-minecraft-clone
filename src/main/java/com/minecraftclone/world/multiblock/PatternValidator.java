@@ -63,6 +63,8 @@ public final class PatternValidator {
             int startX = cx + inDir[0];
             int startY = cy + inDir[1];
             int startZ = cz + inDir[2];
+            // Ensure the start cell's chunk is fully loaded before attempting formation
+            if (!world.isFullyGenerated(startX, startZ)) continue;
             BlockType startBlock = world.getBlock(startX, startY, startZ);
             if (startBlock == null || !def.isInteriorBlock(startBlock)) continue;
 
@@ -102,8 +104,10 @@ public final class PatternValidator {
 
             for (int[] d : FACES) {
                 int qx = px + d[0], qy = py + d[1], qz = pz + d[2];
+                // Ensure neighbor cell's chunk is fully loaded before accepting it
+                if (!world.isFullyGenerated(qx, qz)) return null; // Unloaded chunk — abort
                 BlockType qb = world.getBlock(qx, qy, qz);
-                if (qb == null) return null; // Unloaded chunk — abort
+                if (qb == null) return null; // Null block (shouldn't happen if chunk loaded) — abort
                 if (def.isInteriorBlock(qb)) {
                     if (!visited.contains(interiorKey(qx, qy, qz))) {
                         queue.add(new int[]{qx, qy, qz});

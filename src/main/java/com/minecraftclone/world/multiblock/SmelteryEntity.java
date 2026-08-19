@@ -44,6 +44,8 @@ public final class SmelteryEntity extends MultiBlockEntity {
     /** No-arg constructor for {@link com.minecraftclone.world.BlockEntities} deserialization. */
     public SmelteryEntity() {
         super(null); // instance is null during load; MultiBlockManager re-registers on form
+        // Deserialized entities start as unformed; MultiBlockManager's formation scan will re-activate them
+        this.formed = false;
     }
 
     public SmelteryEntity(MultiBlockInstance instance) {
@@ -81,5 +83,7 @@ public final class SmelteryEntity extends MultiBlockEntity {
     public void readFrom(DataInput in) throws IOException {
         super.readFrom(in);
         heatAccum = in.readFloat();
+        // Do not restore 'formed' from disk; always start unformed and let MultiBlockManager re-form
+        this.formed = false;
     }
 }

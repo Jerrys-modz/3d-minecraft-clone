@@ -1080,9 +1080,9 @@ public enum BlockType {
         return this == AIR || isFluid();
     }
 
-    /** True if this block is drawn in the see-through translucent render pass (glass, ice). */
+    /** True if this block is drawn in the see-through translucent render pass (glass, ice, seared glass). */
     public boolean isTranslucent() {
-        return this == GLASS || this == ICE;
+        return this == GLASS || this == ICE || this == SEARED_GLASS;
     }
 
     /**

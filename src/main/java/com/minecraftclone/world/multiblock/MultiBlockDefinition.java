@@ -41,6 +41,15 @@ public interface MultiBlockDefinition {
     boolean isShellBlock(BlockType type);
 
     /**
+     * True if this block type is the specific controller block for this definition.
+     * Used to identify valid controller positions during formation scans.
+     * Defaults to checking if the block is both relevant and a shell block.
+     */
+    default boolean isControllerBlock(BlockType type) {
+        return isRelevantBlock(type) && isShellBlock(type);
+    }
+
+    /**
      * True for any block that is allowed inside the hollow interior.
      * Usually {@code AIR}, fluid, or small decorations.
      */

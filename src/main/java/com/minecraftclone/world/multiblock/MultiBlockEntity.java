@@ -45,11 +45,15 @@ public abstract class MultiBlockEntity implements BlockEntity {
 
     @Override
     public void writeTo(DataOutput out) throws IOException {
+        // Note: 'formed' is written for backward compatibility but ignored on load
         out.writeBoolean(formed);
     }
 
     @Override
     public void readFrom(DataInput in) throws IOException {
-        formed = in.readBoolean();
+        // Discard the persisted 'formed' flag; entities always deserialize as unformed
+        // and are re-formed through MultiBlockManager's normal scan process
+        in.readBoolean();
+        formed = false;
     }
 }

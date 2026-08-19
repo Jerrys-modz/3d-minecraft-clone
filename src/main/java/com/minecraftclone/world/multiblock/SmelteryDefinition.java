@@ -58,6 +58,11 @@ public final class SmelteryDefinition implements MultiBlockDefinition {
     }
 
     @Override
+    public boolean isControllerBlock(BlockType type) {
+        return type == BlockType.SMELTERY_CONTROLLER;
+    }
+
+    @Override
     public boolean isInteriorBlock(BlockType type) {
         if (type == null) return false;
         if (type == BlockType.AIR) return true;

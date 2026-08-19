@@ -261,4 +261,54 @@ class CraftingTest {
         assertEquals(4, r.outputAmount());
     }
 
+    @Test
+    void clayCanteenCraftsFrom4ClayBalls() {
+        // Pattern: "YY / YY" (4 clay balls) -> 1 clay canteen
+        BlockType[] grid = new BlockType[4];
+        grid[0] = BlockType.CLAY_BALL;
+        grid[1] = BlockType.CLAY_BALL;
+        grid[2] = BlockType.CLAY_BALL;
+        grid[3] = BlockType.CLAY_BALL;
+        Crafting.Recipe r = Crafting.match2x2(grid);
+        assertNotNull(r, "Clay canteen recipe should match");
+        assertEquals(BlockType.CLAY_CANTEEN, r.output());
+        assertEquals(1, r.outputAmount());
+    }
+
+    @Test
+    void searedBrickCraftsFrom4ClayBallsIn3x3() {
+        // Pattern: "YY. / YY. / ..." (4 clay balls in 3x3) -> 2 seared bricks
+        // This pattern is distinct from the 2x2 clay canteen recipe
+        BlockType[] grid = new BlockType[9];
+        grid[0] = BlockType.CLAY_BALL;
+        grid[1] = BlockType.CLAY_BALL;
+        grid[3] = BlockType.CLAY_BALL;
+        grid[4] = BlockType.CLAY_BALL;
+        Crafting.Recipe r = Crafting.match3x3(grid);
+        assertNotNull(r, "Seared brick recipe should match in 3x3 grid");
+        assertEquals(BlockType.SEARED_BRICK, r.output());
+        assertEquals(2, r.outputAmount());
+    }
+
+    @Test
+    void ironSwordBladeAndShovelHeadAreDistinct() {
+        // Sword blade: "I.. / I.. / ..." (2 vertical iron ingots)
+        BlockType[] swordGrid = new BlockType[9];
+        swordGrid[0] = BlockType.IRON_INGOT;
+        swordGrid[3] = BlockType.IRON_INGOT;
+        Crafting.Recipe sword = Crafting.match3x3(swordGrid);
+        assertNotNull(sword, "Iron sword blade recipe should match");
+        assertEquals(BlockType.IRON_SWORD_BLADE, sword.output());
+        assertEquals(1, sword.outputAmount());
+
+        // Shovel head: "I.. / .I. / ..." (2 diagonal iron ingots)
+        BlockType[] shovelGrid = new BlockType[9];
+        shovelGrid[0] = BlockType.IRON_INGOT;
+        shovelGrid[4] = BlockType.IRON_INGOT;
+        Crafting.Recipe shovel = Crafting.match3x3(shovelGrid);
+        assertNotNull(shovel, "Iron shovel head recipe should match");
+        assertEquals(BlockType.IRON_SHOVEL_HEAD, shovel.output());
+        assertEquals(1, shovel.outputAmount());
+    }
+
 }

@@ -115,6 +115,47 @@ public final class MultiBlockManager {
         }
     }
 
+    /**
+     * Called by {@code World} when a chunk at {@code (chunkX, chunkZ)} is
+     * unloaded.  Removes all formed multi-block instances whose bounding
+     * boxes intersect the unloaded chunk, clearing them from both the
+     * {@code byController} and {@code byPosition} maps.
+     *
+     * <p>This ensures that when chunks reload, the multiblock can form fresh
+     * instances without stale entity references or inconsistent state.
+     *
+     * @param world  the world (used to call onDeform callbacks)
+     * @param chunkX chunk X coordinate
+     * @param chunkZ chunk Z coordinate
+     */
+    public void onChunkUnload(World world, int chunkX, int chunkZ) {
+        // Chunk world-block bounds (16 blocks per chunk)
+        int minX = chunkX * 16;
+        int maxX = minX + 15;
+        int minZ = chunkZ * 16;
+        int maxZ = minZ + 15;
+
+        // Collect instances to remove (avoid concurrent modification)
+        List<MultiBlockInstance> toRemove = new ArrayList<>();
+        for (MultiBlockInstance inst : byController.values()) {
+            // Check if instance's bounding box intersects this chunk
+            if (inst.maxX >= minX && inst.minX <= maxX
+             && inst.maxZ >= minZ && inst.minZ <= maxZ) {
+                toRemove.add(inst);
+            }
+        }
+
+        // Deform each intersecting instance
+        for (MultiBlockInstance inst : toRemove) {
+            MultiBlockDefinition def = findDefinition(inst.definitionId);
+            if (def != null) {
+                def.onDeform(inst, world);
+            }
+            byController.remove(blockKey(inst.controllerX, inst.controllerY, inst.controllerZ));
+            unindexInstance(inst);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Private: deformation
     // -----------------------------------------------------------------------
@@ -153,7 +194,7 @@ public final class MultiBlockManager {
         BlockType changedBlock = world.getBlock(x, y, z);
         if (changedBlock == null) return;
 
-        for (MultiBlockDefinition def : definitions) {
+        defLoop: for (MultiBlockDefinition def : definitions) {
             if (!def.isRelevantBlock(changedBlock)) continue;
 
             int radius = def.scanRadius();
@@ -171,7 +212,7 @@ public final class MultiBlockManager {
                         MultiBlockInstance instance = def.tryForm(world, cx, cy, cz);
                         if (instance != null) {
                             registerInstance(instance, world, def);
-                            break; // One formation per definition per change event is enough
+                            continue defLoop; // One formation per definition per change event is enough
                         }
                     }
                 }
@@ -181,12 +222,10 @@ public final class MultiBlockManager {
 
     /**
      * Returns true if {@code type} is a controller block for {@code def}.
-     * Definitions must override {@link #isControllerOf} or the default
-     * {@link MultiBlockDefinition#isRelevantBlock} is used instead.
+     * Uses the definition's {@link MultiBlockDefinition#isControllerBlock} predicate.
      */
     private static boolean isControllerOf(MultiBlockDefinition def, BlockType type) {
-        // Subclasses can narrow this; for now use isRelevantBlock
-        return def.isRelevantBlock(type) && def.isShellBlock(type);
+        return def.isControllerBlock(type);
     }
 
     // -----------------------------------------------------------------------

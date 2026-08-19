@@ -767,6 +767,8 @@ public class World implements BlockAccessor {
                 if (c.isModifiedByPlayer()) {
                     storage.save(c, blockEntitiesInChunk(c));
                 }
+                // Notify multiblock manager so it can remove instances in this chunk
+                multiBlockManager.onChunkUnload(this, c.getPos().x(), c.getPos().z());
                 c.destroy();
             }
         }

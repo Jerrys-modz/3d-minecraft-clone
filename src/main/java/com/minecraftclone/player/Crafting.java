@@ -184,7 +184,8 @@ public final class Crafting {
 
         // Seared Brick: fire clay balls in-world (Furnace: clay ball → seared brick).
         // Also allow crafting 2 seared bricks from 4 clay balls as an early-game bootstrap.
-        shaped2x2("YY", "YY", BlockType.SEARED_BRICK, 2);         // 4 clay balls → 2 seared bricks
+        // Use a 3x3 pattern to avoid conflict with the clay-canteen 2x2 recipe
+        shaped3x3("YY.", "YY.", "...", BlockType.SEARED_BRICK, 2);         // 4 clay balls → 2 seared bricks
 
         // Smeltery Controller: 8 iron ingots in a ring around the centre (empty inside)
         shaped3x3("III", "I.I", "III", BlockType.SMELTERY_CONTROLLER, 1);
@@ -217,7 +218,7 @@ public final class Crafting {
         shaped3x3("II.", "I..", "...", BlockType.IRON_PICK_HEAD,   1);  // L-shape = pick prongs
         shaped3x3("II.", "II.", "...", BlockType.IRON_AXE_HEAD,    1);  // 2×2 square = blade
         shaped3x3("I..", "I..", "...", BlockType.IRON_SWORD_BLADE, 1);  // vertical bar = blade
-        shaped3x3(".I.", ".I.", "...", BlockType.IRON_SHOVEL_HEAD,  1); // narrow bar = paddle
+        shaped3x3("I..", ".I.", "...", BlockType.IRON_SHOVEL_HEAD,  1); // angled = paddle/spade
 
         // Tinkers' tool assembly — done at the Tool Station via right-click interaction.
         // These shapeless fallback recipes allow crafting without the Tool Station for now,
