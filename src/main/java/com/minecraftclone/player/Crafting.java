@@ -82,6 +82,8 @@ public final class Crafting {
         CHARS.put('U', BlockType.WOOL);
         CHARS.put('V', BlockType.WOLF_PELT);
         CHARS.put('B', BlockType.BEAR_HIDE);
+        CHARS.put('Y', BlockType.CLAY_BALL);    // Y = claY ball
+        CHARS.put('H', BlockType.WHEAT);        // H = wHeat
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -150,6 +152,20 @@ public final class Crafting {
 
         // Fence
         shaped3x3("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);                       // 4 planks + 2 sticks -> 3 fence
+
+        // --- Farming recipes ---
+        // Hoes: SS / .S / .P  (two material on top, stick below)
+        shaped3x3("PP.", "SP.", "S..", BlockType.WOOD_HOE, 1);
+        shaped3x3("KK.", "SK.", "S..", BlockType.STONE_HOE, 1);
+        shaped3x3("II.", "SI.", "S..", BlockType.IRON_HOE, 1);
+        shaped3x3("DD.", "SD.", "S..", BlockType.DIAMOND_HOE, 1);
+
+        // Clay canteen: 4 clay balls in a 2x2
+        shaped2x2("YY", "YY", BlockType.CLAY_CANTEEN, 1);  // 4 clay balls -> 1 canteen
+
+        // Bread: 3 wheat in a row (shapeless - any 3-wheat combo in 2x2 or 3x3)
+        shaped3x3("HHH", "...", "...", BlockType.BREAD, 1); // 3 wheat in a row -> bread
+        shaped2x2("HH", "..", BlockType.BREAD, 1);           // 2 wheat in a 2x2 row -> 1 bread (simpler)
 
         // --- 5x5 Advanced Crafting Table Recipes ---
         // These recipes require the full 5x5 grid and produce advanced items

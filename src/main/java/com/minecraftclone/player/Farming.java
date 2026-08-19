@@ -119,6 +119,32 @@ public final class Farming {
     }
 
     // -----------------------------------------------------------------------
+    // Hydration
+    // -----------------------------------------------------------------------
+
+    /**
+     * Vanilla rule: farmland is hydrated when any water block (source, flow, or
+     * the legacy WATER constant) exists within 4 blocks horizontally at the same
+     * Y or one block above. This is checked on every random tick and drives the
+     * FARMLAND ↔ FARMLAND_WET state transition.
+     */
+    public static boolean isNearWater(World world, int wx, int wy, int wz) {
+        for (int dz = -4; dz <= 4; dz++) {
+            for (int dx = -4; dx <= 4; dx++) {
+                for (int dy = 0; dy <= 1; dy++) {
+                    BlockType b = world.getBlock(wx + dx, wy + dy, wz + dz);
+                    if (b != null && b.isFluid() && !b.equals(BlockType.LAVA)
+                            && !b.equals(BlockType.LAVA_SOURCE)
+                            && !b.equals(BlockType.LAVA_FLOW)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // -----------------------------------------------------------------------
     // Growth tick — Minecraft-style random tick system
     // -----------------------------------------------------------------------
 
@@ -177,15 +203,31 @@ public final class Farming {
                 int wz = originZ + lz;
 
                 BlockType b = world.getBlock(wx, wy, wz);
-                if (b == null || !isCrop(b)) continue;
+                if (b == null) continue;
 
-                // Sugar cane grows on any solid base; other crops require farmland.
-                if (b != BlockType.SUGAR_CANE
-                        && world.getBlock(wx, wy - 1, wz) != BlockType.FARMLAND) {
+                // --- Farmland hydration tick ---
+                if (b == BlockType.FARMLAND || b == BlockType.FARMLAND_WET) {
+                    boolean wet = isNearWater(world, wx, wy, wz);
+                    if (wet && b == BlockType.FARMLAND) {
+                        world.setBlock(wx, wy, wz, BlockType.FARMLAND_WET);
+                    } else if (!wet && b == BlockType.FARMLAND_WET) {
+                        world.setBlock(wx, wy, wz, BlockType.FARMLAND);
+                    }
+                    continue;
+                }
+
+                if (!isCrop(b)) continue;
+
+                // Sugar cane grows on any solid base; other crops need farmland (either variant).
+                BlockType base = world.getBlock(wx, wy - 1, wz);
+                if (b != BlockType.SUGAR_CANE && (base == null || !base.isFarmland())) {
                     // Farmland was broken — clear the orphaned crop.
                     world.setBlock(wx, wy, wz, BlockType.AIR);
                     continue;
                 }
+
+                // Crops only grow on HYDRATED farmland (FARMLAND_WET), just like vanilla.
+                if (b != BlockType.SUGAR_CANE && base != BlockType.FARMLAND_WET) continue;
 
                 BlockType next = nextStage(b);
                 if (next != null) {

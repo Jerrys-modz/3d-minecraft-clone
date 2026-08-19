@@ -72,7 +72,9 @@ public final class Mining {
         TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.SHOVEL, TIER_DIAMOND, 1562));
 
         // Farming blocks
-        put(BlockType.FARMLAND, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.FARMLAND,     0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.FARMLAND_WET, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.CLAY,         0.6f, ToolKind.SHOVEL, TIER_HAND);
         // Crops: instant, no tool required.
         put(BlockType.WHEAT_STAGE_1,  0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.WHEAT_STAGE_2,  0f, ToolKind.NONE, TIER_HAND);

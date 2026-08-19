@@ -29,7 +29,8 @@ public final class CreativeCatalog {
                     BlockType.NETHERRACK, BlockType.SOUL_SAND, BlockType.GLOWSTONE, BlockType.END_STONE, BlockType.OBSIDIAN,
                     BlockType.NETHER_PORTAL, BlockType.END_PORTAL,
                     // Phase 0: farming structures
-                    BlockType.FARMLAND,
+                    BlockType.FARMLAND, BlockType.FARMLAND_WET,
+                    BlockType.CLAY,
             }),
             new Tab("Decoration", new BlockType[]{
                     BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,
@@ -188,7 +189,7 @@ public final class CreativeCatalog {
                     // Phase 0: farming food items + canteen
                     BlockType.SEEDS, BlockType.WHEAT, BlockType.BREAD,
                     BlockType.POTATO, BlockType.POTATO_COOKED, BlockType.CARROT,
-                    BlockType.CLAY_CANTEEN, BlockType.CLAY_CANTEEN_FULL,
+                    BlockType.CLAY_BALL, BlockType.CLAY_CANTEEN, BlockType.CLAY_CANTEEN_FULL,
             }),
     };
 

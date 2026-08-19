@@ -651,7 +651,21 @@ public enum BlockType {
     WOOD_HOE(439, 0),
     STONE_HOE(440, 0),
     IRON_HOE(441, 0),
-    DIAMOND_HOE(442, 0);
+    DIAMOND_HOE(442, 0),
+
+    // --- Clay (terrain block + item drop) ---
+    /** Blue-grey clay block; spawns on river/lake beds. Drops CLAY_BALL when broken. */
+    CLAY(443, true, false, 232),
+    /** Item dropped from CLAY blocks; 4 arranged in a 2×2 craft CLAY_CANTEEN. */
+    CLAY_BALL(444, 0),
+
+    // --- Hydrated farmland ---
+    /**
+     * Moist farmland (within 4 blocks of a water source).
+     * Visually darker than dry FARMLAND. Crops only grow on this variant.
+     * Reverts to dry FARMLAND when no water is nearby, and to DIRT if trampled.
+     */
+    FARMLAND_WET(445, true, false, 233, 2, 2);
 
     public final short id;
     public final boolean solid;
@@ -1021,6 +1035,11 @@ public enum BlockType {
     /** True for any hoe item (used to till DIRT/GRASS into FARMLAND). */
     public boolean isHoe() {
         return this == WOOD_HOE || this == STONE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
+    }
+
+    /** True for either variant of tilled farmland (dry or hydrated). */
+    public boolean isFarmland() {
+        return this == FARMLAND || this == FARMLAND_WET;
     }
 
     /**

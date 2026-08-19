@@ -314,6 +314,8 @@ public class TextureAtlas {
         paintCropStage(image, 229, rnd, 0x48A828, 0.60f); // CARROT_CROP_2 (growing)
         paintCropStage(image, 230, rnd, 0xFF8020, 1.00f); // CARROT_CROP_3 (mature, orange tips)
         paintSugarCane(image, 231, rnd);                  // SUGAR_CANE
+        paintClayBlock(image, 232, rnd);                  // CLAY (blue-grey terrain block)
+        paintWetFarmlandTop(image, 233, rnd);             // FARMLAND_WET top (dark moist soil)
 
         return image;
     }
@@ -1084,6 +1086,40 @@ public class TextureAtlas {
                 boolean segLine = (y % 5 == 0);
                 int c = segLine ? 0x3A8A28 : (y < TILE_PX / 3 ? 0x58C040 : 0x48A830);
                 img.setRGB(ox + x, oy + y, 0xFF000000 | c);
+            }
+        }
+    }
+
+    /** Blue-grey clay block: a uniform fine-grained surface with subtle speckle. */
+    private void paintClayBlock(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int base = 0x9BA7B0; // muted blue-grey
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(18) - 9;
+                int r = Math.max(0, Math.min(255, ((base >> 16) & 0xFF) + noise));
+                int g = Math.max(0, Math.min(255, ((base >> 8)  & 0xFF) + noise));
+                int b = Math.max(0, Math.min(255, ( base        & 0xFF) + noise));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /** Wet/hydrated farmland top: dark near-black moist soil with faint furrow lines. */
+    private void paintWetFarmlandTop(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int base = 0x2A1A0E; // very dark moist brown
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                boolean furrow = (y % 4 == 0);
+                int noise = rnd.nextInt(12) - 6;
+                int br = furrow ? base - 0x100800 : base;
+                int r = Math.max(0, Math.min(255, ((br >> 16) & 0xFF) + noise));
+                int g = Math.max(0, Math.min(255, ((br >> 8)  & 0xFF) + noise));
+                int b = Math.max(0, Math.min(255, ( br        & 0xFF) + noise));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
             }
         }
     }

@@ -387,6 +387,17 @@ public class TerrainGenerator implements WorldGenerator {
                     }
                 }
 
+                // Clay deposits: replace the top 1-2 blocks of riverbed / shallow lake
+                // floor with CLAY, matching vanilla Minecraft's clay generation.
+                // Rivers are very shallow (height == seaLevel-1) and some shallow ocean
+                // spots qualify too.  Depth range: up to 3 blocks below sea level.
+                if (height < seaLevel && height >= seaLevel - 3
+                        && (rivers[x][z] || biome == Biome.SWAMP)
+                        && featureRandom.nextInt(3) != 0) {
+                    chunk.setLocal(x, height, z, BlockType.CLAY);
+                    if (height > 0) chunk.setLocal(x, height - 1, z, BlockType.CLAY);
+                }
+
                 // Fill water up to sea level for low terrain (oceans, rivers, lakes).
                 // Frozen oceans cap the surface with ice; swamps get the odd lily pad.
                 if (height < seaLevel) {

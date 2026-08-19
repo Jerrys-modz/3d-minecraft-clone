@@ -386,10 +386,14 @@ public class Main {
                     world.spawnItem(bx, by, bz, BlockType.SEEDS, 1 + loot.nextInt(3), loot);
                 }
                 // If a crop was on farmland and we broke it, the farmland stays.
-            } else if (targetType == BlockType.FARMLAND) {
-                // Farmland → drops as dirt when broken (same as vanilla).
+            } else if (targetType == BlockType.FARMLAND || targetType == BlockType.FARMLAND_WET) {
+                // Farmland / wet farmland → drops as dirt when broken (same as vanilla).
                 world.spawnItem(bx, by, bz, BlockType.DIRT, 1, loot);
                 return; // spawnItem already called; skip the generic drop below
+            } else if (targetType == BlockType.CLAY) {
+                // Clay block → drops 4 clay balls (same as vanilla).
+                world.spawnItem(bx, by, bz, BlockType.CLAY_BALL, 4, loot);
+                return;
             } else if (targetType == BlockType.BERRY_BUSH) {
                 world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
             } else if (targetType == BlockType.COAL_ORE) {
@@ -1850,8 +1854,10 @@ public class Main {
                     } else if (noMob && heldItem != null && heldItem.isHoe()
                             && (targeted == BlockType.DIRT || targeted == BlockType.GRASS)
                             && mode.canPlace()) {
-                        // Hoe on DIRT or GRASS → till into FARMLAND.
-                        world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.FARMLAND);
+                        // Hoe on DIRT or GRASS → till into FARMLAND (wet if water is within 4 blocks).
+                        int hx = hit.blockPos.x, hy = hit.blockPos.y, hz = hit.blockPos.z;
+                        boolean nearWater = com.minecraftclone.player.Farming.isNearWater(world, hx, hy, hz);
+                        world.setBlock(hx, hy, hz, nearWater ? BlockType.FARMLAND_WET : BlockType.FARMLAND);
                         handRenderer.triggerSwing();
                         audio.playBlockSound(SoundMaterial.of(BlockType.DIRT), BlockAction.PLACE,
                                 hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
@@ -1863,8 +1869,8 @@ public class Main {
                             }
                         }
                     } else if (noMob && heldItem != null && heldItem.isPlantable()
-                            && targeted == BlockType.FARMLAND && mode.canPlace()) {
-                        // Seed/potato/carrot on FARMLAND → plant the first crop stage in the cell above.
+                            && targeted != null && targeted.isFarmland() && mode.canPlace()) {
+                        // Seed/potato/carrot on FARMLAND or FARMLAND_WET → plant the first crop stage in the cell above.
                         int px = hit.blockPos.x, py = hit.blockPos.y + 1, pz = hit.blockPos.z;
                         if (world.getBlock(px, py, pz) == BlockType.AIR) {
                             BlockType crop = com.minecraftclone.player.Farming.plantedCrop(heldItem);

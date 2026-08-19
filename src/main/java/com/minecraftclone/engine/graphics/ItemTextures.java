@@ -296,6 +296,7 @@ public class ItemTextures {
             case CARROT          -> paintCarrot();
             case CLAY_CANTEEN      -> paintCanteen(false);
             case CLAY_CANTEEN_FULL -> paintCanteen(true);
+            case CLAY_BALL         -> paintClayBall();
 
             // Hoes - same silhouette painter, tinted by material
             case WOOD_HOE    -> paintHoe(0xA9814F);
@@ -988,6 +989,28 @@ public class ItemTextures {
         img.setRGB(10, 5, 0xFF000000 | headColor);
         img.setRGB(10, 6, 0xFF000000 | headColor);
         img.setRGB(10, 7, 0xFF000000 | headColor);
+        return img;
+    }
+
+    /** A small round blue-grey clay lump. */
+    private static BufferedImage paintClayBall() {
+        BufferedImage img = blank();
+        int base = 0x8C9BA4;
+        // Filled circle, radius ~5, centred at (8,8)
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                double dx = x - 7.5, dy = y - 7.5;
+                if (dx * dx + dy * dy <= 25.0) {
+                    // Simple shading: lighter upper-left, darker lower-right
+                    float light = (float) (1.0 - (dx + dy) * 0.04);
+                    light = Math.max(0.65f, Math.min(1.15f, light));
+                    int r = Math.min(255, (int) (((base >> 16) & 0xFF) * light));
+                    int g = Math.min(255, (int) (((base >> 8)  & 0xFF) * light));
+                    int b = Math.min(255, (int) (( base        & 0xFF) * light));
+                    img.setRGB(x, y, 0xFF000000 | (r << 16) | (g << 8) | b);
+                }
+            }
+        }
         return img;
     }
 
