@@ -71,6 +71,25 @@ public final class Mining {
         TOOLS.put(BlockType.IRON_HOE,    new ToolStats(ToolKind.SHOVEL, TIER_IRON,   251));
         TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.SHOVEL, TIER_DIAMOND, 1562));
 
+        // Phase 0.5: Tinkers' Construct tool items
+        // Modular Tinkers' tools match iron-tier stats (future: per-material stat lookup)
+        TOOLS.put(BlockType.TINKERS_PICKAXE, new ToolStats(ToolKind.PICKAXE, TIER_IRON, 500));
+        TOOLS.put(BlockType.TINKERS_AXE,     new ToolStats(ToolKind.AXE,     TIER_IRON, 500));
+        TOOLS.put(BlockType.TINKERS_SWORD,   new ToolStats(ToolKind.SWORD,   TIER_IRON, 500));
+        TOOLS.put(BlockType.TINKERS_SHOVEL,  new ToolStats(ToolKind.SHOVEL,  TIER_IRON, 500));
+
+        // Phase 0.5: Tinkers' Construct structure blocks (pickaxe required; moderate hardness)
+        put(BlockType.SEARED_BRICK,         3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SEARED_GLASS,         0.3f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.SEARED_TANK,          3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMELTERY_DRAIN,       3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMELTERY_CONTROLLER,  3.5f, ToolKind.PICKAXE, TIER_STONE);
+        // Crafting station blocks
+        put(BlockType.CASTING_TABLE,        2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.CASTING_BASIN,        2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.PART_BUILDER,         2.5f, ToolKind.AXE,     TIER_HAND);
+        put(BlockType.TOOL_STATION,         2.5f, ToolKind.AXE,     TIER_HAND);
+
         // Farming blocks
         put(BlockType.FARMLAND,     0.6f, ToolKind.SHOVEL, TIER_HAND);
         put(BlockType.FARMLAND_WET, 0.6f, ToolKind.SHOVEL, TIER_HAND);

@@ -31,6 +31,11 @@ public final class CreativeCatalog {
                     // Phase 0: farming structures
                     BlockType.FARMLAND, BlockType.FARMLAND_WET,
                     BlockType.CLAY,
+                    // Phase 0.5: Tinkers' Construct structure blocks
+                    BlockType.SEARED_BRICK, BlockType.SEARED_GLASS, BlockType.SEARED_TANK,
+                    BlockType.SMELTERY_DRAIN, BlockType.SMELTERY_CONTROLLER,
+                    BlockType.CASTING_TABLE, BlockType.CASTING_BASIN,
+                    BlockType.PART_BUILDER, BlockType.TOOL_STATION,
             }),
             new Tab("Decoration", new BlockType[]{
                     BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,
@@ -170,6 +175,12 @@ public final class CreativeCatalog {
                     BlockType.WOOD_BROADAXE, BlockType.STONE_BROADAXE, BlockType.IRON_BROADAXE, BlockType.DIAMOND_BROADAXE,
                     // Phase 0: hoes
                     BlockType.WOOD_HOE, BlockType.STONE_HOE, BlockType.IRON_HOE, BlockType.DIAMOND_HOE,
+                    // Phase 0.5: Tinkers' Construct tool parts + assembled tools
+                    BlockType.WOOD_TOOL_ROD,
+                    BlockType.IRON_PICK_HEAD, BlockType.IRON_AXE_HEAD,
+                    BlockType.IRON_SWORD_BLADE, BlockType.IRON_SHOVEL_HEAD,
+                    BlockType.TINKERS_PICKAXE, BlockType.TINKERS_AXE,
+                    BlockType.TINKERS_SWORD, BlockType.TINKERS_SHOVEL,
             }),
             new Tab("Combat", new BlockType[]{
                     BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD,

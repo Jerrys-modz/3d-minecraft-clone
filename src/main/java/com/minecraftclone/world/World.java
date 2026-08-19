@@ -163,6 +163,10 @@ public class World implements BlockAccessor {
         // Edited chunks for each dimension live in their own subdirectory, so
         // coordinates never collide across dimensions.
         this.storage = new ChunkStorage(saveDir.resolve(dimension.saveFolder()));
+
+        // Register all multi-block definitions.
+        // Add new definitions here as the game grows; order doesn't matter.
+        multiBlockManager.register(com.minecraftclone.world.multiblock.SmelteryDefinition.INSTANCE);
     }
 
     public DimensionType getDimension() {
@@ -277,6 +281,10 @@ public class World implements BlockAccessor {
         if (lx == Chunk.SIZE - 1) markNeighborDirty(cx + 1, cz);
         if (lz == 0) markNeighborDirty(cx, cz - 1);
         if (lz == Chunk.SIZE - 1) markNeighborDirty(cx, cz + 1);
+
+        // Notify the multi-block manager so smeltery (and future) structures can
+        // form or deform when their structural blocks change.
+        multiBlockManager.onBlockChanged(this, worldX, worldY, worldZ);
 
         // Placing/removing a light source (e.g. a torch) can change the baked glow
         // in every chunk within its radius, not just literal boundary columns - the
@@ -1498,5 +1506,56 @@ public class World implements BlockAccessor {
             c.destroy();
         }
         chunks.clear();
+    }
+
+    // =========================================================================
+    // Multi-block system
+    // =========================================================================
+
+    /** The multi-block manager — tracks formed structures and drives formation / deformation. */
+    private final com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager =
+            new com.minecraftclone.world.multiblock.MultiBlockManager();
+
+    /**
+     * Returns the multi-block manager.  Call {@code manager().register(def)} at startup
+     * for each {@link com.minecraftclone.world.multiblock.MultiBlockDefinition}.
+     */
+    public com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager() {
+        return multiBlockManager;
+    }
+
+    /**
+     * Register a {@link com.minecraftclone.world.multiblock.MultiBlockEntity} at the
+     * given controller position.  Called by
+     * {@link com.minecraftclone.world.multiblock.MultiBlockManager} when a structure forms.
+     * The entity is stored in the shared {@code blockEntities} map so it participates in
+     * the existing tick, persistence, and active-light systems without duplication.
+     */
+    public void registerMultiBlockEntity(int x, int y, int z,
+            com.minecraftclone.world.multiblock.MultiBlockEntity entity) {
+        blockEntities.put(blockKey(x, y, z), entity);
+        // Dirty the surrounding chunks so the lit-front tile updates immediately.
+        int cx = worldToChunk(x), cz = worldToChunk(z);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                markNeighborDirty(cx + dx, cz + dz);
+            }
+        }
+    }
+
+    /**
+     * The formed multi-block instance whose controller is at {@code (x, y, z)},
+     * or {@code null} if no structure is formed there.
+     */
+    public com.minecraftclone.world.multiblock.MultiBlockInstance multiBlockAt(int x, int y, int z) {
+        return multiBlockManager.instanceAt(x, y, z);
+    }
+
+    /**
+     * The formed multi-block instance whose bounding box contains {@code (x, y, z)},
+     * or {@code null}.
+     */
+    public com.minecraftclone.world.multiblock.MultiBlockInstance multiBlockContaining(int x, int y, int z) {
+        return multiBlockManager.instanceContaining(x, y, z);
     }
 }

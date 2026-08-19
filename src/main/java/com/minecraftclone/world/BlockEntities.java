@@ -24,6 +24,9 @@ public final class BlockEntities {
         register(Furnace.TYPE, Furnace::new);
         register(Chest.TYPE, Chest::new);
         register(Barrel.TYPE, Barrel::new);
+        // Phase 0.5: Tinkers' Construct multi-block entities
+        register(com.minecraftclone.world.multiblock.SmelteryEntity.TYPE,
+                 com.minecraftclone.world.multiblock.SmelteryEntity::new);
     }
 
     private BlockEntities() {

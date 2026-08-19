@@ -317,6 +317,18 @@ public class TextureAtlas {
         paintClayBlock(image, 232, rnd);                  // CLAY (blue-grey terrain block)
         paintWetFarmlandTop(image, 233, rnd);             // FARMLAND_WET top (dark moist soil)
 
+        // --- Phase 0.5: Tinkers' Construct blocks (234-243) ---
+        paintSearedBrick(image, 234, rnd);                // SEARED_BRICK
+        paintSearedGlass(image, 235);                     // SEARED_GLASS
+        paintSearedTank(image, 236, rnd);                 // SEARED_TANK
+        paintSmelteryDrain(image, 237, rnd);              // SMELTERY_DRAIN
+        paintSmelteryController(image, 238, rnd, false);  // SMELTERY_CONTROLLER sides/top/bottom
+        paintSmelteryController(image, 239, rnd, true);   // SMELTERY_CONTROLLER front (active/lit)
+        paintCastingTable(image, 240, rnd);               // CASTING_TABLE
+        paintCastingBasin(image, 241, rnd);               // CASTING_BASIN
+        paintPartBuilder(image, 242, rnd);                // PART_BUILDER
+        paintToolStation(image, 243, rnd);                // TOOL_STATION
+
         return image;
     }
 
@@ -1644,4 +1656,256 @@ public class TextureAtlas {
     public void destroy() {
         glDeleteTextures(textureId);
     }
+
+    // =========================================================================
+    // Phase 0.5 — Tinkers' Construct tile painters
+    // =========================================================================
+
+    /**
+     * SEARED_BRICK (tile 234): fired, blackened brick with orange-red mortar
+     * lines.  The dark soot colour (#1A1008) contrasts with hot mortar (#8B3A10).
+     */
+    private void paintSearedBrick(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int brickColor = 0x1E1208;
+        int mortarColor = 0x7A3010;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // Horizontal mortar every 5 rows, vertical mortar offset per row
+                int rowOffset = ((y / 5) % 2) * 4;
+                boolean mortarH = (y % 5 == 0);
+                boolean mortarV = ((x + rowOffset) % 8 == 0);
+                int noise = rnd.nextInt(10) - 5;
+                int base = (mortarH || mortarV) ? mortarColor : brickColor;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8)  & 0xFF) + noise);
+                int b = clamp(( base        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * SEARED_GLASS (tile 235): dark smoky-brown semi-transparent glass with a
+     * copper-tinted grid frame.  Resembles Tinkers' classic seared glass.
+     */
+    private void paintSearedGlass(BufferedImage img, int index) {
+        int ox = tileX(index), oy = tileY(index);
+        int fill = 0x3A2010; // dark smoky interior
+        int frame = 0x6B3A1A;// copper-brown frame
+        int alpha = 160;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                boolean onFrame = (x == 0 || x == TILE_PX-1 || y == 0 || y == TILE_PX-1
+                                || x == TILE_PX/2 || y == TILE_PX/2);
+                int color = onFrame ? frame : fill;
+                img.setRGB(ox + x, oy + y, (alpha << 24) | color);
+            }
+        }
+    }
+
+    /**
+     * SEARED_TANK (tile 236): looks like a seared brick block but with a
+     * small translucent window in the centre revealing molten orange inside.
+     */
+    private void paintSearedTank(BufferedImage img, int index, Random rnd) {
+        // Start with seared brick
+        paintSearedBrick(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        // Draw a 6x8 window in the centre, orange-glow fill
+        int wx = ox + 5, wy = oy + 4;
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 6; x++) {
+                boolean border = (x == 0 || x == 5 || y == 0 || y == 7);
+                int color = border ? 0x6B3A1A : 0xC84000;
+                img.setRGB(wx + x, wy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * SMELTERY_DRAIN (tile 237): dark seared brick face with a square drain
+     * hole (a 4×4 dark void in the centre).
+     */
+    private void paintSmelteryDrain(BufferedImage img, int index, Random rnd) {
+        paintSearedBrick(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        // Drain hole (6x6 void square centred on face)
+        for (int y = 5; y < 11; y++) {
+            for (int x = 5; x < 11; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF050502); // near-black void
+            }
+        }
+        // Highlight rim
+        for (int i = 5; i < 11; i++) {
+            img.setRGB(ox + i, oy + 5,  0xFF6B3A1A);
+            img.setRGB(ox + i, oy + 10, 0xFF3A1A08);
+            img.setRGB(ox + 5,  oy + i, 0xFF6B3A1A);
+            img.setRGB(ox + 10, oy + i, 0xFF3A1A08);
+        }
+    }
+
+    /**
+     * SMELTERY_CONTROLLER face (tiles 238 = inactive, 239 = active/lit).
+     * Inactive: a dark square mouth on a seared brick background.
+     * Active: the mouth glows deep orange-white (molten metal visible inside).
+     */
+    private void paintSmelteryController(BufferedImage img, int index, Random rnd, boolean active) {
+        paintSearedBrick(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        if (active) {
+            // Glowing orange-white opening
+            for (int y = 3; y < 13; y++) {
+                for (int x = 3; x < 13; x++) {
+                    float dist = (float) Math.sqrt((x - 7.5) * (x - 7.5) + (y - 7.5) * (y - 7.5));
+                    int glow = (int) Math.max(0, 255 - dist * 22);
+                    int r = Math.min(255, glow + 160);
+                    int g = Math.min(255, glow * 80 / 255);
+                    int b = 0;
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+                }
+            }
+        } else {
+            // Dark void opening
+            for (int y = 3; y < 13; y++) {
+                for (int x = 3; x < 13; x++) {
+                    img.setRGB(ox + x, oy + y, 0xFF0A0502);
+                }
+            }
+            // Rim highlight
+            for (int i = 3; i < 13; i++) {
+                img.setRGB(ox + i, oy + 3, 0xFF4A2810);
+                img.setRGB(ox + 3, oy + i, 0xFF4A2810);
+                img.setRGB(ox + i, oy + 12, 0xFF1A0A04);
+                img.setRGB(ox + 12, oy + i, 0xFF1A0A04);
+            }
+        }
+    }
+
+    /**
+     * CASTING_TABLE top (tile 240): dark wood surface with a recessed casting
+     * indent in the centre (where the cast sits).
+     */
+    private void paintCastingTable(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int wood = 0x3A2410;
+        int recess = 0x1A0E06;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(8) - 4;
+                boolean inRecess = (x >= 4 && x <= 11 && y >= 4 && y <= 11);
+                int base = inRecess ? recess : wood;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8)  & 0xFF) + noise);
+                int b = clamp(( base        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Rim highlight on recess
+        for (int i = 4; i <= 11; i++) {
+            img.setRGB(ox + i, oy + 4, 0xFF5A3820);
+            img.setRGB(ox + 4, oy + i, 0xFF5A3820);
+        }
+    }
+
+    /**
+     * CASTING_BASIN top (tile 241): seared brick frame with a deep square
+     * basin depression (orange-glow gradient inside).
+     */
+    private void paintCastingBasin(BufferedImage img, int index, Random rnd) {
+        paintSearedBrick(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        // Basin depression
+        for (int y = 2; y < 14; y++) {
+            for (int x = 2; x < 14; x++) {
+                int r = clamp(180 + rnd.nextInt(16) - 8);
+                int g = clamp(60 + rnd.nextInt(10));
+                int b = 0;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Dark rim
+        for (int i = 2; i < 14; i++) {
+            img.setRGB(ox + i, oy + 2,  0xFF6B3A1A);
+            img.setRGB(ox + i, oy + 13, 0xFF3A1A08);
+            img.setRGB(ox + 2, oy + i,  0xFF6B3A1A);
+            img.setRGB(ox + 13, oy + i, 0xFF3A1A08);
+        }
+    }
+
+    /**
+     * PART_BUILDER top (tile 242): looks like a small crafting table with a
+     * pattern grid overlay in one half and raw material in the other.
+     */
+    private void paintPartBuilder(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int wood = 0x5A3820;
+        // Wood base
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(10) - 5;
+                int r = clamp(((wood >> 16) & 0xFF) + noise);
+                int g = clamp(((wood >> 8)  & 0xFF) + noise);
+                int b = clamp(( wood        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Pattern grid (left half)
+        for (int y = 2; y < 14; y += 4) {
+            for (int x = 1; x < 7; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF2A1808);
+            }
+        }
+        for (int x = 1; x < 7; x += 3) {
+            for (int y = 2; y < 14; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF2A1808);
+            }
+        }
+        // Material block (right half) — grey stone
+        for (int y = 4; y < 12; y++) {
+            for (int x = 9; x < 15; x++) {
+                int g2 = 0x9E9E9E;
+                int noise = rnd.nextInt(12) - 6;
+                int r = clamp(((g2 >> 16) & 0xFF) + noise);
+                int gv = clamp(((g2 >> 8)  & 0xFF) + noise);
+                int bv = clamp(( g2        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (gv << 8) | bv);
+            }
+        }
+    }
+
+    /**
+     * TOOL_STATION top (tile 243): assembly-bench look — dark iron plate with
+     * a groove for aligning tool parts and a hammer detail.
+     */
+    private void paintToolStation(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int iron = 0x9090A8;
+        // Iron plate base
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(12) - 6;
+                int r = clamp(((iron >> 16) & 0xFF) + noise);
+                int g = clamp(((iron >> 8)  & 0xFF) + noise);
+                int b = clamp(( iron        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Alignment groove (horizontal channel)
+        for (int x = 1; x < 15; x++) {
+            img.setRGB(ox + x, oy + 7,  0xFF505060);
+            img.setRGB(ox + x, oy + 8,  0xFF404050);
+        }
+        // Small hammer icon (top-left, 4x5 shape)
+        int hColor = 0x303040;
+        img.setRGB(ox + 2, oy + 2, 0xFF000000 | hColor);
+        img.setRGB(ox + 3, oy + 2, 0xFF000000 | hColor);
+        img.setRGB(ox + 4, oy + 2, 0xFF000000 | hColor);
+        img.setRGB(ox + 3, oy + 3, 0xFF000000 | hColor);
+        img.setRGB(ox + 3, oy + 4, 0xFF000000 | hColor);
+        img.setRGB(ox + 3, oy + 5, 0xFF000000 | hColor);
+    }
+
+    /** Clamp a colour channel to [0, 255]. */
+    private static int clamp(int v) { return Math.max(0, Math.min(255, v)); }
 }

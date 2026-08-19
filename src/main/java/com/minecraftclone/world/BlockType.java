@@ -665,7 +665,119 @@ public enum BlockType {
      * Visually darker than dry FARMLAND. Crops only grow on this variant.
      * Reverts to dry FARMLAND when no water is nearby, and to DIRT if trampled.
      */
-    FARMLAND_WET(445, true, false, 233, 2, 2);
+    FARMLAND_WET(445, true, false, 233, 2, 2),
+
+    // =========================================================================
+    // Phase 0.5 — Tinkers' Construct: Smeltery multi-block + crafting stations
+    // =========================================================================
+
+    // --- Smeltery structural blocks (atlas tiles 234-240) ---
+
+    /**
+     * Primary structural block for the Smeltery.  Dark brownish-black fired
+     * brick with orange mortar highlights.  Tile 234.
+     */
+    SEARED_BRICK(446, true, false, 234),
+
+    /**
+     * Transparent window block for the Smeltery shell; lets players see the
+     * molten metal inside without opening the structure.  Tile 235.
+     */
+    SEARED_GLASS(447, true, true, 235),
+
+    /**
+     * Liquid-storage block for the Smeltery shell; holds extra molten metal
+     * capacity (each tank block adds capacity in the future smelting logic).
+     * Tile 236.
+     */
+    SEARED_TANK(448, true, false, 236),
+
+    /**
+     * Drain block on a Smeltery wall; used (in future) to pour molten metal
+     * into Casting Tables / Casting Basins below.  Tile 237.
+     */
+    SMELTERY_DRAIN(449, true, false, 237),
+
+    /**
+     * Smeltery controller — the "brain" of the multi-block.  Directional
+     * (faces the front wall like a furnace).  Inactive tile 238 (dark void
+     * hole), active tile 239 (glowing orange mouth, lit when formed).
+     * Atlas: top/side/bottom = 238, front = 238, litFront = 239.
+     */
+    SMELTERY_CONTROLLER(450, true, false, 238, 238, 238, 238, 239, 0, 0),
+
+    // --- Tinkers' Construct crafting station blocks (atlas tiles 240-244) ---
+
+    /**
+     * Casting Table — a flat-topped slab where poured metal solidifies into
+     * tool parts using a clay cast.  Tile 240.
+     */
+    CASTING_TABLE(451, true, false, 240),
+
+    /**
+     * Casting Basin — a deeper mould for large tool parts (large plates,
+     * tough rods).  Tile 241.
+     */
+    CASTING_BASIN(452, true, false, 241),
+
+    /**
+     * Part Builder — the workbench for shaping raw material (planks, stone,
+     * metal ingots) into tool parts using a pattern.  Tile 242.
+     */
+    PART_BUILDER(453, true, false, 242),
+
+    /**
+     * Tool Station — where assembled tool parts are combined into a finished
+     * modular Tinkers' tool.  Tile 243.
+     */
+    TOOL_STATION(454, true, false, 243),
+
+    // --- Tinkers' Construct tool part items (no atlas tile — painted by ItemTextures) ---
+
+    /** Iron pickaxe head — a shaped tool part, fits into Tool Station. */
+    IRON_PICK_HEAD(455, 0),
+
+    /** Iron axe head — a shaped tool part. */
+    IRON_AXE_HEAD(456, 0),
+
+    /** Iron sword blade — a shaped tool part. */
+    IRON_SWORD_BLADE(457, 0),
+
+    /** Iron shovel head — a shaped tool part. */
+    IRON_SHOVEL_HEAD(458, 0),
+
+    /**
+     * Wooden tool rod — the handle that fits into every modular tool.
+     * Made from planks in the Part Builder.
+     */
+    WOOD_TOOL_ROD(459, 0),
+
+    // --- Tinkers' assembled modular tools (items, no atlas tile) ---
+
+    /**
+     * Tinkers' Pickaxe — assembled in the Tool Station from an
+     * {@link #IRON_PICK_HEAD} + {@link #WOOD_TOOL_ROD}.
+     * Matches vanilla IRON_PICKAXE stats initially; future: modifiers stack.
+     */
+    TINKERS_PICKAXE(460, 0),
+
+    /**
+     * Tinkers' Axe — assembled from an {@link #IRON_AXE_HEAD} +
+     * {@link #WOOD_TOOL_ROD}.
+     */
+    TINKERS_AXE(461, 0),
+
+    /**
+     * Tinkers' Sword — assembled from an {@link #IRON_SWORD_BLADE} +
+     * {@link #WOOD_TOOL_ROD}.
+     */
+    TINKERS_SWORD(462, 0),
+
+    /**
+     * Tinkers' Shovel — assembled from an {@link #IRON_SHOVEL_HEAD} +
+     * {@link #WOOD_TOOL_ROD}.
+     */
+    TINKERS_SHOVEL(463, 0);
 
     public final short id;
     public final boolean solid;
@@ -1040,6 +1152,38 @@ public enum BlockType {
     /** True for either variant of tilled farmland (dry or hydrated). */
     public boolean isFarmland() {
         return this == FARMLAND || this == FARMLAND_WET;
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 0.5 — Tinkers' Construct helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * True for any block that can form the shell of a Smeltery multi-block
+     * (brick, glass, tank, drain, or controller).
+     */
+    public boolean isSearedBlock() {
+        return this == SEARED_BRICK || this == SEARED_GLASS
+            || this == SEARED_TANK  || this == SMELTERY_DRAIN
+            || this == SMELTERY_CONTROLLER;
+    }
+
+    /**
+     * True for any Tinkers' Construct tool part item (shaped but not yet
+     * assembled into a tool).
+     */
+    public boolean isTinkersToolPart() {
+        return this == IRON_PICK_HEAD   || this == IRON_AXE_HEAD
+            || this == IRON_SWORD_BLADE || this == IRON_SHOVEL_HEAD
+            || this == WOOD_TOOL_ROD;
+    }
+
+    /**
+     * True for any assembled Tinkers' modular tool.
+     */
+    public boolean isTinkersTool() {
+        return this == TINKERS_PICKAXE || this == TINKERS_AXE
+            || this == TINKERS_SWORD   || this == TINKERS_SHOVEL;
     }
 
     /**

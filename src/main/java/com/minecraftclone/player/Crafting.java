@@ -84,6 +84,9 @@ public final class Crafting {
         CHARS.put('B', BlockType.BEAR_HIDE);
         CHARS.put('Y', BlockType.CLAY_BALL);    // Y = claY ball
         CHARS.put('H', BlockType.WHEAT);        // H = wHeat
+        // Phase 0.5: Tinkers' Construct ingredient shortcuts
+        CHARS.put('Z', BlockType.SEARED_BRICK);       // Z = seared/sintered (kiln)
+        CHARS.put('R', BlockType.WOOD_TOOL_ROD);      // R = Rod
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -166,6 +169,63 @@ public final class Crafting {
         // Bread: 3 wheat in a row (shapeless - any 3-wheat combo in 2x2 or 3x3)
         shaped3x3("HHH", "...", "...", BlockType.BREAD, 1); // 3 wheat in a row -> bread
         shaped2x2("HH", "..", BlockType.BREAD, 1);           // 2 wheat in a 2x2 row -> 1 bread (simpler)
+
+        // ---------------------------------------------------------------
+        // Phase 0.5: Tinkers' Construct crafting station recipes
+        // ---------------------------------------------------------------
+        // Character key additions (for this section):
+        //   'Z' = SEARED_BRICK  (Z for seared/sintered, mnemonic: "Zapped in a kiln")
+        //   'R' = WOOD_TOOL_ROD (R for Rod)
+        //   'Q' = IRON_PICK_HEAD
+        //   'A' = IRON_AXE_HEAD
+        //   'X' = IRON_SWORD_BLADE
+        //   'J' = IRON_SHOVEL_HEAD
+        // These are added to CHARS below the static block; see bottom of static block.
+
+        // Seared Brick: fire clay balls in-world (Furnace: clay ball → seared brick).
+        // Also allow crafting 2 seared bricks from 4 clay balls as an early-game bootstrap.
+        shaped2x2("YY", "YY", BlockType.SEARED_BRICK, 2);         // 4 clay balls → 2 seared bricks
+
+        // Smeltery Controller: 8 iron ingots in a ring around the centre (empty inside)
+        shaped3x3("III", "I.I", "III", BlockType.SMELTERY_CONTROLLER, 1);
+
+        // Seared Glass: seared brick + glass (2×1)
+        shaped2x2("ZG", "..", BlockType.SEARED_GLASS, 2);          // seared brick + glass → 2 seared glass
+
+        // Seared Tank: seared brick frame with glass inside (holds liquid)
+        shaped3x3("ZGZ", "G.G", "ZGZ", BlockType.SEARED_TANK, 1); // frame + glass interior
+
+        // Smeltery Drain: seared brick with iron at centre (the pour hole)
+        shaped3x3("ZZZ", "ZIZ", "ZZZ", BlockType.SMELTERY_DRAIN, 2);
+
+        // Casting Table: seared brick top + plank legs
+        shaped3x3("ZZZ", ".P.", ".P.", BlockType.CASTING_TABLE, 1);
+
+        // Casting Basin: U-shape of seared bricks (open top)
+        shaped3x3("Z.Z", "Z.Z", "ZZZ", BlockType.CASTING_BASIN, 1);
+
+        // Part Builder: planks workbench topped with seared brick
+        shaped3x3("ZZZ", "PPP", "...", BlockType.PART_BUILDER, 1);
+
+        // Tool Station: iron ingots on top, planks frame body
+        shaped3x3("III", "PZP", "PPP", BlockType.TOOL_STATION, 1);
+
+        // Tool rod: 2 planks stacked → 4 wood tool rods (same as vanilla stick recipe but in a rod shape)
+        shaped2x2("P.", "P.", BlockType.WOOD_TOOL_ROD, 4);
+
+        // Iron tool heads — each has a distinct 3×3 silhouette:
+        shaped3x3("II.", "I..", "...", BlockType.IRON_PICK_HEAD,   1);  // L-shape = pick prongs
+        shaped3x3("II.", "II.", "...", BlockType.IRON_AXE_HEAD,    1);  // 2×2 square = blade
+        shaped3x3("I..", "I..", "...", BlockType.IRON_SWORD_BLADE, 1);  // vertical bar = blade
+        shaped3x3(".I.", ".I.", "...", BlockType.IRON_SHOVEL_HEAD,  1); // narrow bar = paddle
+
+        // Tinkers' tool assembly — done at the Tool Station via right-click interaction.
+        // These shapeless fallback recipes allow crafting without the Tool Station for now,
+        // so players can get started before building the full smeltery.
+        shapeless2x2(BlockType.TINKERS_PICKAXE, 1, BlockType.IRON_PICK_HEAD,   BlockType.WOOD_TOOL_ROD);
+        shapeless2x2(BlockType.TINKERS_AXE,     1, BlockType.IRON_AXE_HEAD,    BlockType.WOOD_TOOL_ROD);
+        shapeless2x2(BlockType.TINKERS_SWORD,   1, BlockType.IRON_SWORD_BLADE, BlockType.WOOD_TOOL_ROD);
+        shapeless2x2(BlockType.TINKERS_SHOVEL,  1, BlockType.IRON_SHOVEL_HEAD, BlockType.WOOD_TOOL_ROD);
 
         // --- 5x5 Advanced Crafting Table Recipes ---
         // These recipes require the full 5x5 grid and produce advanced items

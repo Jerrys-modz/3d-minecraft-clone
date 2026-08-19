@@ -304,6 +304,19 @@ public class ItemTextures {
             case IRON_HOE    -> paintHoe(0xE8E8E8);
             case DIAMOND_HOE -> paintHoe(0x5FE0E0);
 
+            // ----------------------------------------------------------------
+            // Phase 0.5: Tinkers' Construct tool parts + assembled tools
+            // ----------------------------------------------------------------
+            case IRON_PICK_HEAD    -> paintToolHead(0xE8E8E8, HEAD_PICK);
+            case IRON_AXE_HEAD     -> paintToolHead(0xE8E8E8, HEAD_AXE);
+            case IRON_SWORD_BLADE  -> paintToolHead(0xE8E8E8, HEAD_SWORD);
+            case IRON_SHOVEL_HEAD  -> paintToolHead(0xE8E8E8, HEAD_SHOVEL);
+            case WOOD_TOOL_ROD     -> paintToolRod();
+            case TINKERS_PICKAXE   -> paintPickaxe(0xE8E8E8);   // re-use existing pickaxe painter
+            case TINKERS_AXE       -> paintAxe(0xE8E8E8);
+            case TINKERS_SWORD     -> paintSword(0xE8E8E8);
+            case TINKERS_SHOVEL    -> paintShovel(0xE8E8E8);
+
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
     }
@@ -1012,6 +1025,96 @@ public class ItemTextures {
             }
         }
         return img;
+    }
+
+    // =========================================================================
+    // Phase 0.5 — Tinkers' Construct part painters
+    // =========================================================================
+
+    /** Head style constants for {@link #paintToolHead}. */
+    private static final int HEAD_PICK = 0, HEAD_AXE = 1, HEAD_SWORD = 2, HEAD_SHOVEL = 3;
+
+    /**
+     * Paints a raw (unassembled) tool head item in the given material colour.
+     * The silhouette matches the vanilla tool head but without a handle,
+     * making it visually distinct from a complete tool.
+     */
+    private static BufferedImage paintToolHead(int headColor, int headStyle) {
+        BufferedImage img = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
+        int lit  = lighten(headColor);
+        int dark = darken(headColor);
+        switch (headStyle) {
+            case HEAD_PICK -> {
+                // Claw shape, upper-right quadrant only (no handle)
+                for (int x = 2; x <= 13; x++) {
+                    img.setRGB(x, 3, 0xFF000000 | lit);
+                    img.setRGB(x, 4, 0xFF000000 | headColor);
+                    img.setRGB(x, 5, 0xFF000000 | dark);
+                }
+                img.setRGB(2,  6, 0xFF000000 | dark);
+                img.setRGB(13, 6, 0xFF000000 | dark);
+                img.setRGB(2,  7, 0xFF000000 | dark);
+                img.setRGB(13, 7, 0xFF000000 | dark);
+            }
+            case HEAD_AXE -> {
+                // Axe blade (upper-right crescent)
+                for (int y = 2; y <= 9; y++) {
+                    for (int x = Math.max(2, 8 - y); x <= 13; x++) {
+                        img.setRGB(x, y, 0xFF000000 | headColor);
+                    }
+                    img.setRGB(13, y, 0xFF000000 | dark);
+                }
+                for (int x = 2; x <= 13; x++) img.setRGB(x, 2, 0xFF000000 | lit);
+            }
+            case HEAD_SWORD -> {
+                // Blade (thin diagonal slab)
+                for (int i = 0; i < 10; i++) {
+                    img.setRGB(7 - i/2, 3 + i, 0xFF000000 | lit);
+                    img.setRGB(8 - i/2, 3 + i, 0xFF000000 | headColor);
+                    img.setRGB(9 - i/2, 3 + i, 0xFF000000 | dark);
+                }
+                // Guard cross-guard (horizontal bar)
+                for (int x = 4; x <= 11; x++) img.setRGB(x, 12, 0xFF000000 | headColor);
+            }
+            case HEAD_SHOVEL -> {
+                // Flat paddle head
+                for (int y = 2; y <= 9; y++) {
+                    for (int x = 5; x <= 10; x++) {
+                        img.setRGB(x, y, 0xFF000000 | headColor);
+                    }
+                    img.setRGB(5,  y, 0xFF000000 | lit);
+                    img.setRGB(10, y, 0xFF000000 | dark);
+                }
+                for (int x = 5; x <= 10; x++) img.setRGB(x, 2, 0xFF000000 | lit);
+                for (int x = 5; x <= 10; x++) img.setRGB(x, 9, 0xFF000000 | dark);
+            }
+        }
+        return img;
+    }
+
+    /**
+     * Wooden tool rod — a short diagonal rod (looks like a stick but oriented
+     * bottom-left to centre-right, leaving room for a head to attach later).
+     */
+    private static BufferedImage paintToolRod() {
+        BufferedImage img = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
+        int wood = 0xA9814F, dark = 0x7A5A2A;
+        // Diagonal handle line, 7 pixels long, starting from lower-left
+        for (int i = 0; i < 7; i++) {
+            int x = 4 + i;
+            int y = 12 - i;
+            img.setRGB(x,     y, 0xFF000000 | wood);
+            img.setRGB(x + 1, y, 0xFF000000 | dark);
+        }
+        return img;
+    }
+
+    /** Darkens a colour by 40 points (used for shading tool-part items). */
+    private static int darken(int color) {
+        int r = Math.max(0, ((color >> 16) & 0xFF) - 40);
+        int g = Math.max(0, ((color >>  8) & 0xFF) - 40);
+        int b = Math.max(0, ( color        & 0xFF) - 40);
+        return (r << 16) | (g << 8) | b;
     }
 
     /** Binds the given item's texture to texture unit 0. */
