@@ -376,6 +376,20 @@ public class Main {
             // a fluid source drops itself.
             if (targetType.isFluidFlow()) {
                 // nothing to drop
+            } else if (targetType.isCrop()) {
+                // Crops drop their harvest item (and bonus seeds for ripe wheat).
+                BlockType drop = com.minecraftclone.player.Farming.harvestDrop(targetType);
+                if (drop != null) {
+                    world.spawnItem(bx, by, bz, drop, 1, loot);
+                }
+                if (com.minecraftclone.player.Farming.alsoDropsSeeds(targetType)) {
+                    world.spawnItem(bx, by, bz, BlockType.SEEDS, 1 + loot.nextInt(3), loot);
+                }
+                // If a crop was on farmland and we broke it, the farmland stays.
+            } else if (targetType == BlockType.FARMLAND) {
+                // Farmland → drops as dirt when broken (same as vanilla).
+                world.spawnItem(bx, by, bz, BlockType.DIRT, 1, loot);
+                return; // spawnItem already called; skip the generic drop below
             } else if (targetType == BlockType.BERRY_BUSH) {
                 world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
             } else if (targetType == BlockType.COAL_ORE) {
@@ -420,6 +434,10 @@ public class Main {
                 }
                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
                     world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
+                }
+                // Breaking tall grass has a 1-in-8 chance to drop wheat seeds.
+                if (targetType == BlockType.TALL_GRASS && loot.nextInt(8) == 0) {
+                    world.spawnItem(bx, by, bz, BlockType.SEEDS, 1, loot);
                 }
             }
 
@@ -1615,6 +1633,13 @@ public class Main {
             // ticking forward with world time.
             world.tickBlockEntities(dt);
 
+            // Farming: randomly advance crops near the player each frame.
+            {
+                org.joml.Vector3f pp = player.getPosition();
+                com.minecraftclone.player.Farming.tickCropsNear(
+                        world, (int) pp.x, (int) pp.y, (int) pp.z, dt, loot);
+            }
+
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
             // to the player's health, where the existing death/respawn handling picks
@@ -1815,6 +1840,53 @@ public class Main {
                                 showMessage(messages, "Cannot sleep here", new Vector4f(0.8f, 0.3f, 0.3f, 1f), 2f);
                             }
                         }
+                    } else if (noMob && heldItem != null && heldItem.isHoe()
+                            && (targeted == BlockType.DIRT || targeted == BlockType.GRASS)
+                            && mode.canPlace()) {
+                        // Hoe on DIRT or GRASS → till into FARMLAND.
+                        world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.FARMLAND);
+                        handRenderer.triggerSwing();
+                        audio.playBlockSound(SoundMaterial.of(BlockType.DIRT), BlockAction.PLACE,
+                                hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                        if (!mode.isCreative() && Mining.isTool(heldItem)) {
+                            if (player.getDurability().use(heldItem)) {
+                                player.getInventory().remove(heldItem, 1);
+                                showMessage(messages, "Your " + heldItem.displayName() + " broke!",
+                                        new Vector4f(1f, 0.4f, 0.2f, 1f), 2.5f);
+                            }
+                        }
+                    } else if (noMob && heldItem != null && heldItem.isPlantable()
+                            && targeted == BlockType.FARMLAND && mode.canPlace()) {
+                        // Seed/potato/carrot on FARMLAND → plant the first crop stage in the cell above.
+                        int px = hit.blockPos.x, py = hit.blockPos.y + 1, pz = hit.blockPos.z;
+                        if (world.getBlock(px, py, pz) == BlockType.AIR) {
+                            BlockType crop = com.minecraftclone.player.Farming.plantedCrop(heldItem);
+                            if (crop != null) {
+                                if (!mode.isCreative()) player.getInventory().remove(heldItem, 1);
+                                world.setBlock(px, py, pz, crop);
+                                handRenderer.triggerSwing();
+                                audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
+                                        px + 0.5f, py + 0.5f, pz + 0.5f, 0.8f);
+                            }
+                        }
+                    } else if (noMob && heldItem == BlockType.CLAY_CANTEEN
+                            && (targeted == BlockType.WATER_SOURCE || targeted == BlockType.WATER)) {
+                        // Empty canteen right-clicked on water → fill it.
+                        if (!mode.isCreative()) {
+                            player.getInventory().remove(BlockType.CLAY_CANTEEN, 1);
+                            player.getInventory().add(BlockType.CLAY_CANTEEN_FULL, 1);
+                        }
+                        handRenderer.triggerSwing();
+                        showMessage(messages, "Canteen filled!", new Vector4f(0.3f, 0.6f, 1f, 1f), 1.5f);
+                    } else if (noMob && heldItem == BlockType.CLAY_CANTEEN_FULL && !mode.isCreative()
+                            && player.getStats().getThirst() < PlayerStats.MAX_THIRST) {
+                        // Full canteen used in hand → drink to restore thirst.
+                        player.getStats().drink(40f);   // restores 40 out of 100 thirst
+                        player.getInventory().remove(BlockType.CLAY_CANTEEN_FULL, 1);
+                        player.getInventory().add(BlockType.CLAY_CANTEEN, 1); // canteen returned empty
+                        handRenderer.triggerSwing();
+                        audio.play(SoundEvent.EAT);
+                        showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         // Don't place if clicking on a bed (sleep instead) or if placement spot is a bed
                         BlockType placeTarget = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
@@ -1967,10 +2039,11 @@ public class Main {
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
                 if (!settings.getGameMode().isInvulnerable()) {
                     hud.renderStatusBars(
-                            player.getStats().getHealth(), PlayerStats.MAX_HEALTH,
-                            player.getStats().getHunger(), PlayerStats.MAX_HUNGER,
+                            player.getStats().getHealth(),  PlayerStats.MAX_HEALTH,
+                            player.getStats().getHunger(),  PlayerStats.MAX_HUNGER,
+                            player.getStats().getThirst(),  PlayerStats.MAX_THIRST,
                             player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
-                            player.getStats().getBreath(), PlayerStats.MAX_BREATH,
+                            player.getStats().getBreath(),  PlayerStats.MAX_BREATH,
                             player.isSubmerged(),
                             Inventory.HOTBAR_SIZE, window.getAspectRatio());
                 }

@@ -28,6 +28,8 @@ public final class CreativeCatalog {
                     BlockType.PUMPKIN,
                     BlockType.NETHERRACK, BlockType.SOUL_SAND, BlockType.GLOWSTONE, BlockType.END_STONE, BlockType.OBSIDIAN,
                     BlockType.NETHER_PORTAL, BlockType.END_PORTAL,
+                    // Phase 0: farming structures
+                    BlockType.FARMLAND,
             }),
             new Tab("Decoration", new BlockType[]{
                     BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,
@@ -35,6 +37,11 @@ public final class CreativeCatalog {
                     BlockType.MUSHROOM_RED, BlockType.MUSHROOM_BROWN, BlockType.VINE,
                     BlockType.BAMBOO, BlockType.LILY_PAD, BlockType.SEAWEED, BlockType.DOOR, BlockType.TRAPDOOR,
                     BlockType.BED, BlockType.BED_HEAD,
+                    // Phase 0: crops (all stages) and sugar cane as decoration
+                    BlockType.WHEAT_STAGE_1, BlockType.WHEAT_STAGE_2, BlockType.WHEAT_STAGE_3, BlockType.WHEAT_STAGE_4,
+                    BlockType.POTATO_CROP_1, BlockType.POTATO_CROP_2, BlockType.POTATO_CROP_3,
+                    BlockType.CARROT_CROP_1, BlockType.CARROT_CROP_2, BlockType.CARROT_CROP_3,
+                    BlockType.SUGAR_CANE,
             }),
             new Tab("Materials", new BlockType[]{
                     BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
@@ -160,6 +167,8 @@ public final class CreativeCatalog {
                     BlockType.WOOD_SHOVEL, BlockType.STONE_SHOVEL, BlockType.IRON_SHOVEL, BlockType.DIAMOND_SHOVEL,
                     BlockType.WOOD_HAMMER, BlockType.STONE_HAMMER, BlockType.IRON_HAMMER, BlockType.DIAMOND_HAMMER,
                     BlockType.WOOD_BROADAXE, BlockType.STONE_BROADAXE, BlockType.IRON_BROADAXE, BlockType.DIAMOND_BROADAXE,
+                    // Phase 0: hoes
+                    BlockType.WOOD_HOE, BlockType.STONE_HOE, BlockType.IRON_HOE, BlockType.DIAMOND_HOE,
             }),
             new Tab("Combat", new BlockType[]{
                     BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD,
@@ -176,6 +185,10 @@ public final class CreativeCatalog {
             new Tab("Food", new BlockType[]{
                     BlockType.APPLE, BlockType.BERRIES,
                     BlockType.RAW_PORKCHOP, BlockType.RAW_BEEF, BlockType.MUTTON,
+                    // Phase 0: farming food items + canteen
+                    BlockType.SEEDS, BlockType.WHEAT, BlockType.BREAD,
+                    BlockType.POTATO, BlockType.POTATO_COOKED, BlockType.CARROT,
+                    BlockType.CLAY_CANTEEN, BlockType.CLAY_CANTEEN_FULL,
             }),
     };
 

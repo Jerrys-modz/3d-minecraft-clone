@@ -285,6 +285,24 @@ public class ItemTextures {
             case IMPURE_PLUTONIUM -> paintImpurePile(0x6A8A5A);
             case IMPURE_IRIDIUM -> paintImpurePile(0xE8E8F8);
 
+            // ----------------------------------------------------------------
+            // Phase 0: Farming items
+            // ----------------------------------------------------------------
+            case SEEDS           -> paintSeeds();
+            case WHEAT           -> paintWheat();
+            case BREAD           -> paintBread();
+            case POTATO          -> paintPotato(false);
+            case POTATO_COOKED   -> paintPotato(true);
+            case CARROT          -> paintCarrot();
+            case CLAY_CANTEEN      -> paintCanteen(false);
+            case CLAY_CANTEEN_FULL -> paintCanteen(true);
+
+            // Hoes - same silhouette painter, tinted by material
+            case WOOD_HOE    -> paintHoe(0xA9814F);
+            case STONE_HOE   -> paintHoe(0x9E9E9E);
+            case IRON_HOE    -> paintHoe(0xE8E8E8);
+            case DIAMOND_HOE -> paintHoe(0x5FE0E0);
+
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
     }
@@ -824,6 +842,153 @@ public class ItemTextures {
                 }
             }
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase 0: Farming item painters
+    // -------------------------------------------------------------------------
+
+    /** Wheat seeds: a tiny tan/brown cluster of dots suggesting a seed pouch. */
+    private static BufferedImage paintSeeds() {
+        BufferedImage img = blank();
+        // A small tear-drop pouch shape
+        int[][] dots = {{6,4},{7,3},{8,3},{9,4},{10,5},{10,6},{9,7},{8,8},{7,8},{6,7},{5,6},{5,5}};
+        for (int[] d : dots) img.setRGB(d[0], d[1], 0xFF000000 | 0xC8A850);
+        // Seed specks inside
+        int[] sx = {7,8,9,7,9}; int[] sy = {5,5,5,6,6};
+        for (int i = 0; i < sx.length; i++) img.setRGB(sx[i], sy[i], 0xFF000000 | 0x8A6020);
+        return img;
+    }
+
+    /** Harvested wheat: a bundle of golden stalks. */
+    private static BufferedImage paintWheat() {
+        BufferedImage img = blank();
+        // Three stalks
+        for (int[] col : new int[][]{{5,0xC8A830},{8,0xD8B840},{11,0xC0A030}}) {
+            int x = col[0], c = col[1];
+            for (int y = 4; y <= 13; y++) {
+                img.setRGB(x, y, 0xFF000000 | (y < 8 ? c : shade(c, 0.75f)));
+            }
+        }
+        // Grain heads at top
+        for (int x = 4; x <= 12; x++) {
+            img.setRGB(x, 3, 0xFF000000 | 0xE8D060);
+            if (x % 2 == 0) img.setRGB(x, 2, 0xFF000000 | 0xF0D870);
+        }
+        return img;
+    }
+
+    /** Bread: a golden-brown loaf shape. */
+    private static BufferedImage paintBread() {
+        BufferedImage img = blank();
+        // Loaf body
+        for (int y = 5; y <= 11; y++) {
+            int l = (y == 5 || y == 11) ? 4 : 3;
+            int r = (y == 5 || y == 11) ? 12 : 13;
+            for (int x = l; x <= r; x++) {
+                boolean edge = (y == 5 || y == 11 || x == l || x == r);
+                img.setRGB(x, y, 0xFF000000 | (edge ? 0x8A5820 : 0xC8902A));
+            }
+        }
+        // Golden top crust highlight
+        for (int x = 4; x <= 12; x++) img.setRGB(x, 5, 0xFF000000 | 0xE8C060);
+        return img;
+    }
+
+    /** Raw or baked potato. {@code cooked=true} darkens the skin. */
+    private static BufferedImage paintPotato(boolean cooked) {
+        BufferedImage img = blank();
+        int skin = cooked ? 0x7A5018 : 0xC8962E;
+        int flesh = cooked ? 0xA87030 : 0xF0C860;
+        // Oval body
+        for (int y = 4; y <= 12; y++) {
+            int l = (y < 6 || y > 10) ? 5 : 4;
+            int r = (y < 6 || y > 10) ? 11 : 12;
+            for (int x = l; x <= r; x++) {
+                boolean edge = (y == 4 || y == 12 || x == l || x == r);
+                img.setRGB(x, y, 0xFF000000 | (edge ? skin : flesh));
+            }
+        }
+        // Eyes (dark spots)
+        img.setRGB(7, 6, 0xFF000000 | shade(skin, 0.5f));
+        img.setRGB(9, 9, 0xFF000000 | shade(skin, 0.5f));
+        return img;
+    }
+
+    /** Carrot: orange body with green leafy top. */
+    private static BufferedImage paintCarrot() {
+        BufferedImage img = blank();
+        // Green leaves
+        for (int y = 2; y <= 5; y++) {
+            img.setRGB(6, y, 0xFF000000 | 0x2A9030);
+            img.setRGB(8, y, 0xFF000000 | 0x3AA040);
+            img.setRGB(10, y, 0xFF000000 | 0x2A9030);
+        }
+        // Orange carrot body (tapering downward)
+        for (int y = 5; y <= 13; y++) {
+            int half = Math.max(1, (14 - y) / 2);
+            int cx = 8;
+            for (int x = cx - half; x <= cx + half; x++) {
+                boolean edge = (x == cx - half || x == cx + half);
+                img.setRGB(x, y, 0xFF000000 | (edge ? 0xC05010 : 0xFF7020));
+            }
+        }
+        return img;
+    }
+
+    /**
+     * Clay canteen: a wide-bottomed jug shape. {@code full=true} draws a water
+     * fill line inside the vessel to indicate it holds water.
+     */
+    private static BufferedImage paintCanteen(boolean full) {
+        BufferedImage img = blank();
+        int clay = 0xC8784A;
+        int rim  = shade(clay, 0.7f);
+        // Wide body
+        for (int y = 4; y <= 13; y++) {
+            int l = (y < 6) ? 6 : 4;
+            int r = (y < 6) ? 10 : 12;
+            for (int x = l; x <= r; x++) {
+                boolean edge = (y == 4 || y == 13 || x == l || x == r);
+                img.setRGB(x, y, 0xFF000000 | (edge ? rim : clay));
+            }
+        }
+        // Neck / spout
+        for (int y = 2; y <= 4; y++) {
+            for (int x = 7; x <= 9; x++) {
+                img.setRGB(x, y, 0xFF000000 | rim);
+            }
+        }
+        // Water level inside when full
+        if (full) {
+            for (int y = 9; y <= 11; y++) {
+                for (int x = 5; x <= 11; x++) {
+                    if ((img.getRGB(x, y) & 0xFFFFFF) == (clay & 0xFFFFFF)) {
+                        img.setRGB(x, y, 0xFF000000 | 0x4898D0);
+                    }
+                }
+            }
+        }
+        return img;
+    }
+
+    /**
+     * Hoe: a wooden handle with a right-angle metal head at the top.
+     * The head color is the material; the handle is always wood-brown.
+     */
+    private static BufferedImage paintHoe(int headColor) {
+        BufferedImage img = blank();
+        int handle = 0x8B5E2A;
+        // Diagonal handle
+        drawThickLine(img, 5, 13, 10, 8, handle);
+        // Horizontal blade at top
+        for (int x = 6; x <= 12; x++) img.setRGB(x, 4, 0xFF000000 | headColor);
+        for (int x = 6; x <= 12; x++) img.setRGB(x, 5, 0xFF000000 | shade(headColor, 0.75f));
+        // Vertical socket connecting handle to blade
+        img.setRGB(10, 5, 0xFF000000 | headColor);
+        img.setRGB(10, 6, 0xFF000000 | headColor);
+        img.setRGB(10, 7, 0xFF000000 | headColor);
+        return img;
     }
 
     /** Binds the given item's texture to texture unit 0. */

@@ -301,6 +301,20 @@ public class TextureAtlas {
         paintTorch(image, 38);
         paintFire(image, FIRE_TILE, rnd);
 
+        // --- Phase 0: Farming tiles (220-231) ---
+        paintFarmlandTop(image, 220, rnd);       // FARMLAND top (tilled dark dirt)
+        paintCropStage(image, 221, rnd, 0x90C840, 0.20f); // WHEAT_STAGE_1 (tiny sprout)
+        paintCropStage(image, 222, rnd, 0x90C840, 0.40f); // WHEAT_STAGE_2 (young wheat)
+        paintCropStage(image, 223, rnd, 0xB8D840, 0.70f); // WHEAT_STAGE_3 (growing)
+        paintCropStage(image, 224, rnd, 0xE8C840, 1.00f); // WHEAT_STAGE_4 (mature golden wheat)
+        paintCropStage(image, 225, rnd, 0x60B030, 0.25f); // POTATO_CROP_1 (sprout)
+        paintCropStage(image, 226, rnd, 0x60B030, 0.60f); // POTATO_CROP_2 (growing)
+        paintCropStage(image, 227, rnd, 0x78C040, 1.00f); // POTATO_CROP_3 (mature, leafy)
+        paintCropStage(image, 228, rnd, 0x48A828, 0.25f); // CARROT_CROP_1 (sprout)
+        paintCropStage(image, 229, rnd, 0x48A828, 0.60f); // CARROT_CROP_2 (growing)
+        paintCropStage(image, 230, rnd, 0xFF8020, 1.00f); // CARROT_CROP_3 (mature, orange tips)
+        paintSugarCane(image, 231, rnd);                  // SUGAR_CANE
+
         return image;
     }
 
@@ -984,6 +998,91 @@ public class TextureAtlas {
                 int x = bx + (sway * t * t) / Math.max(1, height * height);
                 if (x < 0 || x >= TILE_PX) continue;
                 int c = t > height * 0.7f ? 0x4AA048 : 0x2F8F3A;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | c);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Phase 0: Farming tiles
+    // ---------------------------------------------------------------------
+
+    /**
+     * Farmland top: dark brown tilled dirt with faint horizontal furrow lines.
+     * The sides and bottom reuse the dirt tile (index 2) directly from the atlas;
+     * only the top face uses this special tile.
+     */
+    private void paintFarmlandTop(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Base: slightly darker, moister-looking dirt
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int t = (int) (valueNoise(x, y, 4) * 20);
+                int c = lerpColor(0x5A3A18, 0x3D2410, t / 20f);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | c);
+            }
+        }
+        // Horizontal furrow lines every 4 pixels
+        for (int y = 3; y < TILE_PX; y += 4) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int cur = img.getRGB(ox + x, oy + y) & 0xFFFFFF;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(cur, 0.6f));
+            }
+        }
+    }
+
+    /**
+     * A crop growth stage rendered as a thin upright cross (same X-shape the
+     * renderer uses for any {@code cross=true} block). {@code fillFrac} (0..1)
+     * controls how tall the plant appears: 0.25 = a tiny sprout, 1.0 = fully grown.
+     * The colour shifts from pure green when young to golden when ripe.
+     */
+    private void paintCropStage(BufferedImage img, int index, Random rnd, int topColor, float fillFrac) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Clear to transparent first (crops render as a cutout cross)
+        for (int y = 0; y < TILE_PX; y++)
+            for (int x = 0; x < TILE_PX; x++)
+                img.setRGB(ox + x, oy + y, 0);
+
+        int stemColor = shade(topColor, 0.65f);
+        int maxY  = TILE_PX - 1;
+        int minY  = maxY - Math.max(2, Math.round(TILE_PX * fillFrac));
+
+        // Two crossing diagonal stripes (X plant) - each 2px wide
+        for (int y = minY; y <= maxY; y++) {
+            // Stripe from top-left to bottom-right
+            int x1 = (int) ((y - minY) * (TILE_PX - 1f) / Math.max(1, maxY - minY));
+            // Stripe from top-right to bottom-left
+            int x2 = TILE_PX - 1 - x1;
+
+            int c = y > maxY - Math.round((maxY - minY) * 0.3f) ? stemColor : topColor;
+            for (int dx = -1; dx <= 1; dx++) {
+                if (x1 + dx >= 0 && x1 + dx < TILE_PX)
+                    img.setRGB(ox + x1 + dx, oy + y, 0xFF000000 | c);
+                if (x2 + dx >= 0 && x2 + dx < TILE_PX)
+                    img.setRGB(ox + x2 + dx, oy + y, 0xFF000000 | c);
+            }
+        }
+    }
+
+    /** Sugar cane: a tall, segmented green stalk rendered as a cross billboard. */
+    private void paintSugarCane(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Transparent background
+        for (int y = 0; y < TILE_PX; y++)
+            for (int x = 0; x < TILE_PX; x++)
+                img.setRGB(ox + x, oy + y, 0);
+
+        // Draw two vertical stripes (the X stripes are wide for sugar cane)
+        int[] xCols = {5, 6, 9, 10};
+        for (int x : xCols) {
+            for (int y = 0; y < TILE_PX; y++) {
+                // Segment lines every 5 pixels (horizontal marks on the stalk)
+                boolean segLine = (y % 5 == 0);
+                int c = segLine ? 0x3A8A28 : (y < TILE_PX / 3 ? 0x58C040 : 0x48A830);
                 img.setRGB(ox + x, oy + y, 0xFF000000 | c);
             }
         }

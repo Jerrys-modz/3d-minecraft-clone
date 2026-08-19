@@ -64,6 +64,27 @@ public final class Mining {
         TOOLS.put(BlockType.STONE_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_STONE, 132));
         TOOLS.put(BlockType.IRON_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_IRON, 251));
         TOOLS.put(BlockType.DIAMOND_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_DIAMOND, 1562));
+        // Hoes - used via right-click to till dirt into farmland; also listed
+        // here as "tools" so durability tracking and the isTool() check work.
+        TOOLS.put(BlockType.WOOD_HOE,    new ToolStats(ToolKind.SHOVEL, TIER_WOOD,    60));
+        TOOLS.put(BlockType.STONE_HOE,   new ToolStats(ToolKind.SHOVEL, TIER_STONE,  132));
+        TOOLS.put(BlockType.IRON_HOE,    new ToolStats(ToolKind.SHOVEL, TIER_IRON,   251));
+        TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.SHOVEL, TIER_DIAMOND, 1562));
+
+        // Farming blocks
+        put(BlockType.FARMLAND, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        // Crops: instant, no tool required.
+        put(BlockType.WHEAT_STAGE_1,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.WHEAT_STAGE_2,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.WHEAT_STAGE_3,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.WHEAT_STAGE_4,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.POTATO_CROP_1,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.POTATO_CROP_2,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.POTATO_CROP_3,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.CARROT_CROP_1,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.CARROT_CROP_2,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.CARROT_CROP_3,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.SUGAR_CANE,     0f, ToolKind.NONE, TIER_HAND);
 
         // Soft earth - a shovel makes it quick (no tier requirement, just speed).
         put(BlockType.DIRT, 0.5f, ToolKind.SHOVEL, TIER_HAND);
@@ -389,6 +410,11 @@ public final class Mining {
     public static boolean isHammer(BlockType item) {
         ToolStats stats = TOOLS.get(item);
         return stats != null && stats.kind() == ToolKind.HAMMER;
+    }
+
+    /** True if {@code item} is a hoe (used to till dirt into farmland via right-click). */
+    public static boolean isHoe(BlockType item) {
+        return item != null && item.isHoe();
     }
 
     /**

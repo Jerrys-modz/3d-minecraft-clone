@@ -606,7 +606,52 @@ public enum BlockType {
     // Gem items: smelted outputs for the gemstone ore chain (inventory-only, no atlas tile).
     RUBY(416, 0),          // smelted from ruby ore / crushed ruby
     SAPPHIRE(417, 0),      // smelted from sapphire ore / crushed sapphire
-    GREEN_SAPPHIRE(418, 0); // smelted from green sapphire ore / crushed green sapphire
+    GREEN_SAPPHIRE(418, 0), // smelted from green sapphire ore / crushed green sapphire
+
+    // =========================================================================
+    // Phase 0: Deep Survival Foundation
+    // =========================================================================
+
+    // --- Farming world blocks (atlas tiles 220-231) ---
+    // Farmland: tilled dirt that crops grow on (top = tile 220, sides/bottom = dirt tile 2).
+    FARMLAND(419, true, false, 220, 2, 2),
+
+    // Wheat: 4 growth stages (cross-shaped billboard tiles 221-224).
+    WHEAT_STAGE_1(420, false, true, 221),
+    WHEAT_STAGE_2(421, false, true, 222),
+    WHEAT_STAGE_3(422, false, true, 223),
+    WHEAT_STAGE_4(423, false, true, 224),  // mature, ready to harvest
+
+    // Potato: 3 growth stages (cross tiles 225-227).
+    POTATO_CROP_1(424, false, true, 225),
+    POTATO_CROP_2(425, false, true, 226),
+    POTATO_CROP_3(426, false, true, 227),  // mature
+
+    // Carrot: 3 growth stages (cross tiles 228-230).
+    CARROT_CROP_1(427, false, true, 228),
+    CARROT_CROP_2(428, false, true, 229),
+    CARROT_CROP_3(429, false, true, 230),  // mature
+
+    // Sugar cane: single cross tile (231), grows in stacked columns.
+    SUGAR_CANE(430, false, true, 231),
+
+    // --- Farming inventory items ---
+    SEEDS(431, 0),          // wheat seeds - dropped by breaking tall grass; plant on farmland
+    WHEAT(432, 0),          // harvested wheat - craft 3 in a row into BREAD
+    BREAD(433, 4),          // baked bread: restores 4 hunger
+    POTATO(434, 3),         // raw potato: restores 3 hunger; smelt to POTATO_COOKED
+    POTATO_COOKED(435, 5),  // baked potato: restores 5 hunger
+    CARROT(436, 3),         // carrot: restores 3 hunger
+
+    // --- Thirst system ---
+    CLAY_CANTEEN(437, 0),       // empty clay canteen - right-click a water source to fill
+    CLAY_CANTEEN_FULL(438, 0),  // full canteen - right-click (or use) to restore thirst
+
+    // --- Hoe tools: till DIRT / GRASS into FARMLAND ---
+    WOOD_HOE(439, 0),
+    STONE_HOE(440, 0),
+    IRON_HOE(441, 0),
+    DIAMOND_HOE(442, 0);
 
     public final short id;
     public final boolean solid;
@@ -958,6 +1003,24 @@ public enum BlockType {
     /** True for any partial-cube block that needs its own meshing (stairs, fences). */
     public boolean isPartialCube() {
         return stair || fence;
+    }
+
+    /** True for any crop world-block (any growth stage of wheat, potato, or carrot, plus sugar cane). */
+    public boolean isCrop() {
+        return this == WHEAT_STAGE_1 || this == WHEAT_STAGE_2 || this == WHEAT_STAGE_3 || this == WHEAT_STAGE_4
+                || this == POTATO_CROP_1 || this == POTATO_CROP_2 || this == POTATO_CROP_3
+                || this == CARROT_CROP_1 || this == CARROT_CROP_2 || this == CARROT_CROP_3
+                || this == SUGAR_CANE;
+    }
+
+    /** True for items that can be planted on FARMLAND (seeds, raw potato, raw carrot). */
+    public boolean isPlantable() {
+        return this == SEEDS || this == POTATO || this == CARROT;
+    }
+
+    /** True for any hoe item (used to till DIRT/GRASS into FARMLAND). */
+    public boolean isHoe() {
+        return this == WOOD_HOE || this == STONE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
     }
 
     /**

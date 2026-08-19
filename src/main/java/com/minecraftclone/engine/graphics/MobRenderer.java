@@ -102,6 +102,24 @@ public class MobRenderer {
                     new Part(0.09f, 0.30f, 0.09f, -0.13f, 0.30f, 0f, LEG_FACES),
                     new Part(0.09f, 0.30f, 0.09f, 0.13f, 0.30f, 0f, LEG_FACES),
             };
+            case SPIDER -> new Part[]{ // wide low body + small head + 4 visible legs (2 per side)
+                    new Part(0.60f, 0.22f, 0.40f, 0f, 0.40f, 0f, BODY_FACES),
+                    new Part(0.22f, 0.20f, 0.20f, 0f, 0.55f, 0.32f, HEAD_FACES),
+                    // left legs
+                    new Part(0.05f, 0.05f, 0.40f, -0.40f, 0.40f, 0f, LEG_FACES),
+                    new Part(0.05f, 0.05f, 0.40f, -0.40f, 0.30f, 0f, LEG_FACES),
+                    // right legs
+                    new Part(0.05f, 0.05f, 0.40f, 0.40f, 0.40f, 0f, LEG_FACES),
+                    new Part(0.05f, 0.05f, 0.40f, 0.40f, 0.30f, 0f, LEG_FACES),
+            };
+            case CREEPER -> new Part[]{ // four-legged blocky body with square head
+                    new Part(0.24f, 0.36f, 0.18f, 0f, 0.72f, 0f, BODY_FACES),
+                    new Part(0.22f, 0.22f, 0.22f, 0f, 1.20f, 0f, HEAD_FACES),
+                    new Part(0.08f, 0.22f, 0.08f, -0.10f, 0.22f, -0.12f, LEG_FACES),
+                    new Part(0.08f, 0.22f, 0.08f, 0.10f, 0.22f, -0.12f, LEG_FACES),
+                    new Part(0.08f, 0.22f, 0.08f, -0.10f, 0.22f, 0.12f, LEG_FACES),
+                    new Part(0.08f, 0.22f, 0.08f, 0.10f, 0.22f, 0.12f, LEG_FACES),
+            };
         };
     }
 

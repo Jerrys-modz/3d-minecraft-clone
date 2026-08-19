@@ -496,6 +496,7 @@ public class Hud {
      * showing it constantly would just be visual noise for a bar that never moves.
      */
     public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
+                                  float thirst, float maxThirst,
                                   float stamina, float maxStamina, float breath, float maxBreath,
                                   boolean submerged, int hotbarSlotCount, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
@@ -511,12 +512,13 @@ public class Hud {
         float maxX = width / 2f;
         float y = hotbarPanelTopY() + STAT_BAR_STACK_MARGIN;
 
-        // Bottom to top: stamina, hunger, health, (breath) - health ends up on top
-        // of the always-shown bars, most prominent; breath appears above even that
-        // while it's relevant, same as bubbles float above Minecraft's other bars.
+        // Bottom to top: stamina, thirst (cyan-blue), hunger, health, (breath).
+        // Thirst sits between hunger and stamina so the blue bar is easy to spot
+        // without dominating; breath still appears above health when submerged.
         y = renderStatBar(minX, maxX, y, stamina / maxStamina, new Vector4f(0.92f, 0.80f, 0.15f, 0.95f));
-        y = renderStatBar(minX, maxX, y, hunger / maxHunger, new Vector4f(0.85f, 0.55f, 0.15f, 0.95f));
-        y = renderStatBar(minX, maxX, y, health / maxHealth, new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
+        y = renderStatBar(minX, maxX, y, thirst  / maxThirst,  new Vector4f(0.20f, 0.60f, 0.90f, 0.95f));
+        y = renderStatBar(minX, maxX, y, hunger  / maxHunger,  new Vector4f(0.85f, 0.55f, 0.15f, 0.95f));
+        y = renderStatBar(minX, maxX, y, health  / maxHealth,  new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
         if (submerged) {
             renderStatBar(minX, maxX, y, breath / maxBreath, new Vector4f(0.25f, 0.65f, 0.85f, 0.95f));
         }

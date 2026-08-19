@@ -1,19 +1,21 @@
 package com.minecraftclone.player;
 
 /**
- * Health, hunger and stamina: the core survival loop. Damage comes from
- * falling too far, standing in lava, staying submerged too long, or letting
- * hunger hit zero; health slowly regenerates when hunger is high enough.
- * Sprinting costs both stamina (immediate, regenerates fast) and a little
- * extra hunger (permanent until you eat).
+ * Health, hunger, thirst and stamina: the core survival loop. Damage comes
+ * from falling too far, standing in lava, staying submerged too long, letting
+ * hunger hit zero, or letting thirst hit zero; health slowly regenerates when
+ * both hunger and thirst are sufficient. Sprinting costs both stamina
+ * (immediate, regenerates fast) and a little extra hunger (permanent until you
+ * eat). Fill a clay canteen at a water source and drink it to restore thirst.
  */
 public class PlayerStats {
 
-    public static final float MAX_HEALTH = 100f;
-    public static final float MAX_HUNGER = 100f;
+    public static final float MAX_HEALTH  = 100f;
+    public static final float MAX_HUNGER  = 100f;
+    public static final float MAX_THIRST  = 100f;
     public static final float MAX_STAMINA = 100f;
     /** Seconds of breath you start a dive with - same value as {@link #DROWN_GRACE_SECONDS}, just public for the HUD's breath meter. */
-    public static final float MAX_BREATH = 6f;
+    public static final float MAX_BREATH  = 6f;
 
     private static final float SAFE_FALL_SPEED = 10f;          // blocks/sec you can land at with no damage
     private static final float FALL_DAMAGE_PER_SPEED = 3.5f;   // damage per (blocks/sec) over the safe speed
@@ -24,16 +26,21 @@ public class PlayerStats {
     private static final float DROWN_GRACE_SECONDS = MAX_BREATH; // how long you can hold your breath
     private static final float DROWN_DAMAGE_PER_SECOND = 5f;
     private static final float STARVE_DAMAGE_PER_SECOND = 2f;
+    /** Dehydration kicks in once thirst hits zero - similar rate to starvation. */
+    private static final float DEHYDRATE_DAMAGE_PER_SECOND = 2f;
     private static final float REGEN_HUNGER_THRESHOLD = 50f;   // need at least this much hunger to regenerate health
+    private static final float REGEN_THIRST_THRESHOLD = 50f;   // need at least this much thirst to regenerate health
     private static final float REGEN_PER_SECOND = 1f;
     private static final float HUNGER_DRAIN_PER_SECOND = 100f / (20f * 60f); // empties passively over ~20 minutes
+    private static final float THIRST_DRAIN_PER_SECOND = 100f / (15f * 60f); // empties faster than hunger (~15 min)
     private static final float HUNGER_SPRINT_EXTRA_DRAIN_PER_SECOND = 0.5f;
     private static final float STAMINA_SPRINT_DRAIN_PER_SECOND = 25f; // ~4s of sprinting from full
     private static final float STAMINA_REGEN_PER_SECOND = 15f;
     private static final float STAMINA_SPRINT_MIN = 10f; // must regen back above this before sprinting resumes once exhausted
 
-    private float health = MAX_HEALTH;
-    private float hunger = MAX_HUNGER;
+    private float health  = MAX_HEALTH;
+    private float hunger  = MAX_HUNGER;
+    private float thirst  = MAX_THIRST;
     private float stamina = MAX_STAMINA;
     private float submergedTime = 0f;
     private float coldness = 0f; // 0 (warm) .. 1 (freezing out in a blizzard), set by Player each frame
@@ -72,6 +79,10 @@ public class PlayerStats {
         return hunger;
     }
 
+    public float getThirst() {
+        return thirst;
+    }
+
     public float getStamina() {
         return stamina;
     }
@@ -86,8 +97,9 @@ public class PlayerStats {
     }
 
     public void reset() {
-        health = MAX_HEALTH;
-        hunger = MAX_HUNGER;
+        health  = MAX_HEALTH;
+        hunger  = MAX_HUNGER;
+        thirst  = MAX_THIRST;
         stamina = MAX_STAMINA;
         submergedTime = 0f;
         coldness = 0f;
@@ -99,8 +111,9 @@ public class PlayerStats {
 
     /** Keeps every stat topped up and the player alive - used in creative/spectator modes. */
     public void forceFull() {
-        health = MAX_HEALTH;
-        hunger = MAX_HUNGER;
+        health  = MAX_HEALTH;
+        hunger  = MAX_HUNGER;
+        thirst  = MAX_THIRST;
         stamina = MAX_STAMINA;
         submergedTime = 0f;
         coldness = 0f;
@@ -112,6 +125,14 @@ public class PlayerStats {
         // is equipped much later, if the player switches back to a mortal mode.
         armorMultiplier = 1f;
         frameDamageAccumulator = 0f;
+    }
+
+    /**
+     * Drinking a full clay canteen restores {@code amount} thirst points (clamped
+     * to MAX_THIRST). Call from Main when the player right-clicks a CLAY_CANTEEN_FULL.
+     */
+    public void drink(float amount) {
+        thirst = Math.min(MAX_THIRST, thirst + amount);
     }
 
     public boolean canSprint() {
@@ -138,6 +159,7 @@ public class PlayerStats {
 
         float hungerDrain = HUNGER_DRAIN_PER_SECOND + (sprintingAndMoving ? HUNGER_SPRINT_EXTRA_DRAIN_PER_SECOND : 0f);
         hunger = Math.max(0f, hunger - hungerDrain * dt);
+        thirst = Math.max(0f, thirst - THIRST_DRAIN_PER_SECOND * dt);
 
         // Track whether anything hurt the player this tick, so regen (below) doesn't
         // silently cancel out damage taken in the same update - e.g. standing in lava
@@ -191,7 +213,14 @@ public class PlayerStats {
 
         if (hunger <= 0f) {
             damage(STARVE_DAMAGE_PER_SECOND * dt);
-        } else if (!tookDamage && hunger >= REGEN_HUNGER_THRESHOLD && health < MAX_HEALTH) {
+            tookDamage = true;
+        }
+        if (thirst <= 0f) {
+            damage(DEHYDRATE_DAMAGE_PER_SECOND * dt);
+            tookDamage = true;
+        }
+        // Regenerate health only when both hunger and thirst are sufficient and nothing else hurt you.
+        if (!tookDamage && hunger >= REGEN_HUNGER_THRESHOLD && thirst >= REGEN_THIRST_THRESHOLD && health < MAX_HEALTH) {
             health = Math.min(MAX_HEALTH, health + REGEN_PER_SECOND * dt);
         }
     }
