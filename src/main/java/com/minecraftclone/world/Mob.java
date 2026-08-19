@@ -41,9 +41,11 @@ public class Mob {
         // only as a speed boost toward the player; true surface-clinging is a
         // future physics extension.
         SPIDER(1.4f, 0.9f, 2.8f, 16f, true, 3f, false),
-        // Creeper: slow-moving, but explodes when it gets close - dealing heavy
-        // area damage. Treated like undead (dawnDespawns=true) so it fades at
-        // sunrise without a natural-world explosion on load.
+        // Creeper: slow-moving hostile that deals high contact damage via the
+        // standard melee path (attackDamage=10).  In vanilla Tinkers' Construct
+        // a Creeper explodes on close contact; explosion support is a planned
+        // future feature.  dawnDespawns=true so it fades at sunrise rather than
+        // lingering in daylight.
         CREEPER(0.6f, 1.8f, 1.6f, 20f, true, 10f, true);
 
         public final float width;     // x/z footprint

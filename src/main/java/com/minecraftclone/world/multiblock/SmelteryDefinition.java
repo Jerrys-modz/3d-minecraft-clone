@@ -95,9 +95,11 @@ public final class SmelteryDefinition implements MultiBlockDefinition {
 
     @Override
     public void onDeform(MultiBlockInstance instance, World world) {
-        // Remove the block entity at the controller; the manager calls
-        // world.removeBlockEntity, which we delegate to Main/World.
-        world.removeBlockEntity(instance.controllerX, instance.controllerY, instance.controllerZ);
+        // Remove the block entity and dirty the surrounding chunks so the
+        // front-face reverts from the lit tile to the unlit tile immediately.
+        // registerMultiBlockEntity dirtied chunks on form; we mirror that here.
+        world.removeBlockEntityAndRemesh(
+                instance.controllerX, instance.controllerY, instance.controllerZ);
     }
 
     @Override

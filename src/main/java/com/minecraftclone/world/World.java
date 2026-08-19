@@ -479,6 +479,22 @@ public class World implements BlockAccessor {
     }
 
     /**
+     * Removes a block entity and immediately dirties the surrounding 3×3 chunks
+     * so that the renderer picks up the visual change (e.g. the lit front tile of
+     * a Smeltery Controller reverting to its unlit tile after the structure deforms).
+     * This mirrors the dirty-on-form logic in {@link #registerMultiBlockEntity}.
+     */
+    public void removeBlockEntityAndRemesh(int x, int y, int z) {
+        blockEntities.remove(blockKey(x, y, z));
+        int cx = worldToChunk(x), cz = worldToChunk(z);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                markNeighborDirty(cx + dx, cz + dz);
+            }
+        }
+    }
+
+    /**
      * Advances every block entity by {@code dt} seconds of world time. Entities
      * whose block has since been replaced are pruned (their contents are dropped
      * by the caller when the block is mined). When an entity's active state
@@ -726,6 +742,13 @@ public class World implements BlockAccessor {
                         for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
                             if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
                                 blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                                // If the restored entity is a multi-block controller, attempt
+                                // to re-form the multi-block structure.  This re-creates the
+                                // MultiBlockInstance and SmelteryEntity that onChunkUnload
+                                // discarded when the chunk was previously unloaded, so the
+                                // smeltery (or any other multi-block) becomes active again
+                                // without requiring the player to break and replace a block.
+                                multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
                             }
                         }
                         // Lightning fire is transient: any saved mid-burn fire cells

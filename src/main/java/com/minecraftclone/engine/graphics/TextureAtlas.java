@@ -1062,7 +1062,9 @@ public class TextureAtlas {
 
         int stemColor = shade(topColor, 0.65f);
         int maxY  = TILE_PX - 1;
-        int minY  = maxY - Math.max(2, Math.round(TILE_PX * fillFrac));
+        // Clamp to 0: when fillFrac==1.0, raw minY would be 15-16=-1, which
+        // overpaints one row of the tile above in the atlas.
+        int minY  = Math.max(0, maxY - Math.max(2, Math.round(TILE_PX * fillFrac)));
 
         // Two crossing diagonal stripes (X plant) - each 2px wide
         for (int y = minY; y <= maxY; y++) {

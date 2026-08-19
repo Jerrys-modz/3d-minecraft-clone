@@ -116,6 +116,38 @@ public final class MultiBlockManager {
     }
 
     /**
+     * Attempts to form a multi-block structure whose controller is at
+     * {@code (cx, cy, cz)}.  Call this after a chunk containing a controller
+     * block is loaded from storage, so structures that were formed before the
+     * save are re-detected without needing a block-change event.
+     *
+     * <p>Unlike {@link #onBlockChanged}, this method does not handle deformation
+     * and does not set the re-entrance guard — it is safe to call from a chunk-
+     * load path that is already outside the block-change loop.
+     *
+     * @param world the world
+     * @param cx    controller X
+     * @param cy    controller Y
+     * @param cz    controller Z
+     */
+    public void tryFormAt(World world, int cx, int cy, int cz) {
+        long ctrlKey = blockKey(cx, cy, cz);
+        if (byController.containsKey(ctrlKey)) return; // already formed
+
+        BlockType b = world.getBlock(cx, cy, cz);
+        if (b == null) return;
+
+        for (MultiBlockDefinition def : definitions) {
+            if (!def.isControllerBlock(b)) continue;
+            MultiBlockInstance instance = def.tryForm(world, cx, cy, cz);
+            if (instance != null) {
+                registerInstance(instance, world, def);
+                return; // one formation per position
+            }
+        }
+    }
+
+    /**
      * Called by {@code World} when a chunk at {@code (chunkX, chunkZ)} is
      * unloaded.  Removes all formed multi-block instances whose bounding
      * boxes intersect the unloaded chunk, clearing them from both the

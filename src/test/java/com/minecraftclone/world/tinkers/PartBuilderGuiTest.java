@@ -120,8 +120,11 @@ class PartBuilderGuiTest {
 
     @Test
     void allRegisteredMaterialsAreAccepted() {
-        PartBuilderGui gui = new PartBuilderGui();
         for (BlockType mat : TinkersRegistry.materials()) {
+            // Use a fresh gui per material so a previously-accepted slot cannot
+            // mask a rejection of the current material (setMaterial rejects
+            // unregistered types but leaves the slot unchanged if it is already set).
+            PartBuilderGui gui = new PartBuilderGui();
             gui.setMaterial(ItemStack.of(mat, 1));
             assertFalse(gui.materialSlot().isEmpty(),
                     "Expected " + mat.name() + " to be accepted as a Tinkers material");

@@ -951,9 +951,12 @@ public enum BlockType {
         return solid;
     }
 
-    /** True if this block has a distinct front face that faces its orientation (e.g. a furnace). */
+    /** True if this block has a distinct front face that faces its orientation (e.g. a furnace).
+     *  Also returns true when only the lit/active front tile differs from the side tile —
+     *  this covers blocks like {@code SMELTERY_CONTROLLER} whose inactive front is the same
+     *  as the side tile but whose active (lit) front is distinct and must be oriented. */
     public boolean isDirectional() {
-        return frontTile != sideTile;
+        return frontTile != sideTile || litFrontTile != sideTile;
     }
 
     public boolean isEdible() {

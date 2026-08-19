@@ -1776,8 +1776,11 @@ public class Main {
                 // (Never interact through a mob - check targetedMobRef first.)
                 boolean noMob = targetedMobRef[0] == null;
 
-                // Full canteen can be drunk without looking at a block
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && noMob
+                // Full canteen can be drunk when not targeting a block or mob
+                // (hit == null ensures the player isn't facing a block they might
+                // want to interact with — right-clicking a door or water source
+                // should not simultaneously drain the canteen).
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && noMob && hit == null
                         && heldItem == BlockType.CLAY_CANTEEN_FULL && !mode.isCreative()
                         && player.getStats().getThirst() < PlayerStats.MAX_THIRST) {
                     player.getStats().drink(40f);   // restores 40 out of 100 thirst

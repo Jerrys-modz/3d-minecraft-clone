@@ -89,7 +89,8 @@ public final class PartBuilderEntity implements BlockEntity {
         int count  = in.readUnsignedByte();
         if (matId > 0 && count > 0) {
             BlockType mat = BlockType.byId(matId);
-            if (mat != null) {
+            // byId() returns AIR for id==0; guard against AIR and any non-material type.
+            if (mat != null && TinkersRegistry.isMaterial(mat)) {
                 gui.setMaterial(ItemStack.of(mat, count));
             }
         }

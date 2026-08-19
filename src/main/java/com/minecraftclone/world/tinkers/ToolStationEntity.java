@@ -92,11 +92,20 @@ public final class ToolStationEntity implements BlockEntity {
                 int matId    = in.readUnsignedShort();
                 ToolPartType shape = (shapeOrd < shapes.length) ? shapes[shapeOrd] : null;
                 BlockType    mat   = BlockType.byId(matId);
-                if (shape != null && mat != null) {
+                // byId() returns AIR for id==0 and null for truly unknown ids.
+                // Only accept the part when both shape and material are non-null
+                // AND the material id is non-zero (AIR is never a valid tool material).
+                if (shape != null && mat != null && matId != 0
+                        && TinkersRegistry.isMaterial(mat)) {
                     gui.setSlot(i, ItemStack.tinkersPart(new TinkersItem.Part(shape, mat)));
                 } else {
                     gui.setSlot(i, ItemStack.EMPTY);
                 }
+            } else if (kind != KIND_EMPTY) {
+                // Unknown kind byte — we cannot know how many payload bytes follow,
+                // so we cannot safely continue reading. Reset all slots and abort.
+                gui.clearAll();
+                return;
             }
             // KIND_EMPTY — slot stays empty (already cleared in ToolStationGui constructor)
         }
@@ -108,6 +117,8 @@ public final class ToolStationEntity implements BlockEntity {
                 in.readUnsignedByte();   // shape ordinal
                 in.readUnsignedShort();  // material id
             }
+            // Unknown kind: same problem as above, but these are trailing slots we
+            // can't skip safely, so abort (gui already holds whatever we loaded so far).
         }
     }
 }

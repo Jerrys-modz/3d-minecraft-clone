@@ -45,9 +45,32 @@ public final class TinkersRegistry {
 
     /**
      * Registers {@code material} as a valid Tinkers' tool material.
-     * Throws if the type is already registered (prevents accidents with reload).
+     *
+     * <p>Validates that the stats are sane before registering:
+     * <ul>
+     *   <li>{@code stats} must not be null.</li>
+     *   <li>{@code baseDurability} must be positive (≥ 1).</li>
+     *   <li>{@code miningSpeed} must be positive and finite (guards against zero-
+     *       or-negative speeds producing infinite or negative break times in
+     *       {@link com.minecraftclone.world.Mining#breakTimeItem}).</li>
+     *   <li>{@code miningTier} must be non-negative (tier 0 = hand-level).</li>
+     * </ul>
+     *
+     * @throws IllegalStateException    if the material is already registered
+     * @throws IllegalArgumentException if stats are null or have invalid values
      */
     public static void register(BlockType material, TinkersMaterialStats stats) {
+        if (material == null) throw new IllegalArgumentException("material is null");
+        if (stats == null)    throw new IllegalArgumentException("stats is null for: " + material);
+        if (stats.baseDurability() <= 0)
+            throw new IllegalArgumentException("baseDurability must be > 0 for: " + material
+                    + " (got " + stats.baseDurability() + ")");
+        if (!Float.isFinite(stats.miningSpeed()) || stats.miningSpeed() <= 0f)
+            throw new IllegalArgumentException("miningSpeed must be positive and finite for: " + material
+                    + " (got " + stats.miningSpeed() + ")");
+        if (stats.miningTier() < 0)
+            throw new IllegalArgumentException("miningTier must be >= 0 for: " + material
+                    + " (got " + stats.miningTier() + ")");
         if (MATERIALS.containsKey(material)) {
             throw new IllegalStateException("Tinkers material already registered: " + material);
         }

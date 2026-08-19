@@ -132,11 +132,20 @@ public final class PatternValidator {
         if (interiorH < def.minInteriorH() || interiorH > def.maxInteriorH()) return null;
         if (interiorD < def.minInteriorD() || interiorD > def.maxInteriorD()) return null;
 
+        // Interior volume check: BFS visited exactly the cells reachable from the seed.
+        // If the interior is non-rectangular (has a protrusion or is L-shaped) the
+        // shell loop below would silently skip the "extra" cells because they fall
+        // inside the expanded bounding box — catching them here is cheaper and more robust.
+        int expectedInteriorVolume = interiorW * interiorH * interiorD;
+        if (visited.size() != expectedInteriorVolume) return null;
+
         // Controller must be on the shell, not in the interior
         if (!isOnShell(cx, cy, cz, shellMinX, shellMinY, shellMinZ, shellMaxX, shellMaxY, shellMaxZ))
             return null;
 
-        // Validate every shell position
+        // Validate every shell position; also count controller blocks to reject
+        // structures that have more than one controller (ambiguous pairing).
+        int controllerCount = 0;
         for (int x = shellMinX; x <= shellMaxX; x++) {
             for (int y = shellMinY; y <= shellMaxY; y++) {
                 for (int z = shellMinZ; z <= shellMaxZ; z++) {
@@ -146,9 +155,12 @@ public final class PatternValidator {
                      && z > shellMinZ && z < shellMaxZ) continue;
                     BlockType b = world.getBlock(x, y, z);
                     if (b == null || !def.isShellBlock(b)) return null;
+                    if (def.isControllerBlock(b)) controllerCount++;
                 }
             }
         }
+        // Exactly one controller is required.
+        if (controllerCount != 1) return null;
 
         return new MultiBlockInstance(def.id(), cx, cy, cz,
                 shellMinX, shellMinY, shellMinZ, shellMaxX, shellMaxY, shellMaxZ);

@@ -139,14 +139,17 @@ public sealed interface TinkersItem permits TinkersItem.Part, TinkersItem.Tool {
 
         /**
          * Consumes one use of durability.
-         * @return {@code true} if the tool just broke (remaining durability hit 0).
+         * @return {@code true} if the tool just broke (remaining durability hit exactly 0).
+         *         Returns {@code false} when already broken — callers must not
+         *         double-break a tool by calling {@code use()} again after it returns true.
          */
         public boolean use() {
-            return --remaining <= 0;
+            if (remaining <= 0) return false;
+            return --remaining == 0;
         }
 
         public int remaining()  { return Math.max(0, remaining); }
-        public float fraction() { return maxDurability > 0 ? (float)remaining / maxDurability : 1f; }
+        public float fraction() { return maxDurability > 0 ? (float)Math.max(0, remaining) / maxDurability : 1f; }
 
         @Override
         public String toString() {
