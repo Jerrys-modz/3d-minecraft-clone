@@ -291,24 +291,23 @@ class CraftingTest {
     }
 
     @Test
-    void ironSwordBladeAndShovelHeadAreDistinct() {
-        // Sword blade: "I.. / I.. / ..." (2 vertical iron ingots)
+    void tinkersPartPatternsHaveNoCraftingRecipe() {
+        // Tinkers' parts are shaped at the Part Builder, NOT the crafting table.
+        // The old sword-blade / shovel-head grid patterns must not match any recipe.
+
+        // "I.. / I.. / ..." — two vertical iron ingots (was sword-blade pattern)
         BlockType[] swordGrid = new BlockType[9];
         swordGrid[0] = BlockType.IRON_INGOT;
         swordGrid[3] = BlockType.IRON_INGOT;
-        Crafting.Recipe sword = Crafting.match3x3(swordGrid);
-        assertNotNull(sword, "Iron sword blade recipe should match");
-        assertEquals(BlockType.IRON_SWORD_BLADE, sword.output());
-        assertEquals(1, sword.outputAmount());
+        assertNull(Crafting.match3x3(swordGrid),
+                "Sword-blade grid pattern must not yield any crafting recipe");
 
-        // Shovel head: "I.. / .I. / ..." (2 diagonal iron ingots)
+        // "I.. / .I. / ..." — diagonal iron ingots (was shovel-head pattern)
         BlockType[] shovelGrid = new BlockType[9];
         shovelGrid[0] = BlockType.IRON_INGOT;
         shovelGrid[4] = BlockType.IRON_INGOT;
-        Crafting.Recipe shovel = Crafting.match3x3(shovelGrid);
-        assertNotNull(shovel, "Iron shovel head recipe should match");
-        assertEquals(BlockType.IRON_SHOVEL_HEAD, shovel.output());
-        assertEquals(1, shovel.outputAmount());
+        assertNull(Crafting.match3x3(shovelGrid),
+                "Shovel-head grid pattern must not yield any crafting recipe");
     }
 
 }

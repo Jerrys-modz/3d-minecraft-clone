@@ -429,8 +429,10 @@ public final class Mining {
     /**
      * True if the held {@link ItemStack} (vanilla or Tinkers') is sufficient
      * to break {@code block} at all (ignoring speed).
+     * <p>Named {@code canBreakItem} rather than {@code canBreak} to avoid
+     * overload ambiguity when callers pass {@code null} as the second argument.
      */
-    public static boolean canBreak(BlockType block, ItemStack heldItem) {
+    public static boolean canBreakItem(BlockType block, ItemStack heldItem) {
         if (heldItem == null || heldItem.isEmpty()) return canBreak(block, (BlockType) null);
         // For Tinkers' tools read tier and kind from the payload.
         TinkersItem.Tool tinkersTool = heldItem.tinkersTool();
@@ -468,9 +470,12 @@ public final class Mining {
      * Seconds required to break {@code block} with the held {@link ItemStack}
      * (vanilla or Tinkers').  Returns {@link Float#POSITIVE_INFINITY} if the
      * item cannot break the block at all.
+     * <p>Named {@code breakTimeItem} rather than {@code breakTimeSeconds} to
+     * avoid overload ambiguity when callers pass {@code null} as the second
+     * argument (both {@code BlockType} and {@code ItemStack} are reference types).
      */
-    public static float breakTimeSeconds(BlockType block, ItemStack heldItem) {
-        if (!canBreak(block, heldItem)) return Float.POSITIVE_INFINITY;
+    public static float breakTimeItem(BlockType block, ItemStack heldItem) {
+        if (!canBreakItem(block, heldItem)) return Float.POSITIVE_INFINITY;
         BlockInfo info = infoFor(block);
         if (info.hardnessSeconds() <= 0f) return 0f;
 
