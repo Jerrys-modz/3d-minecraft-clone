@@ -389,11 +389,9 @@ public class Main {
             } else if (targetType == BlockType.FARMLAND || targetType == BlockType.FARMLAND_WET) {
                 // Farmland / wet farmland → drops as dirt when broken (same as vanilla).
                 world.spawnItem(bx, by, bz, BlockType.DIRT, 1, loot);
-                return; // spawnItem already called; skip the generic drop below
             } else if (targetType == BlockType.CLAY) {
                 // Clay block → drops 4 clay balls (same as vanilla).
                 world.spawnItem(bx, by, bz, BlockType.CLAY_BALL, 4, loot);
-                return;
             } else if (targetType == BlockType.BERRY_BUSH) {
                 world.spawnItem(bx, by, bz, BlockType.BERRIES, BERRIES_PER_BUSH, loot);
             } else if (targetType == BlockType.COAL_ORE) {

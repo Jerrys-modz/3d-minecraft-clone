@@ -155,10 +155,10 @@ public final class Crafting {
 
         // --- Farming recipes ---
         // Hoes: SS / .S / .P  (two material on top, stick below)
-        shaped3x3("PP.", "SP.", "S..", BlockType.WOOD_HOE, 1);
-        shaped3x3("KK.", "SK.", "S..", BlockType.STONE_HOE, 1);
-        shaped3x3("II.", "SI.", "S..", BlockType.IRON_HOE, 1);
-        shaped3x3("DD.", "SD.", "S..", BlockType.DIAMOND_HOE, 1);
+        shaped3x3("PP.", ".S.", "S..", BlockType.WOOD_HOE, 1);
+        shaped3x3("KK.", ".S.", "S..", BlockType.STONE_HOE, 1);
+        shaped3x3("II.", ".S.", "S..", BlockType.IRON_HOE, 1);
+        shaped3x3("DD.", ".S.", "S..", BlockType.DIAMOND_HOE, 1);
 
         // Clay canteen: 4 clay balls in a 2x2
         shaped2x2("YY", "YY", BlockType.CLAY_CANTEEN, 1);  // 4 clay balls -> 1 canteen
