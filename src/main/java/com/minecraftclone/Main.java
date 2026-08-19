@@ -1633,12 +1633,8 @@ public class Main {
             // ticking forward with world time.
             world.tickBlockEntities(dt);
 
-            // Farming: randomly advance crops near the player each frame.
-            {
-                org.joml.Vector3f pp = player.getPosition();
-                com.minecraftclone.player.Farming.tickCropsNear(
-                        world, (int) pp.x, (int) pp.y, (int) pp.z, dt, loot);
-            }
+            // Farming: Minecraft-style random tick across all loaded chunks.
+            com.minecraftclone.player.Farming.tickCrops(world, dt, loot);
 
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied

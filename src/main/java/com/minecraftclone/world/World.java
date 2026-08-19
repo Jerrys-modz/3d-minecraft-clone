@@ -1217,6 +1217,14 @@ public class World implements BlockAccessor {
         return chunks.size();
     }
 
+    /**
+     * Returns an unmodifiable view of all currently loaded chunks.
+     * Used by the farming random-tick system to iterate over simulation-range chunks.
+     */
+    public java.util.Collection<Chunk> getLoadedChunks() {
+        return java.util.Collections.unmodifiableCollection(chunks.values());
+    }
+
     /** How many loaded chunks actually passed the frustum test in the most recent {@link #render}. */
     public int getVisibleChunkCount() {
         return visibleChunks.size();

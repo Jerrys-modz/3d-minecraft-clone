@@ -10,13 +10,16 @@ import java.util.Random;
  * Farming system: crop growth, planting rules, and harvest drops.
  *
  * <p>Crops (wheat, potato, carrot) grow through multiple stages when planted
- * on {@link BlockType#FARMLAND}. Each game frame there is a small random chance
- * each crop in a radius around the player advances one stage. A mature crop
- * (final stage) is harvested by breaking it; it then drops the corresponding
- * food item (and extra seeds for wheat).
+ * on {@link BlockType#FARMLAND}. Growth is driven by a Minecraft-faithful
+ * <em>random tick</em> system: every loaded chunk column is divided into
+ * 16-block-tall sections, and each section receives {@value #RANDOM_TICK_SPEED}
+ * random block picks per simulated game-tick (20 TPS). When a picked block is
+ * a crop that still has a next stage, it advances. This matches vanilla
+ * Minecraft's behaviour and means crops grow anywhere within the loaded world
+ * (typically ~6-chunk radius = ~96 blocks), not just near the player.
  *
  * <p>Sugar cane does not grow automatically yet - it is placeable as a
- * decoration block. Future work: add growth-tick logic to grow upward.
+ * decoration block. Future work: add upward growth logic here.
  *
  * <p>Farming interactions (hoe-on-dirt, seeds-on-farmland, canteen-at-water)
  * are wired in {@code Main}; this class only answers "what grows where" and
@@ -25,13 +28,16 @@ import java.util.Random;
 public final class Farming {
 
     /**
-     * Probability per game second that a crop in range advances one growth stage.
-     * Average ~90 seconds per stage → ~6 minutes for wheat (3 stages), ~5 min for potato/carrot (2).
+     * Number of random block picks per chunk section (16×16×16) per game tick.
+     * Vanilla Minecraft default is 3. Higher values make crops grow faster.
      */
-    private static final float GROW_PROBABILITY_PER_SECOND = 1f / 90f;
+    static final int RANDOM_TICK_SPEED = 3;
 
-    /** Block radius around the player to tick crops each frame. */
-    private static final int TICK_RADIUS = 8;
+    /**
+     * Height of a chunk section in blocks. Matches Minecraft's 16-block sections.
+     * Each loaded chunk column contains {@code Chunk.HEIGHT / SECTION_HEIGHT} sections.
+     */
+    private static final int SECTION_HEIGHT = 16;
 
     // -----------------------------------------------------------------------
     // Queries
@@ -113,47 +119,92 @@ public final class Farming {
     }
 
     // -----------------------------------------------------------------------
-    // Growth tick
+    // Growth tick — Minecraft-style random tick system
     // -----------------------------------------------------------------------
 
     /**
-     * Called each frame from the main game loop. Randomly advances crops
-     * within {@link #TICK_RADIUS} blocks of the player's position. Only
-     * the cells between {@code py - 4} and {@code py + 4} are scanned so
-     * the loop stays cheap even when the player is at very high altitude.
+     * Called each frame from the main game loop. Advances crops in all loaded
+     * chunks using the same random-tick algorithm as vanilla Minecraft:
      *
-     * @param world  the world to query and mutate
-     * @param px     player X (block coords)
-     * @param py     player Y (block coords)
-     * @param pz     player Z (block coords)
-     * @param dt     frame delta-time in seconds
-     * @param rnd    shared random (not seeded per tick - deliberately noisy)
+     * <ol>
+     *   <li>Convert frame delta-time to simulated game-ticks (20 TPS).</li>
+     *   <li>For every loaded chunk, iterate its 16-block-tall <em>sections</em>.</li>
+     *   <li>Each section receives {@value #RANDOM_TICK_SPEED} × ticksThisFrame
+     *       random block picks; fractional ticks are handled probabilistically.</li>
+     *   <li>If the randomly selected block is a crop with a next stage, it grows.</li>
+     *   <li>If a crop's farmland base was removed, revert the crop to air.</li>
+     * </ol>
+     *
+     * <p>Range: all loaded chunks — typically the full render-distance radius
+     * (default 6 chunks = 96 blocks in each direction), far larger than the
+     * previous 8-block hardcoded radius.
+     *
+     * @param world the world to query and mutate
+     * @param dt    frame delta-time in seconds
+     * @param rnd   shared random (not freshly seeded — deliberate noise)
      */
-    public static void tickCropsNear(World world, int px, int py, int pz,
-                                     float dt, Random rnd) {
-        int yMin = Math.max(1, py - 4);
-        int yMax = Math.min(Chunk.HEIGHT - 2, py + 4);
-        float growChance = GROW_PROBABILITY_PER_SECOND * dt;
+    public static void tickCrops(World world, float dt, Random rnd) {
+        // Convert wall-clock dt to simulated game-ticks (20 TPS = 0.05s per tick).
+        // At typical 60 fps, dt ≈ 0.0167 → ~0.33 ticks. We handle the fractional
+        // part probabilistically so the long-run rate is always correct.
+        float ticksF = dt * 20f;
+        int wholeTicks = (int) ticksF;
+        float fracTick = ticksF - wholeTicks;
 
-        for (int x = px - TICK_RADIUS; x <= px + TICK_RADIUS; x++) {
-            for (int z = pz - TICK_RADIUS; z <= pz + TICK_RADIUS; z++) {
-                for (int y = yMin; y <= yMax; y++) {
-                    BlockType b = world.getBlock(x, y, z);
-                    if (b == null || !isCrop(b)) continue;
-                    // Require farmland directly below (sugar cane just sits on any block for now)
-                    if (b != BlockType.SUGAR_CANE
-                            && world.getBlock(x, y - 1, z) != BlockType.FARMLAND) {
-                        // Farmland was replaced or broken - revert crop to air
-                        world.setBlock(x, y, z, BlockType.AIR);
-                        continue;
-                    }
-                    BlockType next = nextStage(b);
-                    if (next != null && rnd.nextFloat() < growChance) {
-                        world.setBlock(x, y, z, next);
-                    }
+        int sectionsPerColumn = Chunk.HEIGHT / SECTION_HEIGHT;
+
+        for (Chunk chunk : world.getLoadedChunks()) {
+            int originX = chunk.getOriginX();
+            int originZ = chunk.getOriginZ();
+
+            // Number of random picks this frame for this chunk column.
+            // Each section gets RANDOM_TICK_SPEED picks per whole tick, plus a
+            // probabilistic extra pick for the fractional tick remainder.
+            int picks = RANDOM_TICK_SPEED * sectionsPerColumn * wholeTicks;
+            if (rnd.nextFloat() < fracTick) {
+                // Fractional tick: give all sections one extra pick with probability = fracTick.
+                picks += RANDOM_TICK_SPEED * sectionsPerColumn;
+            }
+
+            for (int p = 0; p < picks; p++) {
+                // Pick a random block within the entire chunk column (all sections combined).
+                int lx = rnd.nextInt(Chunk.SIZE);
+                int ly = rnd.nextInt(Chunk.HEIGHT);
+                int lz = rnd.nextInt(Chunk.SIZE);
+
+                int wx = originX + lx;
+                int wy = ly;
+                int wz = originZ + lz;
+
+                BlockType b = world.getBlock(wx, wy, wz);
+                if (b == null || !isCrop(b)) continue;
+
+                // Sugar cane grows on any solid base; other crops require farmland.
+                if (b != BlockType.SUGAR_CANE
+                        && world.getBlock(wx, wy - 1, wz) != BlockType.FARMLAND) {
+                    // Farmland was broken — clear the orphaned crop.
+                    world.setBlock(wx, wy, wz, BlockType.AIR);
+                    continue;
+                }
+
+                BlockType next = nextStage(b);
+                if (next != null) {
+                    world.setBlock(wx, wy, wz, next);
                 }
             }
         }
+    }
+
+    /**
+     * @deprecated Use {@link #tickCrops(World, float, Random)} instead.
+     *             This player-radius variant is kept only to avoid breaking any
+     *             direct call sites during the transition; it now delegates to
+     *             the chunk-based implementation and ignores the position args.
+     */
+    @Deprecated
+    public static void tickCropsNear(World world, int px, int py, int pz,
+                                     float dt, Random rnd) {
+        tickCrops(world, dt, rnd);
     }
 
     private Farming() {}
