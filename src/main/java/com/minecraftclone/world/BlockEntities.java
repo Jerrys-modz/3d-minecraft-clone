@@ -27,6 +27,11 @@ public final class BlockEntities {
         // Phase 0.5: Tinkers' Construct multi-block entities
         register(com.minecraftclone.world.multiblock.SmelteryEntity.TYPE,
                  com.minecraftclone.world.multiblock.SmelteryEntity::new);
+        // Phase 0.5: Tinkers' Construct crafting stations
+        register(com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE,
+                 com.minecraftclone.world.tinkers.PartBuilderEntity::new);
+        register(com.minecraftclone.world.tinkers.ToolStationEntity.TYPE,
+                 com.minecraftclone.world.tinkers.ToolStationEntity::new);
     }
 
     private BlockEntities() {
