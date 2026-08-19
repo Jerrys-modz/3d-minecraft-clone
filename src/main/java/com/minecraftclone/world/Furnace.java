@@ -238,31 +238,64 @@ public class Furnace implements BlockEntity, StorageContainer {
         burnTime = Math.max(0, burnTime - dt);
     }
 
+    /**
+     * Format version byte written at the start of the furnace payload.
+     * 0 = legacy byte-ID format (IDs 0-255 only).
+     * 1 = short-ID format (IDs 0-32767, added when IDs exceeded 255).
+     */
+    private static final byte PAYLOAD_VERSION = 1;
+
     /** Writes the furnace's slots and smelting state to {@code out} (see {@link ChunkStorage}). */
     public void writeTo(DataOutput out) throws IOException {
+        out.writeByte(PAYLOAD_VERSION);
         out.writeFloat(burnTime);
         out.writeFloat(burnDuration);
         out.writeFloat(progress);
         for (int i = 0; i < SLOT_COUNT; i++) {
-            out.writeByte(types[i] == null ? 0 : types[i].id);
+            out.writeShort(types[i] == null ? 0 : types[i].id);
             out.writeByte(counts[i]);
         }
     }
 
     /** Restores the slots and smelting state written by {@link #writeTo}. */
     public void readFrom(DataInput in) throws IOException {
-        burnTime = in.readFloat();
-        burnDuration = in.readFloat();
-        progress = in.readFloat();
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            int id = in.readUnsignedByte();
-            int count = in.readUnsignedByte();
-            if (id == 0 || count <= 0) {
-                types[i] = null;
-                counts[i] = 0;
-            } else {
-                types[i] = BlockType.byId((byte) id);
-                counts[i] = count;
+        // Peek at the first byte: if it matches PAYLOAD_VERSION it's the new short format;
+        // otherwise it's an old-format float (burn-time) starting with a high byte value.
+        byte maybeVersion = in.readByte();
+        boolean newFormat = (maybeVersion == PAYLOAD_VERSION);
+        if (newFormat) {
+            burnTime = in.readFloat();
+            burnDuration = in.readFloat();
+            progress = in.readFloat();
+            for (int i = 0; i < SLOT_COUNT; i++) {
+                int id = in.readUnsignedShort();
+                int count = in.readUnsignedByte();
+                if (id == 0 || count <= 0) {
+                    types[i] = null;
+                    counts[i] = 0;
+                } else {
+                    types[i] = BlockType.byId(id);
+                    counts[i] = count;
+                }
+            }
+        } else {
+            // Legacy format: maybeVersion was the first byte of a float. Reconstruct
+            // the full 4-byte float by reading the remaining 3 bytes.
+            int raw = ((maybeVersion & 0xFF) << 24) | ((in.readUnsignedByte()) << 16)
+                    | ((in.readUnsignedByte()) << 8) | (in.readUnsignedByte());
+            burnTime = Float.intBitsToFloat(raw);
+            burnDuration = in.readFloat();
+            progress = in.readFloat();
+            for (int i = 0; i < SLOT_COUNT; i++) {
+                int id = in.readUnsignedByte();
+                int count = in.readUnsignedByte();
+                if (id == 0 || count <= 0) {
+                    types[i] = null;
+                    counts[i] = 0;
+                } else {
+                    types[i] = BlockType.byId(id);
+                    counts[i] = count;
+                }
             }
         }
     }

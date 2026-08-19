@@ -25,7 +25,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     private static final float LIGHT_EAST_WEST = 0.6f;
 
     private final ChunkPos pos;
-    private final byte[] blocks = new byte[SIZE * HEIGHT * SIZE];
+    private final short[] blocks = new short[SIZE * HEIGHT * SIZE];
     // Per-block facing hint for doors (0:+Z, 1:-Z, 2:+X, 3:-X) - only doors use it.
     private final byte[] orientations = new byte[SIZE * HEIGHT * SIZE];
     // Created lazily on first mesh/upload, so a Chunk can be constructed (and even
@@ -55,7 +55,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     // Persisted alongside blocks[] (see getRawOverlays/setRawOverlays) -
     // unlike fluidLevels, this isn't cheap to regenerate on load (world-gen
     // only runs once, when a chunk is first created).
-    private final byte[] overlays = new byte[SIZE * HEIGHT * SIZE];
+    private final short[] overlays = new short[SIZE * HEIGHT * SIZE];
 
     // Highest Y that's ever held a non-air block, updated incrementally in
     // setLocal - lets rebuildMesh skip scanning the (often large) stretch of
@@ -257,14 +257,14 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     /** Raw block-id array for serialization. Returns the live backing array - treat as read-only. */
-    public byte[] getRawBlocks() {
+    public short[] getRawBlocks() {
         return blocks;
     }
 
     /** Replaces this chunk's block data wholesale, e.g. when loading a saved chunk from disk. */
-    public void setRawBlocks(byte[] data) {
+    public void setRawBlocks(short[] data) {
         if (data.length != blocks.length) {
-            throw new IllegalArgumentException("Expected " + blocks.length + " bytes, got " + data.length);
+            throw new IllegalArgumentException("Expected " + blocks.length + " shorts, got " + data.length);
         }
         System.arraycopy(data, 0, blocks, 0, blocks.length);
         // Fluid levels aren't persisted (flow cells themselves usually aren't
@@ -277,14 +277,14 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     /** Raw overlay-id array for serialization (see {@link #overlays}). Returns the live backing array - treat as read-only. */
-    public byte[] getRawOverlays() {
+    public short[] getRawOverlays() {
         return overlays;
     }
 
     /** Replaces this chunk's overlay data wholesale, e.g. when loading a saved chunk from disk. */
-    public void setRawOverlays(byte[] data) {
+    public void setRawOverlays(short[] data) {
         if (data.length != overlays.length) {
-            throw new IllegalArgumentException("Expected " + overlays.length + " bytes, got " + data.length);
+            throw new IllegalArgumentException("Expected " + overlays.length + " shorts, got " + data.length);
         }
         System.arraycopy(data, 0, overlays, 0, overlays.length);
         dirty = true;

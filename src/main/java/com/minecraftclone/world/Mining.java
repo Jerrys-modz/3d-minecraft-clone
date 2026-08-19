@@ -139,6 +139,186 @@ public final class Mining {
         put(BlockType.GOLD_ORE, 4.0f, ToolKind.PICKAXE, TIER_IRON);
         put(BlockType.DIAMOND_ORE, 6.0f, ToolKind.PICKAXE, TIER_IRON);
 
+        // GTNH Ores - early game (stone tier)
+        put(BlockType.COPPER_ORE, 2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.TIN_ORE, 2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.BAUXITE_ORE, 2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ZINC_ORE, 2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.LEAD_ORE, 2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SILVER_ORE, 2.0f, ToolKind.PICKAXE, TIER_STONE);
+
+        // GTNH Ores - mid-game (iron tier)
+        put(BlockType.NICKEL_ORE, 3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.COBALT_ORE, 3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.TUNGSTEN_ORE, 3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.MOLYBDENUM_ORE, 3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.PLATINUM_ORE, 3.0f, ToolKind.PICKAXE, TIER_IRON);
+
+        // GTNH Ores - advanced (diamond tier)
+        put(BlockType.CHROMIUM_ORE, 5.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.MANGANESE_ORE, 5.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.VANADIUM_ORE, 5.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.BERYLLIUM_ORE, 5.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.TITANIUM_ORE, 5.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+
+        // GTNH Ores - late-game (endgame tier)
+        put(BlockType.URANIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.THORIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.PLUTONIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.IRIDIUM_ORE, 7.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+
+        // GTNH Small Ores - mining indicators, -1 tier (one tier easier than full ore)
+        // Early-game small ores (wood tier - easier than stone tier full ores)
+        put(BlockType.SMALL_COPPER_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_TIN_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_BAUXITE_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_ZINC_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_LEAD_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+        put(BlockType.SMALL_SILVER_ORE, 1.0f, ToolKind.PICKAXE, TIER_WOOD);
+
+        // Mid-game small ores (stone tier - easier than iron tier full ores)
+        put(BlockType.SMALL_NICKEL_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_COBALT_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_TUNGSTEN_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_MOLYBDENUM_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_PLATINUM_ORE, 1.5f, ToolKind.PICKAXE, TIER_STONE);
+
+        // Advanced small ores (iron tier - easier than diamond tier full ores)
+        put(BlockType.SMALL_CHROMIUM_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_MANGANESE_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_VANADIUM_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_BERYLLIUM_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_TITANIUM_ORE, 2.5f, ToolKind.PICKAXE, TIER_IRON);
+
+        // Late-game small ores (diamond tier - same as full ores, can't go lower)
+        put(BlockType.SMALL_URANIUM_ORE, 3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_THORIUM_ORE, 3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_PLUTONIUM_ORE, 3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_IRIDIUM_ORE, 3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+
+        // ── Extended GTNH ore pack ────────────────────────────────────────────
+        // Iron chain (iron tier - common industrial metals)
+        put(BlockType.MAGNETITE_ORE,          3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.HEMATITE_ORE,           3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.BROWN_LIMONITE_ORE,     2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.YELLOW_LIMONITE_ORE,    2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.BANDED_IRON_ORE,        3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.VANADIUM_MAGNETITE_ORE, 3.0f, ToolKind.PICKAXE, TIER_IRON);
+        // Copper chain (stone tier - early game)
+        put(BlockType.CHALCOPYRITE_ORE,  2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.TETRAHEDRITE_ORE,  2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.MALACHITE_ORE,     2.5f, ToolKind.PICKAXE, TIER_STONE);
+        // Lead / Zinc (stone tier)
+        put(BlockType.GALENA_ORE,        2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SPHALERITE_ORE,    2.5f, ToolKind.PICKAXE, TIER_STONE);
+        // Nickel / Cobalt (iron tier)
+        put(BlockType.GARNIERITE_ORE,    3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.PENTLANDITE_ORE,   3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.COBALTITE_ORE,     3.0f, ToolKind.PICKAXE, TIER_IRON);
+        // Sulfur chain (stone tier)
+        put(BlockType.PYRITE_ORE,        2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ARSENOPYRITE_ORE,  2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SULFUR_ORE,        2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.CINNABAR_ORE,      2.5f, ToolKind.PICKAXE, TIER_STONE);
+        // Tin (stone tier)
+        put(BlockType.CASSITERITE_ORE,   2.5f, ToolKind.PICKAXE, TIER_STONE);
+        // Tungsten family (diamond tier - very hard)
+        put(BlockType.SCHEELITE_ORE,     3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.WOLFRAMITE_ORE,    3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.MOLYBDENITE_ORE,   3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.FERBERITE_ORE,     3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        // Chromium / Titanium (iron/diamond tier)
+        put(BlockType.CHROMITE_ORE,      3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.ILMENITE_ORE,      3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.RUTILE_ORE,        3.0f, ToolKind.PICKAXE, TIER_IRON);
+        // Uranium family (diamond tier - radioactive, requires best tools)
+        put(BlockType.URANINITE_ORE,     3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.PITCHBLENDE_ORE,   3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        // Rare earth (iron tier)
+        put(BlockType.MONAZITE_ORE,      3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.BASTNASITE_ORE,    3.0f, ToolKind.PICKAXE, TIER_IRON);
+        // Vanadium / Manganese minerals (iron tier)
+        put(BlockType.VANADINITE_ORE,    3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.PYROLUSITE_ORE,    2.5f, ToolKind.PICKAXE, TIER_STONE);
+        // Carbon / Light metals (stone tier)
+        put(BlockType.GRAPHITE_ORE,      2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.LITHIUM_ORE,       2.5f, ToolKind.PICKAXE, TIER_STONE);
+        // GTNH exotics (diamond tier)
+        put(BlockType.NAQUADAH_ORE,          4.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.NAQUADAH_ENRICHED_ORE, 4.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.TRINIUM_ORE,           4.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        // Additional rare earths / PGM (diamond tier)
+        put(BlockType.NEODYMIUM_ORE,     3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.CERIUM_ORE,        3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.OSMIUM_ORE,        4.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.PALLADIUM_ORE,     3.5f, ToolKind.PICKAXE, TIER_DIAMOND);
+        // Rock/mineral ores (stone tier)
+        put(BlockType.CALCITE_ORE,       2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.OLIVINE_ORE,       2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.TALC_ORE,          2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.BENTONITE_ORE,     2.0f, ToolKind.PICKAXE, TIER_STONE);
+        // Lapis components (stone tier)
+        put(BlockType.SODALITE_ORE,      2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.LAZURITE_ORE,      2.5f, ToolKind.PICKAXE, TIER_STONE);
+        // Evaporites (stone tier)
+        put(BlockType.SALT_ORE,          1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ROCK_SALT_ORE,     1.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SALTPETER_ORE,     2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.BORAX_ORE,         2.0f, ToolKind.PICKAXE, TIER_STONE);
+        // Phosphates (stone tier)
+        put(BlockType.APATITE_ORE,       2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.PHOSPHATE_ORE,     2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.PYROCHLORE_ORE,    3.0f, ToolKind.PICKAXE, TIER_IRON);
+        // Gemstones (iron tier)
+        put(BlockType.LEPIDOLITE_ORE,    3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.RUBY_ORE,          3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SAPPHIRE_ORE,      3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.GREEN_SAPPHIRE_ORE,3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.PYROPE_ORE,        3.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SPESSARTINE_ORE,   3.0f, ToolKind.PICKAXE, TIER_IRON);
+
+        // Extended small ores (half the hardness of their full-vein counterpart, same tier)
+        put(BlockType.SMALL_MAGNETITE_ORE,          1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_HEMATITE_ORE,           1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_BROWN_LIMONITE_ORE,     1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_YELLOW_LIMONITE_ORE,    1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_BANDED_IRON_ORE,        1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_VANADIUM_MAGNETITE_ORE, 1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_CHALCOPYRITE_ORE,  1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_TETRAHEDRITE_ORE,  1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_MALACHITE_ORE,     1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_GALENA_ORE,        1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_SPHALERITE_ORE,    1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_GARNIERITE_ORE,    1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_PENTLANDITE_ORE,   1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_COBALTITE_ORE,     1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_PYRITE_ORE,        1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_ARSENOPYRITE_ORE,  1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_SULFUR_ORE,        1.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_CINNABAR_ORE,      1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_CASSITERITE_ORE,   1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_SCHEELITE_ORE,     1.8f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_WOLFRAMITE_ORE,    1.8f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_MOLYBDENITE_ORE,   1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_CHROMITE_ORE,      1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_ILMENITE_ORE,      1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_RUTILE_ORE,        1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_URANINITE_ORE,     1.8f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_PITCHBLENDE_ORE,   1.8f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_MONAZITE_ORE,      1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_NAQUADAH_ORE,      2.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_TRINIUM_ORE,       2.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_OSMIUM_ORE,        2.0f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_PALLADIUM_ORE,     1.8f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_RUBY_ORE,          1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_NEODYMIUM_ORE,     1.8f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_CERIUM_ORE,        1.8f, ToolKind.PICKAXE, TIER_DIAMOND);
+        put(BlockType.SMALL_PYROLUSITE_ORE,    1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_GRAPHITE_ORE,      1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_LITHIUM_ORE,       1.2f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMALL_VANADINITE_ORE,    1.5f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.SMALL_BASTNASITE_ORE,    1.5f, ToolKind.PICKAXE, TIER_IRON);
+
         // Dimension blocks.
         put(BlockType.NETHERRACK, 1.2f, ToolKind.PICKAXE, TIER_HAND);
         put(BlockType.SOUL_SAND, 0.5f, ToolKind.NONE, TIER_HAND);

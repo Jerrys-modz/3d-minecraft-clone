@@ -101,11 +101,19 @@ public class Chest implements BlockEntity, StorageContainer {
         return total;
     }
 
+    /**
+     * Format version byte written at the start of the chest payload.
+     * 0 = legacy byte-ID format (IDs 0-255 only).
+     * 1 = short-ID format (IDs 0-32767, added when IDs exceeded 255).
+     */
+    private static final byte PAYLOAD_VERSION = 1;
+
     /** Writes the chest's slots to {@code out} (see {@link ChunkStorage}). */
     @Override
     public void writeTo(DataOutput out) throws IOException {
+        out.writeByte(PAYLOAD_VERSION);
         for (int i = 0; i < SLOT_COUNT; i++) {
-            out.writeByte(types[i] == null ? 0 : types[i].id);
+            out.writeShort(types[i] == null ? 0 : types[i].id);
             out.writeByte(counts[i]);
         }
     }
@@ -113,15 +121,40 @@ public class Chest implements BlockEntity, StorageContainer {
     /** Restores the slots written by {@link #writeTo}. */
     @Override
     public void readFrom(DataInput in) throws IOException {
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            int id = in.readUnsignedByte();
-            int count = in.readUnsignedByte();
-            if (id == 0 || count <= 0) {
-                types[i] = null;
-                counts[i] = 0;
+        byte maybeVersion = in.readByte();
+        boolean newFormat = (maybeVersion == PAYLOAD_VERSION);
+        if (newFormat) {
+            for (int i = 0; i < SLOT_COUNT; i++) {
+                int id = in.readUnsignedShort();
+                int count = in.readUnsignedByte();
+                if (id == 0 || count <= 0) {
+                    types[i] = null;
+                    counts[i] = 0;
+                } else {
+                    types[i] = BlockType.byId(id);
+                    counts[i] = count;
+                }
+            }
+        } else {
+            // Legacy format: maybeVersion was actually the first slot's byte ID.
+            int legacyCount = in.readUnsignedByte();
+            if (legacyCount <= 0) {
+                types[0] = null;
+                counts[0] = 0;
             } else {
-                types[i] = BlockType.byId((byte) id);
-                counts[i] = count;
+                types[0] = BlockType.byId(maybeVersion & 0xFF);
+                counts[0] = legacyCount;
+            }
+            for (int i = 1; i < SLOT_COUNT; i++) {
+                int id = in.readUnsignedByte();
+                int count = in.readUnsignedByte();
+                if (id == 0 || count <= 0) {
+                    types[i] = null;
+                    counts[i] = 0;
+                } else {
+                    types[i] = BlockType.byId(id);
+                    counts[i] = count;
+                }
             }
         }
     }

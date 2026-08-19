@@ -4,6 +4,7 @@ import com.minecraftclone.Settings;
 import com.minecraftclone.engine.GamepadBindings;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.engine.graphics.FontAtlas;
+import com.minecraftclone.engine.graphics.GLTexture;
 import com.minecraftclone.engine.graphics.GuiTextures;
 import com.minecraftclone.engine.graphics.IconMesh;
 import com.minecraftclone.engine.graphics.ItemTextures;
@@ -31,6 +32,8 @@ import org.joml.Vector4f;
 import java.util.List;
 
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
+import static org.lwjgl.opengl.GL13.glActiveTexture;
 
 /**
  * Draws all 2D overlay elements: the crosshair, the wireframe outline around
@@ -152,6 +155,19 @@ public class Hud {
     private final IconMesh guiQuadMesh = new IconMesh();
     private final FloatArray guiVerts = new FloatArray(512);
     private final IntArray guiInds = new IntArray(256);
+
+    // Cached mini-map resources to avoid recreating every frame.
+    private java.awt.image.BufferedImage cachedMiniMapImage;
+    private int cachedMiniMapTextureId = -1;
+    private int cachedMiniMapVersion = -1;
+    private final IconMesh miniMapMesh = new IconMesh();
+    private float cachedMiniMapSizeX, cachedMiniMapSizeY, cachedMiniMapOffsetX, cachedMiniMapOffsetY;
+
+    // Cached full-screen map resources.
+    private java.awt.image.BufferedImage cachedFullMapImage;
+    private int cachedFullMapVersion = -1;
+    private int cachedFullMapTextureId = -1;
+    private final IconMesh fullMapMesh = new IconMesh();
 
     // Reusable per-frame scratch buffers for the hotbar icon batch and wear bars,
     // so building the HUD doesn't allocate (or box) anything on the hot path.
@@ -1983,6 +1999,127 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    /**
+     * Renders a mini-map image in the top-right corner of the screen.
+     * Caches the texture and mesh to avoid recreating them every frame.
+     * Pass {@code null} image to clear the cache (e.g., when changing worlds).
+     * {@code imageVersion} comes from {@link com.minecraftclone.engine.MapRenderer#getMiniMapVersion()}
+     * and increments each time the renderer redraws into its cached image; Hud uses it
+     * to detect pixel changes that don't change the image reference.
+     */
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion, float sizeX, float sizeY, float offsetX, float offsetY, float aspectRatio) {
+        if (miniMapImage == null) {
+            // Clear cache when no image provided
+            if (cachedMiniMapTextureId >= 0) {
+                glDeleteTextures(cachedMiniMapTextureId);
+                cachedMiniMapTextureId = -1;
+                miniMapMesh.destroy();
+            }
+            cachedMiniMapImage = null;
+            cachedMiniMapVersion = -1;
+            return;
+        }
+
+        // Check if image pixels or layout has changed
+        boolean imageChanged = cachedMiniMapImage != miniMapImage || cachedMiniMapVersion != imageVersion;
+        boolean layoutChanged = cachedMiniMapSizeX != sizeX || cachedMiniMapSizeY != sizeY
+                             || cachedMiniMapOffsetX != offsetX || cachedMiniMapOffsetY != offsetY;
+
+        // Re-upload texture whenever the renderer has redrawn
+        if (imageChanged) {
+            if (cachedMiniMapTextureId >= 0) {
+                glDeleteTextures(cachedMiniMapTextureId);
+            }
+            cachedMiniMapTextureId = GLTexture.upload(miniMapImage);
+            cachedMiniMapImage = miniMapImage;
+            cachedMiniMapVersion = imageVersion;
+        }
+
+        // Rebuild mesh if image or layout has changed
+        if (imageChanged || layoutChanged) {
+            cachedMiniMapSizeX = sizeX;
+            cachedMiniMapSizeY = sizeY;
+            cachedMiniMapOffsetX = offsetX;
+            cachedMiniMapOffsetY = offsetY;
+
+            float minX = offsetX - sizeX / 2f;
+            float maxX = offsetX + sizeX / 2f;
+            float minY = offsetY - sizeY / 2f;
+            float maxY = offsetY + sizeY / 2f;
+
+            float[] verts = {
+                minX, minY, 0f, 1f,  // bottom-left: v=1
+                maxX, minY, 1f, 1f,  // bottom-right: v=1
+                maxX, maxY, 1f, 0f,  // top-right: v=0
+                minX, maxY, 0f, 0f,  // top-left: v=0
+            };
+            int[] inds = {0, 1, 2, 0, 2, 3};
+            miniMapMesh.upload(verts, inds);
+        }
+
+        glDisable(GL_DEPTH_TEST);
+        hudShader.bind();
+        hudShader.setUniform("transform", new Matrix4f().identity().scale(1f / aspectRatio, 1f, 1f));
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, cachedMiniMapTextureId);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", new Vector4f(1f, 1f, 1f, 1f));
+        miniMapMesh.render();
+        hudShader.unbind();
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
+     * Renders the full-screen map image, filling the entire viewport.
+     * Pass {@code null} to clear the cached texture (e.g. when closing the map).
+     * {@code imageVersion} comes from {@link com.minecraftclone.engine.MapRenderer#getFullMapVersion()}
+     * and increments each time the renderer redraws into its cached image.
+     */
+    public void renderFullMap(java.awt.image.BufferedImage mapImage, int imageVersion) {
+        if (mapImage == null) {
+            if (cachedFullMapTextureId >= 0) {
+                glDeleteTextures(cachedFullMapTextureId);
+                cachedFullMapTextureId = -1;
+                fullMapMesh.destroy();
+            }
+            cachedFullMapImage = null;
+            cachedFullMapVersion = -1;
+            return;
+        }
+
+        if (cachedFullMapImage != mapImage || cachedFullMapVersion != imageVersion) {
+            if (cachedFullMapTextureId >= 0) {
+                glDeleteTextures(cachedFullMapTextureId);
+            }
+            cachedFullMapTextureId = GLTexture.upload(mapImage);
+            cachedFullMapImage = mapImage;
+            cachedFullMapVersion = imageVersion;
+
+            // Full-screen quad: NDC −1..+1 in both axes, UV 0..1 with v flipped
+            float[] verts = {
+                -1f, -1f, 0f, 1f,  // bottom-left: v=1
+                 1f, -1f, 1f, 1f,  // bottom-right: v=1
+                 1f,  1f, 1f, 0f,  // top-right: v=0
+                -1f,  1f, 0f, 0f,  // top-left: v=0
+            };
+            int[] inds = {0, 1, 2, 0, 2, 3};
+            fullMapMesh.upload(verts, inds);
+        }
+
+        glDisable(GL_DEPTH_TEST);
+        hudShader.bind();
+        hudShader.setUniform("transform", new Matrix4f().identity());
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, cachedFullMapTextureId);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", new Vector4f(1f, 1f, 1f, 1f));
+        fullMapMesh.render();
+        hudShader.unbind();
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glEnable(GL_DEPTH_TEST);
+    }
+
     public void destroy() {
         crosshair.destroy();
         cubeOutline.destroy();
@@ -2004,5 +2141,15 @@ public class Hud {
         settingsFill.destroy();
         guiQuadMesh.destroy();
         frostOverlay.destroy();
+        if (cachedMiniMapTextureId >= 0) {
+            glDeleteTextures(cachedMiniMapTextureId);
+            cachedMiniMapTextureId = -1;
+        }
+        miniMapMesh.destroy();
+        if (cachedFullMapTextureId >= 0) {
+            glDeleteTextures(cachedFullMapTextureId);
+            cachedFullMapTextureId = -1;
+        }
+        fullMapMesh.destroy();
     }
 }

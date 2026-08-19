@@ -99,6 +99,7 @@ public class TerrainGenerator implements WorldGenerator {
     private final Noise caveNoise;
     private final Noise riverNoise;
     private final Noise oreNoise;
+    private final GthnOreGenerator gthnOreGenerator;
     private final long seed;
     private final int seaLevel;
     private final boolean structures;
@@ -120,6 +121,7 @@ public class TerrainGenerator implements WorldGenerator {
         this.caveNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
         this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
         this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
+        this.gthnOreGenerator = new GthnOreGenerator(seed, seaLevel);
     }
 
     @Override
@@ -673,12 +675,18 @@ public class TerrainGenerator implements WorldGenerator {
     }
 
     /**
-     * Ore veins: independent 3D noise fields per ore type (decorrelated via large
-     * coordinate offsets), each gated to a depth range and rarity threshold -
-     * rarer/deeper ores are checked first so an unlikely overlap resolves in
-     * favor of the rarer one. Falls back to plain stone.
+     * Ore generation: GTNH ores take priority over vanilla ores, providing a rich
+     * stratified ore system with both small indicator ores and large vein clusters.
+     * Falls back to vanilla ores (coal, iron, gold, diamond) and then stone.
      */
     private BlockType oreAt(int wx, int y, int wz) {
+        // Try GTNH ore generation first (more diverse ore types)
+        BlockType gthnOre = gthnOreGenerator.oreAt(wx, y, wz);
+        if (gthnOre != BlockType.STONE) {
+            return gthnOre;
+        }
+
+        // Vanilla ore generation as fallback
         if (y >= 5 && y <= 16 && oreNoise.fbm3(wx * 0.11 + 1000, y * 0.11, wz * 0.11 + 1000, 1, 0.5, 2.0) > 0.786) {
             return BlockType.DIAMOND_ORE;
         }

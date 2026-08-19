@@ -19,8 +19,8 @@ class ChunkStorageTest {
     /** A GL-free stand-in for {@link Chunk} (whose Mesh construction needs an OpenGL context). */
     private static final class StubChunk implements ChunkStorage.PersistableChunk {
         private final ChunkPos pos;
-        private final byte[] blocks = new byte[Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE];
-        private final byte[] overlays = new byte[blocks.length];
+        private final short[] blocks = new short[Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE];
+        private final short[] overlays = new short[blocks.length];
         private final byte[] orientations = new byte[blocks.length];
 
         StubChunk(ChunkPos pos) {
@@ -33,22 +33,22 @@ class ChunkStorageTest {
         }
 
         @Override
-        public byte[] getRawBlocks() {
+        public short[] getRawBlocks() {
             return blocks;
         }
 
         @Override
-        public void setRawBlocks(byte[] data) {
+        public void setRawBlocks(short[] data) {
             System.arraycopy(data, 0, blocks, 0, Math.min(data.length, blocks.length));
         }
 
         @Override
-        public byte[] getRawOverlays() {
+        public short[] getRawOverlays() {
             return overlays;
         }
 
         @Override
-        public void setRawOverlays(byte[] data) {
+        public void setRawOverlays(short[] data) {
             System.arraycopy(data, 0, overlays, 0, Math.min(data.length, overlays.length));
         }
 
@@ -299,12 +299,13 @@ class ChunkStorageTest {
         try {
             ChunkStorage storage = new ChunkStorage(dir);
             ChunkPos pos = new ChunkPos(2, 2);
-            StubChunk a = new StubChunk(pos);
-            byte[] blocks = a.getRawBlocks();
-            blocks[0] = BlockType.FURNACE.id;
-            blocks[1] = BlockType.STONE.id;
-            byte[] overlays = a.getRawOverlays();
-            overlays[0] = BlockType.SEAWEED.id;
+            int nBlocks = Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE;
+            // Simulate an old byte-format file (no magic byte, raw byte IDs).
+            byte[] blocks = new byte[nBlocks];
+            blocks[0] = (byte) BlockType.FURNACE.id;
+            blocks[1] = (byte) BlockType.STONE.id;
+            byte[] overlays = new byte[nBlocks];
+            overlays[0] = (byte) BlockType.SEAWEED.id;
             // Write blocks + overlays only (no orientation half, no entities) - the
             // shape of a file saved before orientations existed.
             Path file = dir.resolve("chunks").resolve("c_2_2.chunk");
@@ -330,9 +331,10 @@ class ChunkStorageTest {
         try {
             ChunkStorage storage = new ChunkStorage(dir);
             ChunkPos pos = new ChunkPos(1, 1);
-            StubChunk a = new StubChunk(pos);
-            byte[] blocks = a.getRawBlocks();
-            blocks[0] = BlockType.GRASS.id;
+            int nBlocks = Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE;
+            // Simulate an old byte-format file (no magic byte, raw byte IDs).
+            byte[] blocks = new byte[nBlocks];
+            blocks[0] = (byte) BlockType.GRASS.id;
             // Write just the blocks half (no overlays, no entity section) - the
             // shape of a file saved before those sections existed.
             Path file = dir.resolve("chunks").resolve("c_1_1.chunk");
@@ -342,7 +344,7 @@ class ChunkStorageTest {
             StubChunk b = new StubChunk(pos);
             assertTrue(storage.load(b).isEmpty());
             assertEquals(BlockType.GRASS.id, b.getRawBlocks()[0]);
-            for (byte o : b.getRawOverlays()) {
+            for (short o : b.getRawOverlays()) {
                 assertEquals(0, o, "overlays default to empty");
             }
         } finally {
