@@ -18,6 +18,7 @@ import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
+import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.player.ToolDurability;
 import com.minecraftclone.world.gen.WorldGenSettings;
 import com.minecraftclone.util.FloatArray;
@@ -365,7 +366,7 @@ public class Hud {
         float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
         for (int i = 0; i < count; i++) {
             addSlotIcon(slotCenterX(i, count), centerY, iconHalf,
-                    inventory.typeOf(i), inventory.countOf(i), itemTextures, atlas, durability);
+                    inventory.stackOf(i), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
@@ -397,10 +398,16 @@ public class Hud {
      * Adds one slot's icon to the batch: block icons accumulate into the shared
      * atlas batch, item icons draw immediately (their own texture), counts go
      * to the text batch, and worn tools record a wear-bar entry.
+     * <p>
+     * Accepts a full {@link ItemStack} so Tinkers' Construct parts and tools
+     * render with their real per-item texture (via
+     * {@link ItemTextures#bindTinkersItem}) rather than the grey sentinel placeholder.
      */
-    private void addSlotIcon(float cx, float cy, float half, BlockType type, int count,
+    private void addSlotIcon(float cx, float cy, float half, ItemStack stack,
                              ItemTextures itemTextures, TextureAtlas atlas, ToolDurability durability) {
-        if (type == null) return;
+        if (stack == null || stack.isEmpty()) return;
+        BlockType type = stack.type();
+        int count = stack.count();
         if (type.isItem) {
             float[] qv = {
                     cx - half, cy - half, 0f, 1f,
@@ -413,7 +420,12 @@ public class Hud {
             hudShader.setUniform("transform", hudTransform);
             hudShader.setUniform("atlas", 0);
             hudShader.setUniform("color", WHITE);
-            itemTextures.bind(type);
+            // Tinkers items carry a per-item payload that determines the real texture.
+            if (stack.isTinkers()) {
+                itemTextures.bindTinkersItem(stack.tinkersItem());
+            } else {
+                itemTextures.bind(type);
+            }
             hotbarItemIcon.render();
             hudShader.unbind();
         } else {
@@ -426,7 +438,15 @@ public class Hud {
             float digitSize = 0.028f;
             text.add(countText, cx + half - text.measure(countText, digitSize), cy - half, digitSize);
         }
-        if (Mining.isTool(type) || Armor.isArmor(type)) {
+        // Durability bar: Tinkers tools track wear per-item; vanilla tools use the shared ToolDurability map.
+        if (stack.isTinkersTool()) {
+            float fraction = stack.tinkersTool().fraction();
+            if (fraction < 1f) {
+                barCx.add(cx);
+                barCy.add(cy);
+                barFrac.add(fraction);
+            }
+        } else if (Mining.isTool(type) || Armor.isArmor(type)) {
             float fraction = durability.fraction(type);
             if (fraction < 1f) {
                 barCx.add(cx);
@@ -1614,13 +1634,12 @@ public class Hud {
         float iconHalf = INV_SLOT / 2f - 0.006f;
         for (int id = 0; id < gui.slotCount(); id++) {
             float[] c = slotCenter(gui, id);
-            BlockType t = gui.typeOf(id);
-            if (t != null) addSlotIcon(c[0], c[1], iconHalf, t, gui.countOf(id), itemTextures, atlas, durability);
+            addSlotIcon(c[0], c[1], iconHalf, gui.stackOf(id), itemTextures, atlas, durability);
         }
         Crafting.Recipe recipe = gui.currentRecipe();
         if (recipe != null) {
             float[] c = slotCenter(gui, ContainerGui.OUTPUT_SLOT);
-            addSlotIcon(c[0], c[1], iconHalf, recipe.output(), recipe.outputAmount(), itemTextures, atlas, durability);
+            addSlotIcon(c[0], c[1], iconHalf, ItemStack.of(recipe.output(), recipe.outputAmount()), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
@@ -1628,8 +1647,7 @@ public class Hud {
 
         // Cursor stack following the mouse, drawn on top.
         if (controller.hasCursorItem()) {
-            drawCursorStack(atlas, itemTextures, controller.cursorType(), controller.cursorCount(),
-                    cursorLx + 0.02f, cursorLy - 0.02f);
+            drawCursorStack(atlas, itemTextures, controller.cursor(), cursorLx + 0.02f, cursorLy - 0.02f);
         }
 
         // Tooltip for the hovered slot.
@@ -1709,7 +1727,10 @@ public class Hud {
     }
 
     /** Draws the cursor stack (icon + count) at the given logical position, above everything else. */
-    private void drawCursorStack(TextureAtlas atlas, ItemTextures itemTextures, BlockType type, int count, float cx, float cy) {
+    private void drawCursorStack(TextureAtlas atlas, ItemTextures itemTextures, ItemStack stack, float cx, float cy) {
+        if (stack == null || stack.isEmpty()) return;
+        BlockType type = stack.type();
+        int count = stack.count();
         float half = INV_SLOT / 2f;
         if (type.isItem) {
             float[] qv = {
@@ -1723,7 +1744,11 @@ public class Hud {
             hudShader.setUniform("transform", hudTransform);
             hudShader.setUniform("atlas", 0);
             hudShader.setUniform("color", WHITE);
-            itemTextures.bind(type);
+            if (stack.isTinkers()) {
+                itemTextures.bindTinkersItem(stack.tinkersItem());
+            } else {
+                itemTextures.bind(type);
+            }
             hotbarItemIcon.render();
             hudShader.unbind();
         } else {
@@ -1910,7 +1935,7 @@ public class Hud {
         beginSlotBatch();
         for (int i = 0; i < items.length; i++) {
             float[] c = catalogItemCenter(i);
-            addSlotIcon(c[0], c[1], half, items[i], 1, itemTextures, atlas, durability);
+            addSlotIcon(c[0], c[1], half, ItemStack.of(items[i], 1), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
@@ -1934,7 +1959,7 @@ public class Hud {
         float hotbarHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
         for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
             addSlotIcon(slotCenterX(i, Inventory.HOTBAR_SIZE), centerY, hotbarHalf,
-                    inventory.typeOf(i), inventory.countOf(i), itemTextures, atlas, durability);
+                    inventory.stackOf(i), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
@@ -1978,8 +2003,7 @@ public class Hud {
 
         // Cursor stack following the mouse.
         if (controller.hasCursorItem()) {
-            drawCursorStack(atlas, itemTextures, controller.cursorType(), controller.cursorCount(),
-                    cursorLx + 0.02f, cursorLy - 0.02f);
+            drawCursorStack(atlas, itemTextures, controller.cursor(), cursorLx + 0.02f, cursorLy - 0.02f);
         }
 
         // Tooltip for the hovered catalog item or hotbar slot.
