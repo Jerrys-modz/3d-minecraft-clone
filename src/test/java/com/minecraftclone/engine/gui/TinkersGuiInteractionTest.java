@@ -50,6 +50,23 @@ class TinkersGuiInteractionTest {
     }
 
     @Test
+    void partBuilderMaterialSlotRejectsNonMaterialWithoutEatingCursor() {
+        PartBuilderGui pb = new PartBuilderGui();
+        ContainerGui gui = ContainerGui.forPartBuilder(inventory, pb);
+        InventoryController ctrl = new InventoryController(gui);
+
+        inventory.setSlot(0, BlockType.DIRT, 8);
+        ctrl.click(0, false, false);
+        assertEquals(BlockType.DIRT, ctrl.cursorType());
+        assertEquals(8, ctrl.cursorCount());
+
+        ctrl.click(ContainerGui.PB_MATERIAL_SLOT, false, false);
+        assertTrue(pb.materialSlot().isEmpty(), "Dirt must not enter the material slot");
+        assertEquals(BlockType.DIRT, ctrl.cursorType());
+        assertEquals(8, ctrl.cursorCount());
+    }
+
+    @Test
     void partBuilderShapeButtonTogglesSelection() {
         PartBuilderGui pb = new PartBuilderGui();
         ContainerGui gui = ContainerGui.forPartBuilder(inventory, pb);
