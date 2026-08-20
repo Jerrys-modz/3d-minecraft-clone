@@ -95,16 +95,12 @@ public class Hud {
     private static final float FURNACE_ARROW_X0 = FURNACE_FLAME_X + 0.035f;
     private static final float FURNACE_ARROW_X1 = FURNACE_OUTPUT_X - 0.09f;
 
-    // Part Builder GUI layout. Material slot on the left, 8 shape buttons in a
-    // 2-column grid in the centre, output slot on the right — all above the
-    // player's inventory rows.
-    private static final float PB_MAT_X       = -0.72f;
-    private static final float PB_MAT_Y       = INV_TOP_ROW_Y + 2 * INV_STEP - 0.01f;
-    private static final float PB_SHAPE_X0    = -0.33f;        // shape grid left column x
-    private static final float PB_SHAPE_X1    = PB_SHAPE_X0 + INV_STEP;
-    private static final float PB_SHAPE_TOP_Y = PB_MAT_Y + INV_STEP;
-    private static final float PB_OUT_X       = 0.55f;
-    private static final float PB_OUT_Y       = PB_MAT_Y;
+    // Part Builder GUI layout. The station sits above the player's inventory
+    // with the same gap as the chest / crafting-table screens, so the shape
+    // buttons never collide with the bag. Material on the inventory's left
+    // column, a compact 4×2 shape grid in the middle, output on the right.
+    private static final int PB_SHAPE_COLS = 4;
+    private static final float PB_STATION_BOTTOM_Y = INV_TOP_ROW_Y + TABLE_CRAFT_GAP;
 
     // Tool Station GUI layout. Five input slots in a horizontal row on the
     // left/centre, output slot on the right.
@@ -481,6 +477,37 @@ public class Hud {
                 barFrac.add(fraction);
             }
         }
+    }
+
+    /**
+     * Silhouette of a Part Builder shape button. Uses the loaded material's
+     * colour when one is in the slot so the player can preview the part;
+     * the selected shape is gold-tinted, unselected ones are translucent
+     * so they read as buttons rather than items sitting in the bag.
+     */
+    private void addGhostPartIcon(float cx, float cy, float half,
+                                  com.minecraftclone.world.tinkers.ToolPartType shape,
+                                  BlockType material, ItemTextures itemTextures, boolean selected) {
+        if (itemTextures == null || shape == null) return;
+        BlockType mat = material != null ? material : BlockType.PLANKS;
+        ItemStack ghost = ItemStack.tinkersPart(
+                new com.minecraftclone.world.tinkers.TinkersItem.Part(shape, mat));
+        float[] qv = {
+                cx - half, cy - half, 0f, 1f,
+                cx + half, cy - half, 1f, 1f,
+                cx + half, cy + half, 1f, 0f,
+                cx - half, cy + half, 0f, 0f,
+        };
+        hotbarItemIcon.upload(qv, QUAD_INDICES);
+        hudShader.bind();
+        hudShader.setUniform("transform", hudTransform);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", selected
+                ? new Vector4f(1f, 0.92f, 0.35f, 1f)
+                : new Vector4f(1f, 1f, 1f, 0.50f));
+        itemTextures.bindTinkersItem(ghost.tinkersItem());
+        hotbarItemIcon.render();
+        hudShader.unbind();
     }
 
     /** Uploads and draws the accumulated block-icon batch. */
@@ -1352,7 +1379,70 @@ public class Hud {
     }
 
     private float invGridLeft() {
-        return INV_GRID_CENTER_X - invGridWidth() / 2f + INV_SLOT / 2f;
+        return invGridLeftX();
+    }
+
+    /** Center x of the player's inventory column 0. Package-visible for layout tests. */
+    static float invGridLeftX() {
+        float gridW = 9 * INV_SLOT + 8 * INV_GAP;
+        return INV_GRID_CENTER_X - gridW / 2f + INV_SLOT / 2f;
+    }
+
+    /** Hit-box size of a container slot in logical-square units. */
+    static float containerSlotSize() {
+        return INV_SLOT;
+    }
+
+    static float pbStationBottomY() {
+        return PB_STATION_BOTTOM_Y;
+    }
+
+    static float pbShapeTopY() {
+        int rows = (ContainerGui.PB_SHAPE_COUNT + PB_SHAPE_COLS - 1) / PB_SHAPE_COLS;
+        return PB_STATION_BOTTOM_Y + (rows - 1) * INV_STEP;
+    }
+
+    static float pbShapeLeftX() {
+        return invGridLeftX() + 2 * INV_STEP;
+    }
+
+    static float pbMatX() { return invGridLeftX(); }
+    static float pbOutX() { return invGridLeftX() + 8 * INV_STEP; }
+    static float pbMatY() { return (PB_STATION_BOTTOM_Y + pbShapeTopY()) / 2f; }
+    static float pbOutY() { return pbMatY(); }
+
+    static float pbShapeX(int index) {
+        return pbShapeLeftX() + (index % PB_SHAPE_COLS) * INV_STEP;
+    }
+
+    static float pbShapeY(int index) {
+        return pbShapeTopY() - (index / PB_SHAPE_COLS) * INV_STEP;
+    }
+
+    /** Logical-square center of a Part Builder slot, or {@code null} if not a PB slot. */
+    static float[] partBuilderSlotCenter(int slotId) {
+        if (slotId == ContainerGui.PB_MATERIAL_SLOT) return new float[]{pbMatX(), pbMatY()};
+        if (slotId == ContainerGui.PB_OUTPUT_SLOT)   return new float[]{pbOutX(), pbOutY()};
+        if (slotId >= ContainerGui.PB_SHAPE_SLOT_0
+                && slotId < ContainerGui.PB_SHAPE_SLOT_0 + ContainerGui.PB_SHAPE_COUNT) {
+            int i = slotId - ContainerGui.PB_SHAPE_SLOT_0;
+            return new float[]{pbShapeX(i), pbShapeY(i)};
+        }
+        return null;
+    }
+
+    /** Logical-square center of a player-inventory slot (0..35), ignoring chest shift. */
+    static float[] playerInventorySlotCenter(int slotId) {
+        int r, c;
+        if (slotId < Inventory.HOTBAR_SIZE) {
+            r = 3;
+            c = slotId;
+        } else {
+            int s = slotId - Inventory.HOTBAR_SIZE;
+            r = s / 9;
+            c = s % 9;
+        }
+        return new float[]{invGridLeftX() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP};
     }
 
     /** True for the placed 3x3 / 5x5 workbenches (not the player's 2x2). */
@@ -1408,15 +1498,10 @@ public class Hud {
 
     /** Center (logical x, y) of the given slot id in the open gui; see {@link ContainerGui} for numbering. */
     private float[] slotCenter(ContainerGui gui, int slotId) {
-        // Part Builder slots
-        if (gui.isPbMaterialSlot(slotId))  return new float[]{PB_MAT_X, PB_MAT_Y};
-        if (gui.isPbOutputSlot(slotId))    return new float[]{PB_OUT_X, PB_OUT_Y};
-        if (gui.isPbShapeSlot(slotId)) {
-            int i = slotId - ContainerGui.PB_SHAPE_SLOT_0;
-            int row = i / 2, col = i % 2;
-            float x = col == 0 ? PB_SHAPE_X0 : PB_SHAPE_X1;
-            float y = PB_SHAPE_TOP_Y - row * INV_STEP;
-            return new float[]{x, y};
+        // Part Builder slots — stacked above the bag, 4×2 shape grid.
+        if (gui.kind() == ContainerGui.Kind.PART_BUILDER) {
+            float[] pb = partBuilderSlotCenter(slotId);
+            if (pb != null) return pb;
         }
         // Tool Station slots
         if (gui.isTsInputSlot(slotId)) {
@@ -1635,9 +1720,9 @@ public class Hud {
             panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
             panelTop   = chestTopRowY(gui) + INV_SLOT / 2f + 0.055f - shift;
         } else if (gui.kind() == ContainerGui.Kind.PART_BUILDER) {
-            panelLeft  = PB_MAT_X - INV_SLOT / 2f - 0.04f;
-            panelRight = PB_OUT_X + INV_SLOT / 2f + 0.04f;
-            panelTop   = PB_SHAPE_TOP_Y + INV_SLOT / 2f + 0.055f;
+            panelLeft  = INV_GRID_CENTER_X - gridW / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = pbShapeTopY() + INV_SLOT / 2f + 0.10f;
         } else if (gui.kind() == ContainerGui.Kind.TOOL_STATION) {
             panelLeft  = TS_SLOTS_LEFT_X - INV_SLOT / 2f - 0.04f;
             panelRight = TS_OUT_X + INV_SLOT / 2f + 0.04f;
@@ -1721,8 +1806,10 @@ public class Hud {
         // inventory, so the two spaces read as separate sections at a glance.
         // The chest's bottom row sits CHEST_BOTTOM_ROW_Y above the player's top
         // row, leaving a clear gap for it. Table crafting uses the same gap.
-        if (chest || isTableCrafting(gui)) {
-            float upperBottom = chest ? CHEST_BOTTOM_ROW_Y : tableCraftBottomY();
+        if (chest || isTableCrafting(gui) || gui.kind() == ContainerGui.Kind.PART_BUILDER) {
+            float upperBottom = chest ? CHEST_BOTTOM_ROW_Y
+                    : isTableCrafting(gui) ? tableCraftBottomY()
+                    : PB_STATION_BOTTOM_Y;
             float sepCenter = (upperBottom + INV_TOP_ROW_Y) / 2f - shift;
             float sepHalf = 0.016f;
             inventoryPanel.upload(new float[]{
@@ -1762,8 +1849,22 @@ public class Hud {
         // output is derived from the recipe rather than stored).
         beginSlotBatch();
         float iconHalf = INV_SLOT / 2f - 0.006f;
+        com.minecraftclone.world.tinkers.PartBuilderGui pbGui =
+                gui.kind() == ContainerGui.Kind.PART_BUILDER ? gui.partBuilderGui() : null;
+        BlockType pbGhostMat = (pbGui != null && pbGui.materialType() != null)
+                ? pbGui.materialType() : BlockType.PLANKS;
+        com.minecraftclone.world.tinkers.ToolPartType pbSelected =
+                pbGui != null ? pbGui.selectedShape() : null;
         for (int id = 0; id < gui.slotCount(); id++) {
             float[] c = slotCenter(gui, id);
+            if (gui.isPbShapeSlot(id)) {
+                int idx = id - ContainerGui.PB_SHAPE_SLOT_0;
+                com.minecraftclone.world.tinkers.ToolPartType shape =
+                        com.minecraftclone.world.tinkers.ToolPartType.values()[idx];
+                addGhostPartIcon(c[0], c[1], iconHalf, shape, pbGhostMat, itemTextures,
+                        shape == pbSelected);
+                continue;
+            }
             addSlotIcon(c[0], c[1], iconHalf, gui.stackOf(id), itemTextures, atlas, durability);
         }
         Crafting.Recipe recipe = gui.currentRecipe();
@@ -1869,8 +1970,10 @@ public class Hud {
     }
 
     /**
-     * Draws Part Builder decorations: a gold selection border around the active shape button,
-     * a "→" arrow between the material slot and output slot, and shape-name text labels.
+     * Draws Part Builder decorations: a gold selection border around the active
+     * shape button, an arrow from the shape grid to the output slot (never
+     * through the buttons), and Material / Output labels that sit above those
+     * slots — well clear of the shape grid and the inventory below.
      */
     private void renderPartBuilderDecorations(ContainerGui gui) {
         com.minecraftclone.world.tinkers.PartBuilderGui pb = gui.partBuilderGui();
@@ -1888,9 +1991,8 @@ public class Hud {
                     com.minecraftclone.world.tinkers.ToolPartType.values();
             for (int i = 0; i < shapes.length; i++) {
                 if (shapes[i] == sel) {
-                    int row = i / 2, col = i % 2;
-                    float sx = col == 0 ? PB_SHAPE_X0 : PB_SHAPE_X1;
-                    float sy = PB_SHAPE_TOP_Y - row * INV_STEP;
+                    float sx = pbShapeX(i);
+                    float sy = pbShapeY(i);
                     float h = INV_SLOT / 2f + 0.005f;
                     inventoryHover.upload(outlineLines(sx, sy, h));
                     lineShader.setUniform("color", new Vector4f(1.0f, 0.82f, 0.1f, 1f));
@@ -1901,32 +2003,31 @@ public class Hud {
             }
         }
 
-        // Arrow from material → output.
+        // Arrow from the last shape column → output. Stops short of the grid
+        // so it never paints over the buttons.
         float arrowHalf = 0.016f;
-        float arrowMidY = PB_MAT_Y;
-        float arrowX0 = PB_MAT_X + INV_SLOT / 2f + 0.06f;
-        float arrowX1 = PB_OUT_X - INV_SLOT / 2f - 0.06f;
-        furnaceDeco.clear();
-        addQuad3(furnaceDeco, arrowX0, arrowMidY - arrowHalf, arrowX1, arrowMidY + arrowHalf);
-        inventoryPanel.upload(furnaceDeco.toArray());
-        lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
-        inventoryPanel.render();
+        float lastShapeX = pbShapeX(PB_SHAPE_COLS - 1);
+        float arrowX0 = lastShapeX + INV_SLOT / 2f + 0.02f;
+        float arrowX1 = pbOutX() - INV_SLOT / 2f - 0.02f;
+        if (arrowX1 > arrowX0) {
+            furnaceDeco.clear();
+            addQuad3(furnaceDeco, arrowX0, pbOutY() - arrowHalf, arrowX1, pbOutY() + arrowHalf);
+            inventoryPanel.upload(furnaceDeco.toArray());
+            lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
+            inventoryPanel.render();
+        }
 
         lineShader.unbind();
 
-        // Shape-name text labels next to each button.
+        // Short labels above the material and output slots only — shape names
+        // live in the hover tooltip so they don't collide with neighbouring buttons.
+        float labelSize = 0.020f;
+        float labelY = pbShapeTopY() + INV_SLOT / 2f + 0.012f;
         text.begin();
-        com.minecraftclone.world.tinkers.ToolPartType[] shapes =
-                com.minecraftclone.world.tinkers.ToolPartType.values();
-        for (int i = 0; i < shapes.length; i++) {
-            int row = i / 2, col = i % 2;
-            float sx = col == 0 ? PB_SHAPE_X0 : PB_SHAPE_X1;
-            float sy = PB_SHAPE_TOP_Y - row * INV_STEP;
-            float labelX = sx - INV_SLOT / 2f + 0.002f;
-            float labelY = sy + INV_SLOT / 2f + 0.004f;
-            String label = shapes[i].name().replace('_', ' ').toLowerCase(java.util.Locale.ROOT);
-            text.add(label, labelX, labelY, 0.018f);
-        }
+        String mat = "Material";
+        String out = "Output";
+        text.add(mat, pbMatX() - text.measure(mat, labelSize) / 2f, labelY, labelSize);
+        text.add(out, pbOutX() - text.measure(out, labelSize) / 2f, labelY, labelSize);
         text.render(hudTransform, new Vector4f(0.9f, 0.9f, 0.9f, 1f));
     }
 
