@@ -76,6 +76,14 @@ public class Hud {
     /** Center x of the vertical armor-slot column, just left of the player's inventory grid. */
     private static final float ARMOR_X = -0.40f;
 
+    /**
+     * Gap between the player's inventory top row and the bottom row of a
+     * crafting-table grid. Same spacing the chest GUI uses so the 3x3/5x5
+     * sits <em>above</em> the bag instead of sharing the 2x2 inventory's
+     * left-hand corner.
+     */
+    private static final float TABLE_CRAFT_GAP = 0.15f;
+
     // Furnace GUI layout (logical square units). The input/fuel slots sit in a
     // column to the left of the inventory grid, the output between them and the
     // grid, with a burn flame and a progress arrow between the two columns.
@@ -1337,6 +1345,36 @@ public class Hud {
         return INV_GRID_CENTER_X - invGridWidth() / 2f + INV_SLOT / 2f;
     }
 
+    /** True for the placed 3x3 / 5x5 workbenches (not the player's 2x2). */
+    private static boolean isTableCrafting(ContainerGui gui) {
+        return gui.kind() == ContainerGui.Kind.CRAFTING_TABLE
+                || gui.kind() == ContainerGui.Kind.ADVANCED_CRAFTING_TABLE;
+    }
+
+    /** Center y of a table-crafting grid's bottom row, stacked above the player inventory. */
+    private static float tableCraftBottomY() {
+        return INV_TOP_ROW_Y + TABLE_CRAFT_GAP;
+    }
+
+    /** Center x of column 0 of a table-crafting grid, aligned to the player's 9-wide bag. */
+    private float tableCraftLeftX() {
+        return invGridLeft();
+    }
+
+    /** Center y of row 0 of a table-crafting grid {@code height} rows tall. */
+    private float tableCraftTopY(int height) {
+        return tableCraftBottomY() + (height - 1) * INV_STEP;
+    }
+
+    /** Output slot just to the right of a {@code width}-column table grid, vertically centered. */
+    private float tableCraftOutputX(int width) {
+        return tableCraftLeftX() + width * INV_STEP + 0.06f;
+    }
+
+    private float tableCraftOutputY(int height) {
+        return tableCraftTopY(height) - (height - 1) * INV_STEP / 2f;
+    }
+
     /** Center y of the chest grid's bottom row - fixed, so the gap to the player grid below it is always the same. */
     private static final float CHEST_BOTTOM_ROW_Y = INV_TOP_ROW_Y + 0.15f;
 
@@ -1378,12 +1416,22 @@ public class Hud {
         if (gui.isTsOutputSlot(slotId))    return new float[]{TS_OUT_X, TS_OUT_Y};
 
         if (gui.isOutputSlot(slotId)) {
+            if (isTableCrafting(gui)) {
+                int n = gui.gridWidth();
+                return new float[]{tableCraftOutputX(n), tableCraftOutputY(n)};
+            }
             return new float[]{OUTPUT_X, OUTPUT_Y};
         }
         if (gui.isGridSlot(slotId)) {
             int g = slotId - ContainerGui.GRID_START;
             int width = gui.gridWidth();
             int r = g / width, c = g % width;
+            if (isTableCrafting(gui)) {
+                return new float[]{
+                        tableCraftLeftX() + c * INV_STEP,
+                        tableCraftTopY(width) - r * INV_STEP
+                };
+            }
             return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
         }
         if (gui.isArmorSlot(slotId)) {
@@ -1583,6 +1631,11 @@ public class Hud {
             panelLeft  = TS_SLOTS_LEFT_X - INV_SLOT / 2f - 0.04f;
             panelRight = TS_OUT_X + INV_SLOT / 2f + 0.04f;
             panelTop   = TS_SLOTS_Y + INV_SLOT / 2f + 0.055f;
+        } else if (isTableCrafting(gui)) {
+            int n = gui.gridWidth();
+            panelLeft  = invGridLeft() - INV_SLOT / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = tableCraftTopY(n) + INV_SLOT / 2f + 0.055f;
         } else {
             panelLeft  = CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
             panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
@@ -1648,12 +1701,18 @@ public class Hud {
             renderToolStationDecorations(gui);
         }
 
+        // Crafting-table arrow from the 3x3/5x5 to the result slot.
+        if (isTableCrafting(gui)) {
+            renderCraftingTableDecorations(gui);
+        }
+
         // A solid divider band between the chest's grid and the player's
         // inventory, so the two spaces read as separate sections at a glance.
         // The chest's bottom row sits CHEST_BOTTOM_ROW_Y above the player's top
-        // row, leaving a clear gap for it.
-        if (chest) {
-            float sepCenter = (CHEST_BOTTOM_ROW_Y + INV_TOP_ROW_Y) / 2f - shift;
+        // row, leaving a clear gap for it. Table crafting uses the same gap.
+        if (chest || isTableCrafting(gui)) {
+            float upperBottom = chest ? CHEST_BOTTOM_ROW_Y : tableCraftBottomY();
+            float sepCenter = (upperBottom + INV_TOP_ROW_Y) / 2f - shift;
             float sepHalf = 0.016f;
             inventoryPanel.upload(new float[]{
                     panelLeft + 0.02f, sepCenter - sepHalf, 0, panelRight - 0.02f, sepCenter - sepHalf, 0,
@@ -1874,6 +1933,33 @@ public class Hud {
             text.add(label, labelX, labelY, 0.018f);
         }
         text.render(hudTransform, new Vector4f(0.9f, 0.9f, 0.9f, 1f));
+    }
+
+    /**
+     * Draws the workbench arrow from the last column of the 3x3/5x5 to the result
+     * slot. Binds {@link #lineShader} itself — the textured panel path unbinds
+     * whatever shader it used right before decorations run.
+     */
+    private void renderCraftingTableDecorations(ContainerGui gui) {
+        int n = gui.gridWidth();
+        float lastColX = tableCraftLeftX() + (n - 1) * INV_STEP;
+        float outX = tableCraftOutputX(n);
+        float midY = tableCraftOutputY(n);
+        float arrowHalf = 0.016f;
+        float arrowX0 = lastColX + INV_SLOT / 2f + 0.02f;
+        float arrowX1 = outX - INV_SLOT / 2f - 0.02f;
+        if (arrowX1 <= arrowX0) return;
+
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        furnaceDeco.clear();
+        addQuad3(furnaceDeco, arrowX0, midY - arrowHalf, arrowX1, midY + arrowHalf);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
+        inventoryPanel.render();
+        lineShader.unbind();
     }
 
     /**
