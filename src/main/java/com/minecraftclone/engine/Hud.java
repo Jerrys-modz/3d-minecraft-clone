@@ -352,6 +352,7 @@ public class Hud {
     public void renderHotbar(TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
                               Inventory inventory, int selectedSlot, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
 
         int count = Inventory.HOTBAR_SIZE;
         float centerY = slotCenterY();
@@ -405,6 +406,7 @@ public class Hud {
 
         renderDurabilityBars(iconHalf);
 
+        glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
     }
 
@@ -1295,37 +1297,45 @@ public class Hud {
      * in an isometric projection (45° rotation, 35° tilt).
      */
     private void addIsometricBlock(float cx, float cy, float half, BlockType type, TextureAtlas atlas) {
-        // The isometric projection creates depth by offsetting side faces
-        float depth = half * 0.32f;  // Depth of the side faces (how much they extend)
+        // 2:1 dimetric cube. Vertices are CCW in y-up logical space so they
+        // survive GL_CULL_FACE left on by the 3D world pass.
+        float x = half * 0.88f;
+        float topH = half * 0.44f;
+        float bodyH = half * 0.72f;
+        float midY = cy - half * 0.06f;
 
-        // Draw in back-to-front order for correct overlap (though z-ordering doesn't matter for 2D HUD)
+        float topY = midY + topH;
+        float eqY = midY;
+        float frontY = midY - topH;
+        float botEqY = eqY - bodyH;
+        float botFrontY = frontY - bodyH;
 
-        // Left side face (X- in world space, shows as left in isometric) - trapezoid
-        // Bottom-left, bottom-right, top-right, top-left
+        float[] topUv = atlas.getUV(type.topTile);
+        float[] sideUv = atlas.getUV(type.sideTile);
+
+        // Left parallelogram: BL, BR, TR, TL (CCW, y-up)
         addArbitraryQuad(
-            cx - half, cy,                          // bottom-left
-            cx - half + depth, cy - half + depth,   // bottom-right
-            cx - half + depth, cy - half,           // top-right
-            cx - half, cy - depth,                  // top-left
-            atlas.getUV(type.sideTile));
+                cx - x, botEqY,
+                cx,     botFrontY,
+                cx,     frontY,
+                cx - x, eqY,
+                sideUv);
 
-        // Right side face (Z+ in world space, shows as right in isometric) - trapezoid
-        // Bottom-left, bottom-right, top-right, top-left
+        // Right parallelogram: BL, BR, TR, TL
         addArbitraryQuad(
-            cx + half - depth, cy - half + depth,   // bottom-left
-            cx + half, cy,                          // bottom-right
-            cx + half, cy - depth,                  // top-right
-            cx + half - depth, cy - half,           // top-left
-            atlas.getUV(type.sideTile));
+                cx,     botFrontY,
+                cx + x, botEqY,
+                cx + x, eqY,
+                cx,     frontY,
+                sideUv);
 
-        // Top face (Y+ in world space) - diamond-shaped quad
-        // Bottom vertex, right vertex, top vertex, left vertex
+        // Top diamond: left, front, right, back (CCW, y-up)
         addArbitraryQuad(
-            cx, cy,                                 // bottom vertex
-            cx + half - depth, cy - half + depth,   // right vertex
-            cx, cy - half + 2 * depth,              // top vertex
-            cx - half + depth, cy - half + depth,   // left vertex
-            atlas.getUV(type.topTile));
+                cx - x, eqY,
+                cx,     frontY,
+                cx + x, eqY,
+                cx,     topY,
+                topUv);
     }
 
     private static float[] outlineLines(float cx, float cy, float half) {
@@ -1604,6 +1614,7 @@ public class Hud {
                                    int hoveredSlot, TextureAtlas atlas, ItemTextures itemTextures,
                                    ToolDurability durability, float aspectRatio, float cursorLx, float cursorLy) {
         glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         // Panel background spanning the container area and the inventory grid.
@@ -1814,6 +1825,7 @@ public class Hud {
         drawCenteredText("Left: take/place stack    Right: one item    Shift-click: move    Drag: spread    Esc: close",
                 0f, panelBottom - 0.04f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
+        glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
     }
 
@@ -2039,7 +2051,7 @@ public class Hud {
             blockVertices.clear();
             blockIndices.clear();
             blockVertexCounter = 0;
-            addQuad(cx - half, cy - half, cx + half, cy + half, atlas.getUV(type.topTile));
+            addIsometricBlock(cx, cy, half, type, atlas);
             hotbarBlockIcons.upload(blockVertices.toArray(), blockIndices.toArray());
             hudShader.bind();
             hudShader.setUniform("transform", hudTransform);
@@ -2119,6 +2131,7 @@ public class Hud {
                                TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
                                float aspectRatio, float cursorLx, float cursorLy) {
         glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         // Full-screen dim behind everything (logical x spans the whole viewport).
@@ -2306,6 +2319,7 @@ public class Hud {
         drawCenteredText("Creative    Click: add to cursor    Shift-click: to hotbar    X: delete",
                 0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
+        glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
     }
 
