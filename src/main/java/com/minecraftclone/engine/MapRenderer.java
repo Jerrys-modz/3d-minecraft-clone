@@ -1,7 +1,10 @@
 package com.minecraftclone.engine;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Chunk;
 import com.minecraftclone.world.MapData;
+import com.minecraftclone.world.gen.GthnOreGenerator;
+import com.minecraftclone.world.gen.GthnOreGenerator.MixInfo;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -9,16 +12,24 @@ import java.util.*;
 import java.util.List;
 
 /**
- * Renders the map as a classic grid showing explored chunks and discovered ore veins.
- * Supports both mini-map (corner) and full-screen views.
+ * JourneyMap-style top-down terrain renderer: block-resolution surface colours
+ * with height shading, a zoomed-in mini-map, and GTNH VisualProspecting mix
+ * waypoints (coloured diamonds + hover popups) on the full map.
  */
 public class MapRenderer {
 
-    private static final int CHUNK_PIXEL_SIZE = 8; // Each chunk = 8x8 pixels on the mini-map
-    private static final int MINI_MAP_WIDTH  = 160;
-    private static final int MINI_MAP_HEIGHT = 160;
+    public static final int MINI_MAP_SIZE = 192;
+    /** Mini-map zoom: pixels per block (3px × 192 → ~64 blocks across). */
+    public static final int MINI_PIXELS_PER_BLOCK = 3;
+    public static final float DEFAULT_SCALE = 3.0f;
+    public static final float MIN_SCALE = 0.5f;
+    public static final float MAX_SCALE = 16.0f;
 
-    // Ore vein colors (RGB) – used for both dots on the map and the legend.
+    private static final int UNEXPLORED = 0x16161C;
+    private static final int EXPLORED_FALLBACK = 0x5A5A5A; // v1 saves, no surface yet
+    private static final int CLUSTER_RADIUS = 40;
+
+    // Ore vein colours (RGB) – used for mix waypoints and the legend.
     private static final Map<BlockType, Integer> ORE_COLORS = new LinkedHashMap<>();
     private static final Map<BlockType, String>  ORE_NAMES  = new LinkedHashMap<>();
 
@@ -48,8 +59,8 @@ public class MapRenderer {
         // Late-game ores
         reg(BlockType.URANIUM_ORE,     0x8CFF40, "Uranium");
         reg(BlockType.THORIUM_ORE,     0x7A5A48, "Thorium");
-        reg(BlockType.PLUTONIUM_ORE,   0x3A7040, "Plutonium");
-        reg(BlockType.IRIDIUM_ORE,     0xE8DCFF, "Iridium");
+        reg(BlockType.PLUTONIUM_ORE,    0x3A7040, "Plutonium");
+        reg(BlockType.IRIDIUM_ORE,      0xE8DCFF, "Iridium");
 
         // Vanilla ores
         reg(BlockType.COAL_ORE,        0x3A3A3A, "Coal");
@@ -144,16 +155,22 @@ public class MapRenderer {
         ORE_NAMES.put(type, name);
     }
 
+    /** Colour used for a mix waypoint (the mix primary's ore colour). */
+    public static int oreColor(BlockType type) {
+        return ORE_COLORS.getOrDefault(type, 0xFFFFFF);
+    }
+
     private final MapData mapData;
-    private float mapScale   = 1.0f;
-    private float mapOffsetX = 0f;
-    private float mapOffsetZ = 0f;
+    private float mapScale   = DEFAULT_SCALE;
+    private float panWorldX  = 0f;
+    private float panWorldZ  = 0f;
 
     // Cached mini-map
     private BufferedImage cachedMiniMapImage;
-    private int lastMiniMapPlayerChunkX = Integer.MAX_VALUE;
-    private int lastMiniMapPlayerChunkZ = Integer.MAX_VALUE;
-    private float lastMiniMapPlayerYaw = Float.NaN;
+    private int lastMiniMapQx = Integer.MAX_VALUE;
+    private int lastMiniMapQz = Integer.MAX_VALUE;
+    private int lastMiniMapYaw = Integer.MAX_VALUE;
+    private int lastMiniMapRevision = Integer.MIN_VALUE;
     /** Incremented each time the mini-map image is redrawn so Hud can re-upload the GPU texture. */
     private int miniMapVersion = 0;
 
@@ -161,24 +178,50 @@ public class MapRenderer {
     private BufferedImage cachedFullMapImage;
     private int lastFullMapWidth = -1;
     private int lastFullMapHeight = -1;
-    private int lastFullMapPlayerChunkX = Integer.MAX_VALUE;
-    private int lastFullMapPlayerChunkZ = Integer.MAX_VALUE;
-    private float lastFullMapPlayerYaw = Float.NaN;
+    private int lastFullMapQx = Integer.MAX_VALUE;
+    private int lastFullMapQz = Integer.MAX_VALUE;
+    private int lastFullMapYaw = Integer.MAX_VALUE;
     private float lastFullMapScale = Float.NaN;
-    private float lastFullMapOffsetX = Float.NaN;
-    private float lastFullMapOffsetZ = Float.NaN;
+    private float lastFullPanX = Float.NaN;
+    private float lastFullPanZ = Float.NaN;
+    private int lastFullMouseX = Integer.MIN_VALUE;
+    private int lastFullMouseY = Integer.MIN_VALUE;
+    private int lastFullMapRevision = Integer.MIN_VALUE;
     /** Incremented each time the full-map image is redrawn so Hud can re-upload the GPU texture. */
     private int fullMapVersion = 0;
+
+    private List<MixWaypoint> cachedWaypoints;
+    private int cachedWaypointRevision = Integer.MIN_VALUE;
 
     public MapRenderer(MapData mapData) {
         this.mapData = mapData;
     }
 
+    public static final class MixWaypoint {
+        public final int worldX, worldY, worldZ;
+        public final String mixName;
+        public final String composition;
+        public final BlockType primary;
+        public final int color;
+
+        public MixWaypoint(int worldX, int worldY, int worldZ,
+                           String mixName, String composition,
+                           BlockType primary, int color) {
+            this.worldX = worldX;
+            this.worldY = worldY;
+            this.worldZ = worldZ;
+            this.mixName = mixName;
+            this.composition = composition;
+            this.primary = primary;
+            this.color = color;
+        }
+    }
+
     // ── Mini-map ─────────────────────────────────────────────────────────────
 
     /**
-     * Render the mini-map (160×160) centred on the player.
-     * Includes a direction arrow at the player marker, N/S/E/W compass labels,
+     * Render the mini-map centred on the player at block resolution.
+     * Includes a direction arrow, N/S/E/W compass labels, mix-vein diamonds
      * and an outer border.
      *
      * @param playerWorldX player X in world space
@@ -186,87 +229,69 @@ public class MapRenderer {
      * @param playerYaw    camera yaw in degrees (−90 = North/−Z, 0 = East/+X)
      */
     public BufferedImage renderMiniMap(float playerWorldX, float playerWorldZ, float playerYaw) {
-        int[] playerChunk = MapData.getChunkCoords(playerWorldX, playerWorldZ);
-        int playerChunkX = playerChunk[0];
-        int playerChunkZ = playerChunk[1];
+        int qx = Math.round(playerWorldX * MINI_PIXELS_PER_BLOCK);
+        int qz = Math.round(playerWorldZ * MINI_PIXELS_PER_BLOCK);
+        int qYaw = Math.round(playerYaw);
+        int rev = mapData.getRevision();
 
-        // Return cached image if nothing has changed
         if (cachedMiniMapImage != null
-                && lastMiniMapPlayerChunkX == playerChunkX
-                && lastMiniMapPlayerChunkZ == playerChunkZ
-                && lastMiniMapPlayerYaw == playerYaw) {
+                && lastMiniMapQx == qx
+                && lastMiniMapQz == qz
+                && lastMiniMapYaw == qYaw
+                && lastMiniMapRevision == rev) {
             return cachedMiniMapImage;
         }
 
-        // Update cache state
-        lastMiniMapPlayerChunkX = playerChunkX;
-        lastMiniMapPlayerChunkZ = playerChunkZ;
-        lastMiniMapPlayerYaw = playerYaw;
+        lastMiniMapQx = qx;
+        lastMiniMapQz = qz;
+        lastMiniMapYaw = qYaw;
+        lastMiniMapRevision = rev;
 
-        // Reuse the cached image buffer if available
         BufferedImage img = cachedMiniMapImage;
-        if (img == null || img.getWidth() != MINI_MAP_WIDTH || img.getHeight() != MINI_MAP_HEIGHT) {
-            img = new BufferedImage(MINI_MAP_WIDTH, MINI_MAP_HEIGHT, BufferedImage.TYPE_INT_RGB);
+        if (img == null || img.getWidth() != MINI_MAP_SIZE || img.getHeight() != MINI_MAP_SIZE) {
+            img = new BufferedImage(MINI_MAP_SIZE, MINI_MAP_SIZE, BufferedImage.TYPE_INT_RGB);
             cachedMiniMapImage = img;
         }
+
+        int[] pixels = new int[MINI_MAP_SIZE * MINI_MAP_SIZE];
+        float half = MINI_MAP_SIZE / 2f;
+        for (int py = 0; py < MINI_MAP_SIZE; py++) {
+            int wz = (int) Math.floor(playerWorldZ + (py - half) / MINI_PIXELS_PER_BLOCK);
+            for (int px = 0; px < MINI_MAP_SIZE; px++) {
+                int wx = (int) Math.floor(playerWorldX + (px - half) / MINI_PIXELS_PER_BLOCK);
+                pixels[py * MINI_MAP_SIZE + px] = colorAt(wx, wz);
+            }
+        }
+        img.setRGB(0, 0, MINI_MAP_SIZE, MINI_MAP_SIZE, pixels, 0, MINI_MAP_SIZE);
 
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-        // Background
-        g.setColor(new Color(20, 20, 20));
-        g.fillRect(0, 0, MINI_MAP_WIDTH, MINI_MAP_HEIGHT);
-
-        int radius = 10;
-        for (int cx = playerChunkX - radius; cx <= playerChunkX + radius; cx++) {
-            for (int cz = playerChunkZ - radius; cz <= playerChunkZ + radius; cz++) {
-                int screenX = MINI_MAP_WIDTH  / 2 + (cx - playerChunkX) * CHUNK_PIXEL_SIZE;
-                int screenZ = MINI_MAP_HEIGHT / 2 + (cz - playerChunkZ) * CHUNK_PIXEL_SIZE;
-
-                if (screenX + CHUNK_PIXEL_SIZE < 0 || screenX >= MINI_MAP_WIDTH)  continue;
-                if (screenZ + CHUNK_PIXEL_SIZE < 0 || screenZ >= MINI_MAP_HEIGHT) continue;
-
-                if (mapData.isChunkExplored(cx, cz)) {
-                    g.setColor(new Color(90, 90, 90));
-                    g.fillRect(screenX, screenZ, CHUNK_PIXEL_SIZE, CHUNK_PIXEL_SIZE);
-                    for (MapData.OreVeinRecord vein : mapData.getVeinsInChunk(cx, cz)) {
-                        int oreScreenX = screenX + ((vein.worldX & 0xF) * CHUNK_PIXEL_SIZE) / 16;
-                        int oreScreenZ = screenZ + ((vein.worldZ & 0xF) * CHUNK_PIXEL_SIZE) / 16;
-                        int color = ORE_COLORS.getOrDefault(vein.oreType, 0xFFFFFF);
-                        g.setColor(new Color(color));
-                        g.fillRect(oreScreenX, oreScreenZ, 2, 2);
-                    }
-                } else {
-                    g.setColor(new Color(35, 35, 35));
-                    g.fillRect(screenX, screenZ, CHUNK_PIXEL_SIZE, CHUNK_PIXEL_SIZE);
-                }
-                // Chunk grid
-                g.setColor(new Color(50, 50, 50));
-                g.drawRect(screenX, screenZ, CHUNK_PIXEL_SIZE, CHUNK_PIXEL_SIZE);
-            }
+        for (MixWaypoint wp : waypoints()) {
+            int sx = Math.round(half + (wp.worldX + 0.5f - playerWorldX) * MINI_PIXELS_PER_BLOCK);
+            int sy = Math.round(half + (wp.worldZ + 0.5f - playerWorldZ) * MINI_PIXELS_PER_BLOCK);
+            if (sx < 4 || sx >= MINI_MAP_SIZE - 4 || sy < 4 || sy >= MINI_MAP_SIZE - 4) continue;
+            drawDiamond(g, sx, sy, 3, wp.color);
         }
 
-        int centerX = MINI_MAP_WIDTH  / 2;
-        int centerZ = MINI_MAP_HEIGHT / 2;
+        int centerX = MINI_MAP_SIZE / 2;
+        int centerZ = MINI_MAP_SIZE / 2;
 
-        // Compass labels (N / S / E / W)
-        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 9));
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 10));
         FontMetrics fm = g.getFontMetrics();
-        g.setColor(new Color(220, 220, 220));
-        drawCentred(g, fm, "N", centerX, 10);
-        drawCentred(g, fm, "S", centerX, MINI_MAP_HEIGHT - 2);
-        drawCentred(g, fm, "E", MINI_MAP_WIDTH - 5, centerZ + fm.getAscent() / 2);
-        drawCentred(g, fm, "W", 5, centerZ + fm.getAscent() / 2);
+        g.setColor(new Color(240, 240, 240));
+        drawCentred(g, fm, "N", centerX, 12);
+        drawCentred(g, fm, "S", centerX, MINI_MAP_SIZE - 4);
+        drawCentred(g, fm, "E", MINI_MAP_SIZE - 6, centerZ + fm.getAscent() / 2);
+        drawCentred(g, fm, "W", 6, centerZ + fm.getAscent() / 2);
 
-        // Direction arrow at player position
-        drawDirectionArrow(g, centerX, centerZ, playerYaw, 7);
+        drawDirectionArrow(g, centerX, centerZ, playerYaw, 8);
 
-        // Outer border (2px)
-        g.setColor(new Color(160, 160, 160));
-        g.drawRect(0, 0, MINI_MAP_WIDTH - 1, MINI_MAP_HEIGHT - 1);
-        g.setColor(new Color(100, 100, 100));
-        g.drawRect(1, 1, MINI_MAP_WIDTH - 3, MINI_MAP_HEIGHT - 3);
+        g.setColor(new Color(200, 200, 200));
+        g.drawRect(0, 0, MINI_MAP_SIZE - 1, MINI_MAP_SIZE - 1);
+        g.setColor(new Color(40, 40, 40));
+        g.drawRect(1, 1, MINI_MAP_SIZE - 3, MINI_MAP_SIZE - 3);
 
         g.dispose();
         miniMapVersion++;
@@ -281,205 +306,206 @@ public class MapRenderer {
     // ── Full-screen map ───────────────────────────────────────────────────────
 
     /**
-     * Render the full-screen map.
-     * Right side carries an ore legend showing every ore type seen so far.
-     * Top-left shows the player's current world coordinates.
-     * Bottom centre shows pan/zoom/close instructions.
+     * Render the full-screen map at block resolution, north-up, with mix
+     * waypoints and a hover popup when the cursor sits on a diamond.
      *
      * @param width        image width (window width)
      * @param height       image height (window height)
      * @param playerWorldX player X in world space
      * @param playerWorldZ player Z in world space
      * @param playerYaw    camera yaw in degrees
+     * @param mouseX       cursor X in window pixels (origin top-left)
+     * @param mouseY       cursor Y in window pixels
      */
     public BufferedImage renderFullMap(int width, int height,
                                        float playerWorldX, float playerWorldZ,
-                                       float playerYaw) {
-        int[] playerChunk = MapData.getChunkCoords(playerWorldX, playerWorldZ);
-        int playerChunkX = playerChunk[0];
-        int playerChunkZ = playerChunk[1];
+                                       float playerYaw,
+                                       int mouseX, int mouseY) {
+        int qx = Math.round(playerWorldX * 2f);
+        int qz = Math.round(playerWorldZ * 2f);
+        int qYaw = Math.round(playerYaw);
+        int rev = mapData.getRevision();
 
-        // Return cached image if nothing has changed
         if (cachedFullMapImage != null
                 && lastFullMapWidth == width
                 && lastFullMapHeight == height
-                && lastFullMapPlayerChunkX == playerChunkX
-                && lastFullMapPlayerChunkZ == playerChunkZ
-                && lastFullMapPlayerYaw == playerYaw
+                && lastFullMapQx == qx
+                && lastFullMapQz == qz
+                && lastFullMapYaw == qYaw
                 && lastFullMapScale == mapScale
-                && lastFullMapOffsetX == mapOffsetX
-                && lastFullMapOffsetZ == mapOffsetZ) {
+                && lastFullPanX == panWorldX
+                && lastFullPanZ == panWorldZ
+                && lastFullMouseX == mouseX
+                && lastFullMouseY == mouseY
+                && lastFullMapRevision == rev) {
             return cachedFullMapImage;
         }
 
-        // Update cache state
         lastFullMapWidth = width;
         lastFullMapHeight = height;
-        lastFullMapPlayerChunkX = playerChunkX;
-        lastFullMapPlayerChunkZ = playerChunkZ;
-        lastFullMapPlayerYaw = playerYaw;
+        lastFullMapQx = qx;
+        lastFullMapQz = qz;
+        lastFullMapYaw = qYaw;
         lastFullMapScale = mapScale;
-        lastFullMapOffsetX = mapOffsetX;
-        lastFullMapOffsetZ = mapOffsetZ;
+        lastFullPanX = panWorldX;
+        lastFullPanZ = panWorldZ;
+        lastFullMouseX = mouseX;
+        lastFullMouseY = mouseY;
+        lastFullMapRevision = rev;
 
-        // Legend panel on the right; map fills the rest.
-        int legendW = Math.min(180, width / 5);
-        int mapW    = width - legendW;
+        int legendW = Math.min(220, Math.max(160, width / 6));
+        int mapW    = Math.max(1, width - legendW);
 
-        // Reuse the cached image buffer if size matches
         BufferedImage img = cachedFullMapImage;
         if (img == null || img.getWidth() != width || img.getHeight() != height) {
             img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
             cachedFullMapImage = img;
         }
 
+        float viewX = playerWorldX + panWorldX;
+        float viewZ = playerWorldZ + panWorldZ;
+        float scale = mapScale;
+
+        int[] pixels = new int[width * height];
+        Arrays.fill(pixels, UNEXPLORED);
+        float halfW = mapW / 2f;
+        float halfH = height / 2f;
+        for (int sy = 0; sy < height; sy++) {
+            int wz = (int) Math.floor(viewZ + (sy - halfH) / scale);
+            int row = sy * width;
+            for (int sx = 0; sx < mapW; sx++) {
+                int wx = (int) Math.floor(viewX + (sx - halfW) / scale);
+                pixels[row + sx] = colorAt(wx, wz);
+            }
+        }
+        img.setRGB(0, 0, width, height, pixels, 0, width);
+
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-        // ── Map background ──────────────────────────────────────────────────
-        g.setColor(new Color(20, 20, 25));
-        g.fillRect(0, 0, mapW, height);
+        List<MixWaypoint> wps = waypoints();
+        Set<String> seenMixes = new LinkedHashSet<>();
+        boolean showLabels = scale >= 2.0f;
+        MixWaypoint hovered = null;
+        double hoverDist = 14;
 
-        int chunkPx = Math.max(2, (int) (CHUNK_PIXEL_SIZE * mapScale));
-        int cx0 = mapW / 2;
-        int cz0 = height / 2;
-
-        // Derive the centre chunk coordinates from the current map offsets.
-        int centreChunkX = playerChunkX - (int) Math.round(mapOffsetX / chunkPx);
-        int centreChunkZ = playerChunkZ - (int) Math.round(mapOffsetZ / chunkPx);
-
-        // Viewport-sized radius without extra pan terms.
-        int radiusX = mapW  / chunkPx / 2 + 2;
-        int radiusZ = height / chunkPx / 2 + 2;
-
-        // Track which ore types actually appear in the visible/explored area.
-        Set<BlockType> seenOres = new LinkedHashSet<>();
-
-        for (int cx = centreChunkX - radiusX; cx <= centreChunkX + radiusX; cx++) {
-            for (int cz = centreChunkZ - radiusZ; cz <= centreChunkZ + radiusZ; cz++) {
-                int screenX = cx0 + (int) (mapOffsetX + (cx - playerChunkX) * chunkPx);
-                int screenZ = cz0 + (int) (mapOffsetZ + (cz - playerChunkZ) * chunkPx);
-
-                if (screenX + chunkPx < 0 || screenX >= mapW)    continue;
-                if (screenZ + chunkPx < 0 || screenZ >= height)   continue;
-
-                if (mapData.isChunkExplored(cx, cz)) {
-                    g.setColor(new Color(85, 85, 85));
-                    g.fillRect(screenX, screenZ, chunkPx, chunkPx);
-
-                    if (chunkPx >= 4) {
-                        for (MapData.OreVeinRecord vein : mapData.getVeinsInChunk(cx, cz)) {
-                            int oreX = screenX + ((vein.worldX & 0xF) * chunkPx) / 16;
-                            int oreZ = screenZ + ((vein.worldZ & 0xF) * chunkPx) / 16;
-                            int dotSz = Math.max(2, chunkPx / 6);
-                            int color = ORE_COLORS.getOrDefault(vein.oreType, 0xFFFFFF);
-                            g.setColor(new Color(color));
-                            g.fillRect(oreX, oreZ, dotSz, dotSz);
-                            seenOres.add(vein.oreType);
-                        }
-                    }
-                } else {
-                    g.setColor(new Color(30, 30, 35));
-                    g.fillRect(screenX, screenZ, chunkPx, chunkPx);
+        for (MixWaypoint wp : wps) {
+            int sx = Math.round(halfW + (wp.worldX + 0.5f - viewX) * scale);
+            int sy = Math.round(halfH + (wp.worldZ + 0.5f - viewZ) * scale);
+            if (sx < 2 || sx >= mapW - 2 || sy < 2 || sy >= height - 2) continue;
+            seenMixes.add(wp.mixName);
+            int diamond = Math.max(4, Math.min(7, Math.round(scale * 1.4f)));
+            drawDiamond(g, sx, sy, diamond, wp.color);
+            if (showLabels) {
+                g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+                FontMetrics lfm = g.getFontMetrics();
+                int tw = lfm.stringWidth(wp.mixName);
+                int tx = sx + diamond + 4;
+                int ty = sy + 4;
+                if (tx + tw < mapW - 4) {
+                    g.setColor(new Color(0, 0, 0, 170));
+                    g.fillRoundRect(tx - 2, ty - lfm.getAscent(), tw + 4, lfm.getHeight(), 4, 4);
+                    g.setColor(new Color(wp.color));
+                    g.drawString(wp.mixName, tx, ty);
                 }
-
-                // Grid lines only when chunks are large enough to distinguish
-                if (chunkPx >= 6) {
-                    g.setColor(new Color(50, 50, 50));
-                    g.drawRect(screenX, screenZ, chunkPx, chunkPx);
-                }
+            }
+            double d = Math.hypot(mouseX - sx, mouseY - sy);
+            if (d < hoverDist) {
+                hoverDist = d;
+                hovered = wp;
             }
         }
 
-        // Player marker with direction arrow
-        int markerX = cx0 + (int) mapOffsetX;
-        int markerZ = cz0 + (int) mapOffsetZ;
-        drawDirectionArrow(g, markerX, markerZ, playerYaw, 10);
+        int markerX = Math.round(halfW + (playerWorldX - viewX) * scale);
+        int markerZ = Math.round(halfH + (playerWorldZ - viewZ) * scale);
+        drawDirectionArrow(g, markerX, markerZ, playerYaw, 11);
 
-        // Crosshair at screen centre (shows what coordinate the map is centred on)
-        g.setColor(new Color(255, 220, 0, 160));
-        int ch = 12;
-        g.drawLine(cx0 - ch, cz0, cx0 + ch, cz0);
-        g.drawLine(cx0, cz0 - ch, cx0, cz0 + ch);
-
-        // ── HUD overlays on the map area ────────────────────────────────────
         Font hudFont = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
         Font hudBold = new Font(Font.SANS_SERIF, Font.BOLD,  13);
         g.setFont(hudBold);
 
-        // Coordinates (top-left)
         String coords = String.format("X: %.0f  Z: %.0f", playerWorldX, playerWorldZ);
-        g.setColor(new Color(0, 0, 0, 160));
+        g.setColor(new Color(0, 0, 0, 170));
         g.fillRoundRect(5, 5, g.getFontMetrics().stringWidth(coords) + 10, 22, 6, 6);
         g.setColor(new Color(220, 220, 220));
         g.drawString(coords, 10, 21);
 
-        // "Map" title (top centre)
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
         String title = "World Map";
         FontMetrics tfm = g.getFontMetrics();
-        g.setColor(new Color(0, 0, 0, 160));
+        g.setColor(new Color(0, 0, 0, 170));
         g.fillRoundRect(mapW / 2 - tfm.stringWidth(title) / 2 - 6, 4,
                 tfm.stringWidth(title) + 12, 24, 6, 6);
         g.setColor(new Color(255, 255, 200));
         g.drawString(title, mapW / 2 - tfm.stringWidth(title) / 2, 21);
 
-        // Instructions (bottom centre)
         g.setFont(hudFont);
-        String hint = "WASD: pan  |  Scroll: zoom  |  R: reset  |  M / Esc: close";
+        String hint = "WASD: pan  |  Scroll: zoom  |  R: reset  |  Hover a diamond for mix info  |  M / Esc: close";
         FontMetrics hfm = g.getFontMetrics();
         int hintW = hfm.stringWidth(hint);
-        g.setColor(new Color(0, 0, 0, 160));
-        g.fillRoundRect(mapW / 2 - hintW / 2 - 6, height - 22, hintW + 12, 18, 6, 6);
+        g.setColor(new Color(0, 0, 0, 170));
+        g.fillRoundRect(Math.max(6, mapW / 2 - hintW / 2 - 6), height - 22, hintW + 12, 18, 6, 6);
         g.setColor(new Color(180, 180, 180));
-        g.drawString(hint, mapW / 2 - hintW / 2, height - 8);
+        g.drawString(hint, Math.max(12, mapW / 2 - hintW / 2), height - 8);
+
+        if (hovered != null) {
+            drawMixPopup(g, hovered, mouseX, mouseY, mapW, height);
+        }
 
         // ── Legend panel ────────────────────────────────────────────────────
-        g.setColor(new Color(25, 25, 30));
+        g.setColor(new Color(22, 22, 28));
         g.fillRect(mapW, 0, legendW, height);
         g.setColor(new Color(60, 60, 70));
         g.drawLine(mapW, 0, mapW, height);
 
         g.setFont(hudBold);
         g.setColor(new Color(210, 210, 210));
-        g.drawString("Ore Legend", mapW + 8, 22);
+        g.drawString("Ore Mixes", mapW + 8, 22);
 
-        // Divider
         g.setColor(new Color(60, 60, 70));
         g.drawLine(mapW + 4, 28, width - 4, 28);
 
-        // Discovered ores first; then all known (dimmed) if space allows.
         int ly = 44;
         int rowH = 16;
         g.setFont(hudFont);
-        FontMetrics lfm = g.getFontMetrics();
 
-        List<BlockType> legendOrder = new ArrayList<>();
-        for (BlockType t : ORE_COLORS.keySet()) {
-            if (seenOres.contains(t)) legendOrder.add(0, t);  // discovered first
+        List<MixWaypoint> legend = new ArrayList<>();
+        Set<String> listed = new HashSet<>();
+        for (MixWaypoint wp : wps) {
+            if (listed.add(wp.mixName)) legend.add(wp);
         }
-        // Add undiscovered if we haven't run off the panel yet
-        for (BlockType t : ORE_COLORS.keySet()) {
-            if (!seenOres.contains(t)) legendOrder.add(t);
-        }
+        legend.sort(Comparator.comparing(w -> w.mixName));
 
-        for (BlockType ore : legendOrder) {
+        for (MixWaypoint wp : legend) {
             if (ly + rowH > height - 6) break;
-            int rgb  = ORE_COLORS.get(ore);
-            String nm = ORE_NAMES.getOrDefault(ore, ore.name());
-            boolean discovered = seenOres.contains(ore);
-
-            // Colour swatch
-            g.setColor(new Color(rgb));
-            g.fillRect(mapW + 8, ly - 10, 10, 10);
-            g.setColor(new Color(80, 80, 80));
-            g.drawRect(mapW + 8, ly - 10, 10, 10);
-
-            // Name (dimmed if not yet discovered)
-            g.setColor(discovered ? new Color(210, 210, 210) : new Color(90, 90, 90));
-            g.drawString(nm, mapW + 22, ly);
+            boolean visible = seenMixes.contains(wp.mixName);
+            g.setColor(new Color(wp.color));
+            g.fillPolygon(
+                    new int[]{mapW + 13, mapW + 18, mapW + 13, mapW + 8},
+                    new int[]{ly - 12, ly - 7, ly - 2, ly - 7},
+                    4);
+            g.setColor(new Color(40, 40, 40));
+            g.drawPolygon(
+                    new int[]{mapW + 13, mapW + 18, mapW + 13, mapW + 8},
+                    new int[]{ly - 12, ly - 7, ly - 2, ly - 7},
+                    4);
+            g.setColor(visible ? new Color(220, 220, 220) : new Color(110, 110, 110));
+            String nm = wp.mixName;
+            FontMetrics lfm = g.getFontMetrics();
+            while (nm.length() > 4 && lfm.stringWidth(nm) > legendW - 30) {
+                nm = nm.substring(0, nm.length() - 2);
+            }
+            if (!nm.equals(wp.mixName)) nm = nm + "…";
+            g.drawString(nm, mapW + 24, ly);
             ly += rowH;
+        }
+
+        if (legend.isEmpty()) {
+            g.setColor(new Color(120, 120, 120));
+            g.drawString("No veins yet", mapW + 8, ly);
+            g.drawString("Explore to find", mapW + 8, ly + 16);
+            g.drawString("GTNH mixes.", mapW + 8, ly + 32);
         }
 
         g.dispose();
@@ -494,25 +520,234 @@ public class MapRenderer {
 
     // ── Zoom / Pan / Reset ────────────────────────────────────────────────────
 
-    /** Zoom the full-screen map (>1.0 = zoom in). */
+    /** Zoom the full-screen map (>1.0 = zoom in). Scale is pixels-per-block. */
     public void zoom(float factor) {
-        mapScale = Math.max(0.25f, Math.min(8.0f, mapScale * factor));
+        mapScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, mapScale * factor));
     }
 
-    /** Pan the full-screen map. */
+    /**
+     * Pan the full-screen map. {@code deltaX}/{@code deltaZ} are in screen
+     * pixels; converted to world blocks using the current zoom so motion
+     * feels constant on-screen.
+     */
     public void pan(float deltaX, float deltaZ) {
-        mapOffsetX += deltaX;
-        mapOffsetZ += deltaZ;
+        panWorldX += deltaX / mapScale;
+        panWorldZ += deltaZ / mapScale;
     }
 
-    /** Reset pan and zoom to defaults. */
+    /** Reset pan and zoom to defaults (player-centred, ~3 px/block). */
     public void resetView() {
-        mapScale   = 1.0f;
-        mapOffsetX = 0f;
-        mapOffsetZ = 0f;
+        mapScale   = DEFAULT_SCALE;
+        panWorldX  = 0f;
+        panWorldZ  = 0f;
     }
 
-    // ── Internal helpers ──────────────────────────────────────────────────────
+    public float getMapScale() {
+        return mapScale;
+    }
+
+    // ── Terrain colour ────────────────────────────────────────────────────────
+
+    /**
+     * JourneyMap-like map colour for a surface block. Public so tests can lock
+     * the palette (grass is green, water is blue, sand is yellow, …).
+     */
+    public static int terrainColor(BlockType b) {
+        if (b == null || b == BlockType.AIR) return UNEXPLORED;
+        if (b.isWater()) return 0x3A6BC4;
+        if (b.isLava()) return 0xE06018;
+        return switch (b) {
+            case GRASS, TALL_GRASS, FLOWER_RED, FLOWER_YELLOW -> 0x5DAA32;
+            case SWAMP_GRASS, VINE, LILY_PAD -> 0x3E7A38;
+            case MYCELIUM, MUSHROOM_RED, MUSHROOM_BROWN -> 0x6B5A68;
+            case DIRT -> 0x966C4A;
+            case SAND -> 0xE8D48A;
+            case GRAVEL -> 0x7A7A72;
+            case STONE, STONE_SLAB, STONE_STAIRS, BEDROCK -> 0x7A7A7A;
+            case SNOW, SNOWY_STONE_SLAB, SNOWY_PLANKS_SLAB -> 0xF4F8FB;
+            case ICE -> 0x8CB8E0;
+            case PACKED_ICE -> 0x74A0D8;
+            case WOOD_LOG -> 0x6B5530;
+            case PLANKS, PLANKS_SLAB, PLANKS_STAIRS, WOODEN_FENCE, CRAFTING_TABLE -> 0xB8945F;
+            case LEAVES -> 0x2F6B32;
+            case CHERRY_LEAVES -> 0xE8A0B8;
+            case CACTUS -> 0x3A8A32;
+            case DEAD_BUSH -> 0x8A6A3A;
+            case RED_CLAY -> 0xB45A32;
+            case NETHERRACK -> 0x6E2E2E;
+            case SOUL_SAND -> 0x4A3A28;
+            case GLOWSTONE -> 0xE8C45A;
+            case END_STONE -> 0xD8D49A;
+            case OBSIDIAN -> 0x1A1028;
+            case NETHER_PORTAL -> 0x6A20C0;
+            case END_PORTAL -> 0x1A1A3A;
+            case PUMPKIN -> 0xC07818;
+            case WOOL -> 0xD8D8D8;
+            case GLASS -> 0xC0D0E0;
+            case BAMBOO -> 0x5A9A32;
+            case SEAWEED -> 0x2A6A48;
+            default -> {
+                String n = b.name();
+                if (n.contains("LEAVES")) yield 0x2F6B32;
+                if (n.contains("LOG") || n.contains("WOOD") || n.contains("PLANK")) yield 0x6B5530;
+                if (n.contains("SAND")) yield 0xE8D48A;
+                if (n.contains("GRASS")) yield 0x5DAA32;
+                if (n.contains("SNOW") || n.contains("ICE")) yield 0xE8F0F8;
+                if (b.cross) yield 0x5DAA32;
+                yield 0x6E6E68;
+            }
+        };
+    }
+
+    /**
+     * Classic Minecraft map shading: brighter than the west neighbour if
+     * higher, darker if lower, plus a gentle altitude wash so peaks pop.
+     */
+    public static int shade(int rgb, int height, int westHeight) {
+        float f = 1.0f;
+        if (westHeight >= 0) {
+            if (height > westHeight) f = 1.22f;
+            else if (height < westHeight) f = 0.78f;
+        }
+        f *= 0.82f + 0.36f * Math.min(1f, Math.max(0, height) / 80f);
+        return scaleRgb(rgb, f);
+    }
+
+    private static int scaleRgb(int rgb, float f) {
+        int r = Math.min(255, Math.max(0, Math.round(((rgb >> 16) & 0xFF) * f)));
+        int g = Math.min(255, Math.max(0, Math.round(((rgb >> 8) & 0xFF) * f)));
+        int b = Math.min(255, Math.max(0, Math.round((rgb & 0xFF) * f)));
+        return (r << 16) | (g << 8) | b;
+    }
+
+    private int colorAt(int worldX, int worldZ) {
+        int cx = Math.floorDiv(worldX, Chunk.SIZE);
+        int cz = Math.floorDiv(worldZ, Chunk.SIZE);
+        if (!mapData.isChunkExplored(cx, cz)) return UNEXPLORED;
+        BlockType block = mapData.getSurfaceBlock(worldX, worldZ);
+        if (block == null) return EXPLORED_FALLBACK;
+        int h = mapData.getSurfaceY(worldX, worldZ);
+        int westH = mapData.getSurfaceY(worldX - 1, worldZ);
+        return shade(terrainColor(block), h, westH);
+    }
+
+    // ── Mix waypoints ─────────────────────────────────────────────────────────
+
+    private List<MixWaypoint> waypoints() {
+        int rev = mapData.getRevision();
+        if (cachedWaypoints != null && cachedWaypointRevision == rev) return cachedWaypoints;
+        cachedWaypoints = clusterMixWaypoints(mapData);
+        cachedWaypointRevision = rev;
+        return cachedWaypoints;
+    }
+
+    /**
+     * Collapse per-block vein records into one VisualProspecting-style mix
+     * waypoint per cluster (same mix name, within {@link #CLUSTER_RADIUS}
+     * blocks). Public for tests.
+     */
+    public static List<MixWaypoint> clusterMixWaypoints(MapData data) {
+        Map<String, List<MapData.OreVeinRecord>> byMix = new LinkedHashMap<>();
+        Map<String, MixInfo> infoByName = new HashMap<>();
+        for (MapData.OreVeinRecord vein : data.allVeins()) {
+            MixInfo info = GthnOreGenerator.mixInfo(vein.oreType);
+            if (info == null) continue;
+            byMix.computeIfAbsent(info.name, k -> new ArrayList<>()).add(vein);
+            infoByName.putIfAbsent(info.name, info);
+        }
+
+        List<MixWaypoint> out = new ArrayList<>();
+        int r2 = CLUSTER_RADIUS * CLUSTER_RADIUS;
+        for (Map.Entry<String, List<MapData.OreVeinRecord>> e : byMix.entrySet()) {
+            MixInfo info = infoByName.get(e.getKey());
+            List<MapData.OreVeinRecord> remaining = new ArrayList<>(e.getValue());
+            while (!remaining.isEmpty()) {
+                MapData.OreVeinRecord seed = remaining.remove(0);
+                long sx = seed.worldX, sy = seed.worldY, sz = seed.worldZ;
+                int n = 1;
+                Iterator<MapData.OreVeinRecord> it = remaining.iterator();
+                while (it.hasNext()) {
+                    MapData.OreVeinRecord v = it.next();
+                    int dx = v.worldX - seed.worldX;
+                    int dz = v.worldZ - seed.worldZ;
+                    if (dx * dx + dz * dz <= r2) {
+                        sx += v.worldX;
+                        sy += v.worldY;
+                        sz += v.worldZ;
+                        n++;
+                        it.remove();
+                    }
+                }
+                out.add(new MixWaypoint(
+                        (int) (sx / n), (int) (sy / n), (int) (sz / n),
+                        info.name, info.compositionLabel(), info.primary,
+                        oreColor(info.primary)));
+            }
+        }
+        return out;
+    }
+
+    // ── Drawing helpers ───────────────────────────────────────────────────────
+
+    private static void drawMixPopup(Graphics2D g, MixWaypoint wp, int mouseX, int mouseY,
+                                     int mapW, int height) {
+        String title = wp.mixName;
+        String comp = wp.composition;
+        String yLine = "Y: " + wp.worldY;
+        String xzLine = "X: " + wp.worldX + "  Z: " + wp.worldZ;
+
+        Font titleFont = new Font(Font.SANS_SERIF, Font.BOLD, 13);
+        Font bodyFont = new Font(Font.SANS_SERIF, Font.PLAIN, 11);
+        g.setFont(titleFont);
+        FontMetrics tfm = g.getFontMetrics();
+        g.setFont(bodyFont);
+        FontMetrics bfm = g.getFontMetrics();
+
+        int inner = Math.max(tfm.stringWidth(title) + 22,
+                Math.max(bfm.stringWidth(comp),
+                        Math.max(bfm.stringWidth(yLine), bfm.stringWidth(xzLine))));
+        int boxW = inner + 16;
+        int boxH = 72;
+        int px = mouseX + 16;
+        int py = mouseY + 16;
+        if (px + boxW > mapW - 6) px = mouseX - boxW - 12;
+        if (py + boxH > height - 6) py = mouseY - boxH - 12;
+        px = Math.max(6, px);
+        py = Math.max(6, py);
+
+        g.setColor(new Color(12, 12, 18, 230));
+        g.fillRoundRect(px, py, boxW, boxH, 8, 8);
+        g.setColor(new Color(wp.color));
+        g.setStroke(new BasicStroke(2f));
+        g.drawRoundRect(px, py, boxW, boxH, 8, 8);
+        g.setStroke(new BasicStroke(1f));
+
+        drawDiamond(g, px + 12, py + 16, 5, wp.color);
+        g.setFont(titleFont);
+        g.setColor(new Color(wp.color));
+        g.drawString(title, px + 22, py + 20);
+
+        g.setFont(bodyFont);
+        g.setColor(new Color(210, 210, 210));
+        g.drawString(comp, px + 8, py + 38);
+        g.setColor(new Color(180, 180, 180));
+        g.drawString(yLine, px + 8, py + 52);
+        g.drawString(xzLine, px + 8, py + 64);
+    }
+
+    private static void drawDiamond(Graphics2D g, int cx, int cy, int size, int rgb) {
+        int[] xs = {cx, cx + size, cx, cx - size};
+        int[] ys = {cy - size, cy, cy + size, cy};
+        g.setColor(new Color(rgb));
+        g.fillPolygon(xs, ys, 4);
+        g.setColor(new Color(20, 20, 20));
+        g.drawPolygon(xs, ys, 4);
+        // Inner highlight so dark ores still read as a waypoint.
+        g.setColor(new Color(255, 255, 255, 90));
+        int h = Math.max(1, size / 2);
+        g.fillPolygon(new int[]{cx, cx + h, cx, cx - h},
+                new int[]{cy - h, cy, cy + h, cy}, 4);
+    }
 
     /**
      * Draw a filled triangle pointing in the camera's facing direction.
@@ -521,11 +756,9 @@ public class MapRenderer {
      */
     private static void drawDirectionArrow(Graphics2D g, int cx, int cy, float yaw, int size) {
         double rad = Math.toRadians(yaw);
-        // World (dx, dz) facing direction → screen (sx, sy): +sx = East, +sy = South (down)
         float dx = (float) Math.cos(rad);
         float dz = (float) Math.sin(rad);
 
-        // Triangle tip, left base, right base
         float tipX  = cx + dx * (size + 2);
         float tipY  = cy + dz * (size + 2);
         float baseX = cx - dx * (size / 2f);
@@ -545,9 +778,12 @@ public class MapRenderer {
             Math.round(baseY - perpY * half)
         };
 
-        g.setColor(new Color(0, 210, 0));
+        g.setColor(new Color(20, 20, 20));
+        g.fillPolygon(new int[]{xs[0], xs[1], xs[2]},
+                new int[]{ys[0] + 1, ys[1] + 1, ys[2] + 1}, 3);
+        g.setColor(new Color(40, 220, 70));
         g.fillPolygon(xs, ys, 3);
-        g.setColor(new Color(0, 90, 0));
+        g.setColor(new Color(10, 80, 20));
         g.drawPolygon(xs, ys, 3);
     }
 

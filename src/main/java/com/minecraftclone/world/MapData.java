@@ -5,16 +5,30 @@ import java.nio.file.*;
 import java.util.*;
 
 /**
- * Persistent map data tracking explored chunks and discovered ore vein locations.
- * Only records ore veins in chunks the player has visited.
+ * Persistent map data tracking explored chunks, their top-down surface
+ * (block + height per column, for a JourneyMap-style terrain view) and
+ * discovered ore vein locations. Only records veins in chunks the player
+ * has visited; surface samples refresh on every visit so terraforming
+ * shows up after you re-enter a chunk.
  */
 public class MapData {
+
+    private static final int COLS = Chunk.SIZE * Chunk.SIZE;
 
     /** Set of explored chunk coordinates (as long key: chunkX | (chunkZ << 32)). */
     private final Set<Long> exploredChunks = new HashSet<>();
 
     /** Map of chunk coordinates to ore veins found in that chunk. */
     private final Map<Long, List<OreVeinRecord>> veinsByChunk = new HashMap<>();
+
+    /** 16×16 surface block ids (by {@link BlockType#id}) per explored chunk. */
+    private final Map<Long, short[]> surfaceBlocks = new HashMap<>();
+
+    /** 16×16 surface heights (0–255) per explored chunk. */
+    private final Map<Long, byte[]> surfaceHeights = new HashMap<>();
+
+    /** Bumped on every explore / surface refresh so the renderer can drop its cache. */
+    private int revision;
 
     /**
      * Record of an ore vein's location and type.
@@ -31,32 +45,50 @@ public class MapData {
         }
     }
 
+    /** Cache-busting counter; increments whenever exploration data changes. */
+    public int getRevision() {
+        return revision;
+    }
+
     /**
-     * Mark a chunk as explored and discover any ore veins it contains.
-     * Called when the player enters a new chunk.
+     * Mark a chunk as explored, (re)sample its surface, and — on first visit —
+     * discover any ore veins it contains. Surface is refreshed even for chunks
+     * that were already explored so older saves and terraforming pick up terrain
+     * colours without requiring a new world.
      */
-    public void exploreChunk(int chunkX, int chunkZ, World world) {
-        long chunkKey = encodeChunkKey(chunkX, chunkZ);
-        if (exploredChunks.contains(chunkKey)) {
-            return; // Already explored
+    public void exploreChunk(int chunkX, int chunkZ, BlockAccessor world) {
+        if (looksUnloaded(world, chunkX, chunkZ)) {
+            return;
         }
 
-        exploredChunks.add(chunkKey);
+        long chunkKey = encodeChunkKey(chunkX, chunkZ);
+        boolean firstVisit = exploredChunks.add(chunkKey);
 
-        // Scan the chunk for ore veins (full-size ores only, not small ores)
-        // Group into 4x4 column cells to reduce density; keep at most one vein per ore type per cell
+        // v1 saves are already "explored" but have no surface — sample those
+        // (and any brand-new chunk) once. Don't resample every call.
+        if (!hasSurface(chunkX, chunkZ)) {
+            sampleSurface(chunkX, chunkZ, world);
+            revision++;
+        }
+
+        if (!firstVisit) {
+            return; // Veins are scanned once.
+        }
+
+        // Scan the chunk for ore veins (full-size ores only, not small ores).
+        // Group into 4x4 column cells to reduce density; keep at most one vein
+        // per ore type per cell. Depth matches GTNH vein defs (up to Y 80).
         List<OreVeinRecord> veins = new ArrayList<>();
-        int baseX = chunkX * 16;
-        int baseZ = chunkZ * 16;
+        int baseX = chunkX * Chunk.SIZE;
+        int baseZ = chunkZ * Chunk.SIZE;
 
-        // 4x4 cells in a 16x16 chunk = 4x4 grid of cells
         for (int cellX = 0; cellX < 4; cellX++) {
             for (int cellZ = 0; cellZ < 4; cellZ++) {
                 int minX = baseX + cellX * 4;
                 int minZ = baseZ + cellZ * 4;
                 Map<BlockType, OreVeinRecord> cellVeins = new HashMap<>();
 
-                for (int y = 5; y < 64; y++) {
+                for (int y = 5; y < 96; y++) {
                     for (int x = minX; x < minX + 4; x++) {
                         for (int z = minZ; z < minZ + 4; z++) {
                             BlockType block = world.getBlock(x, y, z);
@@ -73,6 +105,58 @@ public class MapData {
         if (!veins.isEmpty()) {
             veinsByChunk.put(chunkKey, veins);
         }
+        revision++;
+    }
+
+    /**
+     * Unloaded chunks (and End void) are all air — skip them so we don't
+     * freeze an empty surface before terrain has generated.
+     */
+    static boolean looksUnloaded(BlockAccessor world, int chunkX, int chunkZ) {
+        int x = chunkX * Chunk.SIZE + Chunk.SIZE / 2;
+        int z = chunkZ * Chunk.SIZE + Chunk.SIZE / 2;
+        for (int y = 0; y < Chunk.HEIGHT; y++) {
+            if (world.getBlock(x, y, z) != BlockType.AIR) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Sample the topmost "map-worthy" block of every column in the chunk.
+     * Cross-shaped plants (grass, flowers) are skipped so the ground/water
+     * under them is what actually paints the map.
+     */
+    private void sampleSurface(int chunkX, int chunkZ, BlockAccessor world) {
+        long key = encodeChunkKey(chunkX, chunkZ);
+        short[] blocks = new short[COLS];
+        byte[] heights = new byte[COLS];
+        int baseX = chunkX * Chunk.SIZE;
+        int baseZ = chunkZ * Chunk.SIZE;
+        for (int lz = 0; lz < Chunk.SIZE; lz++) {
+            for (int lx = 0; lx < Chunk.SIZE; lx++) {
+                int wx = baseX + lx;
+                int wz = baseZ + lz;
+                int y = Chunk.HEIGHT - 1;
+                BlockType b = world.getBlock(wx, y, wz);
+                while (y > 0 && isMapDecoration(b)) {
+                    y--;
+                    b = world.getBlock(wx, y, wz);
+                }
+                int idx = lz * Chunk.SIZE + lx;
+                blocks[idx] = b.id;
+                heights[idx] = (byte) y;
+            }
+        }
+        surfaceBlocks.put(key, blocks);
+        surfaceHeights.put(key, heights);
+    }
+
+    /**
+     * Plants and empty air shouldn't paint the map — skip down to the ground
+     * (or water) underneath. Leaves/logs stay so forests read as tree cover.
+     */
+    static boolean isMapDecoration(BlockType b) {
+        return b == null || b == BlockType.AIR || b.cross;
     }
 
     /**
@@ -83,11 +167,53 @@ public class MapData {
         return veinsByChunk.getOrDefault(key, Collections.emptyList());
     }
 
+    /** Flattened list of every discovered vein, for mix-waypoint clustering. */
+    public List<OreVeinRecord> allVeins() {
+        if (veinsByChunk.isEmpty()) return Collections.emptyList();
+        List<OreVeinRecord> all = new ArrayList<>();
+        for (List<OreVeinRecord> list : veinsByChunk.values()) {
+            all.addAll(list);
+        }
+        return all;
+    }
+
     /**
      * Check if a chunk has been explored.
      */
     public boolean isChunkExplored(int chunkX, int chunkZ) {
         return exploredChunks.contains(encodeChunkKey(chunkX, chunkZ));
+    }
+
+    /** True when this chunk has a sampled surface (v2 saves / re-explored v1). */
+    public boolean hasSurface(int chunkX, int chunkZ) {
+        return surfaceBlocks.containsKey(encodeChunkKey(chunkX, chunkZ));
+    }
+
+    /**
+     * Top-down block at a world column, or {@code null} if that chunk has no
+     * surface sample yet.
+     */
+    public BlockType getSurfaceBlock(int worldX, int worldZ) {
+        int cx = Math.floorDiv(worldX, Chunk.SIZE);
+        int cz = Math.floorDiv(worldZ, Chunk.SIZE);
+        short[] blocks = surfaceBlocks.get(encodeChunkKey(cx, cz));
+        if (blocks == null) return null;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        return BlockType.byId(blocks[lz * Chunk.SIZE + lx] & 0xFFFF);
+    }
+
+    /**
+     * Surface height at a world column, or {@code -1} if unsampled.
+     */
+    public int getSurfaceY(int worldX, int worldZ) {
+        int cx = Math.floorDiv(worldX, Chunk.SIZE);
+        int cz = Math.floorDiv(worldZ, Chunk.SIZE);
+        byte[] heights = surfaceHeights.get(encodeChunkKey(cx, cz));
+        if (heights == null) return -1;
+        int lx = Math.floorMod(worldX, Chunk.SIZE);
+        int lz = Math.floorMod(worldZ, Chunk.SIZE);
+        return heights[lz * Chunk.SIZE + lx] & 0xFF;
     }
 
     /**
@@ -102,25 +228,34 @@ public class MapData {
      */
     public static int[] getChunkCoords(float worldX, float worldZ) {
         return new int[]{
-            Math.floorDiv((int) Math.floor(worldX), 16),
-            Math.floorDiv((int) Math.floor(worldZ), 16)
+            Math.floorDiv((int) Math.floor(worldX), Chunk.SIZE),
+            Math.floorDiv((int) Math.floor(worldZ), Chunk.SIZE)
         };
     }
 
     /**
      * Encode chunk coordinates into a single long key for hashing.
      */
-    private static long encodeChunkKey(int chunkX, int chunkZ) {
+    public static long encodeChunkKey(int chunkX, int chunkZ) {
         return ((long) chunkX & 0xFFFFFFFFL) | (((long) chunkZ & 0xFFFFFFFFL) << 32);
+    }
+
+    public static int decodeChunkX(long key) {
+        return (int) key;
+    }
+
+    public static int decodeChunkZ(long key) {
+        return (int) (key >>> 32);
     }
 
     // ── Persistence ───────────────────────────────────────────────────────────
 
-    private static final int SAVE_VERSION = 1;
+    private static final int SAVE_VERSION = 2;
 
     /**
-     * Persist explored-chunk and vein data to disk. Called when switching
-     * dimensions or returning to the main menu so exploration is not lost.
+     * Persist explored-chunk, surface and vein data to disk. Called when
+     * switching dimensions or returning to the main menu so exploration is
+     * not lost.
      *
      * @param file target file path (created along with any missing parent dirs)
      */
@@ -151,6 +286,19 @@ public class MapData {
                         out.writeUTF(vein.oreType.name());
                     }
                 }
+
+                // v2: surface samples
+                out.writeInt(surfaceBlocks.size());
+                for (Map.Entry<Long, short[]> entry : surfaceBlocks.entrySet()) {
+                    long key = entry.getKey();
+                    out.writeLong(key);
+                    short[] blocks = entry.getValue();
+                    byte[] heights = surfaceHeights.getOrDefault(key, new byte[COLS]);
+                    for (int i = 0; i < COLS; i++) {
+                        out.writeShort(blocks[i]);
+                    }
+                    out.write(heights, 0, COLS);
+                }
             }
         } catch (IOException e) {
             System.err.println("Failed to save map data to " + file + ": " + e.getMessage());
@@ -160,6 +308,8 @@ public class MapData {
     /**
      * Load previously saved exploration data from disk. Ignores the file
      * gracefully if it does not exist (new world) or its format is unknown.
+     * Version 1 saves (chunks + veins, no terrain) still load; terrain fills
+     * in as those chunks are re-entered.
      *
      * @param file the map data file to load
      */
@@ -168,7 +318,7 @@ public class MapData {
         try (DataInputStream in = new DataInputStream(
                 new BufferedInputStream(Files.newInputStream(file)))) {
             int version = in.readInt();
-            if (version != SAVE_VERSION) {
+            if (version < 1 || version > SAVE_VERSION) {
                 System.err.println("Unknown map data version " + version + ", skipping.");
                 return;
             }
@@ -203,19 +353,40 @@ public class MapData {
                     veinsByChunk.put(key, veins);
                 }
             }
+
+            if (version >= 2) {
+                int surfaceCount = in.readInt();
+                if (surfaceCount < 0 || surfaceCount > 1_000_000) {
+                    System.err.println("Corrupt map data: invalid surface count " + surfaceCount + ", skipping.");
+                    return;
+                }
+                for (int i = 0; i < surfaceCount; i++) {
+                    long key = in.readLong();
+                    short[] blocks = new short[COLS];
+                    for (int j = 0; j < COLS; j++) {
+                        blocks[j] = in.readShort();
+                    }
+                    byte[] heights = in.readNBytes(COLS);
+                    if (heights.length < COLS) {
+                        byte[] padded = new byte[COLS];
+                        System.arraycopy(heights, 0, padded, 0, heights.length);
+                        heights = padded;
+                    }
+                    surfaceBlocks.put(key, blocks);
+                    surfaceHeights.put(key, heights);
+                }
+            }
+            revision++;
         } catch (IOException e) {
             System.err.println("Failed to load map data from " + file + ": " + e.getMessage());
         }
     }
 
     /**
-     * Check if a block is a full-size GTNH ore (not small ore).
+     * Check if a block is a full-size GTNH / vanilla ore (not a small ore).
      */
-    private static boolean isFullSizeOre(BlockType type) {
-        // Check if it's a full-size ore (not a small ore)
-        return type != null && type.solid && !type.toString().startsWith("SMALL_") &&
-               (type.toString().endsWith("_ORE") || type == BlockType.COAL_ORE ||
-                type == BlockType.IRON_ORE || type == BlockType.GOLD_ORE ||
-                type == BlockType.DIAMOND_ORE);
+    public static boolean isFullSizeOre(BlockType type) {
+        return type != null && type.solid && !type.name().startsWith("SMALL_") &&
+               type.name().endsWith("_ORE");
     }
 }

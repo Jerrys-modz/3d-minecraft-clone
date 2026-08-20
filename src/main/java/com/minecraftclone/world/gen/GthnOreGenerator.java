@@ -114,6 +114,32 @@ public class GthnOreGenerator {
         new OreVeinDef(20, 60, 0.68, BlockType.SAPPHIRE_ORE, BlockType.GREEN_SAPPHIRE_ORE, BlockType.SPESSARTINE_ORE),
     };
 
+    /**
+     * GTNH VisualProspecting-style mix identity: the vein's primary ore names
+     * the mix ("Copper Mix"), and the composition lists primary + secondaries.
+     */
+    public static final class MixInfo {
+        public final String name;
+        public final BlockType primary;
+        public final BlockType[] composition;
+
+        public MixInfo(String name, BlockType primary, BlockType[] composition) {
+            this.name = name;
+            this.primary = primary;
+            this.composition = composition;
+        }
+
+        /** Comma-separated ore labels for hover popups, e.g. "Copper, Tin, Silver". */
+        public String compositionLabel() {
+            StringBuilder sb = new StringBuilder();
+            for (BlockType t : composition) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(oreLabel(t));
+            }
+            return sb.toString();
+        }
+    }
+
     /** Small ore definitions: depth range and base rarity threshold. */
     private static class SmallOreDef {
         final int minDepth, maxDepth;
@@ -210,6 +236,58 @@ public class GthnOreGenerator {
         // Separate noise functions for veins and small ores to avoid correlation
         this.veinNoise = new Noise(seed ^ 0x1A2B3C4D5E6F7A8BL);
         this.smallOreNoise = new Noise(seed ^ 0x8B7A6F5E4D3C2B1AL);
+    }
+
+    /**
+     * Look up the GTNH mix a full-size ore belongs to. Primaries win when an
+     * ore is both a primary of one vein and a secondary of another; unmatched
+     * vanilla ores (coal/iron/gold/diamond) become a single-ore "mix" named
+     * after themselves so they still get a waypoint.
+     */
+    public static MixInfo mixInfo(BlockType ore) {
+        if (ore == null) return null;
+        MixInfo primaryHit = null;
+        MixInfo secondaryHit = null;
+        for (OreVeinDef def : VEIN_DEFS) {
+            if (def.primaryOre == ore) {
+                primaryHit = toInfo(def);
+                break;
+            }
+            if (secondaryHit == null) {
+                for (BlockType s : def.secondaryOres) {
+                    if (s == ore) {
+                        secondaryHit = toInfo(def);
+                        break;
+                    }
+                }
+            }
+        }
+        if (primaryHit != null) return primaryHit;
+        if (secondaryHit != null) return secondaryHit;
+        if (ore.solid && !ore.name().startsWith("SMALL_") && ore.name().endsWith("_ORE")) {
+            return new MixInfo(oreLabel(ore), ore, new BlockType[]{ore});
+        }
+        return null;
+    }
+
+    /** Convenience: {@code mixInfo(ore).name}, or {@code null}. */
+    public static String mixName(BlockType ore) {
+        MixInfo info = mixInfo(ore);
+        return info == null ? null : info.name;
+    }
+
+    static String oreLabel(BlockType t) {
+        String n = t.displayName();
+        if (n.endsWith(" Ore")) n = n.substring(0, n.length() - 4);
+        return n;
+    }
+
+    private static MixInfo toInfo(OreVeinDef def) {
+        java.util.LinkedHashSet<BlockType> unique = new java.util.LinkedHashSet<>();
+        unique.add(def.primaryOre);
+        for (BlockType s : def.secondaryOres) unique.add(s);
+        return new MixInfo(oreLabel(def.primaryOre) + " Mix", def.primaryOre,
+                unique.toArray(new BlockType[0]));
     }
 
     /**

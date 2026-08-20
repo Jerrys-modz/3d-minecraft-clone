@@ -633,8 +633,6 @@ public class Main {
         float[] animTime = {0f}; // free-running clock driving the flowing-water/lava texture scroll
         float[] attackCooldown = {0f}; // time until the next mob hit can land
         MapRenderer[] mapRenderer = {null}; // initialized when world is created
-        int[] lastChunkX = {Integer.MIN_VALUE}; // last explored chunk X (to detect chunk changes)
-        int[] lastChunkZ = {Integer.MIN_VALUE}; // last explored chunk Z
         boolean[] mapOpen = {false};             // true while the full-screen map is visible
         java.nio.file.Path[] currentWorldDir = {null}; // set whenever a world is loaded, for map persistence
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
@@ -1592,7 +1590,7 @@ public class Main {
 
             // Full-screen map controls (WASD pan, scroll zoom, R reset)
             if (mapOpen[0] && mapRenderer[0] != null) {
-                float panSpeed = 20f * dt;
+                float panSpeed = 280f * dt;
                 if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.FORWARD))) mapRenderer[0].pan(0, -panSpeed);
                 if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.BACK)))    mapRenderer[0].pan(0,  panSpeed);
                 if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.LEFT)))    mapRenderer[0].pan(-panSpeed, 0);
@@ -1619,16 +1617,6 @@ public class Main {
                 float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
                 player.update(dt, input, world, coldFactor);
 
-                // Track chunk exploration for the map
-                Vector3f playerPos_forChunk = player.getPosition();
-                int chunkX = World.worldToChunk((int) Math.floor(playerPos_forChunk.x));
-                int chunkZ = World.worldToChunk((int) Math.floor(playerPos_forChunk.z));
-                if (chunkX != lastChunkX[0] || chunkZ != lastChunkZ[0]) {
-                    world.getMapData().exploreChunk(chunkX, chunkZ, world);
-                    lastChunkX[0] = chunkX;
-                    lastChunkZ[0] = chunkZ;
-                }
-
                 // Dimension portals: walking into a NETHER_PORTAL or END_PORTAL block
                 // teleports the player to the linked dimension (with a short cooldown
                 // so they don't instantly bounce back through the arrival portal).
@@ -1643,8 +1631,6 @@ public class Main {
                         teleportThroughPortal(player, worlds, currentDim, portal);
                         world = worlds[currentDim[0].ordinal()];
                         mapRenderer[0] = new MapRenderer(world.getMapData());
-                        lastChunkX[0] = Integer.MIN_VALUE; // Reset chunk tracking for new dimension
-                        lastChunkZ[0] = Integer.MIN_VALUE;
                         teleportCooldown[0] = PORTAL_COOLDOWN_SECONDS;
                         showMessage(messages, "Welcome to " + currentDim[0].displayName(),
                                 new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
@@ -1716,6 +1702,20 @@ public class Main {
             // rendering setting (e.g. see-through leaves) takes effect live.
             world.update(player.getPosition().x, player.getPosition().z);
 
+            // JourneyMap maps loaded terrain around you. Run after streaming so
+            // newly generated chunks actually have blocks to sample; a 2-chunk
+            // radius fills the zoomed-in mini-map (~4 chunks across). Empty /
+            // not-yet-generated chunks are skipped and retried next frame.
+            if (started[0] && mapRenderer[0] != null) {
+                int chunkX = World.worldToChunk((int) Math.floor(player.getPosition().x));
+                int chunkZ = World.worldToChunk((int) Math.floor(player.getPosition().z));
+                for (int dx = -2; dx <= 2; dx++) {
+                    for (int dz = -2; dz <= 2; dz++) {
+                        world.getMapData().exploreChunk(chunkX + dx, chunkZ + dz, world);
+                    }
+                }
+            }
+
             // The OpenAL listener follows the camera every frame regardless of
             // whether player.update() ran this frame, so positional sounds still
             // pan/attenuate correctly while a menu is open. The camera never
@@ -1751,8 +1751,6 @@ public class Main {
                     currentDim[0] = DimensionType.OVERWORLD;
                     world = worlds[currentDim[0].ordinal()];
                     mapRenderer[0] = new MapRenderer(world.getMapData());
-                    lastChunkX[0] = Integer.MIN_VALUE; // Reset chunk tracking
-                    lastChunkZ[0] = Integer.MIN_VALUE;
                     for (int i = 0; i < 80; i++) {
                         world.update(0, 0);
                     }
@@ -2195,7 +2193,7 @@ public class Main {
                             player.getPosition().x, player.getPosition().z,
                             player.getCamera().getYaw());
                     hud.renderMiniMap(miniMapImage, mapRenderer[0].getMiniMapVersion(),
-                            0.2f, 0.2f, 0.9f, 0.9f, window.getAspectRatio());
+                            0.28f, 0.28f, 0.84f, 0.84f, window.getAspectRatio());
                 }
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
                 if (!settings.getGameMode().isInvulnerable()) {
@@ -2225,7 +2223,8 @@ public class Main {
                 java.awt.image.BufferedImage fullMapImage = mapRenderer[0].renderFullMap(
                         window.getWidth(), window.getHeight(),
                         player.getPosition().x, player.getPosition().z,
-                        player.getCamera().getYaw());
+                        player.getCamera().getYaw(),
+                        (int) input.getMouseX(), (int) input.getMouseY());
                 hud.renderFullMap(fullMapImage, mapRenderer[0].getFullMapVersion());
             }
             if (showDebug[0] && world != null) {
