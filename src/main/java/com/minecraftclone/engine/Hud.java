@@ -38,7 +38,8 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
 /**
  * Draws all 2D overlay elements: the crosshair, the wireframe outline around
  * the targeted block, the hotbar (a 9-slot strip of the player's inventory,
- * with the selected slot highlighted), the health/hunger/stamina bars,
+ * with the selected slot highlighted and the held item's name fading out
+ * above the bar), the health/hunger/stamina bars,
  * transient on-screen messages, the F3 debug overlay, and the Minecraft-style
  * inventory screen (36 slots + a 3x3 crafting grid with an output slot).
  * <p>
@@ -60,6 +61,12 @@ public class Hud {
     private static final float STAT_BAR_HEIGHT = 0.022f;
     private static final float STAT_BAR_GAP = 0.007f;          // gap between stacked bars
     private static final float STAT_BAR_STACK_MARGIN = 0.014f; // gap between the bar stack and the hotbar panel below it
+
+    /** Seconds the held-item name stays fully visible after a hotbar change. */
+    public static final float HOTBAR_NAME_HOLD_SECONDS = 2.0f;
+    /** Seconds the held-item name takes to fade after the hold. */
+    public static final float HOTBAR_NAME_FADE_SECONDS = 1.0f;
+    private static final float HOTBAR_NAME_SIZE = 0.034f;
 
     // Inventory screen layout (logical square units).
     private static final float INV_SLOT = 0.082f;
@@ -214,6 +221,11 @@ public class Hud {
     private final Matrix4f modelMatrix = new Matrix4f();
     private final Matrix4f hudTransform = new Matrix4f();
 
+    /** Last hotbar slot whose name was shown — used to restart the fade on a change. */
+    private int hotbarNameSlot = Integer.MIN_VALUE;
+    private String hotbarNameShown = "";
+    private float hotbarNameAge = Float.POSITIVE_INFINITY;
+
     public Hud(Shader lineShader, Shader hudShader, FontAtlas font) {
         this.lineShader = lineShader;
         this.hudShader = hudShader;
@@ -353,7 +365,7 @@ public class Hud {
 
     /** Renders the in-game 9-slot hotbar: the player's first 9 inventory slots. */
     public void renderHotbar(TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
-                              Inventory inventory, int selectedSlot, float aspectRatio) {
+                              Inventory inventory, int selectedSlot, float aspectRatio, float dt) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
 
@@ -409,8 +421,99 @@ public class Hud {
 
         renderDurabilityBars(iconHalf);
 
+        renderHotbarHeldName(inventory.stackOf(selectedSlot), selectedSlot, dt);
+
         glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
+     * Minecraft-style selected-item overlay: the name of whatever is in the
+     * highlighted hotbar slot, centred above the status bars, fully visible
+     * for {@link #HOTBAR_NAME_HOLD_SECONDS} then fading over
+     * {@link #HOTBAR_NAME_FADE_SECONDS}. Switching slots (or picking up a
+     * different item in the same slot) restarts the timer.
+     */
+    private void renderHotbarHeldName(ItemStack stack, int selectedSlot, float dt) {
+        String name = hotbarItemName(stack);
+        if (name == null) {
+            hotbarNameSlot = selectedSlot;
+            hotbarNameShown = "";
+            hotbarNameAge = Float.POSITIVE_INFINITY;
+            return;
+        }
+        if (selectedSlot != hotbarNameSlot || !name.equals(hotbarNameShown)) {
+            hotbarNameSlot = selectedSlot;
+            hotbarNameShown = name;
+            hotbarNameAge = 0f;
+        } else {
+            hotbarNameAge += Math.max(0f, dt);
+        }
+        float alpha = hotbarNameAlpha(hotbarNameAge);
+        if (alpha <= 0.01f) return;
+
+        float size = HOTBAR_NAME_SIZE;
+        float x = -text.measure(name, size) / 2f;
+        float y = hotbarHeldNameY();
+        float shadow = size * 0.06f;
+        text.begin();
+        text.add(name, x + shadow, y - shadow, size);
+        text.render(hudTransform, new Vector4f(0f, 0f, 0f, 0.55f * alpha));
+        text.begin();
+        text.add(name, x, y, size);
+        text.render(hudTransform, new Vector4f(1f, 1f, 1f, alpha));
+    }
+
+    /**
+     * Display name for the hotbar overlay, or {@code null} when the slot is empty.
+     */
+    public static String hotbarItemName(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        com.minecraftclone.world.tinkers.TinkersItem.Part part = stack.tinkersPart();
+        if (part != null) {
+            return part.material.displayName() + " " + titleFromEnum(part.shape.name());
+        }
+        com.minecraftclone.world.tinkers.TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) {
+            String kind = titleFromEnum(tool.kind.name());
+            BlockType head = tool.headMaterial();
+            return head != null ? head.displayName() + " " + kind : kind;
+        }
+        BlockType type = stack.type();
+        return type == null ? null : type.displayName();
+    }
+
+    /** 1 while holding, then linear fade to 0. */
+    public static float hotbarNameAlpha(float ageSeconds) {
+        if (ageSeconds < 0f) return 1f;
+        if (ageSeconds <= HOTBAR_NAME_HOLD_SECONDS) return 1f;
+        float fade = (ageSeconds - HOTBAR_NAME_HOLD_SECONDS) / HOTBAR_NAME_FADE_SECONDS;
+        return Math.max(0f, 1f - fade);
+    }
+
+    /**
+     * Bottom Y of the held-item name: sits above the four status bars so it
+     * doesn't draw through health/hunger.
+     */
+    public static float hotbarHeldNameY() {
+        float panelTop = -1f + HOTBAR_BOTTOM_MARGIN + HOTBAR_SLOT_SIZE + HOTBAR_PADDING;
+        return panelTop + STAT_BAR_STACK_MARGIN + 4f * (STAT_BAR_HEIGHT + STAT_BAR_GAP);
+    }
+
+    static String titleFromEnum(String name) {
+        StringBuilder sb = new StringBuilder(name.length());
+        boolean upper = true;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c == '_') {
+                sb.append(' ');
+                upper = true;
+            } else {
+                sb.append(upper ? Character.toUpperCase(c) : Character.toLowerCase(c));
+                upper = false;
+            }
+        }
+        return sb.toString();
     }
 
     /** Resets the per-frame scratch buffers for a fresh slot batch. */

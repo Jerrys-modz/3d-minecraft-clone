@@ -2181,7 +2181,7 @@ public class Main {
                     hud.renderBlockOutline(projection, view, hit.blockPos, breakFraction, outlineHeight);
                 }
                 hud.renderCrosshair(window.getAspectRatio());
-                hud.renderHotbar(atlas, itemTextures, player.getDurability(), player.getInventory(), selectedSlot[0], window.getAspectRatio());
+                hud.renderHotbar(atlas, itemTextures, player.getDurability(), player.getInventory(), selectedSlot[0], window.getAspectRatio(), dt);
                 // Render mini-map in top-right corner (hidden while full-screen map is open)
                 if (mapRenderer[0] != null && !mapOpen[0]) {
                     java.awt.image.BufferedImage miniMapImage = mapRenderer[0].renderMiniMap(
