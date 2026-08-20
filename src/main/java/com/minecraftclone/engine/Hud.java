@@ -1,1 +1,3 @@
-file:///tmp/Hud_fixed.java
+package com.minecraftclone.engine;
+
+import com.minecraftclone.Settings;
