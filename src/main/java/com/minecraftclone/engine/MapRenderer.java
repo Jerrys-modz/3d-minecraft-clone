@@ -24,32 +24,32 @@ public class MapRenderer {
 
     static {
         // Early-game ores
-        reg(BlockType.COPPER_ORE,      0xB87333, "Copper");
-        reg(BlockType.TIN_ORE,         0xC0C0C0, "Tin");
-        reg(BlockType.BAUXITE_ORE,     0xE8D0B0, "Bauxite");
-        reg(BlockType.ZINC_ORE,        0xA8B8C8, "Zinc");
-        reg(BlockType.LEAD_ORE,        0x6A6A7A, "Lead");
-        reg(BlockType.SILVER_ORE,      0xE0E0E0, "Silver");
+        reg(BlockType.COPPER_ORE,      0xE8772F, "Copper");
+        reg(BlockType.TIN_ORE,         0xD2E4EA, "Tin");
+        reg(BlockType.BAUXITE_ORE,     0xC65A2A, "Bauxite");
+        reg(BlockType.ZINC_ORE,        0xA8D890, "Zinc");
+        reg(BlockType.LEAD_ORE,        0x5C6A88, "Lead");
+        reg(BlockType.SILVER_ORE,      0xF2F4FF, "Silver");
 
         // Mid-game ores
-        reg(BlockType.NICKEL_ORE,      0xD4D4A0, "Nickel");
-        reg(BlockType.COBALT_ORE,      0x2E5090, "Cobalt");
-        reg(BlockType.TUNGSTEN_ORE,    0x4A4A5A, "Tungsten");
-        reg(BlockType.MOLYBDENUM_ORE,  0x5A5A6A, "Molybdenum");
-        reg(BlockType.PLATINUM_ORE,    0xE8E0D0, "Platinum");
+        reg(BlockType.NICKEL_ORE,      0xE6DC9A, "Nickel");
+        reg(BlockType.COBALT_ORE,      0x3A62F0, "Cobalt");
+        reg(BlockType.TUNGSTEN_ORE,    0x6A88A8, "Tungsten");
+        reg(BlockType.MOLYBDENUM_ORE,  0x7A96B0, "Molybdenum");
+        reg(BlockType.PLATINUM_ORE,    0xFFF4C8, "Platinum");
 
         // Advanced ores
-        reg(BlockType.CHROMIUM_ORE,    0xC8B8B8, "Chromium");
-        reg(BlockType.MANGANESE_ORE,   0x6A5A5A, "Manganese");
-        reg(BlockType.VANADIUM_ORE,    0x7A8A8A, "Vanadium");
-        reg(BlockType.BERYLLIUM_ORE,   0xD0D0E8, "Beryllium");
-        reg(BlockType.TITANIUM_ORE,    0xB8C8C8, "Titanium");
+        reg(BlockType.CHROMIUM_ORE,    0xC0E8DC, "Chromium");
+        reg(BlockType.MANGANESE_ORE,   0xC86890, "Manganese");
+        reg(BlockType.VANADIUM_ORE,    0x7A9A48, "Vanadium");
+        reg(BlockType.BERYLLIUM_ORE,   0xD0E8A8, "Beryllium");
+        reg(BlockType.TITANIUM_ORE,    0xB0C8E8, "Titanium");
 
         // Late-game ores
-        reg(BlockType.URANIUM_ORE,     0x9AC870, "Uranium");
-        reg(BlockType.THORIUM_ORE,     0x7A7A8A, "Thorium");
-        reg(BlockType.PLUTONIUM_ORE,   0x6A8A5A, "Plutonium");
-        reg(BlockType.IRIDIUM_ORE,     0xE8E8F0, "Iridium");
+        reg(BlockType.URANIUM_ORE,     0x8CFF40, "Uranium");
+        reg(BlockType.THORIUM_ORE,     0x7A5A48, "Thorium");
+        reg(BlockType.PLUTONIUM_ORE,   0x3A7040, "Plutonium");
+        reg(BlockType.IRIDIUM_ORE,     0xE8DCFF, "Iridium");
 
         // Vanilla ores
         reg(BlockType.COAL_ORE,        0x3A3A3A, "Coal");
@@ -58,16 +58,16 @@ public class MapRenderer {
         reg(BlockType.DIAMOND_ORE,     0x00FFFF, "Diamond");
 
         // Extended GTNH ore pack — iron chain
-        reg(BlockType.MAGNETITE_ORE,          0x4A4A5A, "Magnetite");
-        reg(BlockType.HEMATITE_ORE,           0x8B3A3A, "Hematite");
-        reg(BlockType.BROWN_LIMONITE_ORE,     0xA0784A, "Brown Limonite");
-        reg(BlockType.YELLOW_LIMONITE_ORE,    0xD4B44A, "Yellow Limonite");
-        reg(BlockType.BANDED_IRON_ORE,        0x8A6A5A, "Banded Iron");
-        reg(BlockType.VANADIUM_MAGNETITE_ORE, 0x6A6A8A, "Vanadium Magnetite");
+        reg(BlockType.MAGNETITE_ORE,          0x5A5A78, "Magnetite");
+        reg(BlockType.HEMATITE_ORE,           0xC04030, "Hematite");
+        reg(BlockType.BROWN_LIMONITE_ORE,     0xC08040, "Brown Limonite");
+        reg(BlockType.YELLOW_LIMONITE_ORE,    0xF0C040, "Yellow Limonite");
+        reg(BlockType.BANDED_IRON_ORE,        0xC07040, "Banded Iron");
+        reg(BlockType.VANADIUM_MAGNETITE_ORE, 0x505888, "Vanadium Magnetite");
         // Copper chain
-        reg(BlockType.CHALCOPYRITE_ORE,  0xC89A40, "Chalcopyrite");
-        reg(BlockType.TETRAHEDRITE_ORE,  0x7A8A7A, "Tetrahedrite");
-        reg(BlockType.MALACHITE_ORE,     0x2A8A4A, "Malachite");
+        reg(BlockType.CHALCOPYRITE_ORE,  0xD8B028, "Chalcopyrite");
+        reg(BlockType.TETRAHEDRITE_ORE,  0x506858, "Tetrahedrite");
+        reg(BlockType.MALACHITE_ORE,     0x20C060, "Malachite");
         // Lead / Zinc
         reg(BlockType.GALENA_ORE,        0x8A8AA0, "Galena");
         reg(BlockType.SPHALERITE_ORE,    0xB4A080, "Sphalerite");
@@ -76,10 +76,10 @@ public class MapRenderer {
         reg(BlockType.PENTLANDITE_ORE,   0x9A8A5A, "Pentlandite");
         reg(BlockType.COBALTITE_ORE,     0x4A5A9A, "Cobaltite");
         // Sulfur chain
-        reg(BlockType.PYRITE_ORE,        0xC8B840, "Pyrite");
-        reg(BlockType.ARSENOPYRITE_ORE,  0x8A9A7A, "Arsenopyrite");
-        reg(BlockType.SULFUR_ORE,        0xE8E050, "Sulfur");
-        reg(BlockType.CINNABAR_ORE,      0xD43A2A, "Cinnabar");
+        reg(BlockType.PYRITE_ORE,        0xF0D030, "Pyrite");
+        reg(BlockType.ARSENOPYRITE_ORE,  0xA8B888, "Arsenopyrite");
+        reg(BlockType.SULFUR_ORE,        0xFFF050, "Sulfur");
+        reg(BlockType.CINNABAR_ORE,      0xE82820, "Cinnabar");
         // Tin
         reg(BlockType.CASSITERITE_ORE,   0xD0C8B8, "Cassiterite");
         // Tungsten family
@@ -105,8 +105,8 @@ public class MapRenderer {
         // Light metals
         reg(BlockType.LITHIUM_ORE,       0xD0D8E8, "Lithium");
         // GTNH exotics
-        reg(BlockType.NAQUADAH_ORE,          0x2A3A2A, "Naquadah");
-        reg(BlockType.NAQUADAH_ENRICHED_ORE, 0x4A6A4A, "Naquadah Enriched");
+        reg(BlockType.NAQUADAH_ORE,          0x2A8050, "Naquadah");
+        reg(BlockType.NAQUADAH_ENRICHED_ORE, 0x208020, "Naquadah Enriched");
         reg(BlockType.TRINIUM_ORE,           0xC0D0D0, "Trinium");
         // Additional rare earths / PGM
         reg(BlockType.NEODYMIUM_ORE,     0x9A8AC8, "Neodymium");
@@ -132,11 +132,11 @@ public class MapRenderer {
         reg(BlockType.PYROCHLORE_ORE,    0xB8A878, "Pyrochlore");
         // Gemstones
         reg(BlockType.LEPIDOLITE_ORE,    0xD8A8D8, "Lepidolite");
-        reg(BlockType.RUBY_ORE,          0xD43060, "Ruby");
-        reg(BlockType.SAPPHIRE_ORE,      0x3060D4, "Sapphire");
-        reg(BlockType.GREEN_SAPPHIRE_ORE,0x3A9A5A, "Green Sapphire");
-        reg(BlockType.PYROPE_ORE,        0xA83050, "Pyrope");
-        reg(BlockType.SPESSARTINE_ORE,   0xD87030, "Spessartine");
+        reg(BlockType.RUBY_ORE,          0xFF2060, "Ruby");
+        reg(BlockType.SAPPHIRE_ORE,      0x2060FF, "Sapphire");
+        reg(BlockType.GREEN_SAPPHIRE_ORE,0x20D070, "Green Sapphire");
+        reg(BlockType.PYROPE_ORE,        0xC01840, "Pyrope");
+        reg(BlockType.SPESSARTINE_ORE,   0xF87820, "Spessartine");
     }
 
     private static void reg(BlockType type, int rgb, String name) {

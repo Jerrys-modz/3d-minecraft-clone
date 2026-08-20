@@ -16,20 +16,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TextureAtlasTest {
 
-    private static BufferedImage waterTile() {
-        BufferedImage atlas = new TextureAtlas().buildImage();
-        int tile = 6; // BlockType.WATER's topTile/sideTile
+    private static BufferedImage atlas() {
+        return new TextureAtlas().buildImage();
+    }
+
+    private static BufferedImage tile(BufferedImage atlas, int index) {
         int px = TextureAtlas.TILE_PX;
-        int ox = (tile % TextureAtlas.GRID) * px;
-        int oy = (tile / TextureAtlas.GRID) * px;
+        int ox = (index % TextureAtlas.GRID) * px;
+        int oy = (index / TextureAtlas.GRID) * px;
         return atlas.getSubimage(ox, oy, px, px);
+    }
+
+    private static BufferedImage waterTile() {
+        return tile(atlas(), 6); // BlockType.WATER's topTile/sideTile
     }
 
     @Test
     void buildImageProducesAFullSizedAtlas() {
-        BufferedImage atlas = new TextureAtlas().buildImage();
-        assertEquals(TextureAtlas.ATLAS_PX, atlas.getWidth());
-        assertEquals(TextureAtlas.ATLAS_PX, atlas.getHeight());
+        BufferedImage image = atlas();
+        assertEquals(TextureAtlas.ATLAS_PX, image.getWidth());
+        assertEquals(TextureAtlas.ATLAS_PX, image.getHeight());
     }
 
     /**
@@ -59,5 +65,95 @@ class TextureAtlasTest {
         }
         assertTrue(distinctColors.size() > 4, "expected real ripple variation, not a near-flat fill");
         assertTrue(blueCount > (px * px) / 2, "expected most of the tile to read as blue/teal rather than neutral grey");
+    }
+
+    @Test
+    void copperOreReadsOrangeOnStoneNotAGreyBlob() {
+        BufferedImage copper = tile(atlas(), 80);
+        int orange = 0, stoneish = 0, px = TextureAtlas.TILE_PX;
+        for (int y = 0; y < px; y++) {
+            for (int x = 0; x < px; x++) {
+                int rgb = copper.getRGB(x, y) & 0xFFFFFF;
+                int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+                if (r > g + 20 && r > b + 30 && r > 140) orange++;
+                if (Math.abs(r - g) < 18 && Math.abs(g - b) < 18) stoneish++;
+            }
+        }
+        assertTrue(orange > 12, "copper should show a real orange vein, got " + orange + " orange pixels");
+        assertTrue(stoneish > px * px / 3, "stone host rock should still be visible around the vein");
+    }
+
+    @Test
+    void smallOresAreSparseFlecksNotFullTileStripes() {
+        BufferedImage smallCopper = tile(atlas(), 100);
+        int px = TextureAtlas.TILE_PX;
+        int orange = 0, distinctRows = 0;
+        for (int y = 0; y < px; y++) {
+            boolean rowHasStone = false, rowHasOre = false;
+            for (int x = 0; x < px; x++) {
+                int rgb = smallCopper.getRGB(x, y) & 0xFFFFFF;
+                int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+                if (r > g + 20 && r > b + 30 && r > 140) {
+                    orange++;
+                    rowHasOre = true;
+                }
+                if (Math.abs(r - g) < 18 && Math.abs(g - b) < 18) rowHasStone = true;
+            }
+            if (rowHasStone && rowHasOre) distinctRows++;
+        }
+        assertTrue(orange > 4 && orange < px * px / 3,
+                "small ores should be sparse flecks, not a full-tile fill (" + orange + " ore pixels)");
+        assertTrue(distinctRows > 0, "small-ore rows should mix stone and mineral, not solid stripes");
+    }
+
+    @Test
+    void gtnhOresAreVisuallyDistinctFromEachOther() {
+        BufferedImage image = atlas();
+        // copper, tin, cobalt, uranium, ruby, malachite, sulfur, sapphire
+        int[] tiles = {80, 81, 87, 96, 175, 128, 136, 176};
+        long[] signatures = new long[tiles.length];
+        for (int i = 0; i < tiles.length; i++) {
+            BufferedImage t = tile(image, tiles[i]);
+            long sumR = 0, sumG = 0, sumB = 0;
+            int px = TextureAtlas.TILE_PX;
+            for (int y = 0; y < px; y++) {
+                for (int x = 0; x < px; x++) {
+                    int rgb = t.getRGB(x, y) & 0xFFFFFF;
+                    sumR += (rgb >> 16) & 0xFF;
+                    sumG += (rgb >> 8) & 0xFF;
+                    sumB += rgb & 0xFF;
+                }
+            }
+            signatures[i] = (sumR << 32) ^ (sumG << 16) ^ sumB;
+        }
+        Set<Long> unique = new HashSet<>();
+        for (long s : signatures) unique.add(s);
+        assertEquals(tiles.length, unique.size(), "ores that used to share a grey palette must no longer look identical");
+    }
+
+    @Test
+    void rubyAndSapphireReadAsSaturatedGems() {
+        BufferedImage ruby = tile(atlas(), 175);
+        BufferedImage sapphire = tile(atlas(), 176);
+        int red = countWhere(ruby, (r, g, b) -> r > 160 && r > g + 40 && r > b + 20);
+        int blue = countWhere(sapphire, (r, g, b) -> b > 160 && b > r + 40 && b > g + 20);
+        assertTrue(red > 6, "ruby should have saturated red facets");
+        assertTrue(blue > 6, "sapphire should have saturated blue facets");
+    }
+
+    private static int countWhere(BufferedImage tile, ChannelPred pred) {
+        int n = 0, px = TextureAtlas.TILE_PX;
+        for (int y = 0; y < px; y++) {
+            for (int x = 0; x < px; x++) {
+                int rgb = tile.getRGB(x, y) & 0xFFFFFF;
+                if (pred.test((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF)) n++;
+            }
+        }
+        return n;
+    }
+
+    @FunctionalInterface
+    private interface ChannelPred {
+        boolean test(int r, int g, int b);
     }
 }
