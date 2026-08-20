@@ -216,6 +216,40 @@ public final class CreativeCatalog {
         return list.toArray(new BlockType[0]);
     }
 
+    /**
+     * Items shown in the creative grid: the selected tab when {@code query} is
+     * blank, otherwise every catalog item whose display name matches (all tabs,
+     * de-duplicated). Words are ANDed, case-insensitive, so "small copper"
+     * hits Small Copper Ore and misses Copper Ingot.
+     */
+    public static BlockType[] itemsFor(int tab, String query) {
+        if (tab < 0 || tab >= TABS.length) return new BlockType[0];
+        BlockType[] tabItems = TABS[tab].items();
+        if (query == null || query.isBlank()) return tabItems;
+        List<BlockType> out = new ArrayList<>();
+        java.util.HashSet<BlockType> seen = new java.util.HashSet<>();
+        for (Tab t : TABS) {
+            for (BlockType type : t.items()) {
+                if (seen.add(type) && matches(type, query)) out.add(type);
+            }
+        }
+        return out.toArray(new BlockType[0]);
+    }
+
+    /** True if every whitespace-separated word of {@code query} appears in the item's name. */
+    public static boolean matches(BlockType type, String query) {
+        if (type == null) return false;
+        String q = query == null ? "" : query.trim().toLowerCase();
+        if (q.isEmpty()) return true;
+        String name = type.displayName().toLowerCase();
+        String raw = type.name().toLowerCase().replace('_', ' ');
+        for (String word : q.split("\\s+")) {
+            if (word.isEmpty()) continue;
+            if (!name.contains(word) && !raw.contains(word)) return false;
+        }
+        return true;
+    }
+
     private CreativeCatalog() {
     }
 }

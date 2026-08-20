@@ -128,6 +128,9 @@ public class Hud {
     private static final float TAB_GAP = 0.012f;
     private static final float TAB_CENTER_Y = 0.80f;        // center y of the tab strip
     private static final float TAB_H = 0.07f;
+    private static final float SEARCH_CENTER_Y = 0.615f;    // search field between tabs and the grid
+    private static final float SEARCH_H = 0.068f;
+    private static final int SEARCH_MAX_CHARS = 28;
 
     // Settings menu layout (logical square units) - shared by rendering and mouse hit-testing.
     private static final float SETTINGS_SIZE = 0.034f;
@@ -1733,6 +1736,46 @@ public class Hud {
                 && logicalY <= top + 0.004f && logicalY >= bot - 0.004f;
     }
 
+    static float catalogGridLeftX() {
+        return -catalogGridRightX();
+    }
+
+    static float searchBoxLeft() {
+        return catalogGridLeftX();
+    }
+
+    static float searchBoxRight() {
+        return catalogGridRightX();
+    }
+
+    static float searchBoxTop() {
+        return SEARCH_CENTER_Y + SEARCH_H / 2f;
+    }
+
+    static float searchBoxBottom() {
+        return SEARCH_CENTER_Y - SEARCH_H / 2f;
+    }
+
+    static float searchClearX() {
+        return searchBoxRight() - 0.038f;
+    }
+
+    /** True if the mouse is over the creative search field. */
+    public boolean creativeSearchAt(float logicalX, float logicalY) {
+        return logicalX >= searchBoxLeft() && logicalX <= searchBoxRight()
+                && Math.abs(logicalY - SEARCH_CENTER_Y) <= SEARCH_H / 2f;
+    }
+
+    /** True if the mouse is over the search field's clear "x". */
+    public boolean creativeSearchClearAt(float logicalX, float logicalY) {
+        return Math.abs(logicalX - searchClearX()) <= 0.03f
+                && Math.abs(logicalY - SEARCH_CENTER_Y) <= SEARCH_H / 2f;
+    }
+
+    public static int searchMaxChars() {
+        return SEARCH_MAX_CHARS;
+    }
+
     /** Maps a click on the scrollbar to a scroll-row offset. */
     public float catalogScrollForY(float logicalY, int itemCount) {
         float top = catalogScrollbarTopY();
@@ -1760,9 +1803,9 @@ public class Hud {
         return -1;
     }
 
-    /** The index (into the given tab's items) of the catalog item under the mouse, or -1. */
-    public int creativeItemAt(float logicalX, float logicalY, int tab, float scrollRows) {
-        return catalogItemAt(logicalX, logicalY, CreativeCatalog.TABS[tab].items().length, scrollRows);
+    /** The index into the currently shown catalog list under the mouse, or -1. */
+    public int creativeItemAt(float logicalX, float logicalY, int itemCount, float scrollRows) {
+        return catalogItemAt(logicalX, logicalY, itemCount, scrollRows);
     }
 
     static int catalogItemAt(float logicalX, float logicalY, int itemCount, float scrollRows) {
@@ -2408,6 +2451,71 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    private void renderCreativeSearchBox(String query, boolean focused) {
+        float left = searchBoxLeft();
+        float right = searchBoxRight();
+        float top = SEARCH_CENTER_Y + SEARCH_H / 2f;
+        float bot = SEARCH_CENTER_Y - SEARCH_H / 2f;
+        slotBgVerts.clear();
+        addQuad3(slotBgVerts, left, bot, right, top);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", focused
+                ? new Vector4f(0.18f, 0.18f, 0.22f, 0.95f)
+                : new Vector4f(0.10f, 0.10f, 0.12f, 0.90f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+
+        float[] border = {
+                left, bot, 0, right, bot, 0,
+                right, bot, 0, right, top, 0,
+                right, top, 0, left, top, 0,
+                left, top, 0, left, bot, 0,
+        };
+        inventoryHover.upload(border);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", focused
+                ? new Vector4f(0.95f, 0.95f, 0.95f, 0.95f)
+                : new Vector4f(0.55f, 0.55f, 0.55f, 0.85f));
+        glLineWidth(1.5f);
+        inventoryHover.render();
+        lineShader.unbind();
+
+        float textSize = 0.028f;
+        float textX = left + 0.02f;
+        float textY = SEARCH_CENTER_Y - 0.014f;
+        boolean empty = query.isEmpty();
+        String shown = empty ? (focused ? "" : "Search items...") : query;
+        drawTextAt(shown, textX, textY, textSize, empty
+                ? new Vector4f(0.55f, 0.55f, 0.55f, 1f)
+                : WHITE);
+
+        if (!empty) {
+            drawCenteredText("x", searchClearX(), SEARCH_CENTER_Y - 0.014f, 0.030f,
+                    new Vector4f(0.85f, 0.85f, 0.85f, 1f));
+        }
+
+        if (focused && (System.currentTimeMillis() / 400) % 2 == 0) {
+            float caretX = textX + text.measure(query, textSize) + 0.004f;
+            slotBgVerts.clear();
+            addQuad3(slotBgVerts, caretX, SEARCH_CENTER_Y - 0.018f, caretX + 0.006f, SEARCH_CENTER_Y + 0.020f);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            inventorySlotBg.upload(slotBgVerts.toArray());
+            lineShader.setUniform("color", WHITE);
+            inventorySlotBg.render();
+            lineShader.unbind();
+        }
+    }
+
     private void renderCatalogScrollbar(int itemCount, float scrollRows) {
         float max = catalogMaxScroll(itemCount);
         if (max <= 0f) return;
@@ -2449,12 +2557,14 @@ public class Hud {
      * Draws the creative-mode inventory screen: a tabbed item catalog on top of
      * the normal 9-slot hotbar plus a "destroy item" slot, with the cursor stack
      * following the mouse. {@code selectedTab} is the active category,
-     * {@code catalogScroll} is how many rows the catalog has been scrolled, and
-     * {@code selectedSlot} the highlighted hotbar slot.
+     * {@code catalogScroll} is how many rows the catalog has been scrolled,
+     * {@code searchQuery} filters the grid (blank = current tab; otherwise all
+     * items matching the query), and {@code searchFocused} draws the caret.
      */
     public void renderCreative(Inventory inventory, InventoryController controller, int selectedTab, int selectedSlot,
                                TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
-                               float aspectRatio, float cursorLx, float cursorLy, float catalogScroll) {
+                               float aspectRatio, float cursorLx, float cursorLy, float catalogScroll,
+                               String searchQuery, boolean searchFocused) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
@@ -2499,10 +2609,13 @@ public class Hud {
                     selected ? WHITE : new Vector4f(0.72f, 0.72f, 0.72f, 1f));
         }
 
+        if (searchQuery == null) searchQuery = "";
+        renderCreativeSearchBox(searchQuery, searchFocused);
+
         // Textured slot cells for the catalog grid and the hotbar + destroy slot.
         float centerY = slotCenterY();
         float dx = destroySlotX();
-        BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
+        BlockType[] items = CreativeCatalog.itemsFor(selectedTab, searchQuery);
         catalogScroll = clampCatalogScroll(catalogScroll, items.length);
         if (guiTextures != null) {
             guiVerts.clear();
@@ -2566,8 +2679,13 @@ public class Hud {
 
         renderCatalogScrollbar(items.length, catalogScroll);
 
+        if (items.length == 0) {
+            drawCenteredText("No matching items", 0f, CAT_GRID_TOP_Y - 0.01f, 0.028f,
+                    new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+        }
+
         // Catalog item hover highlight.
-        int hoverItem = creativeItemAt(cursorLx, cursorLy, selectedTab, catalogScroll);
+        int hoverItem = creativeItemAt(cursorLx, cursorLy, items.length, catalogScroll);
         if (hoverItem >= 0) {
             float[] c = catalogItemCenter(hoverItem, catalogScroll);
             inventoryHover.upload(outlineLines(c[0], c[1], CAT_SLOT / 2f + 0.004f));
@@ -2636,11 +2754,11 @@ public class Hud {
         BlockType tip = null;
         ItemStack tipStack = null;
         int hb = hotbarSlotAt(cursorLx, cursorLy);
-        int ci = creativeItemAt(cursorLx, cursorLy, selectedTab, catalogScroll);
+        int ci = creativeItemAt(cursorLx, cursorLy, items.length, catalogScroll);
         if (hb >= 0) {
             tipStack = inventory.stackOf(hb);
         } else if (ci >= 0) {
-            tip = CreativeCatalog.TABS[selectedTab].items()[ci];
+            tip = items[ci];
         }
         if (tipStack != null && !tipStack.isEmpty()) {
             renderTooltip(tooltipLines(tipStack, durability), cursorLx, cursorLy, aspectRatio);
@@ -2648,8 +2766,8 @@ public class Hud {
             renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
         }
 
-        drawCenteredText("Creative    Click: add    Shift-click: hotbar    Scroll: more    X: delete",
-                0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+        drawCenteredText("Creative    Type to search    Click: add    Shift-click: hotbar    Scroll: more    X: delete",
+                0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.020f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
         glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);

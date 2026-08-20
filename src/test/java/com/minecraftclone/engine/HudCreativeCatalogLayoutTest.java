@@ -66,6 +66,17 @@ class HudCreativeCatalogLayoutTest {
         }
     }
 
+    @Test
+    void searchBoxSitsBetweenTabsAndTheGrid() {
+        float searchTop = Hud.searchBoxTop();
+        float searchBot = Hud.searchBoxBottom();
+        float tabBot = 0.80f - 0.07f / 2f;
+        float gridTop = Hud.catalogItemCenter(0, 0f)[1] + 0.09f / 2f;
+        assertTrue(searchBot > gridTop + EPS, "search overlaps the catalog grid");
+        assertTrue(searchTop < tabBot - EPS, "search overlaps the tab strip");
+        assertTrue(Hud.searchBoxLeft() < 0f && Hud.searchBoxRight() > 0f);
+    }
+
     private static int materialsTabIndex() {
         for (int i = 0; i < CreativeCatalog.TABS.length; i++) {
             if ("Materials".equals(CreativeCatalog.TABS[i].label())) return i;

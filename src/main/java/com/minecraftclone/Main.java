@@ -513,9 +513,13 @@ public class Main {
     }
 
     /** Closes the creative screen, returning any cursor item to the inventory. */
-    private void closeCreative(InventoryController controller, boolean[] creativeOpen, AudioEngine audio) {
+    private void closeCreative(InventoryController controller, boolean[] creativeOpen, AudioEngine audio,
+                               StringBuilder search, boolean[] searchFocused, float[] scroll) {
         controller.returnCursorToInventory();
         creativeOpen[0] = false;
+        if (search != null) search.setLength(0);
+        if (searchFocused != null) searchFocused[0] = false;
+        if (scroll != null) scroll[0] = 0f;
         audio.play(SoundEvent.UI_CLOSE);
     }
 
@@ -603,6 +607,8 @@ public class Main {
         int[] creativeTab = {0};
         float[] creativeScroll = {0f};
         boolean[] creativeScrollbarDrag = {false};
+        StringBuilder creativeSearch = new StringBuilder();
+        boolean[] creativeSearchFocused = {false};
         int[] hoveredSlot = {-1};
         boolean[] mainMenuOpen = {true};
         boolean[] mainSettingsOpen = {false}; // settings page opened from the main menu
@@ -1381,7 +1387,13 @@ public class Main {
                 } else if (inventoryOpen[0]) {
                     closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                 } else if (creativeOpen[0]) {
-                    closeCreative(inventoryController, creativeOpen, audio);
+                    if (creativeSearchFocused[0] && creativeSearch.length() > 0) {
+                        creativeSearch.setLength(0);
+                        creativeScroll[0] = 0f;
+                    } else {
+                        closeCreative(inventoryController, creativeOpen, audio,
+                                creativeSearch, creativeSearchFocused, creativeScroll);
+                    }
                 } else {
                     menuOpen[0] = !menuOpen[0];
                 }
@@ -1392,14 +1404,18 @@ public class Main {
             // Suppress gameplay shortcuts (like inventory toggle) when the settings menu
             // is waiting to capture a gamepad button press for a binding.
             if (!(menuOpen[0] && bindingAction[0] >= 0)) {
-                if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY))) {
+                boolean inventoryKey = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY));
+                if (inventoryKey && !(creativeOpen[0] && creativeSearchFocused[0])) {
                     if (inventoryOpen[0]) {
                         closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                     } else if (creativeOpen[0]) {
-                        closeCreative(inventoryController, creativeOpen, audio);
+                        closeCreative(inventoryController, creativeOpen, audio,
+                            creativeSearch, creativeSearchFocused, creativeScroll);
                     } else if (settings.getGameMode().isCreative()) {
                         creativeOpen[0] = true;
                         creativeScroll[0] = 0f;
+                        creativeSearch.setLength(0);
+                        creativeSearchFocused[0] = true;
                         menuOpen[0] = false;
                         audio.play(SoundEvent.UI_OPEN);
                     } else {
@@ -1418,12 +1434,36 @@ public class Main {
                 // Creative catalog: click a tab to switch category, click an item to
                 // put it on the cursor (shift-click moves it straight to a hotbar
                 // slot), the destroy slot drops the cursor, and the hotbar behaves
-                // like the survival inventory. Overflowing tabs (Materials) scroll
-                // with the wheel or the scrollbar on the right.
+                // like the survival inventory. Overflowing tabs scroll with the
+                // wheel or the scrollbar. Type in the search box to filter every
+                // catalog item by name.
                 float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
                 boolean shift = input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT);
-                int tabItemCount = CreativeCatalog.TABS[creativeTab[0]].items().length;
+
+                String typed = input.consumeTypedChars();
+                if (!typed.isEmpty()) creativeSearchFocused[0] = true;
+                if (creativeSearchFocused[0]) {
+                    for (int i = 0; i < typed.length(); i++) {
+                        char ch = typed.charAt(i);
+                        if (creativeSearch.length() >= Hud.searchMaxChars()) break;
+                        if (Character.isLetterOrDigit(ch) || ch == ' ' || ch == '-' || ch == '_') {
+                            creativeSearch.append(ch);
+                            creativeScroll[0] = 0f;
+                        }
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE) && creativeSearch.length() > 0) {
+                        if (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || input.isKeyDown(GLFW_KEY_RIGHT_CONTROL)) {
+                            creativeSearch.setLength(0);
+                        } else {
+                            creativeSearch.deleteCharAt(creativeSearch.length() - 1);
+                        }
+                        creativeScroll[0] = 0f;
+                    }
+                }
+
+                BlockType[] shown = CreativeCatalog.itemsFor(creativeTab[0], creativeSearch.toString());
+                int tabItemCount = shown.length;
                 creativeScroll[0] = Hud.clampCatalogScroll(creativeScroll[0], tabItemCount);
 
                 double wheel = input.getScrollDelta();
@@ -1435,17 +1475,28 @@ public class Main {
                     int tab = hud.creativeTabAt(logicalX, logicalY);
                     if (tab >= 0) {
                         creativeTab[0] = tab;
+                        creativeSearch.setLength(0);
+                        creativeSearchFocused[0] = false;
                         creativeScroll[0] = 0f;
                         creativeScrollbarDrag[0] = false;
                         audio.play(SoundEvent.UI_CLICK);
+                    } else if (hud.creativeSearchAt(logicalX, logicalY)) {
+                        if (!creativeSearch.isEmpty() && hud.creativeSearchClearAt(logicalX, logicalY)) {
+                            creativeSearch.setLength(0);
+                            creativeScroll[0] = 0f;
+                        }
+                        creativeSearchFocused[0] = true;
+                        audio.play(SoundEvent.UI_CLICK);
                     } else if (hud.creativeScrollbarAt(logicalX, logicalY, tabItemCount)) {
+                        creativeSearchFocused[0] = false;
                         creativeScrollbarDrag[0] = true;
                         creativeScroll[0] = Hud.clampCatalogScroll(
                                 hud.catalogScrollForY(logicalY, tabItemCount), tabItemCount);
                     } else {
-                        int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0], creativeScroll[0]);
+                        creativeSearchFocused[0] = false;
+                        int item = hud.creativeItemAt(logicalX, logicalY, tabItemCount, creativeScroll[0]);
                         if (item >= 0) {
-                            inventoryController.pickCreativeItem(CreativeCatalog.TABS[creativeTab[0]].items()[item], shift);
+                            inventoryController.pickCreativeItem(shown[item], shift);
                             audio.play(SoundEvent.UI_CLICK);
                         } else if (hud.destroySlotAt(logicalX, logicalY)) {
                             inventoryController.destroyCursor();
@@ -1482,9 +1533,9 @@ public class Main {
                         inventoryController.beginDrag(hb, true);
                         audio.play(SoundEvent.UI_CLICK);
                     }
-                    int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0], creativeScroll[0]);
+                    int item = hud.creativeItemAt(logicalX, logicalY, tabItemCount, creativeScroll[0]);
                     if (item >= 0) {
-                        inventoryController.pickCreativeItem(CreativeCatalog.TABS[creativeTab[0]].items()[item], false);
+                        inventoryController.pickCreativeItem(shown[item], false);
                         audio.play(SoundEvent.UI_CLICK);
                     }
                 }
@@ -2306,7 +2357,7 @@ public class Main {
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
                 hud.renderCreative(player.getInventory(), inventoryController, creativeTab[0], selectedSlot[0],
                         atlas, itemTextures, player.getDurability(), window.getAspectRatio(), logicalX, logicalY,
-                        creativeScroll[0]);
+                        creativeScroll[0], creativeSearch.toString(), creativeSearchFocused[0]);
             }
 
             frameCount++;
