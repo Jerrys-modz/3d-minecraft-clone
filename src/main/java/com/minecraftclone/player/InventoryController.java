@@ -4,6 +4,7 @@ import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.tinkers.PartBuilderGui;
 import com.minecraftclone.world.tinkers.ToolPartType;
+import com.minecraftclone.world.tinkers.TinkersRegistry;
 import com.minecraftclone.world.tinkers.ToolStationGui;
 
 /**
@@ -143,6 +144,12 @@ public class InventoryController {
         if (gui.isPbShapeSlot(slotId)) {
             int shapeIdx = slotId - ContainerGui.PB_SHAPE_SLOT_0;
             gui.partBuilderGui().toggleShape(ToolPartType.values()[shapeIdx]);
+            return;
+        }
+        // Tinkers GUI: material slot only accepts registered materials.
+        if (gui.isPbMaterialSlot(slotId)) {
+            if (shift) { quickMove(slotId); return; }
+            clickPartBuilderMaterial(right);
             return;
         }
         // Tinkers GUI: output clicks trigger craft/assemble rather than pick-up.
@@ -584,6 +591,45 @@ public class InventoryController {
     // -----------------------------------------------------------------------
     // Tinkers GUI craft / assemble helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Part Builder material slot: only registered Tinkers materials are accepted.
+     * Invalid items stay on the cursor instead of being swallowed by setMaterial().
+     */
+    private void clickPartBuilderMaterial(boolean right) {
+        PartBuilderGui pb = gui.partBuilderGui();
+        if (pb == null) return;
+        ItemStack slotItem = pb.materialSlot();
+        if (!hasCursorItem()) {
+            if (slotItem.isEmpty()) return;
+            int take = right ? (slotItem.count() + 1) / 2 : slotItem.count();
+            cursor = slotItem.withCount(take);
+            int leftover = slotItem.count() - take;
+            pb.setMaterial(leftover <= 0 ? ItemStack.EMPTY : slotItem.withCount(leftover));
+            return;
+        }
+        if (cursor.isTinkers() || !TinkersRegistry.isMaterial(cursor.type())) {
+            return;
+        }
+        if (slotItem.isEmpty()) {
+            int place = right ? 1 : cursor.count();
+            pb.setMaterial(cursor.withCount(place));
+            cursor = cursor.withCount(cursor.count() - place);
+            return;
+        }
+        if (slotItem.type() == cursor.type()) {
+            int space = Inventory.maxStack(cursor.type()) - slotItem.count();
+            if (space <= 0) return;
+            int add = right ? 1 : Math.min(space, cursor.count());
+            pb.setMaterial(slotItem.withCount(slotItem.count() + add));
+            cursor = cursor.withCount(cursor.count() - add);
+            return;
+        }
+        if (right) return;
+        ItemStack prev = slotItem;
+        pb.setMaterial(cursor);
+        cursor = prev;
+    }
 
     /**
      * Tool Station input slot click: only accepts Tinkers parts (or the vanilla
