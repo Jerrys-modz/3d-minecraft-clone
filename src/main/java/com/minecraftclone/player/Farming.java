@@ -195,10 +195,24 @@ public final class Farming {
      * Returns the Y of the topmost SUGAR_CANE block in a column starting at (wx, wy, wz).
      * If the block at wy is not sugar cane, returns wy - 1 (signals "empty").
      */
-    private static int sugarCaneTop(World world, int wx, int wy, int wz) {
+    static int sugarCaneTop(World world, int wx, int wy, int wz) {
         int y = wy;
         while (y + 1 < Chunk.HEIGHT && world.getBlock(wx, y + 1, wz) == BlockType.SUGAR_CANE) y++;
         return y;
+    }
+
+    /**
+     * Breaks every sugar-cane block from {@code (wx, wy, wz)} up to the top of
+     * the column, dropping one {@link BlockType#SUGAR_CANE} per cell. The cell
+     * at {@code wy} is included. No-op if that cell is not sugar cane.
+     */
+    public static void collapseSugarCaneFrom(World world, int wx, int wy, int wz, java.util.Random rnd) {
+        if (world.getBlock(wx, wy, wz) != BlockType.SUGAR_CANE) return;
+        int topY = sugarCaneTop(world, wx, wy, wz);
+        for (int dropY = wy; dropY <= topY; dropY++) {
+            world.setBlock(wx, dropY, wz, BlockType.AIR);
+            world.spawnItem(wx, dropY, wz, BlockType.SUGAR_CANE, 1, rnd);
+        }
     }
 
     /**
@@ -290,11 +304,7 @@ public final class Farming {
                 if (b == BlockType.SUGAR_CANE) {
                     if (!canSugarCaneStand(world, wx, wy, wz)) {
                         // Water removed from base — break this cane and everything above it.
-                        int topY = sugarCaneTop(world, wx, wy, wz);
-                        for (int dropY = wy; dropY <= topY; dropY++) {
-                            world.setBlock(wx, dropY, wz, BlockType.AIR);
-                            world.spawnItem(wx, dropY, wz, BlockType.SUGAR_CANE, 1, rnd);
-                        }
+                        collapseSugarCaneFrom(world, wx, wy, wz, rnd);
                     } else {
                         // Only the top-most cane block can grow upward (like vanilla).
                         if (world.getBlock(wx, wy + 1, wz) == BlockType.SUGAR_CANE) continue;

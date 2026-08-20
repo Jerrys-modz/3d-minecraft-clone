@@ -674,20 +674,17 @@ public class InventoryController {
     private void craftPartBuilder() {
         PartBuilderGui pb = gui.partBuilderGui();
         if (pb == null || !pb.canCraft()) return;
-        ItemStack result = pb.craft();
-        if (result.isEmpty()) return;
-        if (cursor.isEmpty()) {
-            cursor = result;
-        } else {
-            // Cursor already holds something - add to inventory if possible.
-            inventory.addStack(result);
-        }
+        // Refuse if the cursor is occupied — otherwise craft() consumes the
+        // material and addStack may drop the unique part on the floor of a full bag.
+        if (!cursor.isEmpty()) return;
+        cursor = pb.craft();
     }
 
     /** Shift-click on Part Builder output: craft and deposit directly into inventory. */
     private void craftPartBuilderToInventory() {
         PartBuilderGui pb = gui.partBuilderGui();
         if (pb == null || !pb.canCraft()) return;
+        if (inventory.isFull()) return;
         ItemStack result = pb.craft();
         if (!result.isEmpty()) inventory.addStack(result);
     }
@@ -696,19 +693,15 @@ public class InventoryController {
     private void assembleToolStation() {
         ToolStationGui ts = gui.toolStationGui();
         if (ts == null || !ts.canAssemble()) return;
-        ItemStack result = ts.assemble();
-        if (result.isEmpty()) return;
-        if (cursor.isEmpty()) {
-            cursor = result;
-        } else {
-            inventory.addStack(result);
-        }
+        if (!cursor.isEmpty()) return;
+        cursor = ts.assemble();
     }
 
     /** Shift-click on Tool Station output: assemble and deposit directly into inventory. */
     private void assembleToolStationToInventory() {
         ToolStationGui ts = gui.toolStationGui();
         if (ts == null || !ts.canAssemble()) return;
+        if (inventory.isFull()) return;
         ItemStack result = ts.assemble();
         if (!result.isEmpty()) inventory.addStack(result);
     }

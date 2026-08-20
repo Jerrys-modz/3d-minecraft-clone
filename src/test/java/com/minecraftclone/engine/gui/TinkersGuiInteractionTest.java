@@ -138,6 +138,40 @@ class TinkersGuiInteractionTest {
     }
 
     @Test
+    void partBuilderOutputDoesNotConsumeWhenCursorOccupied() {
+        PartBuilderGui pb = new PartBuilderGui();
+        pb.setMaterial(ItemStack.of(BlockType.IRON_INGOT, 3));
+        pb.setSelectedShape(ToolPartType.PICK_HEAD);
+        ContainerGui gui = ContainerGui.forPartBuilder(inventory, pb);
+        InventoryController ctrl = new InventoryController(gui);
+
+        inventory.setSlot(0, BlockType.DIRT, 8);
+        ctrl.click(0, false, false); // pick up dirt into cursor
+        assertEquals(BlockType.DIRT, ctrl.cursorType());
+
+        ctrl.click(ContainerGui.PB_OUTPUT_SLOT, false, false);
+        assertEquals(BlockType.DIRT, ctrl.cursorType(), "cursor must keep the dirt");
+        assertEquals(3, pb.materialCount(), "material must not be consumed when cursor is occupied");
+        assertFalse(ctrl.cursor().isTinkersPart());
+    }
+
+    @Test
+    void partBuilderShiftClickDoesNotConsumeWhenInventoryFull() {
+        PartBuilderGui pb = new PartBuilderGui();
+        pb.setMaterial(ItemStack.of(BlockType.IRON_INGOT, 2));
+        pb.setSelectedShape(ToolPartType.PICK_HEAD);
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            inventory.setSlot(i, BlockType.DIRT, 1);
+        }
+        ContainerGui gui = ContainerGui.forPartBuilder(inventory, pb);
+        InventoryController ctrl = new InventoryController(gui);
+
+        ctrl.click(ContainerGui.PB_OUTPUT_SLOT, false, true);
+        assertEquals(2, pb.materialCount(), "material must not be consumed when the bag is full");
+        assertTrue(ctrl.cursor().isEmpty());
+    }
+
+    @Test
     void partBuilderShiftClickMaterialReturnsMaterialToInventory() {
         PartBuilderGui pb = new PartBuilderGui();
         pb.setMaterial(ItemStack.of(BlockType.GOLD_INGOT, 5));
@@ -217,6 +251,25 @@ class TinkersGuiInteractionTest {
             }
         }
         assertTrue(found, "Assembled tool should land in inventory");
+    }
+
+    @Test
+    void toolStationOutputDoesNotConsumeWhenCursorOccupied() {
+        ToolStationGui ts = new ToolStationGui();
+        ts.setSlot(0, ItemStack.tinkersPart(new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT)));
+        ts.setSlot(1, ItemStack.tinkersPart(new TinkersItem.Part(ToolPartType.TOOL_ROD, BlockType.PLANKS)));
+        ContainerGui gui = ContainerGui.forToolStation(inventory, ts);
+        InventoryController ctrl = new InventoryController(gui);
+
+        inventory.setSlot(0, BlockType.DIRT, 4);
+        ctrl.click(0, false, false);
+        assertEquals(BlockType.DIRT, ctrl.cursorType());
+
+        ctrl.click(ContainerGui.TS_OUTPUT_SLOT, false, false);
+        assertEquals(BlockType.DIRT, ctrl.cursorType());
+        assertTrue(ts.canAssemble(), "parts must still be in the station");
+        assertTrue(ts.slot(0).isTinkersPart());
+        assertTrue(ts.slot(1).isTinkersPart());
     }
 
     @Test

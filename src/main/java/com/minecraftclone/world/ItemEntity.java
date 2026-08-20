@@ -1,5 +1,7 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.player.ItemStack;
+import com.minecraftclone.world.tinkers.TinkersItem;
 import org.joml.Vector3f;
 
 /**
@@ -16,14 +18,28 @@ public class ItemEntity {
 
     public final BlockType type;
     public int count;
+    /** Optional Tinkers' payload; null for vanilla drops. */
+    public final TinkersItem tinkersItem;
     public final Vector3f position = new Vector3f(); // center of the item
     public final Vector3f velocity = new Vector3f();
     public float age;
 
     public ItemEntity(BlockType type, int count, float x, float y, float z) {
+        this(type, count, x, y, z, null);
+    }
+
+    public ItemEntity(BlockType type, int count, float x, float y, float z, TinkersItem tinkersItem) {
         this.type = type;
         this.count = count;
+        this.tinkersItem = tinkersItem;
         this.position.set(x, y, z);
+    }
+
+    /** Reconstructs the inventory stack this entity represents. */
+    public ItemStack asStack() {
+        if (tinkersItem instanceof TinkersItem.Part p) return ItemStack.tinkersPart(p);
+        if (tinkersItem instanceof TinkersItem.Tool t) return ItemStack.tinkersTool(t);
+        return ItemStack.of(type, count);
     }
 
     public boolean canPickup() {

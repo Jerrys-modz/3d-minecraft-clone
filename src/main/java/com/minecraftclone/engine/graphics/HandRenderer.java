@@ -1,6 +1,7 @@
 package com.minecraftclone.engine.graphics;
 
 import com.minecraftclone.engine.Shader;
+import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.util.FloatArray;
 import com.minecraftclone.util.IntArray;
 import com.minecraftclone.world.BlockType;
@@ -74,6 +75,19 @@ public class HandRenderer {
      */
     public void render(Shader shader, TextureAtlas atlas, ItemTextures itemTextures,
                        BlockType type, float bobPhase, float animTime, float dt, Matrix4f projection) {
+        render(shader, atlas, itemTextures,
+                type == null ? ItemStack.EMPTY : ItemStack.of(type, 1),
+                bobPhase, animTime, dt, projection);
+    }
+
+    /**
+     * Renders the held {@code stack} (or nothing if empty). Tinkers' items bind
+     * their generated part/tool texture instead of the grey sentinel.
+     */
+    public void render(Shader shader, TextureAtlas atlas, ItemTextures itemTextures,
+                       ItemStack stack, float bobPhase, float animTime, float dt, Matrix4f projection) {
+        if (stack == null || stack.isEmpty()) return;
+        BlockType type = stack.type();
         if (type == null || type == BlockType.AIR) return;
 
         float bobX = (float) Math.cos(bobPhase) * 0.02f;
@@ -117,7 +131,9 @@ public class HandRenderer {
         }
 
         mesh.upload(verts.toArray(), inds.toArray());
-        if (type.isItem) {
+        if (stack.isTinkers()) {
+            itemTextures.bindTinkersItem(stack.tinkersItem());
+        } else if (type.isItem) {
             itemTextures.bind(type);
         } else {
             atlas.bind();

@@ -6,6 +6,7 @@ import com.minecraftclone.engine.Shader;
 import com.minecraftclone.engine.Weather;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
+import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.world.gen.EndGenerator;
 import com.minecraftclone.world.gen.NetherGenerator;
@@ -564,6 +565,41 @@ public class World implements BlockAccessor {
         return out;
     }
 
+    /** Drops in-memory block entities that lived in an unloading chunk (already saved if modified). */
+    private void removeBlockEntitiesInChunk(Chunk c) {
+        int minX = c.getOriginX();
+        int minZ = c.getOriginZ();
+        blockEntities.entrySet().removeIf(e -> {
+            int x = keyX(e.getKey());
+            int z = keyZ(e.getKey());
+            return x >= minX && x < minX + Chunk.SIZE && z >= minZ && z < minZ + Chunk.SIZE;
+        });
+    }
+
+    /**
+     * After a chunk is inserted, try to form any smeltery whose controller is
+     * in this chunk, and retry already-loaded controllers now that a neighbor
+     * may have arrived (PatternValidator aborts when a neighbor isn't generated).
+     */
+    private void tryFormMultiblocksInChunk(Chunk chunk) {
+        int originX = chunk.getOriginX();
+        int originZ = chunk.getOriginZ();
+        for (int ly = 0; ly < Chunk.HEIGHT; ly++) {
+            for (int lx = 0; lx < Chunk.SIZE; lx++) {
+                for (int lz = 0; lz < Chunk.SIZE; lz++) {
+                    if (chunk.getLocal(lx, ly, lz) == BlockType.SMELTERY_CONTROLLER) {
+                        multiBlockManager.tryFormAt(this, originX + lx, ly, originZ + lz);
+                    }
+                }
+            }
+        }
+        for (Map.Entry<Long, BlockEntity> e : blockEntities.entrySet()) {
+            if (e.getValue().blockType() == BlockType.SMELTERY_CONTROLLER) {
+                multiBlockManager.tryFormAt(this, keyX(e.getKey()), keyY(e.getKey()), keyZ(e.getKey()));
+            }
+        }
+    }
+
     /** If the block at this position is static WATER/LAVA, promotes it to the matching tracked source. See setBlock. */
     private void promoteIfStaticFluid(int x, int y, int z) {
         BlockType promoted = getBlock(x, y, z).promotedFluidSource();
@@ -783,6 +819,7 @@ public class World implements BlockAccessor {
                     } else {
                         generator.generate(chunk);
                     }
+                    tryFormMultiblocksInChunk(chunk);
                     markNeighborDirty(cx - 1, cz);
                     markNeighborDirty(cx + 1, cz);
                     markNeighborDirty(cx, cz - 1);
@@ -808,8 +845,11 @@ public class World implements BlockAccessor {
                 if (c.isModifiedByPlayer()) {
                     storage.save(c, blockEntitiesInChunk(c));
                 }
-                // Notify multiblock manager so it can remove instances in this chunk
+                // Notify multiblock manager so it can drop instances whose
+                // controller lives in this chunk (shell-only unloads leave the
+                // formed instance intact so the controller entity is saved).
                 multiBlockManager.onChunkUnload(this, c.getPos().x(), c.getPos().z());
+                removeBlockEntitiesInChunk(c);
                 c.destroy();
             }
         }
@@ -1198,7 +1238,17 @@ public class World implements BlockAccessor {
 
     /** Spawns a dropped item of {@code type} at the given block position (centered, with a small random kick). */
     public void spawnItem(int blockX, int blockY, int blockZ, BlockType type, int count, java.util.Random rnd) {
+        if (type == null || count <= 0) return;
         ItemEntity e = new ItemEntity(type, count, blockX + 0.5f, blockY + 0.5f, blockZ + 0.5f);
+        e.velocity.set((rnd.nextFloat() - 0.5f) * 1.5f, 2.5f + rnd.nextFloat() * 1.5f, (rnd.nextFloat() - 0.5f) * 1.5f);
+        items.add(e);
+    }
+
+    /** Spawns a dropped {@link ItemStack}, preserving any Tinkers' payload. */
+    public void spawnItem(int blockX, int blockY, int blockZ, ItemStack stack, java.util.Random rnd) {
+        if (stack == null || stack.isEmpty()) return;
+        ItemEntity e = new ItemEntity(stack.type(), stack.count(),
+                blockX + 0.5f, blockY + 0.5f, blockZ + 0.5f, stack.tinkersItem());
         e.velocity.set((rnd.nextFloat() - 0.5f) * 1.5f, 2.5f + rnd.nextFloat() * 1.5f, (rnd.nextFloat() - 0.5f) * 1.5f);
         items.add(e);
     }
@@ -1249,13 +1299,21 @@ public class World implements BlockAccessor {
                 float dy = e.position.y - (playerPos.y + 0.9f);
                 float dz = e.position.z - playerPos.z;
                 if (dx * dx + dy * dy + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
-                    int remaining = inventory.add(e.type, e.count);
-                    if (remaining < e.count) {
-                        pickedUp = true;
-                        if (remaining > 0) {
-                            e.count = remaining;
-                        } else {
+                    if (e.tinkersItem != null) {
+                        ItemStack leftover = inventory.addStack(e.asStack());
+                        if (leftover.isEmpty()) {
+                            pickedUp = true;
                             it.remove();
+                        }
+                    } else {
+                        int remaining = inventory.add(e.type, e.count);
+                        if (remaining < e.count) {
+                            pickedUp = true;
+                            if (remaining > 0) {
+                                e.count = remaining;
+                            } else {
+                                it.remove();
+                            }
                         }
                     }
                 }

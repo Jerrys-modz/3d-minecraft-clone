@@ -500,10 +500,26 @@ public final class Mining {
         return stats != null && stats.kind() == ToolKind.SWORD;
     }
 
+    /** True if the held stack is a sword (vanilla or Tinkers'). */
+    public static boolean isSword(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) return tool.kind == ToolKind.SWORD;
+        return isSword(stack.type());
+    }
+
     /** True if {@code item} is a hammer (the 3x3 area-mining tool). */
     public static boolean isHammer(BlockType item) {
         ToolStats stats = TOOLS.get(item);
         return stats != null && stats.kind() == ToolKind.HAMMER;
+    }
+
+    /** True if the held stack is a hammer (vanilla or Tinkers'). */
+    public static boolean isHammer(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) return tool.kind == ToolKind.HAMMER;
+        return isHammer(stack.type());
     }
 
     /** True if {@code item} is a hoe (used to till dirt into farmland via right-click). */
@@ -526,5 +542,23 @@ public final class Mining {
             };
         }
         return 1f;
+    }
+
+    /**
+     * Hit damage for the held {@link ItemStack}. Tinkers' swords use the head
+     * material's mining tier (wood/stone/iron/diamond → 4/5/6/7).
+     */
+    public static float attackDamage(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return 1f;
+        TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null && tool.kind == ToolKind.SWORD) {
+            return switch (tool.miningTier()) {
+                case TIER_WOOD -> 4f;
+                case TIER_STONE -> 5f;
+                case TIER_IRON -> 6f;
+                default -> tool.miningTier() >= TIER_DIAMOND ? 7f : 4f;
+            };
+        }
+        return attackDamage(stack.type());
     }
 }

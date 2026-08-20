@@ -402,7 +402,11 @@ public class ContainerGui {
         } else if (isPbMaterialSlot(slotId)) {
             partBuilderGui.setMaterial(type == null ? ItemStack.EMPTY : ItemStack.of(type, count));
         } else if (isTsInputSlot(slotId)) {
-            toolStationGui.setSlot(slotId - TS_SLOT_0, ItemStack.EMPTY); // type-only path clears the slot
+            // Type-only writes cannot reconstruct a Tinkers part payload. Clear
+            // when asked to empty the slot; otherwise leave the part alone.
+            if (type == null || count <= 0) {
+                toolStationGui.setSlot(slotId - TS_SLOT_0, ItemStack.EMPTY);
+            }
         }
         // PB output, PB shape buttons, TS output — read-only, silently ignored
     }

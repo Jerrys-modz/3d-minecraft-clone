@@ -25,12 +25,18 @@ import java.io.IOException;
  */
 public abstract class MultiBlockEntity implements BlockEntity {
 
-    protected final MultiBlockInstance instance;
+    protected MultiBlockInstance instance;
     /** True while the multi-block structure is formed. Set to false on deform. */
     protected boolean formed = true;
 
     protected MultiBlockEntity(MultiBlockInstance instance) {
         this.instance = instance;
+    }
+
+    /** Re-attach a deserialized (or previously deformed) entity to a newly formed instance. */
+    public void reform(MultiBlockInstance instance) {
+        this.instance = instance;
+        this.formed = true;
     }
 
     /** Which block this entity lives in — the controller block type. */

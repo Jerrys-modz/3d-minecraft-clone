@@ -22,11 +22,22 @@ public class MiningController {
      * @param heldItem   the currently selected hotbar item
      * @param holding    whether the break button is held down this frame
      * @param dt         seconds since the last update
-     * @return the break fraction after this update; the caller should treat a result &gt;= 1
+     * @return the break fraction after this update; the caller should treat a result >= 1
      *         as "broken this frame" and call {@link #reset()} once it has actually removed the block
      */
     public float update(Vector3i targetPos, BlockType targetType, BlockType heldItem, boolean holding, float dt) {
-        if (!holding || targetPos == null || targetType == BlockType.BEDROCK || !Mining.canBreak(targetType, heldItem)) {
+        ItemStack stack = (heldItem == null) ? ItemStack.EMPTY : ItemStack.of(heldItem, 1);
+        return update(targetPos, targetType, stack, holding, dt);
+    }
+
+    /**
+     * ItemStack-aware mining update: Tinkers' tools use their payload tier/speed
+     * ({@link Mining#canBreakItem} / {@link Mining#breakTimeItem}) instead of the
+     * sentinel {@code TINKERS_TOOL} BlockType, which has no {@code TOOLS} entry.
+     */
+    public float update(Vector3i targetPos, BlockType targetType, ItemStack heldItem, boolean holding, float dt) {
+        if (!holding || targetPos == null || targetType == BlockType.BEDROCK
+                || !Mining.canBreakItem(targetType, heldItem)) {
             reset();
             return 0f;
         }
@@ -37,7 +48,7 @@ public class MiningController {
         }
 
         progress += dt;
-        float required = Mining.breakTimeSeconds(targetType, heldItem);
+        float required = Mining.breakTimeItem(targetType, heldItem);
         if (required <= 0f) return 1f;
         return progress / required;
     }

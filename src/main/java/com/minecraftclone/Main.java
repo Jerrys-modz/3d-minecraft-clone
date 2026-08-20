@@ -23,6 +23,7 @@ import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
+import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.player.JoinedStorage;
 import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
@@ -349,13 +350,13 @@ public class Main {
      * solid block), dropping its loot and wearing the tool in survival. Shared by
      * the normal break and the hammer's 3x3 area mine.
      */
-    private void breakBlockAt(World world, Player player, GameMode mode, BlockType heldItem, Random loot,
-                              List<Hud.Message> messages, AudioEngine audio, int bx, int by, int bz) {
+    private void breakBlockAt(World world, Player player, GameMode mode, ItemStack heldStack, int heldSlot,
+                              Random loot, List<Hud.Message> messages, AudioEngine audio, int bx, int by, int bz) {
         BlockType overlay = world.getOverlay(bx, by, bz);
         boolean targetingOverlay = overlay != BlockType.AIR;
         BlockType targetType = targetingOverlay ? overlay : world.getBlock(bx, by, bz);
         if (targetType == BlockType.AIR || targetType == BlockType.BEDROCK) return;
-        if (!Mining.canBreak(targetType, heldItem)) return; // e.g. an ore the hammer can't mine
+        if (!Mining.canBreakItem(targetType, heldStack)) return; // e.g. an ore the hammer can't mine
 
         audio.playBlockSound(SoundMaterial.of(targetType), BlockAction.BREAK, bx + 0.5f, by + 0.5f, bz + 0.5f, 1f);
 
@@ -377,6 +378,10 @@ public class Main {
             // a fluid source drops itself.
             if (targetType.isFluidFlow()) {
                 // nothing to drop
+            } else if (targetType == BlockType.SUGAR_CANE) {
+                // The broken cell is already AIR. Drop it and collapse the column above.
+                world.spawnItem(bx, by, bz, BlockType.SUGAR_CANE, 1, loot);
+                com.minecraftclone.player.Farming.collapseSugarCaneFrom(world, bx, by + 1, bz, loot);
             } else if (targetType.isCrop()) {
                 // Crops drop their harvest item (and bonus seeds for ripe wheat).
                 BlockType drop = com.minecraftclone.player.Farming.harvestDrop(targetType);
@@ -390,6 +395,20 @@ public class Main {
             } else if (targetType == BlockType.FARMLAND || targetType == BlockType.FARMLAND_WET) {
                 // Farmland / wet farmland → drops as dirt when broken (same as vanilla).
                 world.spawnItem(bx, by, bz, BlockType.DIRT, 1, loot);
+                // Pop the crop sitting on top immediately instead of waiting for a random tick.
+                BlockType above = world.getBlock(bx, by + 1, bz);
+                if (above != null && above.isCrop()) {
+                    if (above == BlockType.SUGAR_CANE) {
+                        com.minecraftclone.player.Farming.collapseSugarCaneFrom(world, bx, by + 1, bz, loot);
+                    } else {
+                        BlockType cropDrop = com.minecraftclone.player.Farming.harvestDrop(above);
+                        world.setBlock(bx, by + 1, bz, BlockType.AIR);
+                        if (cropDrop != null) world.spawnItem(bx, by + 1, bz, cropDrop, 1, loot);
+                        if (com.minecraftclone.player.Farming.alsoDropsSeeds(above)) {
+                            world.spawnItem(bx, by + 1, bz, BlockType.SEEDS, 1 + loot.nextInt(3), loot);
+                        }
+                    }
+                }
             } else if (targetType == BlockType.CLAY) {
                 // Clay block → drops 4 clay balls (same as vanilla).
                 world.spawnItem(bx, by, bz, BlockType.CLAY_BALL, 4, loot);
@@ -435,6 +454,22 @@ public class Main {
                         world.removeBlockEntity(bx, by, bz);
                     }
                 }
+                if (targetType == BlockType.PART_BUILDER) {
+                    if (world.blockEntityAt(bx, by, bz) instanceof com.minecraftclone.world.tinkers.PartBuilderEntity pb) {
+                        ItemStack mat = pb.gui().materialSlot();
+                        if (!mat.isEmpty()) world.spawnItem(bx, by, bz, mat, loot);
+                        world.removeBlockEntity(bx, by, bz);
+                    }
+                }
+                if (targetType == BlockType.TOOL_STATION) {
+                    if (world.blockEntityAt(bx, by, bz) instanceof com.minecraftclone.world.tinkers.ToolStationEntity ts) {
+                        for (int s = 0; s < com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS; s++) {
+                            ItemStack st = ts.gui().slot(s);
+                            if (!st.isEmpty()) world.spawnItem(bx, by, bz, st, loot);
+                        }
+                        world.removeBlockEntity(bx, by, bz);
+                    }
+                }
                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
                     world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
                 }
@@ -445,13 +480,35 @@ public class Main {
             }
 
             // Wear down the tool that did the breaking; once its uses run out, it's gone.
-            if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
-                player.getInventory().remove(heldItem, 1);
-                System.out.println("Your " + heldItem + " broke!");
-                showMessage(messages, "Your " + heldItem + " broke!",
+            wearHeldTool(player, heldSlot, heldStack, messages, audio);
+        }
+    }
+
+    /**
+     * Consumes one use of the held tool. Tinkers' tools wear their own payload
+     * durability; vanilla tools go through {@code ToolDurability}.
+     */
+    private void wearHeldTool(Player player, int heldSlot, ItemStack heldStack,
+                              List<Hud.Message> messages, AudioEngine audio) {
+        if (heldStack == null || heldStack.isEmpty()) return;
+        com.minecraftclone.world.tinkers.TinkersItem.Tool tool = heldStack.tinkersTool();
+        if (tool != null) {
+            if (tool.use()) {
+                player.getInventory().setStack(heldSlot, ItemStack.EMPTY);
+                System.out.println("Your " + tool + " broke!");
+                showMessage(messages, "Your tool broke!",
                         new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
                 audio.play(SoundEvent.TOOL_BREAK);
             }
+            return;
+        }
+        BlockType heldItem = heldStack.type();
+        if (Mining.isTool(heldItem) && player.getDurability().use(heldItem)) {
+            player.getInventory().remove(heldItem, 1);
+            System.out.println("Your " + heldItem + " broke!");
+            showMessage(messages, "Your " + heldItem + " broke!",
+                    new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
+            audio.play(SoundEvent.TOOL_BREAK);
         }
     }
 
@@ -1597,10 +1654,10 @@ public class Main {
                 // Drop the whole inventory onto the ground, Minecraft-style.
                 Vector3f deathPos = player.getPosition();
                 for (int slot = 0; slot < Inventory.SIZE; slot++) {
-                    BlockType t = player.getInventory().typeOf(slot);
-                    if (t != null) {
+                    ItemStack s = player.getInventory().stackOf(slot);
+                    if (!s.isEmpty()) {
                         world.spawnItem((int) Math.floor(deathPos.x), (int) Math.floor(deathPos.y),
-                                (int) Math.floor(deathPos.z), t, player.getInventory().countOf(slot), loot);
+                                (int) Math.floor(deathPos.z), s, loot);
                     }
                 }
                 // Worn armor drops too (one piece per slot).
@@ -1712,7 +1769,8 @@ public class Main {
                 boolean targetingOverlay = targetOverlay != BlockType.AIR;
                 BlockType targetType = targetingOverlay ? targetOverlay
                         : hit != null ? world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z) : BlockType.AIR;
-                BlockType heldItem = player.getInventory().typeOf(selectedSlot[0]);
+                ItemStack heldStack = player.getInventory().stackOf(selectedSlot[0]);
+                BlockType heldItem = heldStack.isEmpty() ? null : heldStack.type();
                 GameMode mode = settings.getGameMode();
 
                 // What the crosshair is aimed at: a mob takes priority over the block
@@ -1726,18 +1784,14 @@ public class Main {
                         && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && attackCooldown[0] <= 0f) {
                     // Creative kills in one hit; survival/adventure deal tool damage
                     // (a sword hits harder than a bare-handed punch).
-                    float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldItem);
+                    float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldStack);
                     boolean killed = world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
                     audio.playAt(killed ? SoundEvent.MOB_DEATH : SoundEvent.ATTACK,
                             targetedMob.position.x, targetedMob.position.y, targetedMob.position.z, 1f);
                     attackCooldown[0] = 0.45f;
                     // Swords wear out with use (creative tools never break).
-                    if (!mode.isCreative() && Mining.isSword(heldItem) && player.getDurability().use(heldItem)) {
-                        player.getInventory().remove(heldItem, 1);
-                        System.out.println("Your " + heldItem + " broke!");
-                        showMessage(messages, "Your " + heldItem + " broke!",
-                                new Vector4f(1f, 0.72f, 0.3f, 1f), 2.5f);
-                        audio.play(SoundEvent.TOOL_BREAK);
+                    if (!mode.isCreative() && Mining.isSword(heldStack)) {
+                        wearHeldTool(player, selectedSlot[0], heldStack, messages, audio);
                     }
                 }
 
@@ -1752,7 +1806,7 @@ public class Main {
                         // bulldoze a whole swath of blocks by accident.
                         breakFraction = (hit != null && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) ? 1f : 0f;
                     } else {
-                        breakFraction = mining.update(hit != null ? hit.blockPos : null, targetType, heldItem, holding, dt);
+                        breakFraction = mining.update(hit != null ? hit.blockPos : null, targetType, heldStack, holding, dt);
                     }
 
                     if (breakFraction >= 1f) {
@@ -1760,16 +1814,16 @@ public class Main {
                         breakFraction = 0f;
                         handRenderer.triggerSwing();
                         int bx = hit.blockPos.x, by = hit.blockPos.y, bz = hit.blockPos.z;
-                        if (Mining.isHammer(heldItem)) {
+                        if (Mining.isHammer(heldStack)) {
                             // A hammer mines a 3x3 area: the target block plus its
                             // eight horizontal neighbours, all in one swing.
                             for (int dx = -1; dx <= 1; dx++) {
                                 for (int dz = -1; dz <= 1; dz++) {
-                                    breakBlockAt(world, player, mode, heldItem, loot, messages, audio, bx + dx, by, bz + dz);
+                                    breakBlockAt(world, player, mode, heldStack, selectedSlot[0], loot, messages, audio, bx + dx, by, bz + dz);
                                 }
                             }
                         } else {
-                            breakBlockAt(world, player, mode, heldItem, loot, messages, audio, bx, by, bz);
+                            breakBlockAt(world, player, mode, heldStack, selectedSlot[0], loot, messages, audio, bx, by, bz);
                         }
                     }
                 }
@@ -2038,7 +2092,7 @@ public class Main {
             if (started[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]
                     && !settings.getGameMode().isSpectator()) {
                 handRenderer.render(chunkShader, atlas, itemTextures,
-                        player.getInventory().typeOf(selectedSlot[0]),
+                        player.getInventory().stackOf(selectedSlot[0]),
                         player.getBobPhase(), animTime[0], dt, projection);
             }
 
@@ -2192,9 +2246,9 @@ public class Main {
                         hud.drawTextLeft("  Fluid level: " + world.getFluidLevel(bp.x, bp.y, bp.z),
                                 -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                     }
-                    BlockType heldItem = player.getInventory().typeOf(selectedSlot[0]);
-                    String breakInfo = Mining.canBreak(looking, heldItem)
-                            ? String.format(Locale.ROOT, "  Break time: %.2fs", Mining.breakTimeSeconds(looking, heldItem))
+                    ItemStack heldStack = player.getInventory().stackOf(selectedSlot[0]);
+                    String breakInfo = Mining.canBreakItem(looking, heldStack)
+                            ? String.format(Locale.ROOT, "  Break time: %.2fs", Mining.breakTimeItem(looking, heldStack))
                             : "  Cannot break with current tool";
                     hud.drawTextLeft(breakInfo, -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 } else {

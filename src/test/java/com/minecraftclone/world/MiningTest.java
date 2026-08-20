@@ -1,6 +1,11 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.player.ItemStack;
+import com.minecraftclone.world.tinkers.TinkersItem;
+import com.minecraftclone.world.tinkers.ToolPartType;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -70,7 +75,7 @@ class MiningTest {
         assertTrue(Mining.isHammer(BlockType.DIAMOND_HAMMER));
         assertFalse(Mining.isHammer(BlockType.WOOD_PICKAXE));
         assertFalse(Mining.isHammer(BlockType.WOOD_SHOVEL));
-        assertFalse(Mining.isHammer(null));
+        assertFalse(Mining.isHammer((BlockType) null));
     }
 
     @Test
@@ -84,5 +89,58 @@ class MiningTest {
                 < Mining.breakTimeSeconds(BlockType.PLANKS_STAIRS, null));
         assertTrue(Mining.breakTimeSeconds(BlockType.WOODEN_FENCE, BlockType.IRON_BROADAXE)
                 < Mining.breakTimeSeconds(BlockType.WOODEN_FENCE, null));
+    }
+
+    private static ItemStack tinkersTool(Mining.ToolKind kind, BlockType head) {
+        return ItemStack.tinkersTool(new TinkersItem.Tool(kind, List.of(
+                new TinkersItem.ToolLayer(ToolPartType.PICK_HEAD, head),
+                new TinkersItem.ToolLayer(ToolPartType.TOOL_ROD, BlockType.PLANKS)
+        )));
+    }
+
+    @Test
+    void tinkersPickCanMineIronOreAtHeadSpeed() {
+        ItemStack pick = tinkersTool(Mining.ToolKind.PICKAXE, BlockType.IRON_INGOT);
+        assertTrue(Mining.canBreakItem(BlockType.IRON_ORE, pick),
+                "iron-head Tinkers pick must be able to mine iron ore");
+        assertFalse(Mining.canBreak(BlockType.IRON_ORE, BlockType.TINKERS_TOOL),
+                "the TINKERS_TOOL sentinel itself has no tier and must not mine ores");
+        // IRON_ORE hardness 4.0, iron-head miningSpeed 3.0 → 4/3 seconds
+        assertEquals(4.0f / 3.0f, Mining.breakTimeItem(BlockType.IRON_ORE, pick), 0.0001f);
+        assertTrue(Mining.breakTimeItem(BlockType.DIRT, pick)
+                > Mining.breakTimeSeconds(BlockType.DIRT, BlockType.IRON_SHOVEL),
+                "a pick is not effective on dirt");
+    }
+
+    @Test
+    void tinkersSwordHitsHarderThanAPunchAndCountsAsASword() {
+        ItemStack sword = ItemStack.tinkersTool(new TinkersItem.Tool(Mining.ToolKind.SWORD, List.of(
+                new TinkersItem.ToolLayer(ToolPartType.SWORD_BLADE, BlockType.IRON_INGOT),
+                new TinkersItem.ToolLayer(ToolPartType.TOOL_ROD, BlockType.PLANKS)
+        )));
+        assertTrue(Mining.isSword(sword));
+        assertEquals(6f, Mining.attackDamage(sword), 0.0001f);
+        assertEquals(1f, Mining.attackDamage(ItemStack.of(BlockType.TINKERS_TOOL, 1)), 0.0001f,
+                "payload-less sentinel must not deal sword damage");
+    }
+
+    @Test
+    void tinkersHammerIsTheAreaMiningTool() {
+        ItemStack hammer = tinkersTool(Mining.ToolKind.HAMMER, BlockType.IRON_INGOT);
+        assertTrue(Mining.isHammer(hammer));
+        assertFalse(Mining.isHammer(tinkersTool(Mining.ToolKind.PICKAXE, BlockType.IRON_INGOT)));
+        assertFalse(Mining.isHammer(ItemStack.EMPTY));
+    }
+
+    @Test
+    void toolStatsForReadsTinkersPayload() {
+        ItemStack pick = tinkersTool(Mining.ToolKind.PICKAXE, BlockType.IRON_INGOT);
+        Mining.ToolStats stats = Mining.toolStatsFor(pick);
+        assertNotNull(stats);
+        assertEquals(Mining.ToolKind.PICKAXE, stats.kind());
+        assertEquals(Mining.TIER_IRON, stats.tier());
+        assertNull(Mining.toolStats(BlockType.TINKERS_TOOL),
+                "static TOOLS table has no TINKERS_TOOL entry (Hud must not NPE on it)");
+        assertTrue(Mining.isTool(BlockType.TINKERS_TOOL));
     }
 }

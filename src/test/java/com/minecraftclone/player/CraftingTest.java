@@ -310,4 +310,41 @@ class CraftingTest {
                 "Shovel-head grid pattern must not yield any crafting recipe");
     }
 
+    @Test
+    void hoeCraftsFromTwoMaterialAndAColumnOfSticks() {
+        // Vanilla hoe: XX. / .S. / .S.
+        BlockType[] grid = new BlockType[9];
+        grid[0] = BlockType.PLANKS;
+        grid[1] = BlockType.PLANKS;
+        grid[4] = BlockType.STICK;
+        grid[7] = BlockType.STICK;
+        Crafting.Recipe r = Crafting.match3x3(grid);
+        assertNotNull(r, "vanilla hoe pattern must match");
+        assertEquals(BlockType.WOOD_HOE, r.output());
+
+        // The old diagonal-stick Z-shape must not match.
+        BlockType[] diagonal = new BlockType[9];
+        diagonal[0] = BlockType.PLANKS;
+        diagonal[1] = BlockType.PLANKS;
+        diagonal[4] = BlockType.STICK;
+        diagonal[6] = BlockType.STICK;
+        assertNull(Crafting.match3x3(diagonal), "diagonal hoe pattern must not match");
+    }
+
+    @Test
+    void breadRequiresThreeWheatInARow() {
+        BlockType[] three = new BlockType[9];
+        three[0] = BlockType.WHEAT;
+        three[1] = BlockType.WHEAT;
+        three[2] = BlockType.WHEAT;
+        Crafting.Recipe r = Crafting.match3x3(three);
+        assertNotNull(r);
+        assertEquals(BlockType.BREAD, r.output());
+
+        BlockType[] two = new BlockType[4];
+        two[0] = BlockType.WHEAT;
+        two[1] = BlockType.WHEAT;
+        assertNull(Crafting.match2x2(two), "two wheat must not craft bread");
+    }
+
 }

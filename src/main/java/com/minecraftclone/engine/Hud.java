@@ -1781,42 +1781,25 @@ public class Hud {
         }
 
         // Tooltip for the hovered slot.
-        BlockType tip = null;
-        String[] tinkersTooltip = null;
         if (gui.isPbShapeSlot(hoveredSlot)) {
             int idx = hoveredSlot - ContainerGui.PB_SHAPE_SLOT_0;
             com.minecraftclone.world.tinkers.ToolPartType shape = com.minecraftclone.world.tinkers.ToolPartType.values()[idx];
-            tinkersTooltip = new String[]{"Shape: " + shape.name()
-                    .replace('_', ' ').toLowerCase(java.util.Locale.ROOT)};
-        } else if (gui.isPbOutputSlot(hoveredSlot)) {
-            ItemStack out = gui.partBuilderGui() != null ? gui.partBuilderGui().currentOutput() : ItemStack.EMPTY;
-            if (!out.isEmpty() && out.isTinkersPart()) {
-                com.minecraftclone.world.tinkers.TinkersItem.Part p = out.tinkersPart();
-                if (p != null) {
-                    tinkersTooltip = new String[]{"Tinkers Part",
-                            p.shape.name().replace('_', ' ').toLowerCase(java.util.Locale.ROOT)
-                            + " / " + p.material.displayName()};
-                }
-            }
-        } else if (gui.isTsOutputSlot(hoveredSlot)) {
-            ItemStack out = gui.toolStationGui() != null ? gui.toolStationGui().currentOutput() : ItemStack.EMPTY;
-            if (!out.isEmpty() && out.isTinkersTool()) {
-                com.minecraftclone.world.tinkers.TinkersItem.Tool t = out.tinkersTool();
-                if (t != null) {
-                    tinkersTooltip = new String[]{"Tinkers Tool",
-                            t.kind.name().toLowerCase(java.util.Locale.ROOT),
-                            "Durability: " + t.remaining() + "/" + t.maxDurability};
-                }
-            }
-        } else if (gui.isOutputSlot(hoveredSlot)) {
-            tip = recipe != null ? recipe.output() : null;
+            renderTooltip(new String[]{"Shape: " + shape.name()
+                    .replace('_', ' ').toLowerCase(java.util.Locale.ROOT)}, cursorLx, cursorLy, aspectRatio);
         } else if (hoveredSlot >= 0) {
-            tip = gui.typeOf(hoveredSlot);
-        }
-        if (tinkersTooltip != null) {
-            renderTooltip(tinkersTooltip, cursorLx, cursorLy, aspectRatio);
-        } else if (tip != null) {
-            renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
+            ItemStack hovered;
+            if (gui.isPbOutputSlot(hoveredSlot)) {
+                hovered = gui.partBuilderGui() != null ? gui.partBuilderGui().currentOutput() : ItemStack.EMPTY;
+            } else if (gui.isTsOutputSlot(hoveredSlot)) {
+                hovered = gui.toolStationGui() != null ? gui.toolStationGui().currentOutput() : ItemStack.EMPTY;
+            } else if (gui.isOutputSlot(hoveredSlot)) {
+                hovered = recipe != null ? ItemStack.of(recipe.output(), recipe.outputAmount()) : ItemStack.EMPTY;
+            } else {
+                hovered = gui.stackOf(hoveredSlot);
+            }
+            if (!hovered.isEmpty()) {
+                renderTooltip(tooltipLines(hovered, durability), cursorLx, cursorLy, aspectRatio);
+            }
         }
 
         // Title + hint line. The title gets a shadow so it stays legible on the
@@ -2071,8 +2054,36 @@ public class Hud {
 
     /** The tooltip lines for an item: its display name, plus durability for tools and armor. */
     private String[] tooltipLines(BlockType type, ToolDurability durability) {
+        return tooltipLines(type == null ? ItemStack.EMPTY : ItemStack.of(type, 1), durability);
+    }
+
+    /** Tooltip for a full stack, including Tinkers' part/tool payload. */
+    private String[] tooltipLines(ItemStack stack, ToolDurability durability) {
+        if (stack == null || stack.isEmpty()) return new String[]{""};
+        com.minecraftclone.world.tinkers.TinkersItem.Part part = stack.tinkersPart();
+        if (part != null) {
+            return new String[]{"Tinkers Part",
+                    part.shape.name().replace('_', ' ').toLowerCase(java.util.Locale.ROOT)
+                            + " / " + part.material.displayName()};
+        }
+        com.minecraftclone.world.tinkers.TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) {
+            return new String[]{"Tinkers Tool",
+                    tool.kind.name().toLowerCase(java.util.Locale.ROOT),
+                    "Durability: " + tool.remaining() + "/" + tool.maxDurability};
+        }
+        BlockType type = stack.type();
+        if (type == null) return new String[]{""};
+        if (type.isTinkersToolPart()) return new String[]{"Tinkers Part"};
+        if (type.isTinkersTool()) return new String[]{"Tinkers Tool"};
         if (Mining.isTool(type) || Armor.isArmor(type)) {
-            int maxUses = Armor.isArmor(type) ? Armor.maxUses(type) : Mining.toolStats(type).maxUses();
+            int maxUses;
+            if (Armor.isArmor(type)) {
+                maxUses = Armor.maxUses(type);
+            } else {
+                Mining.ToolStats stats = Mining.toolStats(type);
+                maxUses = stats != null ? stats.maxUses() : 0;
+            }
             int rem = durability.remaining(type);
             return new String[]{type.displayName(), "Durability: " + rem + " / " + maxUses};
         }
@@ -2305,14 +2316,17 @@ public class Hud {
 
         // Tooltip for the hovered catalog item or hotbar slot.
         BlockType tip = null;
+        ItemStack tipStack = null;
         int hb = hotbarSlotAt(cursorLx, cursorLy);
         int ci = creativeItemAt(cursorLx, cursorLy, selectedTab);
         if (hb >= 0) {
-            tip = inventory.typeOf(hb);
+            tipStack = inventory.stackOf(hb);
         } else if (ci >= 0) {
             tip = CreativeCatalog.TABS[selectedTab].items()[ci];
         }
-        if (tip != null) {
+        if (tipStack != null && !tipStack.isEmpty()) {
+            renderTooltip(tooltipLines(tipStack, durability), cursorLx, cursorLy, aspectRatio);
+        } else if (tip != null) {
             renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
         }
 

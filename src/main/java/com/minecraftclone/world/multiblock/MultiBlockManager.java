@@ -167,22 +167,19 @@ public final class MultiBlockManager {
         int minZ = chunkZ * 16;
         int maxZ = minZ + 15;
 
-        // Collect instances to remove (avoid concurrent modification)
+        // Only drop instances whose controller lives in this chunk. Overlapping
+        // a shell chunk must not deform the structure or delete the controller
+        // entity — otherwise a neighbor-unload races the controller-chunk save
+        // and the smeltery never re-forms on reload.
         List<MultiBlockInstance> toRemove = new ArrayList<>();
         for (MultiBlockInstance inst : byController.values()) {
-            // Check if instance's bounding box intersects this chunk
-            if (inst.maxX >= minX && inst.minX <= maxX
-             && inst.maxZ >= minZ && inst.minZ <= maxZ) {
+            if (inst.controllerX >= minX && inst.controllerX <= maxX
+             && inst.controllerZ >= minZ && inst.controllerZ <= maxZ) {
                 toRemove.add(inst);
             }
         }
 
-        // Deform each intersecting instance
         for (MultiBlockInstance inst : toRemove) {
-            MultiBlockDefinition def = findDefinition(inst.definitionId);
-            if (def != null) {
-                def.onDeform(inst, world);
-            }
             byController.remove(blockKey(inst.controllerX, inst.controllerY, inst.controllerZ));
             unindexInstance(inst);
         }
@@ -272,10 +269,17 @@ public final class MultiBlockManager {
         // Give the definition a chance to transform the controller block, etc.
         def.onForm(instance, world);
 
-        // Create and register the block entity at the controller position
-        MultiBlockEntity entity = def.createEntity(instance);
-        if (entity != null) {
-            world.registerMultiBlockEntity(instance.controllerX, instance.controllerY, instance.controllerZ, entity);
+        // Reuse a deserialized controller entity (heat / formed state) instead
+        // of clobbering it with a fresh SmelteryEntity.
+        BlockEntity existing = world.blockEntityAt(instance.controllerX, instance.controllerY, instance.controllerZ);
+        if (existing instanceof MultiBlockEntity mbe) {
+            mbe.reform(instance);
+            world.registerMultiBlockEntity(instance.controllerX, instance.controllerY, instance.controllerZ, mbe);
+        } else {
+            MultiBlockEntity entity = def.createEntity(instance);
+            if (entity != null) {
+                world.registerMultiBlockEntity(instance.controllerX, instance.controllerY, instance.controllerZ, entity);
+            }
         }
     }
 
