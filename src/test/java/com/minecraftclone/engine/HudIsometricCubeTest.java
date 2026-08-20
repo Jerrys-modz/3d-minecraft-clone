@@ -47,4 +47,18 @@ class HudIsometricCubeTest {
         assertEquals(full[5], slab[5], EPS, "slab sits on the full cube's ground line");
         assertTrue(slab[1] < full[1] - EPS, "slab top is below a full cube's top");
     }
+
+    @Test
+    void slabAndStairTypesDoNotUseAFullCubeIcon() {
+        assertEquals(0.5f, Hud.isometricIconHeight(com.minecraftclone.world.BlockType.STONE_SLAB), EPS);
+        assertEquals(0.5f, Hud.isometricIconHeight(com.minecraftclone.world.BlockType.PLANKS_SLAB), EPS);
+        assertEquals(1f, Hud.isometricIconHeight(com.minecraftclone.world.BlockType.STONE), EPS);
+        assertTrue(com.minecraftclone.world.BlockType.STONE_STAIRS.stair);
+        // High tread starts at slab height in front and reaches full-cube height at the back.
+        float slabTopY = Hud.isoPoint(CX, CY, HALF, 0.5f, 0.5f, 0.5f)[1];
+        float stairHighBackY = Hud.isoPoint(CX, CY, HALF, 1f, 1f, 1f)[1];
+        float fullBackY = Hud.isoPoint(CX, CY, HALF, 1f, 1f, 1f)[1];
+        assertEquals(fullBackY, stairHighBackY, EPS);
+        assertTrue(slabTopY < stairHighBackY - EPS);
+    }
 }

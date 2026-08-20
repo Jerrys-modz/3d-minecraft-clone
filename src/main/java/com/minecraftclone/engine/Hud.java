@@ -1318,44 +1318,76 @@ public class Hud {
     }
 
     /**
-     * Renders a block as a 3D isometric cube in an inventory slot.
-     * 2:1 dimetric: the top diamond is twice as wide as it is tall, and a
-     * full cube's sides are that same height, so the bounding box is square
-     * and fills the slot. Slabs use {@link BlockType#collisionHeight} so they
-     * stay half-tall; everything else is a full cube.
+     * Renders a block as a 3D isometric shape in an inventory slot.
+     * Full cubes fill the slot; slabs are the bottom half; stairs are two
+     * steps (low tread in front, high tread in back).
      */
     private void addIsometricBlock(float cx, float cy, float half, BlockType type, TextureAtlas atlas) {
-        float height = type.collisionHeight;
-        if (height <= 0f || height > 1f) height = 1f;
-        float[] g = isometricCube(cx, cy, half, height);
-        float x = g[0], topY = g[1], eqY = g[2], frontY = g[3], botEqY = g[4], botFrontY = g[5];
-
         float[] topUv = atlas.getUV(type.topTile);
         float[] sideUv = atlas.getUV(type.sideTile);
+        if (type.stair) {
+            // Low step: full footprint, half height. High step: back half, top half.
+            addIsometricBox(cx, cy, half, 0f, 0f, 0f, 1f, 0.5f, 1f, topUv, sideUv);
+            addIsometricBox(cx, cy, half, 0f, 0.5f, 0.5f, 1f, 1f, 1f, topUv, sideUv);
+            return;
+        }
+        float height = isometricIconHeight(type);
+        addIsometricBox(cx, cy, half, 0f, 0f, 0f, 1f, height, 1f, topUv, sideUv);
+    }
 
-        // Left parallelogram: BL, BR, TR, TL (CCW, y-up)
-        addArbitraryQuad(
-                cx - x, botEqY,
-                cx,     botFrontY,
-                cx,     frontY,
-                cx - x, eqY,
-                sideUv);
+    /**
+     * One axis-aligned box in unit-cube space (0..1), projected to 2:1 dimetric
+     * slot coordinates. Only the three camera-facing faces are emitted (top,
+     * west, south) — the same three a Minecraft inventory cube shows.
+     */
+    private void addIsometricBox(float cx, float cy, float half,
+                                 float x0, float y0, float z0, float x1, float y1, float z1,
+                                 float[] topUv, float[] sideUv) {
+        // West (x = x0): left parallelogram, CCW y-up
+        addIsoQuad(cx, cy, half,
+                x0, y0, z1,  x0, y0, z0,  x0, y1, z0,  x0, y1, z1, sideUv);
+        // South (z = z0): right parallelogram
+        addIsoQuad(cx, cy, half,
+                x0, y0, z0,  x1, y0, z0,  x1, y1, z0,  x0, y1, z0, sideUv);
+        // Top (y = y1)
+        addIsoQuad(cx, cy, half,
+                x0, y1, z1,  x0, y1, z0,  x1, y1, z0,  x1, y1, z1, topUv);
+    }
 
-        // Right parallelogram: BL, BR, TR, TL
-        addArbitraryQuad(
-                cx,     botFrontY,
-                cx + x, botEqY,
-                cx + x, eqY,
-                cx,     frontY,
-                sideUv);
+    private void addIsoQuad(float cx, float cy, float half,
+                            float x0, float y0, float z0,
+                            float x1, float y1, float z1,
+                            float x2, float y2, float z2,
+                            float x3, float y3, float z3,
+                            float[] uv) {
+        float[] p0 = isoPoint(cx, cy, half, x0, y0, z0);
+        float[] p1 = isoPoint(cx, cy, half, x1, y1, z1);
+        float[] p2 = isoPoint(cx, cy, half, x2, y2, z2);
+        float[] p3 = isoPoint(cx, cy, half, x3, y3, z3);
+        addArbitraryQuad(p0[0], p0[1], p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], uv);
+    }
 
-        // Top diamond: left, front, right, back (CCW, y-up)
-        addArbitraryQuad(
-                cx - x, eqY,
-                cx,     frontY,
-                cx + x, eqY,
-                cx,     topY,
-                topUv);
+    /**
+     * Vertical extent of an inventory icon in unit-cube space. Slabs (and other
+     * half-height blocks) are 0.5; stairs are drawn as two steps instead.
+     */
+    static float isometricIconHeight(BlockType type) {
+        if (type == null) return 1f;
+        if (type.slab || type.isSnowCappedSlab() || type.isBed()) return 0.5f;
+        float h = type.collisionHeight;
+        if (h <= 0f || h > 1f) return 1f;
+        return h;
+    }
+
+    /**
+     * 2:1 dimetric projection of a point in unit-cube space (x,y,z in 0..1)
+     * into slot coordinates. Package-visible for icon-shape tests.
+     */
+    static float[] isoPoint(float cx, float cy, float half, float xw, float yw, float zw) {
+        float x = half * 0.92f;
+        float sx = cx + (xw - zw) * x;
+        float sy = (cy - x) + yw * x + (xw + zw) * (x * 0.5f);
+        return new float[]{sx, sy};
     }
 
     /**
@@ -1366,16 +1398,14 @@ public class Hud {
      * bottom half of a block.
      */
     static float[] isometricCube(float cx, float cy, float half, float height) {
-        float x = half * 0.92f;
-        float topH = x * 0.5f;
         float h = height <= 0f || height > 1f ? 1f : height;
-        float bodyH = x * h;
-        float botFrontY = cy - x;
-        float frontY = botFrontY + bodyH;
-        float eqY = frontY + topH;
-        float topY = eqY + topH;
-        float botEqY = eqY - bodyH;
-        return new float[]{x, topY, eqY, frontY, botEqY, botFrontY};
+        float x = half * 0.92f;
+        float[] backTop  = isoPoint(cx, cy, half, 1f, h, 1f);
+        float[] leftTop  = isoPoint(cx, cy, half, 0f, h, 1f);
+        float[] frontTop = isoPoint(cx, cy, half, 0f, h, 0f);
+        float[] leftBot  = isoPoint(cx, cy, half, 0f, 0f, 1f);
+        float[] frontBot = isoPoint(cx, cy, half, 0f, 0f, 0f);
+        return new float[]{x, backTop[1], leftTop[1], frontTop[1], leftBot[1], frontBot[1]};
     }
 
     private static float[] outlineLines(float cx, float cy, float half) {

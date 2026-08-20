@@ -144,7 +144,7 @@ public class HandRenderer {
         if (depth) glEnable(GL_DEPTH_TEST);
     }
 
-    /** Builds a held 3D block cube: six faces with top/side/bottom tiles and baked face lighting. */
+    /** Builds a held 3D block: full cube, half-height slab, or two-step stair. */
     private void addBlockCube(BlockType block, TextureAtlas atlas, float bobX, float bobY,
                               float swingX, float swingY, float swingZ, float swingPitch) {
         model.identity()
@@ -153,17 +153,36 @@ public class HandRenderer {
                 .rotateX(PITCH + swingPitch)
                 .scale(BLOCK_HALF);
 
+        if (block.stair) {
+            // Low tread across the cell; high tread on the -Z half (away from the
+            // camera's usual view, so you see the step).
+            addBlockBox(atlas, block, -1f, -1f, -1f, 1f, 0f, 1f);
+            addBlockBox(atlas, block, -1f,  0f, -1f, 1f, 1f, 0f);
+            return;
+        }
+        float top = -1f + 2f * iconHeight(block);
+        addBlockBox(atlas, block, -1f, -1f, -1f, 1f, top, 1f);
+    }
+
+    /** Local-space box in the held-block -1..1 cube, same winding as a chunk face. */
+    private void addBlockBox(TextureAtlas atlas, BlockType block,
+                             float x0, float y0, float z0, float x1, float y1, float z1) {
         float[] topUv = atlas.getUV(block.topTile);
         float[] sideUv = atlas.getUV(block.sideTile);
         float[] botUv = atlas.getUV(block.bottomTile);
+        addFace(topUv, LIGHT_TOP, new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}});
+        addFace(botUv, LIGHT_BOTTOM, new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}});
+        addFace(sideUv, LIGHT_NORTH_SOUTH, new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}});
+        addFace(sideUv, LIGHT_NORTH_SOUTH, new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}});
+        addFace(sideUv, LIGHT_EAST_WEST, new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}});
+        addFace(sideUv, LIGHT_EAST_WEST, new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}});
+    }
 
-        // Same winding as Chunk.emitFace, so backface culling still works after the rotation.
-        addFace(topUv, LIGHT_TOP, new float[][]{{-1, 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}});
-        addFace(botUv, LIGHT_BOTTOM, new float[][]{{-1, -1, -1}, {1, -1, -1}, {1, -1, 1}, {-1, -1, 1}});
-        addFace(sideUv, LIGHT_NORTH_SOUTH, new float[][]{{1, -1, -1}, {-1, -1, -1}, {-1, 1, -1}, {1, 1, -1}});
-        addFace(sideUv, LIGHT_NORTH_SOUTH, new float[][]{{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}});
-        addFace(sideUv, LIGHT_EAST_WEST, new float[][]{{1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}});
-        addFace(sideUv, LIGHT_EAST_WEST, new float[][]{{-1, -1, -1}, {-1, -1, 1}, {-1, 1, 1}, {-1, 1, -1}});
+    private static float iconHeight(BlockType block) {
+        if (block.slab || block.isSnowCappedSlab() || block.isBed()) return 0.5f;
+        float h = block.collisionHeight;
+        if (h <= 0f || h > 1f) return 1f;
+        return h;
     }
 
     /** Builds a held item as a flat camera-facing sprite, slightly tilted. */
