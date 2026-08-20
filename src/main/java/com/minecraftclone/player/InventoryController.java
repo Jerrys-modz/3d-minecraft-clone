@@ -503,17 +503,18 @@ public class InventoryController {
             return;
         }
 
-        // Tinkers Tool Station: shift-click a Tinkers part from inventory → first empty input slot.
+        // Tinkers Tool Station: shift-click a Tinkers part from inventory into
+        // the slot that matches its role (head → 0, rod → 1, extras → 2–4).
+        // Dumping everything into the first empty slot used to put a rod in
+        // Head and a pick head in Rod, so the station never assembled.
         if (gui.kind() == ContainerGui.Kind.TOOL_STATION && gui.toolStationGui() != null) {
             ItemStack stack = inventory.stackOf(slotId);
             if (stack.isTinkersPart()) {
                 ToolStationGui ts = gui.toolStationGui();
-                for (int i = 0; i < ToolStationGui.INPUT_SLOTS; i++) {
-                    if (ts.slot(i).isEmpty()) {
-                        ts.setSlot(i, stack.withCount(1));
-                        inventory.setSlot(slotId, null, 0);
-                        break;
-                    }
+                int dest = ts.preferredEmptySlot(stack);
+                if (dest >= 0) {
+                    ts.setSlot(dest, stack.withCount(1));
+                    inventory.setSlot(slotId, null, 0);
                 }
             }
             return;
@@ -655,14 +656,18 @@ public class InventoryController {
                 setStack(slotId, ItemStack.EMPTY);
             }
         } else {
-            // Place cursor into slot — only Tinkers parts are accepted.
+            // Place cursor into slot — only the matching part role is accepted
+            // (head in 0, rod in 1, extras in 2–4). Rejecting here keeps the
+            // cursor intact; setSlot would otherwise silently ignore the drop.
             if (!cursor.isTinkersPart()) return;
+            int tsSlot = slotId - ContainerGui.TS_SLOT_0;
+            ToolStationGui ts = gui.toolStationGui();
+            if (ts == null || !ts.accepts(tsSlot, cursor)) return;
             if (slotItem.isEmpty()) {
                 setStack(slotId, cursor.withCount(1));
                 cursor = cursor.withCount(cursor.count() - 1);
                 if (cursor.isEmpty()) clearCursor();
             } else {
-                // Swap cursor with existing part.
                 ItemStack prev = slotItem;
                 setStack(slotId, cursor.withCount(1));
                 cursor = prev;

@@ -102,12 +102,11 @@ public class Hud {
     private static final int PB_SHAPE_COLS = 4;
     private static final float PB_STATION_BOTTOM_Y = INV_TOP_ROW_Y + TABLE_CRAFT_GAP;
 
-    // Tool Station GUI layout. Five input slots in a horizontal row on the
-    // left/centre, output slot on the right.
-    private static final float TS_SLOTS_LEFT_X = -0.55f;
-    private static final float TS_SLOTS_Y      = INV_TOP_ROW_Y + 2 * INV_STEP - 0.01f;
-    private static final float TS_OUT_X        = 0.55f;
-    private static final float TS_OUT_Y        = TS_SLOTS_Y;
+    // Tool Station GUI layout. Head / rod / extras along the inventory's
+    // left columns, output on the right — same station band as the Part
+    // Builder, so the title and role labels sit above the slots instead
+    // of on top of them.
+    private static final float TS_STATION_Y = INV_TOP_ROW_Y + TABLE_CRAFT_GAP + INV_STEP / 2f;
 
     // Chest GUI layout: a grid of the chest's slots (3x9 single, 6x9 double)
     // stacked directly above the player's 3x9 main grid (the hotbar sits below
@@ -1445,6 +1444,41 @@ public class Hud {
         return new float[]{invGridLeftX() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP};
     }
 
+    static float tsSlotX(int index) {
+        return invGridLeftX() + index * INV_STEP;
+    }
+
+    static float tsSlotY() {
+        return TS_STATION_Y;
+    }
+
+    static float tsOutX() {
+        return invGridLeftX() + 8 * INV_STEP;
+    }
+
+    static float tsOutY() {
+        return TS_STATION_Y;
+    }
+
+    /** Logical-square center of a Tool Station slot, or {@code null} if not a TS slot. */
+    static float[] toolStationSlotCenter(int slotId) {
+        if (slotId >= ContainerGui.TS_SLOT_0
+                && slotId < ContainerGui.TS_SLOT_0 + com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS) {
+            return new float[]{tsSlotX(slotId - ContainerGui.TS_SLOT_0), tsSlotY()};
+        }
+        if (slotId == ContainerGui.TS_OUTPUT_SLOT) return new float[]{tsOutX(), tsOutY()};
+        return null;
+    }
+
+    /** Role name drawn above a Tool Station input slot. */
+    static String tsRoleLabel(int index) {
+        return switch (index) {
+            case 0 -> "Head";
+            case 1 -> "Rod";
+            default -> "Extra";
+        };
+    }
+
     /** True for the placed 3x3 / 5x5 workbenches (not the player's 2x2). */
     private static boolean isTableCrafting(ContainerGui gui) {
         return gui.kind() == ContainerGui.Kind.CRAFTING_TABLE
@@ -1503,12 +1537,11 @@ public class Hud {
             float[] pb = partBuilderSlotCenter(slotId);
             if (pb != null) return pb;
         }
-        // Tool Station slots
-        if (gui.isTsInputSlot(slotId)) {
-            int i = slotId - ContainerGui.TS_SLOT_0;
-            return new float[]{TS_SLOTS_LEFT_X + i * INV_STEP, TS_SLOTS_Y};
+        // Tool Station slots — stacked above the bag, aligned to inventory columns.
+        if (gui.kind() == ContainerGui.Kind.TOOL_STATION) {
+            float[] ts = toolStationSlotCenter(slotId);
+            if (ts != null) return ts;
         }
-        if (gui.isTsOutputSlot(slotId))    return new float[]{TS_OUT_X, TS_OUT_Y};
 
         if (gui.isOutputSlot(slotId)) {
             if (isTableCrafting(gui)) {
@@ -1724,9 +1757,9 @@ public class Hud {
             panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
             panelTop   = pbShapeTopY() + INV_SLOT / 2f + 0.10f;
         } else if (gui.kind() == ContainerGui.Kind.TOOL_STATION) {
-            panelLeft  = TS_SLOTS_LEFT_X - INV_SLOT / 2f - 0.04f;
-            panelRight = TS_OUT_X + INV_SLOT / 2f + 0.04f;
-            panelTop   = TS_SLOTS_Y + INV_SLOT / 2f + 0.055f;
+            panelLeft  = INV_GRID_CENTER_X - gridW / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = tsSlotY() + INV_SLOT / 2f + 0.10f;
         } else if (isTableCrafting(gui)) {
             int n = gui.gridWidth();
             panelLeft  = invGridLeft() - INV_SLOT / 2f - 0.03f;
@@ -1806,7 +1839,7 @@ public class Hud {
         // inventory, so the two spaces read as separate sections at a glance.
         // The chest's bottom row sits CHEST_BOTTOM_ROW_Y above the player's top
         // row, leaving a clear gap for it. Table crafting uses the same gap.
-        if (chest || isTableCrafting(gui) || gui.kind() == ContainerGui.Kind.PART_BUILDER) {
+        if (chest || isTableCrafting(gui) || tinkers) {
             float upperBottom = chest ? CHEST_BOTTOM_ROW_Y
                     : isTableCrafting(gui) ? tableCraftBottomY()
                     : PB_STATION_BOTTOM_Y;
@@ -1865,6 +1898,16 @@ public class Hud {
                         shape == pbSelected);
                 continue;
             }
+            if (gui.isTsInputSlot(id) && gui.stackOf(id).isEmpty()) {
+                int idx = id - ContainerGui.TS_SLOT_0;
+                com.minecraftclone.world.tinkers.ToolPartType ghost = switch (idx) {
+                    case 0 -> com.minecraftclone.world.tinkers.ToolPartType.PICK_HEAD;
+                    case 1 -> com.minecraftclone.world.tinkers.ToolPartType.TOOL_ROD;
+                    default -> com.minecraftclone.world.tinkers.ToolPartType.BINDING;
+                };
+                addGhostPartIcon(c[0], c[1], iconHalf, ghost, BlockType.PLANKS, itemTextures, false);
+                continue;
+            }
             addSlotIcon(c[0], c[1], iconHalf, gui.stackOf(id), itemTextures, atlas, durability);
         }
         Crafting.Recipe recipe = gui.currentRecipe();
@@ -1887,6 +1930,14 @@ public class Hud {
             com.minecraftclone.world.tinkers.ToolPartType shape = com.minecraftclone.world.tinkers.ToolPartType.values()[idx];
             renderTooltip(new String[]{"Shape: " + shape.name()
                     .replace('_', ' ').toLowerCase(java.util.Locale.ROOT)}, cursorLx, cursorLy, aspectRatio);
+        } else if (gui.isTsInputSlot(hoveredSlot) && gui.stackOf(hoveredSlot).isEmpty()) {
+            int idx = hoveredSlot - ContainerGui.TS_SLOT_0;
+            String[] lines = switch (idx) {
+                case 0 -> new String[]{"Head", "Pick, axe, sword or shovel head"};
+                case 1 -> new String[]{"Rod", "Tool rod or tough rod"};
+                default -> new String[]{"Extra", "Binding, plate or extra part"};
+            };
+            renderTooltip(lines, cursorLx, cursorLy, aspectRatio);
         } else if (hoveredSlot >= 0) {
             ItemStack hovered;
             if (gui.isPbOutputSlot(hoveredSlot)) {
@@ -2059,8 +2110,8 @@ public class Hud {
     }
 
     /**
-     * Draws Tool Station decorations: an arrow between the last input slot and the output slot,
-     * and slot-role labels (Head, Rod, Extra) above each input slot.
+     * Draws Tool Station decorations: an arrow from the last extra slot to the
+     * output, a ready highlight, and centred role labels above each slot.
      */
     private void renderToolStationDecorations(ContainerGui gui) {
         com.minecraftclone.world.tinkers.ToolStationGui ts = gui.toolStationGui();
@@ -2073,11 +2124,11 @@ public class Hud {
 
         // Arrow from last input slot → output slot.
         float arrowHalf = 0.016f;
-        float lastSlotX = TS_SLOTS_LEFT_X + (com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS - 1) * INV_STEP;
-        float arrowX0 = lastSlotX + INV_SLOT / 2f + 0.04f;
-        float arrowX1 = TS_OUT_X - INV_SLOT / 2f - 0.04f;
+        int last = com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS - 1;
+        float arrowX0 = tsSlotX(last) + INV_SLOT / 2f + 0.04f;
+        float arrowX1 = tsOutX() - INV_SLOT / 2f - 0.04f;
         furnaceDeco.clear();
-        addQuad3(furnaceDeco, arrowX0, TS_SLOTS_Y - arrowHalf, arrowX1, TS_SLOTS_Y + arrowHalf);
+        addQuad3(furnaceDeco, arrowX0, tsSlotY() - arrowHalf, arrowX1, tsSlotY() + arrowHalf);
         inventoryPanel.upload(furnaceDeco.toArray());
         lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
         inventoryPanel.render();
@@ -2085,7 +2136,7 @@ public class Hud {
         // "Ready!" highlight on output when assembly is possible.
         if (ts.canAssemble()) {
             float h = INV_SLOT / 2f + 0.005f;
-            inventoryHover.upload(outlineLines(TS_OUT_X, TS_OUT_Y, h));
+            inventoryHover.upload(outlineLines(tsOutX(), tsOutY(), h));
             lineShader.setUniform("color", new Vector4f(0.2f, 1f, 0.2f, 1f));
             glLineWidth(2.5f);
             inventoryHover.render();
@@ -2093,16 +2144,18 @@ public class Hud {
 
         lineShader.unbind();
 
-        // Slot-role text labels above each input slot.
-        String[] roles = {"Head", "Rod", "Extra", "Extra", "Extra"};
+        // Slot-role labels centred above each slot so they don't collide.
         text.begin();
-        for (int i = 0; i < roles.length; i++) {
-            float slotX = TS_SLOTS_LEFT_X + i * INV_STEP;
-            float labelX = slotX - INV_SLOT / 2f + 0.002f;
-            float labelY = TS_SLOTS_Y + INV_SLOT / 2f + 0.006f;
-            text.add(roles[i], labelX, labelY, 0.018f);
+        float labelY = tsSlotY() + INV_SLOT / 2f + 0.012f;
+        float labelSize = 0.018f;
+        int n = com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS;
+        for (int i = 0; i < n; i++) {
+            String role = tsRoleLabel(i);
+            float w = text.measure(role, labelSize);
+            text.add(role, tsSlotX(i) - w / 2f, labelY, labelSize);
         }
-        text.add("Output", TS_OUT_X - INV_SLOT / 2f + 0.002f, TS_OUT_Y + INV_SLOT / 2f + 0.006f, 0.018f);
+        float outW = text.measure("Output", labelSize);
+        text.add("Output", tsOutX() - outW / 2f, labelY, labelSize);
         text.render(hudTransform, new Vector4f(0.9f, 0.9f, 0.9f, 1f));
     }
 

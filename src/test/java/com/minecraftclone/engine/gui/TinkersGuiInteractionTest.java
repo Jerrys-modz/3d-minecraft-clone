@@ -323,6 +323,58 @@ class TinkersGuiInteractionTest {
     }
 
     @Test
+    void inventoryShiftClickRodGoesToRodSlotNotHead() {
+        ToolStationGui ts = new ToolStationGui();
+        ContainerGui gui = ContainerGui.forToolStation(inventory, ts);
+        InventoryController ctrl = new InventoryController(gui);
+
+        inventory.addStack(ItemStack.tinkersPart(new TinkersItem.Part(ToolPartType.TOOL_ROD, BlockType.PLANKS)));
+        int slot = -1;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inventory.stackOf(i).isTinkersPart()) { slot = i; break; }
+        }
+        ctrl.click(slot, false, true);
+
+        assertTrue(ts.slot(0).isEmpty(), "Rod must not land in the Head slot");
+        assertTrue(ts.slot(1).isTinkersPart(), "Rod belongs in slot 1");
+        assertEquals(ToolPartType.TOOL_ROD, ts.slot(1).tinkersPart().shape);
+    }
+
+    @Test
+    void inventoryShiftClickHeadThenRodAssembles() {
+        ToolStationGui ts = new ToolStationGui();
+        ContainerGui gui = ContainerGui.forToolStation(inventory, ts);
+        InventoryController ctrl = new InventoryController(gui);
+
+        inventory.setStack(0, ItemStack.tinkersPart(new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT)));
+        inventory.setStack(1, ItemStack.tinkersPart(new TinkersItem.Part(ToolPartType.TOOL_ROD, BlockType.PLANKS)));
+        ctrl.click(0, false, true);
+        ctrl.click(1, false, true);
+
+        assertTrue(ts.canAssemble());
+        ctrl.click(ContainerGui.TS_OUTPUT_SLOT, false, false);
+        assertTrue(ctrl.cursor().isTinkersTool());
+    }
+
+    @Test
+    void toolStationHeadSlotRejectsRodWithoutEatingCursor() {
+        ToolStationGui ts = new ToolStationGui();
+        ContainerGui gui = ContainerGui.forToolStation(inventory, ts);
+        InventoryController ctrl = new InventoryController(gui);
+
+        inventory.addStack(ItemStack.tinkersPart(new TinkersItem.Part(ToolPartType.TOOL_ROD, BlockType.PLANKS)));
+        int slot = -1;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inventory.stackOf(i).isTinkersPart()) { slot = i; break; }
+        }
+        ctrl.click(slot, false, false); // pick up rod
+        ctrl.click(ContainerGui.TS_SLOT_0, false, false); // drop on Head
+
+        assertTrue(ts.slot(0).isEmpty(), "Head slot must refuse a rod");
+        assertTrue(ctrl.cursor().isTinkersPart(), "Rod must stay on the cursor");
+    }
+
+    @Test
     void containerGuiSlotCountsAreCorrect() {
         ContainerGui pbGui = ContainerGui.forPartBuilder(inventory,  new PartBuilderGui());
         // 36 player + 1 material + 1 output + 8 shape buttons = 46

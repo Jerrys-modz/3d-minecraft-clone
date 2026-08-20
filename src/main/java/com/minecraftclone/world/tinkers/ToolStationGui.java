@@ -57,19 +57,51 @@ public final class ToolStationGui {
 
     /**
      * Places {@code stack} into {@code slot}.  Only {@link ItemStack}s that
-     * carry a {@link TinkersItem.Part} are accepted; pass {@link ItemStack#EMPTY}
-     * or {@code null} to clear a slot.
-     *
-     * <p>Non-Tinkers stacks are silently ignored (callers may pre-check
-     * {@link ItemStack#isTinkersPart()}).
+     * {@link #accepts(int, ItemStack) belong} in that slot are kept; pass
+     * {@link ItemStack#EMPTY} or {@code null} to clear.  Non-Tinkers stacks
+     * and mismatched shapes (a rod in the head slot, a head in the rod slot)
+     * are silently ignored so callers never lose the cursor item.
      */
     public void setSlot(int slot, ItemStack stack) {
         if (slot < 0 || slot >= INPUT_SLOTS) return;
         if (stack == null || stack.isEmpty()) {
             inputs[slot] = ItemStack.EMPTY;
-        } else if (stack.isTinkersPart()) {
-            inputs[slot] = stack;
+            return;
         }
+        if (!accepts(slot, stack)) return;
+        inputs[slot] = stack;
+    }
+
+    /**
+     * True when {@code stack} may occupy {@code slot}: empty always, otherwise
+     * a Tinkers part whose shape matches the slot's role (head in 0, rod in 1,
+     * any part in the extra slots).
+     */
+    public boolean accepts(int slot, ItemStack stack) {
+        if (slot < 0 || slot >= INPUT_SLOTS) return false;
+        if (stack == null || stack.isEmpty()) return true;
+        if (!stack.isTinkersPart()) return false;
+        TinkersItem.Part p = stack.tinkersPart();
+        if (p == null) return false;
+        if (slot == 0) return p.shape.isHead();
+        if (slot == 1) return p.shape.isRod();
+        return true;
+    }
+
+    /**
+     * First empty slot this part belongs in: head → 0, rod → 1, everything
+     * else (and overflow heads/rods) → extra slots 2–4.  {@code -1} if none.
+     */
+    public int preferredEmptySlot(ItemStack stack) {
+        if (stack == null || !stack.isTinkersPart()) return -1;
+        TinkersItem.Part p = stack.tinkersPart();
+        if (p == null) return -1;
+        if (p.shape.isHead() && slot(0).isEmpty()) return 0;
+        if (p.shape.isRod()  && slot(1).isEmpty()) return 1;
+        for (int i = 2; i < INPUT_SLOTS; i++) {
+            if (slot(i).isEmpty()) return i;
+        }
+        return -1;
     }
 
     // -----------------------------------------------------------------------

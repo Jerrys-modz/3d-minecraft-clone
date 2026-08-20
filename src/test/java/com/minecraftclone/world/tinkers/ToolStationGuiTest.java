@@ -60,9 +60,9 @@ class ToolStationGuiTest {
     @Test
     void headSlotMustContainAHead() {
         ToolStationGui gui = new ToolStationGui();
-        // Placing a TOOL_ROD in the head slot should not count as a valid head
         gui.setSlot(0, woodRod());
         gui.setSlot(1, woodRod());
+        assertTrue(gui.slot(0).isEmpty(), "Rod must not occupy the head slot");
         assertFalse(gui.canAssemble(), "Rod in head slot must not satisfy head requirement");
     }
 
@@ -70,9 +70,23 @@ class ToolStationGuiTest {
     void rodSlotMustContainARod() {
         ToolStationGui gui = new ToolStationGui();
         gui.setSlot(0, ironHead(ToolPartType.PICK_HEAD));
-        // Placing a head part in the rod slot should not count as a valid rod
         gui.setSlot(1, ironHead(ToolPartType.PICK_HEAD));
+        assertTrue(gui.slot(1).isEmpty(), "Head must not occupy the rod slot");
         assertFalse(gui.canAssemble(), "Head in rod slot must not satisfy rod requirement");
+    }
+
+    @Test
+    void preferredEmptySlotRoutesHeadRodAndBinding() {
+        ToolStationGui gui = new ToolStationGui();
+        assertEquals(0, gui.preferredEmptySlot(ironHead(ToolPartType.PICK_HEAD)));
+        assertEquals(1, gui.preferredEmptySlot(woodRod()));
+        assertEquals(2, gui.preferredEmptySlot(stoneBinding()));
+        gui.setSlot(0, ironHead(ToolPartType.AXE_HEAD));
+        assertEquals(2, gui.preferredEmptySlot(ironHead(ToolPartType.PICK_HEAD)),
+                "overflow head goes to extras");
+        gui.setSlot(1, woodRod());
+        assertEquals(2, gui.preferredEmptySlot(part(ToolPartType.TOUGH_ROD, BlockType.IRON_INGOT)),
+                "overflow rod goes to extras");
     }
 
     // -----------------------------------------------------------------------
