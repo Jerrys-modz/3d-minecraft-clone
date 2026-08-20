@@ -70,7 +70,7 @@ public enum BlockType {
     MUSHROOM_BROWN(56, false, true, 36),
     VINE(57, false, true, 39),
     CHERRY_LEAVES(58, true, true, 40, 40, 40),
-    PACKED_ICE(59, true, false, 41),
+    PACKED_ICE(59, true, false, 41, 41, 41),
     BAMBOO(60, false, true, 42),
     LILY_PAD(61, false, true, 43),
     PUMPKIN(62, true, false, 44, 44, 44),
@@ -655,7 +655,7 @@ public enum BlockType {
 
     // --- Clay (terrain block + item drop) ---
     /** Blue-grey clay block; spawns on river/lake beds. Drops CLAY_BALL when broken. */
-    CLAY(443, true, false, 232),
+    CLAY(443, true, false, 232, 232, 232),
     /** Item dropped from CLAY blocks; 4 arranged in a 2×2 craft CLAY_CANTEEN. */
     CLAY_BALL(444, 0),
 
@@ -677,26 +677,26 @@ public enum BlockType {
      * Primary structural block for the Smeltery.  Dark brownish-black fired
      * brick with orange mortar highlights.  Tile 234.
      */
-    SEARED_BRICK(446, true, false, 234),
+    SEARED_BRICK(446, true, false, 234, 234, 234),
 
     /**
      * Transparent window block for the Smeltery shell; lets players see the
      * molten metal inside without opening the structure.  Tile 235.
      */
-    SEARED_GLASS(447, true, true, 235),
+    SEARED_GLASS(447, true, true, 235, 235, 235),
 
     /**
      * Liquid-storage block for the Smeltery shell; holds extra molten metal
      * capacity (each tank block adds capacity in the future smelting logic).
      * Tile 236.
      */
-    SEARED_TANK(448, true, false, 236),
+    SEARED_TANK(448, true, false, 236, 236, 236),
 
     /**
      * Drain block on a Smeltery wall; used (in future) to pour molten metal
      * into Casting Tables / Casting Basins below.  Tile 237.
      */
-    SMELTERY_DRAIN(449, true, false, 237),
+    SMELTERY_DRAIN(449, true, false, 237, 237, 237),
 
     /**
      * Smeltery controller — the "brain" of the multi-block.  Directional
@@ -712,25 +712,25 @@ public enum BlockType {
      * Casting Table — a flat-topped slab where poured metal solidifies into
      * tool parts using a clay cast.  Tile 240.
      */
-    CASTING_TABLE(451, true, false, 240),
+    CASTING_TABLE(451, true, false, 240, 240, 240),
 
     /**
      * Casting Basin — a deeper mould for large tool parts (large plates,
      * tough rods).  Tile 241.
      */
-    CASTING_BASIN(452, true, false, 241),
+    CASTING_BASIN(452, true, false, 241, 241, 241),
 
     /**
      * Part Builder — the workbench for shaping raw material (planks, stone,
      * metal ingots) into tool parts using a pattern.  Tile 242.
      */
-    PART_BUILDER(453, true, false, 242),
+    PART_BUILDER(453, true, false, 242, 242, 242),
 
     /**
      * Tool Station — where assembled tool parts are combined into a finished
      * modular Tinkers' tool.  Tile 243.
      */
-    TOOL_STATION(454, true, false, 243),
+    TOOL_STATION(454, true, false, 243, 243, 243),
 
     // -----------------------------------------------------------------------
     // Tinkers' Construct sentinels: two inventory-item slots that carry the
