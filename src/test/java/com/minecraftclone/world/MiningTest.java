@@ -57,6 +57,28 @@ class MiningTest {
     }
 
     @Test
+    void harvestHintSaysWhetherYouCanMineIt() {
+        ItemStack empty = ItemStack.EMPTY;
+        ItemStack stonePick = ItemStack.of(BlockType.STONE_PICKAXE, 1);
+        ItemStack ironPick = ItemStack.of(BlockType.IRON_PICKAXE, 1);
+
+        assertNull(Mining.harvestHint(BlockType.AIR, empty, false, true));
+        assertEquals("Can mine", Mining.harvestHint(BlockType.DIRT, empty, false, true));
+        assertEquals("Need Stone Pickaxe", Mining.harvestHint(BlockType.IRON_ORE, empty, false, true));
+        assertEquals("Can mine", Mining.harvestHint(BlockType.IRON_ORE, stonePick, false, true));
+        assertEquals("Need Iron Pickaxe", Mining.harvestHint(BlockType.DIAMOND_ORE, stonePick, false, true));
+        assertEquals("Can mine", Mining.harvestHint(BlockType.DIAMOND_ORE, ironPick, false, true));
+        assertEquals("Unbreakable", Mining.harvestHint(BlockType.BEDROCK, ironPick, true, true));
+        assertEquals("Can mine", Mining.harvestHint(BlockType.IRON_ORE, empty, true, true),
+                "creative mines without the right tool");
+        assertEquals("Can't mine", Mining.harvestHint(BlockType.DIRT, empty, false, false),
+                "adventure/spectator cannot break");
+        assertTrue(Mining.harvestHintPositive("Can mine"));
+        assertFalse(Mining.harvestHintPositive("Need Stone Pickaxe"));
+        assertFalse(Mining.harvestHintPositive("Unbreakable"));
+    }
+
+    @Test
     void newToolsAreRegisteredAtEveryTier() {
         BlockType[] kinds = {
                 BlockType.WOOD_SHOVEL, BlockType.STONE_SHOVEL, BlockType.IRON_SHOVEL, BlockType.DIAMOND_SHOVEL,

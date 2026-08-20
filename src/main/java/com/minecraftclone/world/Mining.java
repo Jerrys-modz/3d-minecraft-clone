@@ -446,6 +446,58 @@ public final class Mining {
     }
 
     /**
+     * One-line harvest status for the look-at overlay: {@code "Can mine"},
+     * {@code "Need Iron Pickaxe"}, {@code "Unbreakable"}, or {@code "Can't mine"}.
+     * {@code null} if there's nothing to show (air / missing block).
+     *
+     * @param instantBreak creative-style: any breakable block is harvestable
+     * @param canBreakBlocks false in adventure/spectator
+     */
+    public static String harvestHint(BlockType block, ItemStack held, boolean instantBreak, boolean canBreakBlocks) {
+        if (block == null || block == BlockType.AIR) return null;
+        if (block == BlockType.BEDROCK) return "Unbreakable";
+        if (!canBreakBlocks) return "Can't mine";
+        if (instantBreak || canBreakItem(block, held)) return "Can mine";
+        BlockInfo info = infoFor(block);
+        String tool = prettyEnum(info.effectiveTool().name());
+        String tier = tierName(info.requiredTier());
+        if (info.effectiveTool() == ToolKind.NONE) return "Need a better tool";
+        if (tier.isEmpty()) return "Need " + tool;
+        return "Need " + tier + " " + tool;
+    }
+
+    /** True when {@link #harvestHint} is the success line (green on the overlay). */
+    public static boolean harvestHintPositive(String hint) {
+        return "Can mine".equals(hint);
+    }
+
+    static String tierName(int tier) {
+        return switch (tier) {
+            case TIER_WOOD -> "Wood";
+            case TIER_STONE -> "Stone";
+            case TIER_IRON -> "Iron";
+            case TIER_DIAMOND -> "Diamond";
+            default -> "";
+        };
+    }
+
+    static String prettyEnum(String name) {
+        StringBuilder sb = new StringBuilder(name.length());
+        boolean upper = true;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c == '_') {
+                sb.append(' ');
+                upper = true;
+            } else {
+                sb.append(upper ? Character.toUpperCase(c) : Character.toLowerCase(c));
+                upper = false;
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
      * Seconds required to break {@code block} with {@code heldItem} (which may be
      * a non-tool, i.e. bare hands). Returns {@link Float#POSITIVE_INFINITY} if
      * {@code heldItem} isn't sufficient - check {@link #canBreak} first.

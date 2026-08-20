@@ -2182,6 +2182,26 @@ public class Main {
                 }
                 hud.renderCrosshair(window.getAspectRatio());
                 hud.renderHotbar(atlas, itemTextures, player.getDurability(), player.getInventory(), selectedSlot[0], window.getAspectRatio(), dt);
+                // WAILA-style look-at: block (or mob) name at the top of the screen,
+                // plus whether the held tool can mine it.
+                float lookAspect = window.getAspectRatio();
+                if (targetedMobRef[0] != null) {
+                    hud.renderLookAt(Hud.titleFromEnum(targetedMobRef[0].type.name()), null, lookAspect);
+                } else if (hit != null) {
+                    Vector3i lookPos = hit.blockPos;
+                    BlockType overlay = world.getOverlay(lookPos.x, lookPos.y, lookPos.z);
+                    BlockType primary = world.getBlock(lookPos.x, lookPos.y, lookPos.z);
+                    BlockType looking = overlay != BlockType.AIR ? overlay : primary;
+                    if (looking != BlockType.AIR) {
+                        GameMode lookMode = settings.getGameMode();
+                        String hint = Mining.harvestHint(
+                                looking,
+                                player.getInventory().stackOf(selectedSlot[0]),
+                                lookMode.isCreative(),
+                                lookMode.canBreak());
+                        hud.renderLookAt(looking.displayName(), hint, lookAspect);
+                    }
+                }
                 // Render mini-map in top-right corner (hidden while full-screen map is open)
                 if (mapRenderer[0] != null && !mapOpen[0]) {
                     java.awt.image.BufferedImage miniMapImage = mapRenderer[0].renderMiniMap(

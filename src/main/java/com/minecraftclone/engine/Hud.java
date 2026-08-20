@@ -68,6 +68,9 @@ public class Hud {
     public static final float HOTBAR_NAME_FADE_SECONDS = 1.0f;
     private static final float HOTBAR_NAME_SIZE = 0.034f;
 
+    /** Bottom Y of the look-at overlay title (top of the logical square). */
+    public static final float LOOK_AT_TITLE_Y = 0.90f;
+
     // Inventory screen layout (logical square units).
     private static final float INV_SLOT = 0.082f;
     private static final float INV_GAP = 0.012f;
@@ -293,6 +296,56 @@ public class Hud {
     }
 
     /**
+     * WAILA-style overlay at the top of the screen: the name of whatever the
+     * crosshair is on, and a harvest line ({@code Can mine} / {@code Need Iron
+     * Pickaxe} / {@code Unbreakable}). Pass {@code harvest} null for mobs.
+     */
+    public void renderLookAt(String title, String harvest, float aspectRatio) {
+        if (title == null || title.isEmpty()) return;
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        float titleSize = 0.034f;
+        float hintSize = 0.024f;
+        float titleW = text.measure(title, titleSize);
+        float hintW = harvest == null ? 0f : text.measure(harvest, hintSize);
+        float textW = Math.max(titleW, hintW);
+        float padX = 0.028f;
+        float padY = 0.016f;
+        float lineGap = 0.010f;
+        float titleY = LOOK_AT_TITLE_Y;
+        float hintY = titleY - hintSize - lineGap;
+        float panelTop = titleY + titleSize + padY;
+        float panelBot = (harvest == null ? titleY : hintY) - padY;
+        float panelLeft = -textW / 2f - padX;
+        float panelRight = textW / 2f + padX;
+
+        float[] bg = {
+                panelLeft, panelBot, 0, panelRight, panelBot, 0, panelRight, panelTop, 0,
+                panelLeft, panelBot, 0, panelRight, panelTop, 0, panelLeft, panelTop, 0,
+        };
+        tooltipPanel.upload(bg);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.50f));
+        tooltipPanel.render();
+        lineShader.unbind();
+
+        drawCenteredText(title, 0f, titleY, titleSize, WHITE);
+        if (harvest != null && !harvest.isEmpty()) {
+            boolean ok = Mining.harvestHintPositive(harvest);
+            Vector4f color = ok
+                    ? new Vector4f(0.48f, 0.90f, 0.42f, 1f)
+                    : new Vector4f(0.95f, 0.38f, 0.32f, 1f);
+            drawCenteredText(harvest, 0f, hintY, hintSize, color);
+        }
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
      * A translucent frost vignette over the whole screen, fading in with cold
      * exposure (0 = clear, 1 = freezing out in a blizzard). Drawn in NDC so it
      * covers the viewport regardless of aspect ratio.
@@ -500,7 +553,7 @@ public class Hud {
         return panelTop + STAT_BAR_STACK_MARGIN + 4f * (STAT_BAR_HEIGHT + STAT_BAR_GAP);
     }
 
-    static String titleFromEnum(String name) {
+    public static String titleFromEnum(String name) {
         StringBuilder sb = new StringBuilder(name.length());
         boolean upper = true;
         for (int i = 0; i < name.length(); i++) {
