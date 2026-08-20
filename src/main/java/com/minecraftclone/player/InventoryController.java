@@ -301,6 +301,17 @@ public class InventoryController {
     /** Mouse release: resolve the session as a click (one slot) or a drag (several). */
     public void endDrag(int releaseSlot) {
         if (!dragging) return;
+        // Output slots craft on press-release. The result sits right next to the
+        // armor column / grid, so a tiny mouse slip would otherwise turn the
+        // click into a multi-slot drag and silently skip craft().
+        if (gui.isOutputSlot(dragStart) || gui.isPbOutputSlot(dragStart) || gui.isTsOutputSlot(dragStart)) {
+            click(dragStart, dragRight, false);
+            dragging = false;
+            dragStart = -1;
+            dragDistinct = 0;
+            dragRight = false;
+            return;
+        }
         if (releaseSlot >= 0 && releaseSlot < gui.slotCount() && !gui.isOutputSlot(releaseSlot) && !dragVisited[releaseSlot]) {
             dragVisited[releaseSlot] = true;
             dragDistinct++;

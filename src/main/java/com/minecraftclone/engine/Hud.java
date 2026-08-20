@@ -14,7 +14,6 @@ import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.Crafting;
-import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
@@ -1383,7 +1382,8 @@ public class Hud {
         }
         if (gui.isGridSlot(slotId)) {
             int g = slotId - ContainerGui.GRID_START;
-            int r = g / CraftingGrid.WIDTH, c = g % CraftingGrid.WIDTH;
+            int width = gui.gridWidth();
+            int r = g / width, c = g % width;
             return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
         }
         if (gui.isArmorSlot(slotId)) {
@@ -1423,7 +1423,9 @@ public class Hud {
 
     /** Resolves a mouse position (in logical-square coords) to a slot id in the open gui, or -1 if it's over nothing. */
     public int containerSlotAt(ContainerGui gui, float logicalX, float logicalY) {
-        for (int id = 0; id < gui.slotCount(); id++) {
+        // Walk high ids first so the 2x2/3x3 crafting grid, output, and armor
+        // win if they sit near the player inventory (low ids 0..35).
+        for (int id = gui.slotCount() - 1; id >= 0; id--) {
             float[] c = slotCenter(gui, id);
             if (c == null) continue;
             float half = INV_SLOT / 2f;
@@ -1696,7 +1698,7 @@ public class Hud {
         }
         Crafting.Recipe recipe = gui.currentRecipe();
         if (recipe != null) {
-            float[] c = slotCenter(gui, ContainerGui.OUTPUT_SLOT);
+            float[] c = slotCenter(gui, gui.outputSlotId());
             addSlotIcon(c[0], c[1], iconHalf, ItemStack.of(recipe.output(), recipe.outputAmount()), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);

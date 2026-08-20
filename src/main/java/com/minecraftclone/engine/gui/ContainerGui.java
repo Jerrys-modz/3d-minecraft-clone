@@ -184,6 +184,20 @@ public class ContainerGui {
         return grid().snapshot().length;
     }
 
+    /** Columns in the current crafting grid (2 inventory / 3 table / 5 advanced). */
+    public int gridWidth() {
+        return switch (gridSize()) {
+            case 9 -> 3;
+            case 25 -> 5;
+            default -> 2;
+        };
+    }
+
+    /** Slot id of the crafting result for the open grid (40 on 2x2, 45 on 3x3). */
+    public int outputSlotId() {
+        return GRID_START + gridSize();
+    }
+
     /** The placed block's container (furnace or chest); null when no container is open. */
     public StorageContainer container() {
         return container;

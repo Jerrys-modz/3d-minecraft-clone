@@ -318,6 +318,7 @@ public class Main {
         controller.returnGridToInventory();
         controller.returnCursorToInventory();
         activeGui[0] = inventoryGui;
+        controller.setGui(inventoryGui);
         inventoryOpen[0] = false;
         audio.play(SoundEvent.UI_CLOSE);
     }
@@ -537,8 +538,8 @@ public class Main {
         int[] sliderDragRow = {-1};
         int[] bindingAction = {-1}; // >= 0: capturing a key for this action (settings menu)
         CraftingGrid craftingGrid = new CraftingGrid();
-        InventoryController inventoryController = new InventoryController(player.getInventory(), craftingGrid);
         ContainerGui inventoryGui = new ContainerGui(ContainerGui.Kind.INVENTORY, player.getInventory(), craftingGrid, null);
+        InventoryController inventoryController = new InventoryController(inventoryGui);
         ContainerGui[] activeGui = {inventoryGui}; // the container screen currently shown, if any
         boolean[] inventoryOpen = {false};
         boolean[] creativeOpen = {false};
@@ -1343,6 +1344,7 @@ public class Main {
                         audio.play(SoundEvent.UI_OPEN);
                     } else {
                         activeGui[0] = inventoryGui;
+                        inventoryController.setGui(inventoryGui);
                         inventoryOpen[0] = true;
                         menuOpen[0] = false;
                         audio.play(SoundEvent.UI_OPEN);

@@ -67,6 +67,39 @@ class InventoryControllerTest {
     }
 
     @Test
+    void inventoryTwoByTwoStillCraftsAfterSwitchingFromCraftingTable() {
+        Inventory inv = new Inventory();
+        CraftingGrid playerGrid = new CraftingGrid();
+        ContainerGui inventoryGui = new ContainerGui(ContainerGui.Kind.INVENTORY, inv, playerGrid, null);
+        InventoryController c = new InventoryController(inventoryGui);
+        c.setGui(new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, inv, playerGrid, null));
+        c.setGui(inventoryGui);
+        playerGrid.set(0, BlockType.PLANKS);
+        playerGrid.set(2, BlockType.PLANKS);
+        c.click(inventoryGui.outputSlotId(), false, false);
+        assertEquals(BlockType.STICK, c.cursorType());
+        assertEquals(4, c.cursorCount());
+        assertTrue(playerGrid.isEmpty());
+    }
+
+    @Test
+    void draggingOffTheOutputSlotStillCrafts() {
+        Inventory inv = new Inventory();
+        CraftingGrid grid = new CraftingGrid();
+        grid.set(0, BlockType.PLANKS);
+        grid.set(2, BlockType.PLANKS);
+        InventoryController c = new InventoryController(inv, grid);
+        int output = InventoryController.OUTPUT_SLOT;
+        int armor = ContainerGui.ARMOR_START;
+        c.beginDrag(output, false);
+        c.continueDrag(armor);
+        c.endDrag(armor);
+        assertEquals(BlockType.STICK, c.cursorType());
+        assertEquals(4, c.cursorCount());
+        assertTrue(grid.isEmpty());
+    }
+
+    @Test
     void craftRefusesWhenCursorHoldsAnIncompatibleItem() {
         Inventory inv = new Inventory();
         CraftingGrid grid = new CraftingGrid();
