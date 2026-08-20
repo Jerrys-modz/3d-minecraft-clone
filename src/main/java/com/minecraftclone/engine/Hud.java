@@ -1319,22 +1319,16 @@ public class Hud {
 
     /**
      * Renders a block as a 3D isometric cube in an inventory slot.
-     * Creates the illusion of depth by rendering three quads: the top face and two side faces
-     * in an isometric projection (45° rotation, 35° tilt).
+     * 2:1 dimetric: the top diamond is twice as wide as it is tall, and a
+     * full cube's sides are that same height, so the bounding box is square
+     * and fills the slot. Slabs use {@link BlockType#collisionHeight} so they
+     * stay half-tall; everything else is a full cube.
      */
     private void addIsometricBlock(float cx, float cy, float half, BlockType type, TextureAtlas atlas) {
-        // 2:1 dimetric cube. Vertices are CCW in y-up logical space so they
-        // survive GL_CULL_FACE left on by the 3D world pass.
-        float x = half * 0.88f;
-        float topH = half * 0.44f;
-        float bodyH = half * 0.72f;
-        float midY = cy - half * 0.06f;
-
-        float topY = midY + topH;
-        float eqY = midY;
-        float frontY = midY - topH;
-        float botEqY = eqY - bodyH;
-        float botFrontY = frontY - bodyH;
+        float height = type.collisionHeight;
+        if (height <= 0f || height > 1f) height = 1f;
+        float[] g = isometricCube(cx, cy, half, height);
+        float x = g[0], topY = g[1], eqY = g[2], frontY = g[3], botEqY = g[4], botFrontY = g[5];
 
         float[] topUv = atlas.getUV(type.topTile);
         float[] sideUv = atlas.getUV(type.sideTile);
@@ -1362,6 +1356,26 @@ public class Hud {
                 cx + x, eqY,
                 cx,     topY,
                 topUv);
+    }
+
+    /**
+     * 2:1 dimetric cube in slot space. Returns
+     * {@code {halfWidth, topY, eqY, frontY, botEqY, botFrontY}}.
+     * A full cube ({@code height == 1}) is a square centered on {@code cy};
+     * shorter heights sit on that same ground line so slabs read as the
+     * bottom half of a block.
+     */
+    static float[] isometricCube(float cx, float cy, float half, float height) {
+        float x = half * 0.92f;
+        float topH = x * 0.5f;
+        float h = height <= 0f || height > 1f ? 1f : height;
+        float bodyH = x * h;
+        float botFrontY = cy - x;
+        float frontY = botFrontY + bodyH;
+        float eqY = frontY + topH;
+        float topY = eqY + topH;
+        float botEqY = eqY - bodyH;
+        return new float[]{x, topY, eqY, frontY, botEqY, botFrontY};
     }
 
     private static float[] outlineLines(float cx, float cy, float half) {
