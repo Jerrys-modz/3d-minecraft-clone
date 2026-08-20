@@ -601,6 +601,8 @@ public class Main {
         boolean[] inventoryOpen = {false};
         boolean[] creativeOpen = {false};
         int[] creativeTab = {0};
+        float[] creativeScroll = {0f};
+        boolean[] creativeScrollbarDrag = {false};
         int[] hoveredSlot = {-1};
         boolean[] mainMenuOpen = {true};
         boolean[] mainSettingsOpen = {false}; // settings page opened from the main menu
@@ -1397,6 +1399,7 @@ public class Main {
                         closeCreative(inventoryController, creativeOpen, audio);
                     } else if (settings.getGameMode().isCreative()) {
                         creativeOpen[0] = true;
+                        creativeScroll[0] = 0f;
                         menuOpen[0] = false;
                         audio.play(SoundEvent.UI_OPEN);
                     } else {
@@ -1415,18 +1418,32 @@ public class Main {
                 // Creative catalog: click a tab to switch category, click an item to
                 // put it on the cursor (shift-click moves it straight to a hotbar
                 // slot), the destroy slot drops the cursor, and the hotbar behaves
-                // like the survival inventory.
+                // like the survival inventory. Overflowing tabs (Materials) scroll
+                // with the wheel or the scrollbar on the right.
                 float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
                 boolean shift = input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT);
+                int tabItemCount = CreativeCatalog.TABS[creativeTab[0]].items().length;
+                creativeScroll[0] = Hud.clampCatalogScroll(creativeScroll[0], tabItemCount);
+
+                double wheel = input.getScrollDelta();
+                if (wheel != 0) {
+                    creativeScroll[0] = Hud.clampCatalogScroll(creativeScroll[0] - (float) wheel, tabItemCount);
+                }
 
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
                     int tab = hud.creativeTabAt(logicalX, logicalY);
                     if (tab >= 0) {
                         creativeTab[0] = tab;
+                        creativeScroll[0] = 0f;
+                        creativeScrollbarDrag[0] = false;
                         audio.play(SoundEvent.UI_CLICK);
+                    } else if (hud.creativeScrollbarAt(logicalX, logicalY, tabItemCount)) {
+                        creativeScrollbarDrag[0] = true;
+                        creativeScroll[0] = Hud.clampCatalogScroll(
+                                hud.catalogScrollForY(logicalY, tabItemCount), tabItemCount);
                     } else {
-                        int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0]);
+                        int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0], creativeScroll[0]);
                         if (item >= 0) {
                             inventoryController.pickCreativeItem(CreativeCatalog.TABS[creativeTab[0]].items()[item], shift);
                             audio.play(SoundEvent.UI_CLICK);
@@ -1446,6 +1463,13 @@ public class Main {
                         }
                     }
                 }
+                if (creativeScrollbarDrag[0] && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+                    creativeScroll[0] = Hud.clampCatalogScroll(
+                            hud.catalogScrollForY(logicalY, tabItemCount), tabItemCount);
+                }
+                if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+                    creativeScrollbarDrag[0] = false;
+                }
                 if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) || input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT)) {
                     inventoryController.continueDrag(hud.hotbarSlotAt(logicalX, logicalY));
                 }
@@ -1458,7 +1482,7 @@ public class Main {
                         inventoryController.beginDrag(hb, true);
                         audio.play(SoundEvent.UI_CLICK);
                     }
-                    int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0]);
+                    int item = hud.creativeItemAt(logicalX, logicalY, creativeTab[0], creativeScroll[0]);
                     if (item >= 0) {
                         inventoryController.pickCreativeItem(CreativeCatalog.TABS[creativeTab[0]].items()[item], false);
                         audio.play(SoundEvent.UI_CLICK);
@@ -2281,7 +2305,8 @@ public class Main {
                 float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
                 float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
                 hud.renderCreative(player.getInventory(), inventoryController, creativeTab[0], selectedSlot[0],
-                        atlas, itemTextures, player.getDurability(), window.getAspectRatio(), logicalX, logicalY);
+                        atlas, itemTextures, player.getDurability(), window.getAspectRatio(), logicalX, logicalY,
+                        creativeScroll[0]);
             }
 
             frameCount++;

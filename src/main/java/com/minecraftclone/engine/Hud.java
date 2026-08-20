@@ -119,6 +119,11 @@ public class Hud {
     private static final float CAT_GAP = 0.014f;
     private static final float CAT_STEP = CAT_SLOT + CAT_GAP;
     private static final float CAT_GRID_TOP_Y = 0.44f;      // center y of the catalog's first row
+    private static final int CAT_COLUMNS = 9;
+    /** Gap between the last visible catalog row and the top of the hotbar panel. */
+    private static final float CAT_HOTBAR_GAP = 0.07f;
+    private static final float CAT_SCROLLBAR_W = 0.028f;
+    private static final float CAT_SCROLLBAR_GAP = 0.018f;
     private static final float TAB_W = 0.31f;
     private static final float TAB_GAP = 0.012f;
     private static final float TAB_CENTER_Y = 0.80f;        // center y of the tab strip
@@ -1663,12 +1668,81 @@ public class Hud {
         return left + i * (TAB_W + TAB_GAP);
     }
 
-    /** Center (logical x, y) of catalog item {@code index} (row-major, 9 per row). */
-    private float[] catalogItemCenter(int index) {
-        int r = index / 9, c = index % 9;
-        float gridW = 9 * CAT_SLOT + 8 * CAT_GAP;
+    /** Center (logical x, y) of catalog item {@code index} (row-major, 9 per row), shifted by {@code scrollRows}. */
+    static float[] catalogItemCenter(int index, float scrollRows) {
+        int r = index / CAT_COLUMNS, c = index % CAT_COLUMNS;
+        float gridW = CAT_COLUMNS * CAT_SLOT + (CAT_COLUMNS - 1) * CAT_GAP;
         float left = -gridW / 2f + CAT_SLOT / 2f;
-        return new float[]{left + c * CAT_STEP, CAT_GRID_TOP_Y - r * CAT_STEP};
+        return new float[]{left + c * CAT_STEP, CAT_GRID_TOP_Y - r * CAT_STEP + scrollRows * CAT_STEP};
+    }
+
+    /** Bottom of the last fully-visible catalog row — sits above the hotbar. */
+    static float catalogClipBottomY() {
+        return -1f + HOTBAR_BOTTOM_MARGIN + HOTBAR_SLOT_SIZE + HOTBAR_PADDING + CAT_HOTBAR_GAP;
+    }
+
+    static int catalogVisibleRows() {
+        return Math.max(1, (int) Math.floor((CAT_GRID_TOP_Y - catalogClipBottomY()) / CAT_STEP) + 1);
+    }
+
+    static int catalogRowCount(int itemCount) {
+        return (itemCount + CAT_COLUMNS - 1) / CAT_COLUMNS;
+    }
+
+    static float catalogMaxScroll(int itemCount) {
+        return Math.max(0f, catalogRowCount(itemCount) - catalogVisibleRows());
+    }
+
+    public static float clampCatalogScroll(float scrollRows, int itemCount) {
+        float max = catalogMaxScroll(itemCount);
+        if (scrollRows < 0f) return 0f;
+        if (scrollRows > max) return max;
+        return scrollRows;
+    }
+
+    static boolean catalogItemVisible(int index, float scrollRows) {
+        float y = catalogItemCenter(index, scrollRows)[1];
+        return y <= CAT_GRID_TOP_Y + 1e-4f && y >= catalogClipBottomY() - 1e-4f;
+    }
+
+    static float catalogGridRightX() {
+        float gridW = CAT_COLUMNS * CAT_SLOT + (CAT_COLUMNS - 1) * CAT_GAP;
+        return gridW / 2f;
+    }
+
+    static float catalogScrollbarX() {
+        return catalogGridRightX() + CAT_SCROLLBAR_GAP + CAT_SCROLLBAR_W / 2f;
+    }
+
+    static float catalogScrollbarTopY() {
+        return CAT_GRID_TOP_Y + CAT_SLOT / 2f;
+    }
+
+    static float catalogScrollbarBottomY() {
+        int vis = catalogVisibleRows();
+        return CAT_GRID_TOP_Y - (vis - 1) * CAT_STEP - CAT_SLOT / 2f;
+    }
+
+    /** True if the mouse is over the catalog scrollbar track (only when the tab overflows). */
+    public boolean creativeScrollbarAt(float logicalX, float logicalY, int itemCount) {
+        if (catalogMaxScroll(itemCount) <= 0f) return false;
+        float cx = catalogScrollbarX();
+        float top = catalogScrollbarTopY();
+        float bot = catalogScrollbarBottomY();
+        return Math.abs(logicalX - cx) <= CAT_SCROLLBAR_W / 2f + 0.006f
+                && logicalY <= top + 0.004f && logicalY >= bot - 0.004f;
+    }
+
+    /** Maps a click on the scrollbar to a scroll-row offset. */
+    public float catalogScrollForY(float logicalY, int itemCount) {
+        float top = catalogScrollbarTopY();
+        float bot = catalogScrollbarBottomY();
+        float span = top - bot;
+        if (span <= 1e-4f) return 0f;
+        float t = (top - logicalY) / span;
+        if (t < 0f) t = 0f;
+        if (t > 1f) t = 1f;
+        return t * catalogMaxScroll(itemCount);
     }
 
     /** Center (logical x) of the creative "destroy item" slot, just right of the hotbar. */
@@ -1687,11 +1761,15 @@ public class Hud {
     }
 
     /** The index (into the given tab's items) of the catalog item under the mouse, or -1. */
-    public int creativeItemAt(float logicalX, float logicalY, int tab) {
-        BlockType[] items = CreativeCatalog.TABS[tab].items();
+    public int creativeItemAt(float logicalX, float logicalY, int tab, float scrollRows) {
+        return catalogItemAt(logicalX, logicalY, CreativeCatalog.TABS[tab].items().length, scrollRows);
+    }
+
+    static int catalogItemAt(float logicalX, float logicalY, int itemCount, float scrollRows) {
         float half = CAT_SLOT / 2f;
-        for (int i = 0; i < items.length; i++) {
-            float[] c = catalogItemCenter(i);
+        for (int i = 0; i < itemCount; i++) {
+            if (!catalogItemVisible(i, scrollRows)) continue;
+            float[] c = catalogItemCenter(i, scrollRows);
             if (Math.abs(logicalX - c[0]) <= half && Math.abs(logicalY - c[1]) <= half) return i;
         }
         return -1;
@@ -2330,15 +2408,53 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    private void renderCatalogScrollbar(int itemCount, float scrollRows) {
+        float max = catalogMaxScroll(itemCount);
+        if (max <= 0f) return;
+        float cx = catalogScrollbarX();
+        float halfW = CAT_SCROLLBAR_W / 2f;
+        float top = catalogScrollbarTopY();
+        float bot = catalogScrollbarBottomY();
+        float trackH = top - bot;
+        float thumbH = Math.max(0.055f, catalogVisibleRows() / (float) Math.max(catalogRowCount(itemCount), 1) * trackH);
+        if (thumbH > trackH) thumbH = trackH;
+        float t = scrollRows / max;
+        float thumbTop = top - t * (trackH - thumbH);
+        float thumbBot = thumbTop - thumbH;
+
+        slotBgVerts.clear();
+        addQuad3(slotBgVerts, cx - halfW, bot, cx + halfW, top);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", new Vector4f(0.12f, 0.12f, 0.12f, 0.85f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+
+        slotBgVerts.clear();
+        addQuad3(slotBgVerts, cx - halfW + 0.004f, thumbBot, cx + halfW - 0.004f, thumbTop);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", new Vector4f(0.62f, 0.62f, 0.62f, 0.95f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+    }
+
     /**
      * Draws the creative-mode inventory screen: a tabbed item catalog on top of
      * the normal 9-slot hotbar plus a "destroy item" slot, with the cursor stack
-     * following the mouse. {@code selectedTab} is the active category and
+     * following the mouse. {@code selectedTab} is the active category,
+     * {@code catalogScroll} is how many rows the catalog has been scrolled, and
      * {@code selectedSlot} the highlighted hotbar slot.
      */
     public void renderCreative(Inventory inventory, InventoryController controller, int selectedTab, int selectedSlot,
                                TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
-                               float aspectRatio, float cursorLx, float cursorLy) {
+                               float aspectRatio, float cursorLx, float cursorLy, float catalogScroll) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
@@ -2386,13 +2502,15 @@ public class Hud {
         // Textured slot cells for the catalog grid and the hotbar + destroy slot.
         float centerY = slotCenterY();
         float dx = destroySlotX();
+        BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
+        catalogScroll = clampCatalogScroll(catalogScroll, items.length);
         if (guiTextures != null) {
             guiVerts.clear();
             guiInds.clear();
             float half = CAT_SLOT / 2f - 0.005f;
-            BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
             for (int i = 0; i < items.length; i++) {
-                float[] c = catalogItemCenter(i);
+                if (!catalogItemVisible(i, catalogScroll)) continue;
+                float[] c = catalogItemCenter(i, catalogScroll);
                 renderGuiSlot(c[0], c[1], half);
             }
             for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
@@ -2403,11 +2521,11 @@ public class Hud {
             flushGuiQuads();
         } else {
             // Fallback: flat dark slot squares.
-            BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
             float half = CAT_SLOT / 2f - 0.005f;
             slotBgVerts.clear();
             for (int i = 0; i < items.length; i++) {
-                float[] c = catalogItemCenter(i);
+                if (!catalogItemVisible(i, catalogScroll)) continue;
+                float[] c = catalogItemCenter(i, catalogScroll);
                 addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
             }
             lineShader.bind();
@@ -2435,21 +2553,23 @@ public class Hud {
             lineShader.unbind();
         }
 
-        // Catalog item icons.
-        BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
+        // Catalog item icons (only the rows currently in the viewport).
         float half = CAT_SLOT / 2f - 0.005f;
         beginSlotBatch();
         for (int i = 0; i < items.length; i++) {
-            float[] c = catalogItemCenter(i);
+            if (!catalogItemVisible(i, catalogScroll)) continue;
+            float[] c = catalogItemCenter(i, catalogScroll);
             addSlotIcon(c[0], c[1], half, ItemStack.of(items[i], 1), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
 
+        renderCatalogScrollbar(items.length, catalogScroll);
+
         // Catalog item hover highlight.
-        int hoverItem = creativeItemAt(cursorLx, cursorLy, selectedTab);
+        int hoverItem = creativeItemAt(cursorLx, cursorLy, selectedTab, catalogScroll);
         if (hoverItem >= 0) {
-            float[] c = catalogItemCenter(hoverItem);
+            float[] c = catalogItemCenter(hoverItem, catalogScroll);
             inventoryHover.upload(outlineLines(c[0], c[1], CAT_SLOT / 2f + 0.004f));
             lineShader.bind();
             lineShader.setUniform("projection", identity);
@@ -2516,7 +2636,7 @@ public class Hud {
         BlockType tip = null;
         ItemStack tipStack = null;
         int hb = hotbarSlotAt(cursorLx, cursorLy);
-        int ci = creativeItemAt(cursorLx, cursorLy, selectedTab);
+        int ci = creativeItemAt(cursorLx, cursorLy, selectedTab, catalogScroll);
         if (hb >= 0) {
             tipStack = inventory.stackOf(hb);
         } else if (ci >= 0) {
@@ -2528,7 +2648,7 @@ public class Hud {
             renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
         }
 
-        drawCenteredText("Creative    Click: add to cursor    Shift-click: to hotbar    X: delete",
+        drawCenteredText("Creative    Click: add    Shift-click: hotbar    Scroll: more    X: delete",
                 0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
         glEnable(GL_CULL_FACE);
