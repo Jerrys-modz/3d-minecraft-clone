@@ -7,9 +7,8 @@ import java.util.*;
 /**
  * Persistent map data tracking explored chunks, their top-down surface
  * (block + height per column, for a JourneyMap-style terrain view) and
- * discovered ore vein locations. Only records veins in chunks the player
- * has visited; surface samples refresh on every visit so terraforming
- * shows up after you re-enter a chunk.
+ * discovered ore vein locations. Chunks paint onto the map as they load
+ * within render distance (see {@link World#mapLoadedChunks}).
  */
 public class MapData {
 
@@ -106,6 +105,81 @@ public class MapData {
             veinsByChunk.put(chunkKey, veins);
         }
         revision++;
+    }
+
+    /**
+     * Sample a chunk that is already generated in memory. Skips the all-air
+     * probe (the world would not hand us an ungenerated chunk) and reads
+     * blocks from the chunk directly so sky columns don't walk 256 air cells.
+     */
+    public void exploreGeneratedChunk(Chunk chunk) {
+        if (chunk == null || !chunk.isGenerated()) return;
+        int chunkX = chunk.getPos().x();
+        int chunkZ = chunk.getPos().z();
+        long chunkKey = encodeChunkKey(chunkX, chunkZ);
+        boolean firstVisit = exploredChunks.add(chunkKey);
+
+        if (!hasSurface(chunkX, chunkZ)) {
+            sampleSurface(chunk);
+            revision++;
+        }
+        if (!firstVisit) {
+            return;
+        }
+
+        List<OreVeinRecord> veins = scanVeins(chunk);
+        if (!veins.isEmpty()) {
+            veinsByChunk.put(chunkKey, veins);
+        }
+        revision++;
+    }
+
+    private void sampleSurface(Chunk chunk) {
+        long key = encodeChunkKey(chunk.getPos().x(), chunk.getPos().z());
+        short[] blocks = new short[COLS];
+        byte[] heights = new byte[COLS];
+        int yStart = chunk.getHighestNonAirY();
+        for (int lz = 0; lz < Chunk.SIZE; lz++) {
+            for (int lx = 0; lx < Chunk.SIZE; lx++) {
+                int y = Math.max(yStart, 0);
+                BlockType b = yStart < 0 ? BlockType.AIR : chunk.getLocal(lx, y, lz);
+                while (y > 0 && isMapDecoration(b)) {
+                    y--;
+                    b = chunk.getLocal(lx, y, lz);
+                }
+                int idx = lz * Chunk.SIZE + lx;
+                blocks[idx] = b.id;
+                heights[idx] = (byte) y;
+            }
+        }
+        surfaceBlocks.put(key, blocks);
+        surfaceHeights.put(key, heights);
+    }
+
+    private static List<OreVeinRecord> scanVeins(Chunk chunk) {
+        List<OreVeinRecord> veins = new ArrayList<>();
+        int baseX = chunk.getOriginX();
+        int baseZ = chunk.getOriginZ();
+        for (int cellX = 0; cellX < 4; cellX++) {
+            for (int cellZ = 0; cellZ < 4; cellZ++) {
+                int minLx = cellX * 4;
+                int minLz = cellZ * 4;
+                Map<BlockType, OreVeinRecord> cellVeins = new HashMap<>();
+                for (int y = 5; y < 96; y++) {
+                    for (int lx = minLx; lx < minLx + 4; lx++) {
+                        for (int lz = minLz; lz < minLz + 4; lz++) {
+                            BlockType block = chunk.getLocal(lx, y, lz);
+                            if (isFullSizeOre(block) && !cellVeins.containsKey(block)) {
+                                cellVeins.put(block, new OreVeinRecord(
+                                        baseX + lx, y, baseZ + lz, block));
+                            }
+                        }
+                    }
+                }
+                veins.addAll(cellVeins.values());
+            }
+        }
+        return veins;
     }
 
     /**

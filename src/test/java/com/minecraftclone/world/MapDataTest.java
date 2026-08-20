@@ -150,4 +150,37 @@ class MapDataTest {
         assertEquals(1, loaded.getVeinsInChunk(2, 3).size());
         assertEquals(BlockType.IRON_ORE, loaded.getVeinsInChunk(2, 3).get(0).oreType);
     }
+
+    @Test
+    void exploreGeneratedChunkReadsTheChunkDirectly() {
+        Chunk chunk = new Chunk(new ChunkPos(2, -1));
+        for (int z = 0; z < Chunk.SIZE; z++) {
+            for (int x = 0; x < Chunk.SIZE; x++) {
+                chunk.setLocal(x, 40, z, BlockType.GRASS);
+                chunk.setLocal(x, 39, z, BlockType.DIRT);
+            }
+        }
+        chunk.setLocal(4, 22, 4, BlockType.COPPER_ORE);
+        chunk.setLocal(4, 42, 4, BlockType.TALL_GRASS);
+        chunk.markGenerated();
+
+        MapData data = new MapData();
+        data.exploreGeneratedChunk(chunk);
+        assertTrue(data.hasSurface(2, -1));
+        assertEquals(BlockType.GRASS, data.getSurfaceBlock(2 * 16 + 3, -1 * 16 + 5));
+        assertEquals(BlockType.GRASS, data.getSurfaceBlock(2 * 16 + 4, -1 * 16 + 4),
+                "tall grass on grass should still show grass");
+        assertEquals(1, data.getVeinsInChunk(2, -1).size());
+        assertEquals(BlockType.COPPER_ORE, data.getVeinsInChunk(2, -1).get(0).oreType);
+    }
+
+    @Test
+    void ungeneratedChunksAreNotMapped() {
+        Chunk chunk = new Chunk(new ChunkPos(0, 0));
+        chunk.setLocal(0, 10, 0, BlockType.STONE);
+        MapData data = new MapData();
+        data.exploreGeneratedChunk(chunk);
+        assertFalse(data.hasSurface(0, 0));
+        assertFalse(data.isChunkExplored(0, 0));
+    }
 }

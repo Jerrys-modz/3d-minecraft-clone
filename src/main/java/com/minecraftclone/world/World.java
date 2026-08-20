@@ -75,6 +75,8 @@ public class World implements BlockAccessor {
     // alone exceeds the budget.
     private static final double GENERATE_BUDGET_SECONDS = 0.006;
     private static final double MESH_BUDGET_SECONDS = 0.004;
+    /** Map sampling of newly loaded chunks — same idea as mesh: don't hitch one frame. */
+    private static final double MAP_SAMPLE_BUDGET_SECONDS = 0.004;
     // world.update() (and so updateFluids()) runs once per rendered frame, so
     // recomputing the flood-fill every single call made "one ring per tick"
     // (see FluidSim) mean one ring per *frame*. A fixed *frame-count*
@@ -189,6 +191,55 @@ public class World implements BlockAccessor {
 
     public int getRenderDistance() {
         return renderDistance;
+    }
+
+    /**
+     * Paint every generated chunk within {@link #renderDistance} of the player
+     * onto the map. Nearby chunks first; work is time-budgeted so a 12-chunk
+     * view fills in over a few frames instead of hitching.
+     */
+    public void mapLoadedChunks(int playerChunkX, int playerChunkZ) {
+        double start = System.nanoTime() / 1e9;
+        visitRenderDistanceRing(playerChunkX, playerChunkZ, renderDistance, (cx, cz) -> {
+            if (mapOneChunk(cx, cz, start)) return false;
+            return true;
+        });
+    }
+
+    /**
+     * Walk every chunk in the Chebyshev square of radius {@code rd} around
+     * the player (the same square chunk streaming uses), nearest first.
+     * {@code visitor} returning false stops the walk.
+     *
+     * @return number of chunks visited
+     */
+    static int visitRenderDistanceRing(int playerChunkX, int playerChunkZ, int rd,
+                                       java.util.function.BiPredicate<Integer, Integer> visitor) {
+        if (!visitor.test(playerChunkX, playerChunkZ)) return 1;
+        int visited = 1;
+        for (int r = 1; r <= rd; r++) {
+            for (int i = -r; i < r; i++) {
+                if (!visitor.test(playerChunkX + i, playerChunkZ - r)) return visited + 1;
+                visited++;
+                if (!visitor.test(playerChunkX + r, playerChunkZ + i)) return visited + 1;
+                visited++;
+                if (!visitor.test(playerChunkX - i, playerChunkZ + r)) return visited + 1;
+                visited++;
+                if (!visitor.test(playerChunkX - r, playerChunkZ - i)) return visited + 1;
+                visited++;
+            }
+        }
+        return visited;
+    }
+
+    /** @return true when the map-sample time budget is spent after mapping a chunk. */
+    private boolean mapOneChunk(int chunkX, int chunkZ, double startSeconds) {
+        Chunk c = getChunk(chunkX, chunkZ);
+        if (c == null || !c.isGenerated() || mapData.hasSurface(chunkX, chunkZ)) {
+            return false;
+        }
+        mapData.exploreGeneratedChunk(c);
+        return (System.nanoTime() / 1e9 - startSeconds) >= MAP_SAMPLE_BUDGET_SECONDS;
     }
 
     public boolean isLeavesTransparent() {

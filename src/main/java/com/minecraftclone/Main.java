@@ -1702,18 +1702,13 @@ public class Main {
             // rendering setting (e.g. see-through leaves) takes effect live.
             world.update(player.getPosition().x, player.getPosition().z);
 
-            // JourneyMap maps loaded terrain around you. Run after streaming so
-            // newly generated chunks actually have blocks to sample; a 2-chunk
-            // radius fills the zoomed-in mini-map (~4 chunks across). Empty /
-            // not-yet-generated chunks are skipped and retried next frame.
+            // Paint every generated chunk in render distance onto the map as
+            // they stream in (JourneyMap). Budgeted inside World so a 12-chunk
+            // view fills over a few frames instead of hitching.
             if (started[0] && mapRenderer[0] != null) {
                 int chunkX = World.worldToChunk((int) Math.floor(player.getPosition().x));
                 int chunkZ = World.worldToChunk((int) Math.floor(player.getPosition().z));
-                for (int dx = -2; dx <= 2; dx++) {
-                    for (int dz = -2; dz <= 2; dz++) {
-                        world.getMapData().exploreChunk(chunkX + dx, chunkZ + dz, world);
-                    }
-                }
+                world.mapLoadedChunks(chunkX, chunkZ);
             }
 
             // The OpenAL listener follows the camera every frame regardless of
