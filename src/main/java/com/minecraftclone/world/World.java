@@ -657,6 +657,33 @@ public class World implements BlockAccessor {
     }
 
     /**
+     * Creates (or reuses) the block entity of the given registered type at a
+     * cell and restores its state from {@code in} - the multiplayer path for
+     * server-sent container snapshots (the payload format is exactly the
+     * entity's own {@link BlockEntity#readFrom}). Reusing an existing instance
+     * of the same type matters: an open container GUI reads that object live,
+     * so overwriting its fields refreshes the UI in place. Returns the entity,
+     * or null if the type isn't registered or the block there isn't a match.
+     */
+    public BlockEntity restoreBlockEntity(int x, int y, int z, String type, java.io.DataInput in) throws java.io.IOException {
+        BlockEntity entity = blockEntityAt(x, y, z);
+        if (entity == null || !entity.type().equals(type)) {
+            BlockType existing = getBlock(x, y, z);
+            entity = BlockEntities.create(type);
+            if (entity == null || existing != entity.blockType()) return null;
+            blockEntities.put(blockKey(x, y, z), entity);
+        }
+        entity.readFrom(in);
+        return entity;
+    }
+
+    /** Flags a loaded chunk as player-modified so autosave persists it (used for remote container edits). */
+    public void markChunkModifiedByPlayer(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk != null) chunk.markModifiedByPlayer();
+    }
+
+    /**
      * Removes a block entity and immediately dirties the surrounding 3×3 chunks
      * so that the renderer picks up the visual change (e.g. the lit front tile of
      * a Smeltery Controller reverting to its unlit tile after the structure deforms).

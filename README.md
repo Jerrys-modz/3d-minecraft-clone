@@ -199,6 +199,7 @@ The server is authoritative for the world. It uses a fresh random seed each laun
 - **Mobs** - the server simulates every mob (passive and hostile) with its own day/night clock, so animals wander and zombies hunt the *nearest* player; everyone sees the same mobs in the same places. Attacks are sent to the server, which applies damage server-side; when a mob dies, each client drops its loot locally in their own world. Mobs despawn at dawn / far away just like single-player.
 - **Players** - every connected player appears as a blocky humanoid figure (procedurally painted skin) that moves smoothly via server-relayed position/look updates at ~20 Hz, with a name above its head. Join/leave and death messages appear on screen.
 - **Chat** - press **T**, type, Enter to send; the line appears above the hotbar and everyone sees it.
+- **Containers** - chests (including doubles and 2x2 quads), barrels and furnaces are server-backed: opening one requests the authoritative contents, and closing the GUI pushes what you left inside to everyone else. Furnaces also smelt on the server, so progress continues while nobody is watching. Two players editing the same container at once is last-close-wins.
 
 Deliberately **not shared yet** (each player keeps their own):
 
@@ -262,7 +263,7 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 - **Boats**, **horse/animal riding**.
 - **Electricity**, **temperature effects**.
 - A real **recipe book / on-screen UI** now that a text renderer exists - the crafting grid, message logs, death/damage messaging, the world map, and debug info are in-game (see Features), but there's no scrollable/laid-out recipe book beyond the hotbar and crafting grid.
-- **Multiplayer depth**: the basics are in (players see each other, a shared authoritative world with synced blocks *and* mobs, chat - see [Multiplayer](#multiplayer)), but inventories, health/hunger and item drops are still per-player rather than shared. Syncing those is the natural next step.
+- **Multiplayer depth**: the basics are in (players see each other, a shared authoritative world with synced blocks, mobs, chat *and* containers - see [Multiplayer](#multiplayer)), but inventories, health/hunger and item drops are still per-player rather than shared. Syncing those is the natural next step.
 
 If you've got a specific one of these in mind, just say which and it jumps the queue.
 

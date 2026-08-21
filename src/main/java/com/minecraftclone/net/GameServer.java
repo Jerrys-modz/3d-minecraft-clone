@@ -2,9 +2,13 @@ package com.minecraftclone.net;
 
 import com.minecraftclone.engine.DayNightCycle;
 import com.minecraftclone.util.AABB;
+import com.minecraftclone.world.Barrel;
+import com.minecraftclone.world.BlockEntity;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.Chunk;
 import com.minecraftclone.world.DimensionType;
+import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
@@ -264,6 +268,12 @@ public class GameServer implements AutoCloseable {
                 worldOf(c).update(c.x, c.z);
             }
 
+            // Advance block entities (furnaces smelting) server-side so the
+            // authoritative world keeps working while nobody has one open.
+            for (World w : worlds) {
+                w.tickBlockEntities(dt);
+            }
+
             // Simulate overworld mobs against every connected player (nearest-player targeting).
             tickMobs(dt);
 
@@ -410,6 +420,10 @@ public class GameServer implements AutoCloseable {
                     handlePortalUse(client, portal);
                 } else if (packet instanceof Packets.Respawn) {
                     handleRespawn(client);
+                } else if (packet instanceof Packets.ContainerOpen open) {
+                    handleContainerOpen(client, open);
+                } else if (packet instanceof Packets.ContainerData data) {
+                    handleContainerUpdate(client, data);
                 }
             } catch (IOException e) {
                 disconnect(client);
@@ -650,6 +664,96 @@ public class GameServer implements AutoCloseable {
         client.pitch = 0f;
         send(client, Packets.encodeDimensionChange(new Packets.DimensionChange(client.dimension, client.x, client.y, client.z)));
         broadcastOthers(client, Packets.encodePlayerDeath(new Packets.PlayerDeath(client.id)));
+    }
+
+    /**
+     * The block-entity types that sync over the wire. Tinkers stations and
+     * smelteries are multi-block structures with their own GUIs - not synced yet.
+     */
+    private static boolean isSyncedContainer(BlockType block) {
+        return block == BlockType.CHEST || block == BlockType.BARREL || block == BlockType.FURNACE;
+    }
+
+    /** True if the block-entity type name matches the block actually at the cell. */
+    private static boolean typeMatchesBlock(String type, BlockType block) {
+        return switch (type) {
+            case Chest.TYPE -> block == BlockType.CHEST;
+            case Barrel.TYPE -> block == BlockType.BARREL;
+            case Furnace.TYPE -> block == BlockType.FURNACE;
+            default -> false;
+        };
+    }
+
+    /** Serializes a container's state using its own disk-save format. */
+    private static byte[] snapshotEntity(BlockEntity entity) throws IOException {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        entity.writeTo(out);
+        out.flush();
+        return buf.toByteArray();
+    }
+
+    /** Restores a container's state from its serialized form (see {@link #snapshotEntity}). */
+    private static BlockEntity restoreEntity(World world, int x, int y, int z, String type, byte[] payload)
+            throws IOException {
+        BlockEntity existing = world.blockEntityAt(x, y, z);
+        if (existing != null && existing.type().equals(type)) {
+            try (DataInputStream in = new DataInputStream(new java.io.ByteArrayInputStream(payload))) {
+                existing.readFrom(in);
+            }
+            return existing;
+        }
+        try (DataInputStream in = new DataInputStream(new java.io.ByteArrayInputStream(payload))) {
+            return world.restoreBlockEntity(x, y, z, type, in);
+        }
+    }
+
+    /**
+     * A player right-clicked a container: validate it's a real container within
+     * reach, create the authoritative entity if this is its first open, and
+     * reply with a full snapshot.
+     */
+    private void handleContainerOpen(Client client, Packets.ContainerOpen open) throws IOException {
+        if (!client.joined) return;
+        if (open.dimension() < 0 || open.dimension() >= worlds.length
+                || open.y() < 0 || open.y() >= Chunk.HEIGHT) return;
+        if (!canReach(client, open.x(), open.y(), open.z())) return;
+        World world = worlds[open.dimension()];
+        BlockType block = world.getBlock(open.x(), open.y(), open.z());
+        if (!isSyncedContainer(block)) return;
+        world.ensureChunk(World.worldToChunk(open.x()), World.worldToChunk(open.z()));
+        BlockEntity entity = switch (block) {
+            case CHEST -> world.getOrCreateChest(open.x(), open.y(), open.z());
+            case BARREL -> world.getOrCreateBarrel(open.x(), open.y(), open.z());
+            case FURNACE -> world.getOrCreateFurnace(open.x(), open.y(), open.z());
+            default -> null;
+        };
+        if (entity == null) return;
+        send(client, Packets.encodeContainerData(new Packets.ContainerData(
+                open.dimension(), open.x(), open.y(), open.z(), entity.type(), snapshotEntity(entity))));
+    }
+
+    /**
+     * A client closed a container GUI and publishes what it left inside: apply
+     * it to the authoritative world (so the server and any later opener see the
+     * same contents), persist it, and rebroadcast to everyone else - including
+     * clients with that container open, whose GUI updates live.
+     */
+    private void handleContainerUpdate(Client client, Packets.ContainerData data) throws IOException {
+        if (!client.joined) return;
+        if (data.dimension() < 0 || data.dimension() >= worlds.length
+                || data.y() < 0 || data.y() >= Chunk.HEIGHT) return;
+        if (!canReach(client, data.x(), data.y(), data.z())) return;
+        World world = worlds[data.dimension()];
+        BlockType block = world.getBlock(data.x(), data.y(), data.z());
+        if (!typeMatchesBlock(data.type(), block)) return;
+        BlockEntity entity = restoreEntity(world, data.x(), data.y(), data.z(), data.type(), data.payload());
+        if (entity == null) return;
+        // Persist: the chunk may not be flagged modified (e.g. filling an
+        // already-placed chest), so mark it explicitly.
+        world.markChunkModifiedByPlayer(World.worldToChunk(data.x()), World.worldToChunk(data.z()));
+        broadcastOthers(client, Packets.encodeContainerData(new Packets.ContainerData(
+                data.dimension(), data.x(), data.y(), data.z(), data.type(), snapshotEntity(entity))));
     }
 
     /** Broadcasts the server-authoritative time of day so every client shares the same sky. */

@@ -12,6 +12,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -247,6 +248,85 @@ class GameServerTest {
             assertEquals(1, ack.dimension());
             assertEquals(0, ack.cx());
             assertEquals(0, ack.cz());
+        }
+    }
+
+    /** Joins, places a chest at the spawn cell (within reach), and waits for the echo. */
+    private static Packets.Welcome placeChestAtSpawn(NetClient client) throws Exception {
+        client.sendJoin("Alice");
+        Packets.Welcome welcome = assertInstanceOf(Packets.Welcome.class, awaitPacket(client, Packets.Welcome.class));
+        int px = (int) Math.floor(welcome.spawnX());
+        int py = Math.round(welcome.spawnY());
+        int pz = (int) Math.floor(welcome.spawnZ());
+        client.sendPlaceBlock(new Packets.PlaceBlock((byte) 0, px, py, pz, BlockType.CHEST.id, (byte) 0, false));
+        awaitPacket(client, Packets.BlockChange.class);
+        return welcome;
+    }
+
+    @Test
+    void containerContentsSyncBetweenClients() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort());
+             NetClient b = new NetClient("127.0.0.1", server.getPort())) {
+            // Alice places a chest at her spawn and opens it: an empty snapshot arrives.
+            Packets.Welcome welcomeA = placeChestAtSpawn(a);
+            int px = (int) Math.floor(welcomeA.spawnX());
+            int py = Math.round(welcomeA.spawnY());
+            int pz = (int) Math.floor(welcomeA.spawnZ());
+            a.sendContainerOpen((byte) 0, px, py, pz);
+            Packets.ContainerData empty = assertInstanceOf(Packets.ContainerData.class,
+                    awaitPacketMatching(a, Packets.ContainerData.class, p -> true));
+            assertEquals("chest", empty.type());
+            com.minecraftclone.world.Chest checkEmpty = new com.minecraftclone.world.Chest();
+            checkEmpty.readFrom(new java.io.DataInputStream(new java.io.ByteArrayInputStream(empty.payload())));
+            assertNull(checkEmpty.typeOf(0));
+
+            // Alice puts stone in slot 0 and "closes" the GUI by pushing an update.
+            com.minecraftclone.world.Chest edited = new com.minecraftclone.world.Chest();
+            edited.setSlot(0, BlockType.STONE, 5);
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            edited.writeTo(new java.io.DataOutputStream(buf));
+            a.sendContainerData(new Packets.ContainerData((byte) 0, px, py, pz, "chest", buf.toByteArray()));
+
+            // Bob joins and opens the same chest: he sees Alice's stone.
+            b.sendJoin("Bob");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(b, Packets.Welcome.class));
+            b.sendContainerOpen((byte) 0, px, py, pz);
+            Packets.ContainerData filled = assertInstanceOf(Packets.ContainerData.class,
+                    awaitPacketMatching(b, Packets.ContainerData.class, p -> true));
+            com.minecraftclone.world.Chest seen = new com.minecraftclone.world.Chest();
+            seen.readFrom(new java.io.DataInputStream(new java.io.ByteArrayInputStream(filled.payload())));
+            assertEquals(BlockType.STONE, seen.typeOf(0));
+            assertEquals(5, seen.countOf(0));
+
+            // Alice also receives Bob-free rebroadcasts of her own update? No -
+            // updates go to OTHERS - but she should get Bob's open-triggered none.
+            // (Nothing further to assert for Alice here.)
+        }
+    }
+
+    @Test
+    void containerUpdateFromFarAwayIsRejected() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            Packets.Welcome welcome = placeChestAtSpawn(a);
+            // A chest far outside reach: the server must not apply or echo anything.
+            int farX = (int) Math.floor(welcome.spawnX()) + 200;
+            com.minecraftclone.world.Chest edited = new com.minecraftclone.world.Chest();
+            edited.setSlot(0, BlockType.DIAMOND_ORE, 64);
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            edited.writeTo(new java.io.DataOutputStream(buf));
+            a.sendContainerData(new Packets.ContainerData((byte) 0, farX,
+                    Math.round(welcome.spawnY()), (int) Math.floor(welcome.spawnZ()), "chest", buf.toByteArray()));
+            // Any ContainerData that DOES come back would be for our own earlier
+            // traffic; give the server a moment and confirm nothing addressed to
+            // the far cell arrives.
+            long deadline = System.currentTimeMillis() + 1500;
+            while (System.currentTimeMillis() < deadline) {
+                Object p = a.poll();
+                if (p instanceof Packets.ContainerData d && d.x() == farX) {
+                    throw new AssertionError("Server accepted an out-of-reach container update");
+                }
+                Thread.sleep(10);
+            }
         }
     }
 }

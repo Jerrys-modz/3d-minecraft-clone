@@ -40,12 +40,13 @@ import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.Barrel;
-import com.minecraftclone.world.Chest;
+import com.minecraftclone.world.Bed;
+import com.minecraftclone.world.BlockEntity;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Chunk;
+import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.DimensionType;
 import com.minecraftclone.world.Door;
-import com.minecraftclone.world.Bed;
 import com.minecraftclone.world.Furnace;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.Mob;
@@ -486,6 +487,9 @@ public class Main {
         controller.returnGridToInventory();
         controller.returnCursorToInventory();
         SoundEvent closeSound = activeGui[0] != null ? activeGui[0].closeSound() : SoundEvent.UI_CLOSE;
+        // Publish whatever the player left in an open multiplayer container
+        // (chest/barrel/furnace) so the server and other clients see it.
+        flushOpenContainer();
         activeGui[0] = inventoryGui;
         controller.setGui(inventoryGui);
         inventoryOpen[0] = false;
@@ -664,6 +668,102 @@ public class Main {
         }
     }
 
+    /**
+     * The container cell currently open in a GUI for multiplayer sync:
+     * {dimension, x, y, z}, or dimension -1 when none is open (or single player).
+     */
+    private final int[] openContainerCell = {-1, 0, 0, 0};
+
+    /**
+     * Mirrors run()'s local dimension-worlds array once per frame so helpers
+     * like {@link #flushOpenContainer()} can reach it without threading it
+     * through every signature.
+     */
+    private World[] activeWorlds;
+
+    /** Serializes a block entity with its own disk-save format (shared with the wire). */
+    private static byte[] snapshotBlockEntity(BlockEntity entity) throws IOException {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream out = new java.io.DataOutputStream(buf);
+        entity.writeTo(out);
+        out.flush();
+        return buf.toByteArray();
+    }
+
+    /** True if the block-entity type name matches the block at the cell. */
+    private static boolean typeMatchesBlock(String type, BlockType block) {
+        return switch (type) {
+            case Chest.TYPE -> block == BlockType.CHEST;
+            case Barrel.TYPE -> block == BlockType.BARREL;
+            case Furnace.TYPE -> block == BlockType.FURNACE;
+            default -> false;
+        };
+    }
+
+    /**
+     * Right-clicked a chest/barrel/furnace in multiplayer: remember the cell so
+     * closing the GUI publishes its contents, and ask the server for its
+     * authoritative snapshot (it overwrites the local copy on arrival).
+     */
+    private void trackMultiplayerContainer(int x, int y, int z) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        openContainerCell[0] = currentDim[0].ordinal();
+        openContainerCell[1] = x;
+        openContainerCell[2] = y;
+        openContainerCell[3] = z;
+        try {
+            client.sendContainerOpen((byte) currentDim[0].ordinal(), x, y, z);
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /**
+     * The player closed a container GUI: push every involved entity's state to
+     * the server. A double/quad chest is several entities sharing one view, so
+     * all of its halves are flushed. Last close wins if two players had the
+     * same container open simultaneously.
+     */
+    private void flushOpenContainer() {
+        int dim = openContainerCell[0];
+        openContainerCell[0] = -1;
+        NetClient client = netClient;
+        if (dim < 0 || client == null || !client.isConnected()) return;
+        World world = activeWorlds != null && dim >= 0 && dim < activeWorlds.length ? activeWorlds[dim] : null;
+        if (world == null) return;
+        int x = openContainerCell[1], y = openContainerCell[2], z = openContainerCell[3];
+        BlockType block = world.getBlock(x, y, z);
+        List<int[]> cells = new ArrayList<>();
+        cells.add(new int[]{x, y, z});
+        if (block == BlockType.CHEST) {
+            // Doubles/quads: flush every half that has an entity so the shared
+            // JoinedStorage view stays consistent wherever it was edited.
+            java.util.function.BiPredicate<Integer, Integer> occupied2 =
+                    (cx, cz) -> world.getBlock(cx, y, cz) == BlockType.CHEST;
+            int[] quad = Chest.quadOrigin(x, y, z, (cx, cy, cz) -> occupied2.test(cx, cz));
+            if (quad != null) {
+                cells.add(new int[]{quad[0] + 1, y, quad[1]});
+                cells.add(new int[]{quad[0], y, quad[1] + 1});
+                cells.add(new int[]{quad[0] + 1, y, quad[1] + 1});
+            } else {
+                Chest.Partner partner = Chest.doublePartner(x, y, z, (cx, cy, cz) -> occupied2.test(cx, cz));
+                if (partner != null) cells.add(new int[]{partner.x(), y, partner.z()});
+            }
+        }
+        for (int[] c : cells) {
+            BlockEntity entity = world.blockEntityAt(c[0], c[1], c[2]);
+            if (entity == null || !typeMatchesBlock(entity.type(), world.getBlock(c[0], c[1], c[2]))) continue;
+            try {
+                client.sendContainerData(new Packets.ContainerData(
+                        (byte) dim, c[0], c[1], c[2], entity.type(), snapshotBlockEntity(entity)));
+            } catch (IOException e) {
+                netError = e.getMessage();
+                return;
+            }
+        }
+    }
+
     /** The mob the crosshair is aimed at: local mobs, or remote players' mobs in multiplayer. */
     private Mob raycastTargetMob(Player player, World world) {
         Vector3f eye = player.getEyePosition();
@@ -812,6 +912,21 @@ public class Main {
                 }
             } else if (packet instanceof Packets.ChunkAck ack) {
                 // Chunk matches the seed - the client's own generation already has it.
+            } else if (packet instanceof Packets.ContainerData data) {
+                // A container snapshot (requested on open, or another player's
+                // update): restore it into the local mirror. Reusing the same
+                // entity instance means an open GUI refreshes in place.
+                World target = (worlds != null && data.dimension() >= 0 && data.dimension() < worlds.length)
+                        ? worlds[data.dimension()] : world;
+                if (target != null && data.y() >= 0 && data.y() < Chunk.HEIGHT
+                        && typeMatchesBlock(data.type(), target.getBlock(data.x(), data.y(), data.z()))) {
+                    try (java.io.DataInputStream in = new java.io.DataInputStream(
+                            new java.io.ByteArrayInputStream(data.payload()))) {
+                        target.restoreBlockEntity(data.x(), data.y(), data.z(), data.type(), in);
+                    } catch (IOException e) {
+                        // Corrupt payload - ignore this snapshot rather than desync.
+                    }
+                }
             } else if (packet instanceof Packets.ChatMsg msg) {
                 showMessage(messages, "<" + msg.name() + "> " + msg.text(), new Vector4f(0.92f, 0.92f, 0.92f, 1f), 5f);
             } else if (packet instanceof Packets.Reject reject) {
@@ -1780,6 +1895,7 @@ public class Main {
             }
             animTime[0] += dt;
             attackCooldown[0] -= dt;
+            activeWorlds = worlds;
             Raycaster.Hit hit = null;
             float breakFraction = 0f;
             boolean screenshotRequested = false;
@@ -2868,6 +2984,7 @@ public class Main {
                         }
                     } else if (noMob && targeted == BlockType.FURNACE) {
                         // Right-click a furnace to open its smelting gui.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         Furnace furnace = world.getOrCreateFurnace(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, furnace);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
@@ -2878,12 +2995,14 @@ public class Main {
                     } else if (noMob && targeted == BlockType.CHEST) {
                         // Right-click a chest to open its storage gui; an adjacent
                         // chest on any horizontal axis merges into a 54-slot double.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         world.getOrCreateChest(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.chestContainerAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.BARREL) {
                         // Right-click a barrel to open its storage gui.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         world.getOrCreateBarrel(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));

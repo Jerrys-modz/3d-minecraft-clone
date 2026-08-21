@@ -44,6 +44,8 @@ class PacketsTest {
         else if (packet instanceof Packets.MobState p) payload = Packets.encodeMobState(p);
         else if (packet instanceof Packets.MobRemove p) payload = Packets.encodeMobRemove(p);
         else if (packet instanceof Packets.PlayerDamage p) payload = Packets.encodePlayerDamage(p);
+        else if (packet instanceof Packets.ContainerOpen p) payload = Packets.encodeContainerOpen(p.dimension(), p.x(), p.y(), p.z());
+        else if (packet instanceof Packets.ContainerData p) payload = Packets.encodeContainerData(p);
         else if (packet instanceof Packets.DimensionChange p) payload = Packets.encodeDimensionChange(p);
         else if (packet instanceof Packets.TimeSync p) payload = Packets.encodeTimeSync(p);
         else if (packet instanceof Packets.PlayerDeath p) payload = Packets.encodePlayerDeath(p);
@@ -276,6 +278,29 @@ class PacketsTest {
     @Test
     void respawnRoundTrips() throws Exception {
         assertInstanceOf(Packets.Respawn.class, roundTrip(new Packets.Respawn()));
+    }
+
+    @Test
+    void containerOpenRoundTrips() throws Exception {
+        Packets.ContainerOpen in = new Packets.ContainerOpen((byte) 0, 7, -3, 2);
+        Packets.ContainerOpen out = assertInstanceOf(Packets.ContainerOpen.class, roundTrip(in));
+        assertEquals(0, out.dimension());
+        assertEquals(7, out.x());
+        assertEquals(-3, out.y());
+        assertEquals(2, out.z());
+    }
+
+    @Test
+    void containerDataRoundTripsAndRejectsBadLength() throws Exception {
+        byte[] payload = {1, 2, 3, 4, 5};
+        Packets.ContainerData in = new Packets.ContainerData((byte) 1, -9, 40, 12, "furnace", payload);
+        Packets.ContainerData out = assertInstanceOf(Packets.ContainerData.class, roundTrip(in));
+        assertEquals(1, out.dimension());
+        assertEquals(-9, out.x());
+        assertEquals(40, out.y());
+        assertEquals(12, out.z());
+        assertEquals("furnace", out.type());
+        assertArrayEquals(payload, out.payload());
     }
 
     @Test

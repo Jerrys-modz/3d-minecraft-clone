@@ -59,6 +59,8 @@ public final class Packets {
     public static final byte OP_DIMENSION_CHANGE = 24; // S->C: teleported to another dimension at a position
     public static final byte OP_TIME_SYNC = 25;     // S->C: server-authoritative time of day
     public static final byte OP_PLAYER_DEATH = 26;  // S->C: another player died (respawned to overworld)
+    public static final byte OP_CONTAINER_OPEN = 27;   // C->S: opening a chest/barrel/furnace - send me its contents
+    public static final byte OP_CONTAINER_DATA = 28;   // S->C / C->S: full container snapshot (type + serialized slots)
 
     // ---------------------------------------------------------------
     // Shared encode/decode helpers
@@ -66,6 +68,12 @@ public final class Packets {
 
     /** The max length of any single packet payload. */
     static final int MAX_PAYLOAD = 1 << 20;
+
+    /**
+     * The largest container snapshot payload accepted (a chest is ~85 bytes, a
+     * furnace under 40; anything bigger is corrupt or hostile).
+     */
+    static final int MAX_CONTAINER_PAYLOAD = 8192;
 
     /**
      * Writes a packet to {@code out}: a 4-byte length prefix followed by the
@@ -135,6 +143,20 @@ public final class Packets {
     }
 
     public record PortalUse(byte dimension, short blockId) {
+    }
+
+    /** A player right-clicked a container: the server replies with a ContainerData snapshot. */
+    public record ContainerOpen(byte dimension, int x, int y, int z) {
+    }
+
+    /**
+     * A full container snapshot: the block-entity type name ("chest" / "barrel"
+     * / "furnace") plus its serialized state (exactly the entity's
+     * {@code writeTo} format, shared with the disk save). Sent by the server on
+     * open and re-broadcast whenever another client pushes an update; clients
+     * send the same packet to publish their changes when they close the GUI.
+     */
+    public record ContainerData(byte dimension, int x, int y, int z, String type, byte[] payload) {
     }
 
     public record Respawn() {
@@ -259,6 +281,36 @@ public final class Packets {
         out.writeByte(OP_PORTAL_USE);
         out.writeByte(dimension);
         out.writeShort(blockId);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeContainerOpen(byte dimension, int x, int y, int z) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_CONTAINER_OPEN);
+        out.writeByte(dimension);
+        out.writeInt(x);
+        out.writeInt(y);
+        out.writeInt(z);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeContainerData(ContainerData data) throws IOException {
+        if (data.payload().length > MAX_CONTAINER_PAYLOAD) {
+            throw new IOException("Container payload too large: " + data.payload().length);
+        }
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_CONTAINER_DATA);
+        out.writeByte(data.dimension());
+        out.writeInt(data.x());
+        out.writeInt(data.y());
+        out.writeInt(data.z());
+        out.writeUTF(data.type());
+        out.writeInt(data.payload().length);
+        out.write(data.payload());
         out.close();
         return buf.toByteArray();
     }
@@ -530,6 +582,20 @@ public final class Packets {
             case OP_CHUNK_REQUEST -> new ChunkRequest(in.readByte(), in.readInt(), in.readInt());
             case OP_MOB_ATTACK -> new MobAttack(in.readInt(), in.readFloat());
             case OP_PORTAL_USE -> new PortalUse(in.readByte(), in.readShort());
+            case OP_CONTAINER_OPEN -> new ContainerOpen(in.readByte(), in.readInt(), in.readInt(), in.readInt());
+            case OP_CONTAINER_DATA -> {
+                byte dim = in.readByte();
+                int x = in.readInt(), y = in.readInt(), z = in.readInt();
+                String type = in.readUTF();
+                int len = in.readInt();
+                // Payload length comes off the wire: bound it before allocating.
+                if (len < 0 || len > MAX_CONTAINER_PAYLOAD) {
+                    throw new IOException("Bad container payload length: " + len);
+                }
+                byte[] containerPayload = new byte[len];
+                in.readFully(containerPayload);
+                yield new ContainerData(dim, x, y, z, type, containerPayload);
+            }
             case OP_RESPAWN -> new Respawn();
             case OP_READY -> new Ready();
             case OP_WELCOME -> new Welcome(in.readInt(), in.readLong(), in.readInt(), in.readBoolean(),
