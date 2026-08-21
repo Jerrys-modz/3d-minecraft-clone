@@ -585,6 +585,12 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     // see fluidTop.
     private static final float FLOW_TOP_NEAR = 0.86f;
     private static final float FLOW_TOP_FAR = 0.25f;
+    /**
+     * Submerged cells at or above this height (sources/ocean at 0.9, columns
+     * at 1.0) must not emit a top — that's a sheet floating inside the water.
+     * Fresh landings sit at {@link #FLOW_TOP_NEAR} and still need a top.
+     */
+    static final float SUBMERGED_SURFACE = 0.875f;
 
     /**
      * Fluid surface height (above its cell's floor, 0..1): 0.9 for a static/source
@@ -596,24 +602,25 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     private float fluidTop(BlockAccessor world, int wx, int wy, int wz, BlockType type) {
         if (type == BlockType.WATER || type == BlockType.LAVA || type.isFluidSource()) return 0.9f;
         BlockType below = world.getBlock(wx, wy - 1, wz);
-        // Falling, or stacked on more fluid - a vertical waterfall/lavafall
-        // column, per FluidSim's own "only spread sideways off solid ground"
-        // rule (below.isFluid() there too) - full height either way, never
-        // graded. Once a multi-block-tall fall has fully filled in, only its
-        // very bottom cell actually has air below it, so "below is air" alone
-        // can't tell a column cell apart from a resting puddle: every cell
-        // above the bottom one was rendering at its graded - often much
-        // shorter - puddle height instead of full, a visibly banded, gappy
-        // waterfall.
-        if (below == BlockType.AIR || below.cross || below.isFluid()) return 1f;
-        // Resting on solid ground: grade by distance, even if more fluid is
-        // stacked above (a waterfall landing). Forcing those cells to full
-        // height made every downhill step a full cube next to a shallow
-        // puddle — high, low, high. The column above meets the pool via a
-        // drop skirt instead (see emitFluidDropSkirt).
+        BlockType below2 = world.getBlock(wx, wy - 2, wz);
+        // A true waterfall column is 2+ blocks of air/fluid under this cell.
+        // A 1-block drop onto a landing (fluid on solid, or air on solid) is
+        // just the next step of a downhill stream — treating it as full height
+        // stacked a cube on every stair tread (high-low-high).
+        if (isContinuingFall(below, below2)) return 1f;
         int maxLevel = type.isWater() ? FluidSim.WATER_FLOW_DISTANCE : FluidSim.LAVA_FLOW_DISTANCE;
         float t = Math.min(world.getFluidLevel(wx, wy, wz), maxLevel) / (float) maxLevel;
         return FLOW_TOP_NEAR - t * (FLOW_TOP_NEAR - FLOW_TOP_FAR);
+    }
+
+    /** Air, plants, or more fluid — water can fall through this cell. */
+    static boolean isDropThrough(BlockType t) {
+        return t == BlockType.AIR || t.cross || t.isFluid();
+    }
+
+    /** True when the drop continues past this cell (a real waterfall, not a 1-block step). */
+    static boolean isContinuingFall(BlockType below, BlockType below2) {
+        return isDropThrough(below) && isDropThrough(below2);
     }
 
     /** A gentle, fixed "current" direction for fluid that has no real away-from-source gradient - see {@link #fluidFlowDir}. */
@@ -712,13 +719,15 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     /**
-     * Whether a fluid cell should emit its top face. Full-height cells under
-     * more fluid are the interior of a column (no extra slab in the shaft).
-     * Everything else with a dipped surface needs a top so the pool isn't a hole.
+     * Whether a fluid cell should emit its top face.
+     * Submerged sources/ocean/columns (height ≥ {@link #SUBMERGED_SURFACE})
+     * stay open so you don't see a sheet floating inside the water. Shallow
+     * puddles under a waterfall still need a top or the pool holes to dirt.
      */
     static boolean shouldEmitFluidTop(boolean fluidAbove, boolean fluidBelow, float minCorner, float cellY) {
-        if (fluidAbove && minCorner >= cellY + 0.999f) return false;
-        return minCorner < cellY + 0.999f;
+        float height = minCorner - cellY;
+        if (fluidAbove) return height < SUBMERGED_SURFACE;
+        return height < 0.999f;
     }
 
     /** Emits a lowered translucent surface for fluid instead of a solid full cube. */

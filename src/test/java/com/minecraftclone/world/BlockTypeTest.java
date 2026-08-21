@@ -259,18 +259,33 @@ class BlockTypeTest {
 
     @Test
     void waterfallLandingAlwaysGetsATopFace() {
-        // A puddle the fall just landed on (corners below full height) still
-        // needs a top, otherwise the pool holes through to dirt.
+        // A puddle the fall just landed on still needs a top, otherwise the
+        // pool holes through to dirt.
         assertTrue(Chunk.shouldEmitFluidTop(true, false, 10.5f, 10f));
-        // Mid-column (fluid both above and below) at full height: no extra slab
-        // floating in the shaft.
+        assertTrue(Chunk.shouldEmitFluidTop(true, false, 10f + 0.86f, 10f),
+                "fresh landing at FLOW_TOP_NEAR still needs a surface");
+        // Mid-column at full height: no extra slab floating in the shaft.
         assertFalse(Chunk.shouldEmitFluidTop(true, true, 11f, 10f));
-        // Dipped mid-column still covers the dip.
-        assertTrue(Chunk.shouldEmitFluidTop(true, true, 10.4f, 10f));
         // Surface puddle (nothing above) with lowered corners.
         assertTrue(Chunk.shouldEmitFluidTop(false, false, 10.4f, 10f));
-        // Full-height landing is no longer a special case — it would stick up
-        // out of the pool (high-low-high on a slope).
-        assertFalse(Chunk.shouldEmitFluidTop(true, false, 11f, 10f));
+        // A water source / ocean cell at 0.9 with more water on top must NOT
+        // emit a top — that's the sheet you saw while swimming.
+        assertFalse(Chunk.shouldEmitFluidTop(true, true, 10.9f, 10f));
+        assertFalse(Chunk.shouldEmitFluidTop(true, false, 10.9f, 10f));
+    }
+
+    @Test
+    void onlyRealWaterfallsAreFullHeightColumns() {
+        assertTrue(Chunk.isContinuingFall(BlockType.AIR, BlockType.AIR),
+                "2+ blocks of air is a waterfall");
+        assertTrue(Chunk.isContinuingFall(BlockType.WATER_FLOW, BlockType.WATER_FLOW),
+                "stacked falling water is a column");
+        assertTrue(Chunk.isContinuingFall(BlockType.WATER_FLOW, BlockType.AIR));
+        assertFalse(Chunk.isContinuingFall(BlockType.WATER_FLOW, BlockType.GRASS),
+                "sitting on a landing puddle over dirt is a stream step, not a cube");
+        assertFalse(Chunk.isContinuingFall(BlockType.AIR, BlockType.STONE),
+                "1-block drop onto solid isn't a hanging cube");
+        assertFalse(Chunk.isDropThrough(BlockType.GRASS));
+        assertTrue(Chunk.isDropThrough(BlockType.WATER_FLOW));
     }
 }
