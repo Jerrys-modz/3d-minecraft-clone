@@ -256,4 +256,18 @@ class BlockTypeTest {
                 "quarter-height stream should use a quarter of the tile, not squash it");
         assertEquals(1f, shallow[0][1], 0.001f);
     }
+
+    @Test
+    void waterfallLandingAlwaysGetsATopFace() {
+        // Fluid above + solid below (the block a fall hits): always cap it,
+        // otherwise the pool has a hole down to dirt.
+        assertTrue(Chunk.shouldEmitFluidTop(true, false, 11f, 10f));
+        // Mid-column (fluid both above and below) at full height: no extra slab
+        // floating in the shaft.
+        assertFalse(Chunk.shouldEmitFluidTop(true, true, 11f, 10f));
+        // Dipped mid-column still covers the dip.
+        assertTrue(Chunk.shouldEmitFluidTop(true, true, 10.4f, 10f));
+        // Surface puddle (nothing above) with lowered corners.
+        assertTrue(Chunk.shouldEmitFluidTop(false, false, 10.4f, 10f));
+    }
 }

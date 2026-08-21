@@ -688,6 +688,10 @@ public class Chunk implements ChunkStorage.PersistableChunk {
      * the emitting block's own (non-averaged) height - see below.
      */
     private float fluidCornerTop(BlockAccessor world, int cx, int wy, int cz, BlockType block, float selfTop) {
+        // Full-height cells (a falling column, or the block a waterfall lands
+        // on) have to meet the ceiling. Averaging them with a shallow pool
+        // pulled the landing down and left a hole straight through to dirt.
+        if (selfTop >= 0.999f) return selfTop;
         float sum = 0f;
         for (int dx = -1; dx <= 0; dx++) {
             for (int dz = -1; dz <= 0; dz++) {
@@ -714,6 +718,20 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         return sum / 4f;
     }
 
+    /**
+     * Whether a fluid cell should emit its top face.
+     * <p>
+     * A waterfall landing (fluid above, solid/air below) always needs a cap —
+     * skipping it left a 1×1 hole in the pool that showed the grass the fall
+     * had just hit. Mid-column cells stay open unless a corner actually dips.
+     * Surface cells with dipped corners also emit; a full-height surface still
+     * emits when the caller sees air above ({@code isFaceVisible}).
+     */
+    static boolean shouldEmitFluidTop(boolean fluidAbove, boolean fluidBelow, float minCorner, float cellY) {
+        if (fluidAbove && !fluidBelow) return true;
+        return minCorner < cellY + 0.999f;
+    }
+
     /** Emits a lowered translucent surface for fluid instead of a solid full cube. */
     private void emitFluid(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
@@ -735,30 +753,11 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         float ySE = wy + fluidCornerTop(world, wx + 1, wy, wz + 1, block, selfTop);
         float ySW = wy + fluidCornerTop(world, wx, wy, wz + 1, block, selfTop);
 
-        // isFaceVisible's water branch treats "fluid above" as fully hiding this
-        // top face - true when every corner is already at full height, but a
-        // corner pulled down by a shorter neighbor doesn't actually touch the
-        // cell above it when that neighbor *isn't* fluid (its own geometry
-        // only ever starts at this cell's ceiling, y+1, never lower). Skipping
-        // the face there left a real gap - looking down through it showed
-        // whatever was below (e.g. the floor a waterfall just landed on)
-        // instead of this cell's own water surface.
-        //
-        // But when the cell directly above *is* the same fluid family, this
-        // cell is genuinely submerged - fluidTop already gives a submerged
-        // cell full height (1f) for itself, so any corner dip here only ever
-        // comes from a shallower same-family neighbor at this same Y level
-        // (an underwater ledge/step), not a real hole: that neighbor draws
-        // its own top face to cover its own surface, and this cell stays
-        // sealed above by more fluid either way. Drawing a top face here too
-        // used to paint a spurious, wrongly-angled water surface partway
-        // through open water - exactly what you'd see swimming past an
-        // underwater ledge, a seam floating in the middle of the lake.
-        boolean sealedByFluidAbove = sameFluidFamily(world.getBlock(wx, wy + 1, wz), block);
+        boolean fluidAbove = sameFluidFamily(world.getBlock(wx, wy + 1, wz), block);
+        boolean fluidBelow = sameFluidFamily(world.getBlock(wx, wy - 1, wz), block);
         float minCorner = Math.min(Math.min(yNW, yNE), Math.min(ySE, ySW));
-        boolean topVisible = sealedByFluidAbove
-                ? false
-                : (minCorner < wy + 1f || isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block));
+        boolean topVisible = shouldEmitFluidTop(fluidAbove, fluidBelow, minCorner, wy)
+                || (!fluidAbove && isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block));
         if (topVisible) {
             // A quad with 4 independently-graded corners usually isn't flat, so
             // splitting it into 2 triangles always bends it a little along
