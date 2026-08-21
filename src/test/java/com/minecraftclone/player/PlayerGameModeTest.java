@@ -35,4 +35,17 @@ class PlayerGameModeTest {
         p.setGameMode(GameMode.SURVIVAL);
         assertFalse(p.isFlying());
     }
+
+    @Test
+    void setFlyingIsIgnoredOutsideCreative() {
+        Player p = new Player();
+        p.setGameMode(GameMode.SURVIVAL);
+        p.setFlying(true);
+        assertFalse(p.isFlying());
+        p.setGameMode(GameMode.CREATIVE);
+        p.setFlying(true);
+        assertTrue(p.isFlying());
+        p.setFlying(false);
+        assertFalse(p.isFlying());
+    }
 }

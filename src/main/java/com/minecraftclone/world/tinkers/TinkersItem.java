@@ -151,6 +151,11 @@ public sealed interface TinkersItem permits TinkersItem.Part, TinkersItem.Tool {
         public int remaining()  { return Math.max(0, remaining); }
         public float fraction() { return maxDurability > 0 ? (float)Math.max(0, remaining) / maxDurability : 1f; }
 
+        /** Restores remaining durability from a save. Clamped to {@code 0..maxDurability}. */
+        public void setRemaining(int remaining) {
+            this.remaining = Math.max(0, Math.min(maxDurability, remaining));
+        }
+
         @Override
         public String toString() {
             return "Tinkers[" + kind + "," + (layers.isEmpty() ? "?" : layers.get(0).material().name()) + "]";

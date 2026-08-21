@@ -28,6 +28,7 @@ import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.player.JoinedStorage;
 import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
+import com.minecraftclone.player.PlayerSave;
 import com.minecraftclone.player.PlayerStats;
 import com.minecraftclone.player.StorageContainer;
 import com.minecraftclone.player.OreDrops;
@@ -868,20 +869,15 @@ public class Main {
                 worlds[dim.ordinal()].getMapData().loadFrom(
                     autoDir.resolve(dim.saveFolder()).resolve("map.dat"));
             }
-            mapRenderer[0] = new MapRenderer(world.getMapData());
-            hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
             startCalendar(dayNightCycle, calendar, genSettings);
             for (World w : worlds) {
                 w.setRenderDistance(settings.getRenderDistance());
                 w.setLeavesTransparent(settings.isLeavesTransparent());
             }
             applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
-            for (int i = 0; i < 200; i++) world.update(0, 0);
-            float[] spawn = findSpawn(world);
-            player.spawn(world, spawn[0], spawn[1]);
-            for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
-            world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12,
-                    settings.getDifficulty());
+            world = placePlayer(worlds, currentDim, autoDir, player, selectedSlot, settings, false);
+            mapRenderer[0] = new MapRenderer(world.getMapData());
+            hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
             System.out.println("World seed: " + seed);
             started[0] = true;
             mainMenuOpen[0] = false;
@@ -1384,27 +1380,20 @@ public class Main {
                                 for (DimensionType dim : DimensionType.values()) {
                                     worlds[dim.ordinal()] = new World(seed, genSettings, atlas, worldDir, dim);
                                 }
-                                currentDim[0] = DimensionType.OVERWORLD;
-                                world = worlds[currentDim[0].ordinal()];
                                 currentWorldDir[0] = worldDir;
                                 for (DimensionType dim : DimensionType.values()) {
                                     worlds[dim.ordinal()].getMapData().loadFrom(
                                         worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
                                 }
-                                mapRenderer[0] = new MapRenderer(world.getMapData());
-                                hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
                                 startCalendar(dayNightCycle, calendar, genSettings);
                                 for (World w : worlds) {
                                     w.setRenderDistance(settings.getRenderDistance());
                                     w.setLeavesTransparent(settings.isLeavesTransparent());
                                 }
                                 applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
-                                for (int i = 0; i < 200; i++) world.update(0, 0);
-                                float[] spawn = findSpawn(world);
-                                player.spawn(world, spawn[0], spawn[1]);
-                                for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
-                                world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12,
-                    settings.getDifficulty());
+                                world = placePlayer(worlds, currentDim, worldDir, player, selectedSlot, settings, false);
+                                mapRenderer[0] = new MapRenderer(world.getMapData());
+                                hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
                                 System.out.println("World: " + genSettings.getName() + " seed: " + seed);
                                 started[0] = true;
                                 mainMenuOpen[0] = false;
@@ -1453,27 +1442,20 @@ public class Main {
                             for (DimensionType dim : DimensionType.values()) {
                                 worlds[dim.ordinal()] = new World(seed, genSettings, atlas, worldDir, dim);
                             }
-                            currentDim[0] = DimensionType.OVERWORLD;
-                            world = worlds[currentDim[0].ordinal()];
                             currentWorldDir[0] = worldDir;
                             for (DimensionType dim : DimensionType.values()) {
                                 worlds[dim.ordinal()].getMapData().loadFrom(
                                     worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
                             }
-                            mapRenderer[0] = new MapRenderer(world.getMapData());
-                            hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
                             startCalendar(dayNightCycle, calendar, genSettings);
                             for (World w : worlds) {
                                 w.setRenderDistance(settings.getRenderDistance());
                                 w.setLeavesTransparent(settings.isLeavesTransparent());
                             }
                             applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
-                            for (int i = 0; i < 200; i++) world.update(0, 0);
-                            float[] spawn = findSpawn(world);
-                            player.spawn(world, spawn[0], spawn[1]);
-                            for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
-                            world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12,
-                    settings.getDifficulty());
+                            world = placePlayer(worlds, currentDim, worldDir, player, selectedSlot, settings, true);
+                            mapRenderer[0] = new MapRenderer(world.getMapData());
+                            hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
                             System.out.println("World: " + genSettings.getName() + " seed: " + seed);
                             started[0] = true;
                             mainMenuOpen[0] = false;
@@ -1762,7 +1744,7 @@ public class Main {
                             sliderDragRow[0] = -1;
                             bindingAction[0] = -1;
                         } else if (menuSelection[0] == Hud.PAUSE_QUIT) {
-                            saveOpenWorld(worlds, currentWorldDir[0]);
+                            saveOpenWorld(worlds, currentWorldDir[0], player, currentDim[0], selectedSlot[0]);
                             if (currentWorldDir[0] != null) {
                                 saveWorldGenSettings(currentWorldDir[0], genSettings);
                             }
@@ -1985,7 +1967,7 @@ public class Main {
                 player.getInventory().clear();
                 player.getInventory().clearArmor();
                 player.getDurability().reset();
-                // Respawn back in the overworld, wherever you died.
+                // Respawn back in the overworld, at the bed if it's still there.
                 if (currentDim[0] != DimensionType.OVERWORLD) {
                     currentDim[0] = DimensionType.OVERWORLD;
                     world = worlds[currentDim[0].ordinal()];
@@ -1994,7 +1976,7 @@ public class Main {
                         world.update(0, 0);
                     }
                 }
-                player.respawn(world, 0.5f, 0.5f);
+                respawnPlayer(world, player, messages);
             }
 
             // Item-entity physics + pickup. Frozen while the pause menu is open,
@@ -2051,11 +2033,7 @@ public class Main {
             timeSinceAutosave += dt;
             if (timeSinceAutosave >= AUTOSAVE_INTERVAL_SECONDS) {
                 timeSinceAutosave = 0f;
-                if (worlds != null) {
-                    for (World w : worlds) {
-                        w.saveAllModified();
-                    }
-                }
+                saveOpenWorld(worlds, currentWorldDir[0], player, currentDim[0], selectedSlot[0]);
             }
 
             hit = null;
@@ -2236,10 +2214,15 @@ public class Main {
                         activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted.isBed()) {
-                        // Right-click a bed to sleep in it (if it's night and not in nether/end)
-                        // Spectators cannot interact with beds (no world mutation or time advancement).
+                        // Right-click a bed: always set spawn in the overworld.
+                        // Sleep (and skip to morning) still only happens at night, or
+                        // anytime in creative. Spectators cannot interact with beds.
                         if (!mode.isSpectator()) {
                             if (currentDim[0] == DimensionType.OVERWORLD) {
+                                int bx = hit.blockPos.x, by = hit.blockPos.y, bz = hit.blockPos.z;
+                                int[] foot = Bed.footPos(world, bx, by, bz);
+                                player.setSpawnPoint(foot[0], foot[1], foot[2]);
+                                showMessage(messages, "Respawn point set", new Vector4f(0.7f, 0.9f, 1f, 1f), 2f);
                                 if (dayNightCycle.isNight() || mode.isCreative()) {
                                     if (!player.isSleeping()) {
                                         player.setSleeping(true);
@@ -2255,8 +2238,6 @@ public class Main {
                                         Bed.setOccupied(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, false);
                                         showMessage(messages, "Good morning!", new Vector4f(0.9f, 0.9f, 0.5f, 1f), 2f);
                                     }
-                                } else {
-                                    showMessage(messages, "You can only sleep at night", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 2f);
                                 }
                             } else {
                                 showMessage(messages, "Cannot sleep here", new Vector4f(0.8f, 0.3f, 0.3f, 1f), 2f);
@@ -2704,15 +2685,9 @@ public class Main {
         }
 
         if (worlds != null) {
-            for (World w : worlds) {
-                w.saveAllModified();
-            }
-        }
-        // Persist map exploration data for all dimensions
-        if (worlds != null && currentWorldDir[0] != null) {
-            for (DimensionType dim : DimensionType.values()) {
-                worlds[dim.ordinal()].getMapData().saveTo(
-                        currentWorldDir[0].resolve(dim.saveFolder()).resolve("map.dat"));
+            saveOpenWorld(worlds, currentWorldDir[0], player, currentDim[0], selectedSlot[0]);
+            if (currentWorldDir[0] != null) {
+                saveWorldGenSettings(currentWorldDir[0], genSettings);
             }
         }
         settings.save(settingsFile);
@@ -2743,16 +2718,20 @@ public class Main {
     }
 
 
-    /** Flushes chunk edits and map data for every loaded dimension. */
-    private static void saveOpenWorld(World[] worlds, Path worldDir) {
+    /** Flushes chunk edits, map data and the player for every loaded dimension. */
+    private static void saveOpenWorld(World[] worlds, Path worldDir, Player player,
+                                      DimensionType dim, int selectedSlot) {
         if (worlds == null) return;
         for (World w : worlds) {
             w.saveAllModified();
         }
         if (worldDir != null) {
-            for (DimensionType dim : DimensionType.values()) {
-                worlds[dim.ordinal()].getMapData().saveTo(
-                        worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
+            for (DimensionType d : DimensionType.values()) {
+                worlds[d.ordinal()].getMapData().saveTo(
+                        worldDir.resolve(d.saveFolder()).resolve("map.dat"));
+            }
+            if (player != null) {
+                PlayerSave.capture(player, dim, selectedSlot).save(worldDir);
             }
         }
     }
@@ -2853,6 +2832,64 @@ public class Main {
             }
         }
         return new float[]{0.5f, 0.5f};
+    }
+
+    /**
+     * Puts the player into a just-opened world: restore {@code player.txt} when
+     * {@code restoreSave} is true and a save exists, otherwise find a fresh
+     * overworld spawn. Also streams in nearby chunks and seeds initial mobs.
+     */
+    private static World placePlayer(World[] worlds, DimensionType[] currentDim, Path worldDir,
+                                     Player player, int[] selectedSlot, Settings settings,
+                                     boolean restoreSave) {
+        if (restoreSave && worldDir != null) {
+            PlayerSave save = PlayerSave.load(worldDir);
+            if (save != null) {
+                selectedSlot[0] = save.applyTo(player);
+                currentDim[0] = save.dimension();
+                World world = worlds[currentDim[0].ordinal()];
+                for (int i = 0; i < 80; i++) {
+                    world.update(player.getPosition().x, player.getPosition().z);
+                }
+                world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12,
+                        settings.getDifficulty());
+                return world;
+            }
+        }
+        currentDim[0] = DimensionType.OVERWORLD;
+        World world = worlds[currentDim[0].ordinal()];
+        for (int i = 0; i < 200; i++) world.update(0, 0);
+        float[] spawn = findSpawn(world);
+        player.spawn(world, spawn[0], spawn[1]);
+        selectedSlot[0] = 0;
+        for (int i = 0; i < 80; i++) {
+            world.update(player.getPosition().x, player.getPosition().z);
+        }
+        world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12,
+                settings.getDifficulty());
+        return world;
+    }
+
+    /**
+     * After death: stand up on the last bed if it's still there, otherwise
+     * drop back at world spawn and clear the missing bed.
+     */
+    private static void respawnPlayer(World world, Player player, List<Hud.Message> messages) {
+        if (player.hasSpawnPoint()) {
+            int sx = player.spawnX();
+            int sy = player.spawnY();
+            int sz = player.spawnZ();
+            for (int i = 0; i < 40; i++) world.update(sx, sz);
+            if (Bed.isBed(world.getBlock(sx, sy, sz))) {
+                player.respawnAt(sx + 0.5f, sy + 1f, sz + 0.5f);
+                return;
+            }
+            showMessage(messages, "Your bed is missing", new Vector4f(0.9f, 0.5f, 0.5f, 1f), 3f);
+            player.clearSpawnPoint();
+        }
+        for (int i = 0; i < 80; i++) world.update(0, 0);
+        float[] spawn = findSpawn(world);
+        player.respawn(world, spawn[0], spawn[1]);
     }
 
     /**

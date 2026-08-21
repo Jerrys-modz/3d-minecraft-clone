@@ -115,6 +115,24 @@ public class PlayerStats {
         frameDamageAccumulator = 0f;
     }
 
+    /** Restores the four survival bars from a save (clamped). A 0-health restore leaves the player dead. */
+    public void restore(float health, float hunger, float thirst, float stamina) {
+        this.health  = clamp(health,  0f, MAX_HEALTH);
+        this.hunger  = clamp(hunger,  0f, MAX_HUNGER);
+        this.thirst  = clamp(thirst,  0f, MAX_THIRST);
+        this.stamina = clamp(stamina, 0f, MAX_STAMINA);
+        this.dead = this.health <= 0f;
+        this.submergedTime = 0f;
+        this.coldness = 0f;
+        this.staminaExhausted = this.stamina <= 0f;
+        this.armorMultiplier = 1f;
+        this.frameDamageAccumulator = 0f;
+    }
+
+    private static float clamp(float v, float lo, float hi) {
+        return Math.max(lo, Math.min(hi, v));
+    }
+
     /** Keeps every stat topped up and the player alive - used in creative/spectator modes. */
     public void forceFull() {
         health  = MAX_HEALTH;

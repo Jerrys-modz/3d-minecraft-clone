@@ -73,4 +73,16 @@ public final class ToolDurability {
     public void reset() {
         remaining.clear();
     }
+
+    /** Snapshot of types that have taken wear (untouched items are omitted). */
+    public Map<BlockType, Integer> snapshot() {
+        return new EnumMap<>(remaining);
+    }
+
+    /** Restores a previously {@link #snapshot()}'d wear map. */
+    public void restore(Map<BlockType, Integer> values) {
+        remaining.clear();
+        if (values == null) return;
+        remaining.putAll(values);
+    }
 }
