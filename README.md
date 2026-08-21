@@ -200,10 +200,11 @@ The server is authoritative for the world. It uses a fresh random seed each laun
 - **Players** - every connected player appears as a blocky humanoid figure (procedurally painted skin) that moves smoothly via server-relayed position/look updates at ~20 Hz, with a name above its head. Join/leave and death messages appear on screen.
 - **Chat** - press **T**, type, Enter to send; the line appears above the hotbar and everyone sees it.
 - **Containers** - chests (including doubles and 2x2 quads), barrels and furnaces are server-backed: opening one requests the authoritative contents, and closing the GUI pushes what you left inside to everyone else. Furnaces also smelt on the server, so progress continues while nobody is watching. Two players editing the same container at once is last-close-wins.
+- **Item drops** - broken blocks and mob loot exist once, on the server, so two players can't both loot the same drop: whoever walks over it first gets it (the server validates you're actually near it). Tinkers'-tool drops keep their payload on the client that dropped them instead.
 
 Deliberately **not shared yet** (each player keeps their own):
 
-- **Inventory, health/hunger, item drops** - these stay client-side per player for now (mob deaths drop loot for each player's own world, and a mob's hits damage only the player it was chasing). Dying still respawns you at the overworld spawn - but through the server, so your dimension + position come back consistent for everyone.
+- **Inventory, health/hunger** - these stay client-side per player for now (a mob's hits damage only the player it was chasing, via server-relayed packets). Dying still respawns you at the overworld spawn - but through the server, so your dimension + position come back consistent for everyone.
 
 A disconnect (server closed, connection lost) returns you to the main menu with a message; Host & Play's embedded server shuts down when you leave.
 
@@ -263,7 +264,7 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 - **Boats**, **horse/animal riding**.
 - **Electricity**, **temperature effects**.
 - A real **recipe book / on-screen UI** now that a text renderer exists - the crafting grid, message logs, death/damage messaging, the world map, and debug info are in-game (see Features), but there's no scrollable/laid-out recipe book beyond the hotbar and crafting grid.
-- **Multiplayer depth**: the basics are in (players see each other, a shared authoritative world with synced blocks, mobs, chat *and* containers - see [Multiplayer](#multiplayer)), but inventories, health/hunger and item drops are still per-player rather than shared. Syncing those is the natural next step.
+- **Multiplayer depth**: the basics are in (players see each other, a shared authoritative world with synced blocks, mobs, chat, containers *and* item drops - see [Multiplayer](#multiplayer)), but inventories and health/hunger are still per-player rather than shared. Syncing those is the natural next step.
 
 If you've got a specific one of these in mind, just say which and it jumps the queue.
 

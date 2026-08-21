@@ -159,6 +159,14 @@ public class NetClient implements AutoCloseable {
         send(Packets.encodeContainerData(data));
     }
 
+    public void sendItemSpawn(Packets.ItemSpawn spawn) throws IOException {
+        send(Packets.encodeItemSpawn(spawn));
+    }
+
+    public void sendItemPickup(int id) throws IOException {
+        send(Packets.encodeItemPickup(id));
+    }
+
     private void send(byte[] payload) throws IOException {
         if (disconnected) throw new IOException("Not connected.");
         synchronized (out) {

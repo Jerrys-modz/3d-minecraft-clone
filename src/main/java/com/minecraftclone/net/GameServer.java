@@ -9,6 +9,7 @@ import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.Chunk;
 import com.minecraftclone.world.DimensionType;
 import com.minecraftclone.world.Furnace;
+import com.minecraftclone.world.ItemEntity;
 import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
@@ -120,6 +121,8 @@ public class GameServer implements AutoCloseable {
     private final Random rnd = new Random();
     /** Mob ids we've already told clients about, so natural despawns broadcast removals. */
     private final java.util.Set<Integer> knownMobIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** Item ids already announced with ITEM_ADD; anything vanishing gets a REMOVE. */
+    private final java.util.Set<Integer> knownItemIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private long lastTimeSync = System.nanoTime();
 
     /** The authoritative world for a client's current dimension. */
@@ -272,7 +275,11 @@ public class GameServer implements AutoCloseable {
             // authoritative world keeps working while nobody has one open.
             for (World w : worlds) {
                 w.tickBlockEntities(dt);
+                // Dropped items: physics + expiry, no pickup (clients request that).
+                w.updateItems(dt, null, null);
             }
+
+            broadcastNewItems();
 
             // Simulate overworld mobs against every connected player (nearest-player targeting).
             tickMobs(dt);
@@ -424,6 +431,10 @@ public class GameServer implements AutoCloseable {
                     handleContainerOpen(client, open);
                 } else if (packet instanceof Packets.ContainerData data) {
                     handleContainerUpdate(client, data);
+                } else if (packet instanceof Packets.ItemSpawn spawn) {
+                    handleItemSpawn(client, spawn);
+                } else if (packet instanceof Packets.ItemPickup pickup) {
+                    handleItemPickup(client, pickup);
                 }
             } catch (IOException e) {
                 disconnect(client);
@@ -487,6 +498,20 @@ public class GameServer implements AutoCloseable {
 
         // Send the newcomer every currently-loaded overworld mob so the world isn't empty for them.
         sendMobSpawns(client);
+
+        // Same for dropped items across every dimension.
+        for (World w : worlds) {
+            byte dim = (byte) worldOfDimension(w);
+            for (ItemEntity e : w.getItems()) {
+                if (e.tinkersItem != null || e.id <= 0) continue;
+                try {
+                    send(client, Packets.encodeItemAdd(new Packets.ItemAdd(
+                            e.id, dim, e.position.x, e.position.y, e.position.z, e.type.id, e.count)));
+                } catch (IOException ignored) {
+                    // Fixed-size record; cannot realistically fail.
+                }
+            }
+        }
 
         System.out.println(name + " joined (" + getPlayerCount() + " online)");
     }
@@ -754,6 +779,105 @@ public class GameServer implements AutoCloseable {
         world.markChunkModifiedByPlayer(World.worldToChunk(data.x()), World.worldToChunk(data.z()));
         broadcastOthers(client, Packets.encodeContainerData(new Packets.ContainerData(
                 data.dimension(), data.x(), data.y(), data.z(), data.type(), snapshotEntity(entity))));
+    }
+
+    /**
+     * Announces dropped items to clients: anything new (mob loot the server
+     * spawned, or a client's block-break drops) gets an ITEM_ADD with a fresh
+     * id; anything that vanished (picked up, expired, fell out of the world)
+     * gets an ITEM_REMOVE. Runs once per tick; cheap because both sides of the
+     * diff are small sets.
+     */
+    private void broadcastNewItems() {
+        for (World world : worlds) {
+            byte dim = (byte) worldOfDimension(world);
+            List<ItemEntity> items = world.getItems();
+            java.util.Set<Integer> live = java.util.concurrent.ConcurrentHashMap.newKeySet();
+            for (ItemEntity e : items) {
+                if (e.tinkersItem != null) continue; // payload-carrying drops stay local to their owner
+                if (e.id <= 0) e.id = world.allocateItemId();
+                live.add(e.id);
+                if (knownItemIds.add(e.id)) {
+                    try {
+                        broadcastAll(Packets.encodeItemAdd(new Packets.ItemAdd(
+                                e.id, dim, e.position.x, e.position.y, e.position.z, e.type.id, e.count)));
+                    } catch (IOException ignored) {
+                        // Fixed-size record; cannot realistically fail.
+                    }
+                }
+            }
+            for (int id : List.copyOf(knownItemIds)) {
+                // Ids are globally unique across dimensions, so a missing id in
+                // this dimension's set means it's gone entirely.
+                if (!live.contains(id) && !itemExistsInAnyWorld(id)) {
+                    if (knownItemIds.remove(id)) {
+                        try {
+                            broadcastAll(Packets.encodeItemRemove(id));
+                        } catch (IOException ignored) {
+                            // Fixed-size record; cannot realistically fail.
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** The ordinal of the dimension a world belongs to (worlds are indexed by it). */
+    private int worldOfDimension(World world) {
+        for (int i = 0; i < worlds.length; i++) {
+            if (worlds[i] == world) return i;
+        }
+        return DimensionType.OVERWORLD.ordinal();
+    }
+
+    private boolean itemExistsInAnyWorld(int id) {
+        for (World w : worlds) {
+            if (w.itemById(id) != null) return true;
+        }
+        return false;
+    }
+
+    /**
+     * A client broke a block (or died): spawn the drop server-side so everyone
+     * shares one copy. Lightly validated - finite coords near the player,
+     * sane count - since the client computes tool-dependent drop tables.
+     */
+    private void handleItemSpawn(Client client, Packets.ItemSpawn spawn) throws IOException {
+        if (!client.joined) return;
+        if (spawn.dimension() < 0 || spawn.dimension() >= worlds.length) return;
+        int count = spawn.count();
+        BlockType type = spawn.blockId() > 0 ? BlockType.byId(spawn.blockId()) : null;
+        if (type == null || type.isItem || count < 1 || count > 99) return;
+        float dx = spawn.x() - client.x, dy = spawn.y() - client.y, dz = spawn.z() - client.z;
+        // Generous: death drops scatter around the body, breaks are within reach.
+        if (!Float.isFinite(dx) || !Float.isFinite(dy) || !Float.isFinite(dz)) return;
+        if (dx * dx + dy * dy + dz * dz > (MAX_EDIT_DISTANCE_SQ * 4f)) return;
+        World world = worlds[spawn.dimension()];
+        ItemEntity e = new ItemEntity(type, count, spawn.x(), spawn.y(), spawn.z());
+        e.id = world.allocateItemId();
+        e.velocity.set((rnd.nextFloat() - 0.5f) * 1.5f, 2.5f + rnd.nextFloat() * 1.5f,
+                (rnd.nextFloat() - 0.5f) * 1.5f);
+        world.getItems().add(e);
+    }
+
+    /** How far from their reported position a client may pick an item up (blocks). */
+    private static final float MAX_PICKUP_DISTANCE_SQ = 3f * 3f;
+
+    /**
+     * A player walked over a dropped item: validate they're actually near it,
+     * remove it, grant it to them alone, and tell everyone else it's gone.
+     */
+    private void handleItemPickup(Client client, Packets.ItemPickup pickup) throws IOException {
+        if (!client.joined) return;
+        World world = worldOf(client);
+        ItemEntity item = world.itemById(pickup.id());
+        if (item == null) return;
+        if (!item.canPickup()) return;
+        float dx = item.position.x - client.x, dy = item.position.y - client.y, dz = item.position.z - client.z;
+        if (dx * dx + dy * dy + dz * dz > MAX_PICKUP_DISTANCE_SQ) return;
+        world.removeItemById(item.id);
+        send(client, Packets.encodeItemGive(new Packets.ItemGive(item.id, item.type.id, item.count)));
+        broadcastOthers(client, Packets.encodeItemRemove(item.id));
     }
 
     /** Broadcasts the server-authoritative time of day so every client shares the same sky. */

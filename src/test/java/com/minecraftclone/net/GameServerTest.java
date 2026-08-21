@@ -329,4 +329,51 @@ class GameServerTest {
             }
         }
     }
+
+    @Test
+    void droppedItemsSyncAndGrantPickup() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort());
+             NetClient b = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            Packets.Welcome welcomeA = assertInstanceOf(Packets.Welcome.class,
+                    awaitPacket(a, Packets.Welcome.class));
+            b.sendJoin("Bob");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(b, Packets.Welcome.class));
+
+            // Alice reports breaking a block near her position: the drop becomes
+            // server-authoritative and both clients hear about it.
+            float ix = welcomeA.spawnX(), iy = welcomeA.spawnY(), iz = welcomeA.spawnZ();
+            a.sendItemSpawn(new Packets.ItemSpawn((byte) 0, ix, iy, iz, BlockType.STONE.id, 4));
+            Packets.ItemAdd addA = assertInstanceOf(Packets.ItemAdd.class,
+                    awaitPacketMatching(a, Packets.ItemAdd.class, p -> true));
+            assertTrue(addA.id() > 0);
+            assertEquals(BlockType.STONE.id, addA.blockId());
+            assertEquals(4, addA.count());
+            Packets.ItemAdd addB = assertInstanceOf(Packets.ItemAdd.class,
+                    awaitPacketMatching(b, Packets.ItemAdd.class, p -> p instanceof Packets.ItemAdd d && d.id() == addA.id()));
+            assertEquals(addA.id(), addB.id());
+
+            // A spawn far from Alice is rejected - no ADD ever arrives for it.
+            a.sendItemSpawn(new Packets.ItemSpawn((byte) 0, ix + 500f, iy, iz, BlockType.DIRT.id, 2));
+            long deadline = System.currentTimeMillis() + 1200;
+            while (System.currentTimeMillis() < deadline) {
+                Object p = b.poll();
+                if (p instanceof Packets.ItemAdd d && d.blockId() == BlockType.DIRT.id) {
+                    throw new AssertionError("Server accepted an out-of-range item spawn");
+                }
+                Thread.sleep(10);
+            }
+
+            // Bob stands on the item and picks it up: he gets GIVE, Alice gets REMOVE.
+            b.sendMove(new Packets.Move(ix, iy, iz, 0f, 0f, true, false, false));
+            b.sendItemPickup(addB.id());
+            Packets.ItemGive give = assertInstanceOf(Packets.ItemGive.class,
+                    awaitPacketMatching(b, Packets.ItemGive.class, p -> true));
+            assertEquals(addB.id(), give.id());
+            assertEquals(BlockType.STONE.id, give.blockId());
+            assertEquals(4, give.count());
+            assertInstanceOf(Packets.ItemRemove.class,
+                    awaitPacketMatching(a, Packets.ItemRemove.class, p -> ((Packets.ItemRemove) p).id() == addA.id()));
+        }
+    }
 }

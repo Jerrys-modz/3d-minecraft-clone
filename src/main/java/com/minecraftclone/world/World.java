@@ -1488,13 +1488,51 @@ public class World implements BlockAccessor {
         return items;
     }
 
+    private int nextItemId = 1;
+
+    /** The next server-side item identity (multiplayer; clients never call this). */
+    public int allocateItemId() {
+        return nextItemId++;
+    }
+
+    /** The dropped item with the given server id, or null (multiplayer pickup references items by id). */
+    public ItemEntity itemById(int id) {
+        for (ItemEntity e : items) {
+            if (e.id == id) return e;
+        }
+        return null;
+    }
+
+    /** Removes the dropped item with the given server id; returns true if it existed. */
+    public boolean removeItemById(int id) {
+        for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
+            if (it.next().id == id) {
+                it.remove();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Spawns a server-identified dropped item at an exact position (the multiplayer ADD path). */
+    public void spawnSyncedItem(int id, BlockType type, int count, float x, float y, float z) {
+        ItemEntity e = new ItemEntity(type, count, x, y, z);
+        e.id = id;
+        items.add(e);
+    }
+
     /**
      * Advances item physics (gravity, resting on blocks) and collects any item
      * the player is close enough to pick up into {@code inventory}. Call once
      * per frame from the main thread. Returns true if at least one item was
      * picked up this frame (for a pickup sound - see Main).
+     * <p>
+     * Pass {@code skipSyncedPickup} true on a multiplayer client: server-identified
+     * items ({@code id > 0}) may only be collected via the server's explicit
+     * GIVE, so they're skipped here - local-only drops (Tinkers' payloads)
+     * still pick up normally.
      */
-    public boolean updateItems(float dt, Vector3f playerPos, Inventory inventory) {
+    public boolean updateItems(float dt, Vector3f playerPos, Inventory inventory, boolean skipSyncedPickup) {
         boolean pickedUp = false;
         for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
             ItemEntity e = it.next();
@@ -1524,7 +1562,9 @@ public class World implements BlockAccessor {
                 e.velocity.y = 0f;
             }
 
-            if (e.canPickup()) {
+            boolean pickable = playerPos != null && inventory != null && e.canPickup()
+                    && !(skipSyncedPickup && e.id > 0);
+            if (pickable) {
                 float dx = e.position.x - playerPos.x;
                 float dy = e.position.y - (playerPos.y + 0.9f);
                 float dz = e.position.z - playerPos.z;
@@ -1550,6 +1590,14 @@ public class World implements BlockAccessor {
             }
         }
         return pickedUp;
+    }
+
+    /**
+     * Advances item physics and picks up into {@code inventory} - the
+     * single-player form, where every drop may be collected locally.
+     */
+    public boolean updateItems(float dt, Vector3f playerPos, Inventory inventory) {
+        return updateItems(dt, playerPos, inventory, false);
     }
 
     public int getLoadedChunkCount() {

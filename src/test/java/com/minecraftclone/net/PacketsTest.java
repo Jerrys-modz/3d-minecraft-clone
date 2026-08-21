@@ -46,6 +46,11 @@ class PacketsTest {
         else if (packet instanceof Packets.PlayerDamage p) payload = Packets.encodePlayerDamage(p);
         else if (packet instanceof Packets.ContainerOpen p) payload = Packets.encodeContainerOpen(p.dimension(), p.x(), p.y(), p.z());
         else if (packet instanceof Packets.ContainerData p) payload = Packets.encodeContainerData(p);
+        else if (packet instanceof Packets.ItemAdd p) payload = Packets.encodeItemAdd(p);
+        else if (packet instanceof Packets.ItemRemove p) payload = Packets.encodeItemRemove(p.id());
+        else if (packet instanceof Packets.ItemPickup p) payload = Packets.encodeItemPickup(p.id());
+        else if (packet instanceof Packets.ItemGive p) payload = Packets.encodeItemGive(p);
+        else if (packet instanceof Packets.ItemSpawn p) payload = Packets.encodeItemSpawn(p);
         else if (packet instanceof Packets.DimensionChange p) payload = Packets.encodeDimensionChange(p);
         else if (packet instanceof Packets.TimeSync p) payload = Packets.encodeTimeSync(p);
         else if (packet instanceof Packets.PlayerDeath p) payload = Packets.encodePlayerDeath(p);
@@ -301,6 +306,32 @@ class PacketsTest {
         assertEquals(12, out.z());
         assertEquals("furnace", out.type());
         assertArrayEquals(payload, out.payload());
+    }
+
+    @Test
+    void itemPacketsRoundTrip() throws Exception {
+        Packets.ItemAdd add = assertInstanceOf(Packets.ItemAdd.class,
+                roundTrip(new Packets.ItemAdd(42, (byte) 1, 1.5f, 64f, -3.25f, BlockType.STONE.id, 7)));
+        assertEquals(42, add.id());
+        assertEquals(1, add.dimension());
+        assertEquals(1.5f, add.x());
+        assertEquals(64f, add.y());
+        assertEquals(-3.25f, add.z());
+        assertEquals(BlockType.STONE.id, add.blockId());
+        assertEquals(7, add.count());
+
+        assertEquals(42, assertInstanceOf(Packets.ItemRemove.class, roundTrip(new Packets.ItemRemove(42))).id());
+        assertEquals(42, assertInstanceOf(Packets.ItemPickup.class, roundTrip(new Packets.ItemPickup(42))).id());
+
+        Packets.ItemGive give = assertInstanceOf(Packets.ItemGive.class,
+                roundTrip(new Packets.ItemGive(42, BlockType.COAL.id, 3)));
+        assertEquals(BlockType.COAL.id, give.blockId());
+        assertEquals(3, give.count());
+
+        Packets.ItemSpawn spawn = assertInstanceOf(Packets.ItemSpawn.class,
+                roundTrip(new Packets.ItemSpawn((byte) 0, 0.5f, 40f, 2.5f, BlockType.DIRT.id, 1)));
+        assertEquals(BlockType.DIRT.id, spawn.blockId());
+        assertEquals(1, spawn.count());
     }
 
     @Test

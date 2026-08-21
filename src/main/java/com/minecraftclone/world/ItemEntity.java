@@ -18,6 +18,16 @@ public class ItemEntity {
 
     public final BlockType type;
     public int count;
+    /**
+     * Server-assigned identity for multiplayer (>0). 0 means local-only:
+     * either single player, or a drop carrying a Tinkers' payload, which stays
+     * on the client that dropped it rather than being serialized over the wire.
+     */
+    public int id;
+    /** Set once this local drop has been handed to the server (multiplayer). */
+    public boolean syncRequested;
+    /** When this client last asked the server to pick the synced item up (nanoTime). */
+    public volatile long pickupRequestAtNanos;
     /** Optional Tinkers' payload; null for vanilla drops. */
     public final TinkersItem tinkersItem;
     public final Vector3f position = new Vector3f(); // center of the item

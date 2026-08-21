@@ -48,6 +48,7 @@ import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.DimensionType;
 import com.minecraftclone.world.Door;
 import com.minecraftclone.world.Furnace;
+import com.minecraftclone.world.ItemEntity;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.RemotePlayer;
@@ -65,6 +66,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -646,6 +648,64 @@ public class Main {
         }
     }
 
+    /** How far from their reported position a client may pick an item up (blocks). */
+    private static final float ITEM_PICKUP_RADIUS_SQ = 1.8f * 1.8f;
+    /** How often a pickup may be re-requested for the same item if the server stays silent. */
+    private static final long PICKUP_RETRY_NANOS = 1_000_000_000L;
+
+    /**
+     * Hands every newly-dropped local item to the server: block-break drops and
+     * death loot spawn locally (the client owns drop tables), so the sweep
+     * publishes each one as an ITEM_SPAWN and removes the local copy - the
+     * server's ITEM_ADD echo recreates it with a shared id. Tinkers'-payload
+     * drops stay local-only (their payload isn't on the wire).
+     */
+    private void syncLocalDrops(World world) {
+        byte dim = (byte) currentDim[0].ordinal();
+        NetClient client = netClient;
+        Iterator<ItemEntity> it = world.getItems().iterator();
+        while (it.hasNext()) {
+            ItemEntity e = it.next();
+            if (e.id != 0 || e.syncRequested || e.tinkersItem != null) continue;
+            e.syncRequested = true;
+            try {
+                client.sendItemSpawn(new Packets.ItemSpawn(dim,
+                        e.position.x, e.position.y, e.position.z, e.type.id, Math.min(e.count, 99)));
+            } catch (IOException ex) {
+                netError = ex.getMessage();
+                return;
+            }
+            // The server now owns this drop; its ITEM_ADD echo recreates it
+            // here (and everywhere else) with a shared id.
+            it.remove();
+        }
+    }
+
+    /**
+     * Walk-over pickup for server-owned items: when the player is close enough,
+     * ask the server to grant the stack (it replies with ITEM_GIVE). Re-requests
+     * are throttled per item.
+     */
+    private void requestItemPickups(World world, Vector3f playerPos) {
+        long now = System.nanoTime();
+        NetClient client = netClient;
+        for (ItemEntity e : world.getItems()) {
+            if (e.id <= 0 || !e.canPickup()) continue;
+            float dx = e.position.x - playerPos.x;
+            float dy = e.position.y - (playerPos.y + 0.9f);
+            float dz = e.position.z - playerPos.z;
+            if (dx * dx + dy * dy + dz * dz >= ITEM_PICKUP_RADIUS_SQ) continue;
+            if (now - e.pickupRequestAtNanos < PICKUP_RETRY_NANOS) continue;
+            e.pickupRequestAtNanos = now;
+            try {
+                client.sendItemPickup(e.id);
+            } catch (IOException ex) {
+                netError = ex.getMessage();
+                return;
+            }
+        }
+    }
+
     /** Sends a chat message typed by the local player. */
     private void sendChat(String text) {
         NetClient client = netClient;
@@ -974,13 +1034,26 @@ public class Main {
             } else if (packet instanceof Packets.MobRemove remove) {
                 if (remoteMobs != null) {
                     Mob gone = remoteMobs.remove(remove.mobId());
-                    // Drop the mob's loot where it died (unless it just despawned - y == -1000).
-                    if (world != null && gone != null && remove.y() > -500f) {
-                        BlockType drop = gone.dropType();
-                        int count = 1 + (int) (Math.random() * (gone.type == Mob.Type.SHEEP ? 2 : 3));
-                        world.spawnItem((int) Math.floor(remove.x()), (int) Math.floor(remove.y()),
-                                (int) Math.floor(remove.z()), drop, count, new Random());
-                    }
+                    // Loot is spawned server-side and arrives as ITEM_ADD -
+                    // nothing to do here beyond forgetting the mob.
+                }
+            } else if (packet instanceof Packets.ItemAdd add) {
+                World target = (worlds != null && add.dimension() >= 0 && add.dimension() < worlds.length)
+                        ? worlds[add.dimension()] : world;
+                BlockType type = add.blockId() > 0 ? BlockType.byId(add.blockId()) : null;
+                if (target != null && type != null && add.count() > 0 && add.count() <= 99
+                        && Float.isFinite(add.x()) && Float.isFinite(add.y()) && Float.isFinite(add.z())) {
+                    target.spawnSyncedItem(add.id(), type, add.count(), add.x(), add.y(), add.z());
+                }
+            } else if (packet instanceof Packets.ItemRemove remove) {
+                if (world != null) world.removeItemById(remove.id());
+            } else if (packet instanceof Packets.ItemGive give) {
+                // The server granted OUR pickup: add it to the inventory locally.
+                BlockType type = give.blockId() > 0 ? BlockType.byId(give.blockId()) : null;
+                if (type != null && world != null) {
+                    world.removeItemById(give.id());
+                    player.getInventory().add(type, give.count());
+                    audio.play(SoundEvent.ITEM_PICKUP);
                 }
             } else if (packet instanceof Packets.PlayerDamage dmg) {
                 if (world != null && player != null) {
@@ -2770,10 +2843,17 @@ public class Main {
             }
 
             // Item-entity physics + pickup. Frozen while the pause menu is open,
-            // same as Minecraft's Game Menu.
+            // same as Minecraft's Game Menu. In multiplayer, server-identified
+            // items are granted via ITEM_GIVE rather than collected locally -
+            // only local-only drops (Tinkers' payloads) pick up here.
             if (!menuOpen[0]) {
-            if (world.updateItems(dt, player.getPosition(), player.getInventory())) {
+            boolean mp = netClient != null && netClient.isConnected();
+            if (world.updateItems(dt, player.getPosition(), player.getInventory(), mp)) {
                 audio.play(SoundEvent.ITEM_PICKUP);
+            }
+            if (mp) {
+                syncLocalDrops(world);
+                requestItemPickups(world, player.getPosition());
             }
 
             // Furnaces (and any other block entities) work in the background,

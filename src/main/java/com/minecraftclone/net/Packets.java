@@ -61,6 +61,11 @@ public final class Packets {
     public static final byte OP_PLAYER_DEATH = 26;  // S->C: another player died (respawned to overworld)
     public static final byte OP_CONTAINER_OPEN = 27;   // C->S: opening a chest/barrel/furnace - send me its contents
     public static final byte OP_CONTAINER_DATA = 28;   // S->C / C->S: full container snapshot (type + serialized slots)
+    public static final byte OP_ITEM_ADD = 29;      // S->C: a dropped item exists (id + position + type/count)
+    public static final byte OP_ITEM_REMOVE = 30;   // S->C: a dropped item is gone (picked up / expired)
+    public static final byte OP_ITEM_PICKUP = 31;   // C->S: walk-over intent - server validates and answers GIVE
+    public static final byte OP_ITEM_GIVE = 32;     // S->C: targeted - the pickup was granted, add it to your inventory
+    public static final byte OP_ITEM_SPAWN = 33;    // C->S: I broke a block / died - spawn these drops server-side
 
     // ---------------------------------------------------------------
     // Shared encode/decode helpers
@@ -157,6 +162,26 @@ public final class Packets {
      * send the same packet to publish their changes when they close the GUI.
      */
     public record ContainerData(byte dimension, int x, int y, int z, String type, byte[] payload) {
+    }
+
+    /** A dropped item now exists on the server (broadcast when spawned). */
+    public record ItemAdd(int id, byte dimension, float x, float y, float z, short blockId, int count) {
+    }
+
+    /** A dropped item vanished (picked up by anyone, or expired). */
+    public record ItemRemove(int id) {
+    }
+
+    /** A player walked over a dropped item and wants it. */
+    public record ItemPickup(int id) {
+    }
+
+    /** Targeted to the picker: the pickup was granted - add this to your inventory. */
+    public record ItemGive(int id, short blockId, int count) {
+    }
+
+    /** A client's local drop (block break / death loot) that should become server-authoritative. */
+    public record ItemSpawn(byte dimension, float x, float y, float z, short blockId, int count) {
     }
 
     public record Respawn() {
@@ -293,6 +318,64 @@ public final class Packets {
         out.writeInt(x);
         out.writeInt(y);
         out.writeInt(z);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeItemAdd(ItemAdd add) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_ITEM_ADD);
+        out.writeInt(add.id());
+        out.writeByte(add.dimension());
+        out.writeFloat(add.x());
+        out.writeFloat(add.y());
+        out.writeFloat(add.z());
+        out.writeShort(add.blockId());
+        out.writeByte(add.count());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeItemRemove(int id) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_ITEM_REMOVE);
+        out.writeInt(id);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeItemPickup(int id) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_ITEM_PICKUP);
+        out.writeInt(id);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeItemGive(ItemGive give) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_ITEM_GIVE);
+        out.writeInt(give.id());
+        out.writeShort(give.blockId());
+        out.writeByte(give.count());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeItemSpawn(ItemSpawn spawn) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_ITEM_SPAWN);
+        out.writeByte(spawn.dimension());
+        out.writeFloat(spawn.x());
+        out.writeFloat(spawn.y());
+        out.writeFloat(spawn.z());
+        out.writeShort(spawn.blockId());
+        out.writeByte(spawn.count());
         out.close();
         return buf.toByteArray();
     }
@@ -596,6 +679,13 @@ public final class Packets {
                 in.readFully(containerPayload);
                 yield new ContainerData(dim, x, y, z, type, containerPayload);
             }
+            case OP_ITEM_ADD -> new ItemAdd(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(),
+                    in.readFloat(), in.readShort(), in.readUnsignedByte());
+            case OP_ITEM_REMOVE -> new ItemRemove(in.readInt());
+            case OP_ITEM_PICKUP -> new ItemPickup(in.readInt());
+            case OP_ITEM_GIVE -> new ItemGive(in.readInt(), in.readShort(), in.readUnsignedByte());
+            case OP_ITEM_SPAWN -> new ItemSpawn(in.readByte(), in.readFloat(), in.readFloat(),
+                    in.readFloat(), in.readShort(), in.readUnsignedByte());
             case OP_RESPAWN -> new Respawn();
             case OP_READY -> new Ready();
             case OP_WELCOME -> new Welcome(in.readInt(), in.readLong(), in.readInt(), in.readBoolean(),
