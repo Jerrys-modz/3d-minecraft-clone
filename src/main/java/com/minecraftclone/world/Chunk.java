@@ -89,6 +89,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     private boolean generated = false;
     private boolean hasMeshData = false;
     private boolean hasTranslucentData = false;
+    private boolean meshAttempted = false;
     private boolean modifiedByPlayer = false;
     private boolean leavesTransparent = false;
 
@@ -122,6 +123,36 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
     public void markDirty() {
         dirty = true;
+    }
+
+    /** True when this chunk has GPU geometry from a completed {@link #rebuildMesh}. */
+    public boolean hasMeshData() {
+        return hasMeshData;
+    }
+
+    /**
+     * Generated terrain that has never been uploaded. Flying around dirties
+     * nearby chunks (neighbor seams) every frame; if those remeshes win the
+     * budget, a new chunk stays invisible until you punch it. First meshes
+     * have to jump the queue.
+     */
+    public boolean needsFirstMesh() {
+        return generated && !meshAttempted;
+    }
+
+    /** Dirty, or generated but never meshed. Ungenerated placeholders stay out of the queue. */
+    public boolean needsMesh() {
+        return generated && (dirty || !meshAttempted);
+    }
+
+    /**
+     * If the high-water scan bound was never set (a bulk load that skipped
+     * {@link #setLocal}), walk the blocks once so {@link #rebuildMesh} doesn't
+     * scan 0 layers and upload an empty mesh for a full chunk of terrain.
+     */
+    void ensureHeightBound() {
+        if (highestNonAirY >= 0) return;
+        rebuildLightSourceIndex();
     }
 
     private static int index(int x, int y, int z) {
@@ -348,6 +379,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
      */
     public void rebuildMesh(BlockAccessor world, TextureAtlas atlas, List<int[]> nearbyLights, boolean leavesTransparent) {
         this.leavesTransparent = leavesTransparent;
+        ensureHeightBound();
         FloatArray vertices = meshVertices;
         IntArray indices = meshIndices;
         vertices.clear();
@@ -489,6 +521,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         }
         translucentMesh.upload(transVertices.toArray(), transIndices.toArray());
         hasTranslucentData = transIndices.size() > 0;
+        meshAttempted = true;
         dirty = false;
     }
 

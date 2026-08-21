@@ -816,58 +816,20 @@ public class World implements BlockAccessor {
         int pcx = worldToChunk((int) Math.floor(playerWorldX));
         int pcz = worldToChunk((int) Math.floor(playerWorldZ));
 
-        // Load / generate, budgeted by wall-clock time (see GENERATE_BUDGET_SECONDS
-        // above for why this isn't a fixed chunk count anymore).
+        // Load / generate nearest-first so the chunks in front of you exist
+        // before far corners of the view. Budgeted by wall-clock time (see
+        // GENERATE_BUDGET_SECONDS).
         long generateDeadline = System.nanoTime() + (long) (GENERATE_BUDGET_SECONDS * 1e9);
-        int generated = 0;
-        outer:
-        for (int dx = -renderDistance; dx <= renderDistance; dx++) {
-            for (int dz = -renderDistance; dz <= renderDistance; dz++) {
-                if (dx * dx + dz * dz > renderDistance * renderDistance) continue;
-                int cx = pcx + dx, cz = pcz + dz;
-                if (!chunks.containsKey(key(cx, cz))) {
-                    if (generated > 0 && System.nanoTime() >= generateDeadline) break outer;
-                    Chunk chunk = new Chunk(new ChunkPos(cx, cz));
-                    chunks.put(key(cx, cz), chunk);
-                    if (storage.hasSavedChunk(chunk.getPos())) {
-                        // A previously-edited chunk: restore the player's changes
-                        // instead of regenerating pristine terrain, along with any
-                        // block entities that were holding state in it.
-                        for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
-                            if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
-                                blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
-                                // If the restored entity is a multi-block controller, attempt
-                                // to re-form the multi-block structure.  This re-creates the
-                                // MultiBlockInstance and SmelteryEntity that onChunkUnload
-                                // discarded when the chunk was previously unloaded, so the
-                                // smeltery (or any other multi-block) becomes active again
-                                // without requiring the player to break and replace a block.
-                                multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
-                            }
-                        }
-                        // Lightning fire is transient: any saved mid-burn fire cells
-                        // are cleared on reload rather than persisting forever.
-                        short[] raw = chunk.getRawBlocks();
-                        boolean hadFire = false;
-                        for (int i = 0; i < raw.length; i++) {
-                            if (raw[i] == BlockType.FIRE.id) {
-                                raw[i] = BlockType.AIR.id;
-                                hadFire = true;
-                            }
-                        }
-                        if (hadFire) chunk.setRawBlocks(raw);
-                    } else {
-                        generator.generate(chunk);
-                    }
-                    tryFormMultiblocksInChunk(chunk);
-                    markNeighborDirty(cx - 1, cz);
-                    markNeighborDirty(cx + 1, cz);
-                    markNeighborDirty(cx, cz - 1);
-                    markNeighborDirty(cx, cz + 1);
-                    generated++;
-                }
-            }
-        }
+        int[] generated = {0};
+        visitRenderDistanceRing(pcx, pcz, renderDistance, (cx, cz) -> {
+            int dx = cx - pcx, dz = cz - pcz;
+            if (dx * dx + dz * dz > renderDistance * renderDistance) return true;
+            if (chunks.containsKey(key(cx, cz))) return true;
+            if (generated[0] > 0 && System.nanoTime() >= generateDeadline) return false;
+            loadOrGenerateChunk(cx, cz);
+            generated[0]++;
+            return true;
+        });
 
         // Unload far chunks. Most frames unload nothing, so the removal list
         // is only allocated once something actually needs to go.
@@ -904,19 +866,70 @@ public class World implements BlockAccessor {
             updateFluids();
         }
 
-        // Remesh dirty chunks nearest-first, budgeted by wall-clock time (see
-        // MESH_BUDGET_SECONDS above) rather than a fixed count per tick.
+        // Remesh: first-time meshes beat neighbor-seam remeshes (otherwise a
+        // flying player keeps re-dirtying nearby chunks and the new ones at
+        // the rim never get a mesh until you punch them). Then nearest-first.
+        // Budgeted by wall-clock time (see MESH_BUDGET_SECONDS).
         List<Chunk> dirty = new ArrayList<>();
         for (Chunk c : chunks.values()) {
-            if (c.isDirty()) dirty.add(c);
+            if (c.needsMesh()) dirty.add(c);
         }
-        dirty.sort((a, b) -> Double.compare(a.getPos().distanceSq(pcx, pcz), b.getPos().distanceSq(pcx, pcz)));
+        dirty.sort((a, b) -> compareMeshQueue(
+                a.needsFirstMesh(), a.getPos().distanceSq(pcx, pcz),
+                b.needsFirstMesh(), b.getPos().distanceSq(pcx, pcz)));
         long meshDeadline = System.nanoTime() + (long) (MESH_BUDGET_SECONDS * 1e9);
         for (int i = 0; i < dirty.size(); i++) {
             if (i > 0 && System.nanoTime() >= meshDeadline) break;
             Chunk c = dirty.get(i);
             c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
         }
+    }
+
+    /**
+     * First-time meshes jump the queue; otherwise nearest to the player.
+     * A flying player constantly re-dirties nearby chunks, and without this
+     * those remeshes starve new chunks at the rim — they exist (you can
+     * punch them) but never appear until a block update.
+     */
+    static int compareMeshQueue(boolean aFirst, double aDist, boolean bFirst, double bDist) {
+        int byMesh = Boolean.compare(bFirst, aFirst);
+        if (byMesh != 0) return byMesh;
+        return Double.compare(aDist, bDist);
+    }
+
+    /** Generate or load one chunk and stitch it to already-loaded neighbors. */
+    private void loadOrGenerateChunk(int cx, int cz) {
+        Chunk chunk = new Chunk(new ChunkPos(cx, cz));
+        chunks.put(key(cx, cz), chunk);
+        if (storage.hasSavedChunk(chunk.getPos())) {
+            for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
+                if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
+                    blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                    multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
+                }
+            }
+            short[] raw = chunk.getRawBlocks();
+            boolean hadFire = false;
+            for (int i = 0; i < raw.length; i++) {
+                if (raw[i] == BlockType.FIRE.id) {
+                    raw[i] = BlockType.AIR.id;
+                    hadFire = true;
+                }
+            }
+            if (hadFire) chunk.setRawBlocks(raw);
+            // A corrupt/unreadable save would leave an empty hole in the world
+            // forever because we skipped generate. Fall back to terrain.
+            if (!chunk.isGenerated()) {
+                generator.generate(chunk);
+            }
+        } else {
+            generator.generate(chunk);
+        }
+        tryFormMultiblocksInChunk(chunk);
+        markNeighborDirty(cx - 1, cz);
+        markNeighborDirty(cx + 1, cz);
+        markNeighborDirty(cx, cz - 1);
+        markNeighborDirty(cx, cz + 1);
     }
 
     /**
