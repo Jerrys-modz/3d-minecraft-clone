@@ -67,6 +67,11 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     // taller is eventually built there, which is always safe (never causes a
     // real block above it to be skipped).
     private int highestNonAirY = -1;
+    // True once {@link #rebuildLightSourceIndex} has run. Distinguishes "never
+    // scanned" from "scanned and the chunk is all air" (highestNonAirY stays
+    // -1 in both cases). Without this, ensureHeightBound would rescan an
+    // all-air chunk on every remesh.
+    private boolean heightBoundChecked = false;
 
     // rebuildMesh's scratch vertex/index buffers, kept as reused instance
     // state instead of freshly allocated on every call. A chunk that's
@@ -89,6 +94,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     private boolean generated = false;
     private boolean hasMeshData = false;
     private boolean hasTranslucentData = false;
+    private boolean meshAttempted = false;
     private boolean modifiedByPlayer = false;
     private boolean leavesTransparent = false;
 
@@ -122,6 +128,36 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
     public void markDirty() {
         dirty = true;
+    }
+
+    /** True when this chunk has GPU geometry from a completed {@link #rebuildMesh}. */
+    public boolean hasMeshData() {
+        return hasMeshData;
+    }
+
+    /**
+     * Generated terrain that has never been uploaded. Flying around dirties
+     * nearby chunks (neighbor seams) every frame; if those remeshes win the
+     * budget, a new chunk stays invisible until you punch it. First meshes
+     * have to jump the queue.
+     */
+    public boolean needsFirstMesh() {
+        return generated && !meshAttempted;
+    }
+
+    /** Dirty, or generated but never meshed. Ungenerated placeholders stay out of the queue. */
+    public boolean needsMesh() {
+        return generated && (dirty || !meshAttempted);
+    }
+
+    /**
+     * If the high-water scan bound was never set (a bulk load that skipped
+     * {@link #setLocal}), walk the blocks once so {@link #rebuildMesh} doesn't
+     * scan 0 layers and upload an empty mesh for a full chunk of terrain.
+     */
+    void ensureHeightBound() {
+        if (heightBoundChecked || highestNonAirY >= 0) return;
+        rebuildLightSourceIndex();
     }
 
     private static int index(int x, int y, int z) {
@@ -272,6 +308,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         // recompute proper levels for any flow cells that happened to be saved.
         java.util.Arrays.fill(fluidLevels, (byte) 0);
         dirty = true;
+        heightBoundChecked = false;
         rebuildLightSourceIndex();
         rebuildFluidIndex();
     }
@@ -322,6 +359,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                 }
             }
         }
+        heightBoundChecked = true;
     }
 
     /** Full rescan of flowing-fluid blocks - only needed after a wholesale block replacement (disk load). */
@@ -348,6 +386,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
      */
     public void rebuildMesh(BlockAccessor world, TextureAtlas atlas, List<int[]> nearbyLights, boolean leavesTransparent) {
         this.leavesTransparent = leavesTransparent;
+        ensureHeightBound();
         FloatArray vertices = meshVertices;
         IntArray indices = meshIndices;
         vertices.clear();
@@ -437,15 +476,22 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                         continue;
                     }
                     if (block.isFluid()) {
-                        emitFluid(world, vertices, indices, vertexCounter, wx, wy, wz, block, atlas, blockLight);
+                        // Fluids live on the translucent mesh so they blend over
+                        // already-drawn terrain instead of writing depth in the
+                        // opaque pass (which made waterfalls x-ray the sky/caves
+                        // whenever a later chunk lost the depth test).
+                        emitFluid(world, transVertices, transIndices, transCounter, wx, wy, wz, block, atlas, blockLight);
                         continue;
                     }
 
-                    // Translucent blocks (glass, ice) go into their own batch, drawn
-                    // after everything opaque so they blend over what's behind them.
-                    FloatArray bv = block.isTranslucent() ? transVertices : vertices;
-                    IntArray bi = block.isTranslucent() ? transIndices : indices;
-                    int[] bc = block.isTranslucent() ? transCounter : vertexCounter;
+                    // Glass stays on the translucent mesh (see-through windows).
+                    // Ice is meshed with opaque terrain so it writes depth —
+                    // otherwise water walls show through it, and culling those
+                    // walls leaves a hole because ice didn't occupy the depth buffer.
+                    boolean seeThrough = block.isTranslucent() && !block.isIce();
+                    FloatArray bv = seeThrough ? transVertices : vertices;
+                    IntArray bi = seeThrough ? transIndices : indices;
+                    int[] bc = seeThrough ? transCounter : vertexCounter;
 
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz, block)) {
@@ -485,6 +531,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         }
         translucentMesh.upload(transVertices.toArray(), transIndices.toArray());
         hasTranslucentData = transIndices.size() > 0;
+        meshAttempted = true;
         dirty = false;
     }
 
@@ -505,10 +552,8 @@ public class Chunk implements ChunkStorage.PersistableChunk {
             neighbor = world.getBlock(worldX, worldY, worldZ);
         }
 
-        if (block.isWater()) {
-            // Translucent water: cull faces toward other water (and toward solid -
-            // the solid's own face shows through the water instead).
-            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab || neighbor.isStair() || neighbor.isFence();
+        if (block.isFluid()) {
+            return fluidFaceVisibleToward(neighbor, block, leavesTransparent);
         }
 
         if (block.isTranslucent()) {
@@ -533,7 +578,24 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         // With see-through leaves on, leaf blocks stop occluding faces too - both
         // the leaf block's own faces and the blocks behind it get drawn, so the
         // cutout holes in the leaves texture actually show what's behind.
-        return leavesTransparent && (neighbor == BlockType.LEAVES || neighbor == BlockType.CHERRY_LEAVES);
+        return leavesTransparent && neighbor.isLeaves();
+    }
+
+    /**
+     * Whether a fluid cell should emit a face toward {@code neighbor}.
+     * Ice is translucent (so glass-style see-through) but it still fills the
+     * cell — drawing a water wall into it showed the water's side through the
+     * frozen sheet. Glass still gets a water face so you can see the pool
+     * through a window.
+     */
+    static boolean fluidFaceVisibleToward(BlockType neighbor, BlockType block, boolean leavesTransparent) {
+        if (sameFluidFamily(neighbor, block)) return false;
+        if (neighbor.isIce()) return false;
+        return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab
+                || neighbor.isStair() || neighbor.isFence()
+                || neighbor.isDoor() || neighbor.isTrapdoor() || neighbor.isBed()
+                || neighbor.isTranslucent() || neighbor.isFluid()
+                || (leavesTransparent && neighbor.isLeaves());
     }
 
     /**
@@ -574,6 +636,12 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     // see fluidTop.
     private static final float FLOW_TOP_NEAR = 0.86f;
     private static final float FLOW_TOP_FAR = 0.25f;
+    /**
+     * Submerged cells at or above this height (sources/ocean at 0.9, columns
+     * at 1.0) must not emit a top — that's a sheet floating inside the water.
+     * Fresh landings sit at {@link #FLOW_TOP_NEAR} and still need a top.
+     */
+    static final float SUBMERGED_SURFACE = 0.875f;
 
     /**
      * Fluid surface height (above its cell's floor, 0..1): 0.9 for a static/source
@@ -585,31 +653,25 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     private float fluidTop(BlockAccessor world, int wx, int wy, int wz, BlockType type) {
         if (type == BlockType.WATER || type == BlockType.LAVA || type.isFluidSource()) return 0.9f;
         BlockType below = world.getBlock(wx, wy - 1, wz);
-        // Falling, or stacked on more fluid - a vertical waterfall/lavafall
-        // column, per FluidSim's own "only spread sideways off solid ground"
-        // rule (below.isFluid() there too) - full height either way, never
-        // graded. Once a multi-block-tall fall has fully filled in, only its
-        // very bottom cell actually has air below it, so "below is air" alone
-        // can't tell a column cell apart from a resting puddle: every cell
-        // above the bottom one was rendering at its graded - often much
-        // shorter - puddle height instead of full, a visibly banded, gappy
-        // waterfall.
-        if (below == BlockType.AIR || below.cross || below.isFluid()) return 1f;
-        // The one cell this doesn't cover: the very bottom of a fall, where it
-        // lands on solid ground. Its own below is solid, so the checks above
-        // graded it down like a resting puddle even though it's still being
-        // actively fed from directly above - the falling column's box always
-        // starts at this cell's own ceiling (y+1), so anything less than full
-        // height here left a visible sliver gap right at the point of impact,
-        // and with corner-averaging pulling its other corners toward the
-        // puddle it had started spreading into, that sliver read as a short,
-        // disconnected panel rather than water reaching the ground. A cell
-        // with fluid directly above it must be full height to meet it with no
-        // gap, regardless of what's below.
-        if (world.getBlock(wx, wy + 1, wz).isFluid()) return 1f;
+        BlockType below2 = world.getBlock(wx, wy - 2, wz);
+        // A true waterfall column is 2+ blocks of air/fluid under this cell.
+        // A 1-block drop onto a landing (fluid on solid, or air on solid) is
+        // just the next step of a downhill stream — treating it as full height
+        // stacked a cube on every stair tread (high-low-high).
+        if (isContinuingFall(below, below2)) return 1f;
         int maxLevel = type.isWater() ? FluidSim.WATER_FLOW_DISTANCE : FluidSim.LAVA_FLOW_DISTANCE;
         float t = Math.min(world.getFluidLevel(wx, wy, wz), maxLevel) / (float) maxLevel;
         return FLOW_TOP_NEAR - t * (FLOW_TOP_NEAR - FLOW_TOP_FAR);
+    }
+
+    /** Air, plants, or more fluid — water can fall through this cell. */
+    static boolean isDropThrough(BlockType t) {
+        return t == BlockType.AIR || t.cross || t.isFluid();
+    }
+
+    /** True when the drop continues past this cell (a real waterfall, not a 1-block step). */
+    static boolean isContinuingFall(BlockType below, BlockType below2) {
+        return isDropThrough(below) && isDropThrough(below2);
     }
 
     /** A gentle, fixed "current" direction for fluid that has no real away-from-source gradient - see {@link #fluidFlowDir}. */
@@ -677,6 +739,10 @@ public class Chunk implements ChunkStorage.PersistableChunk {
      * the emitting block's own (non-averaged) height - see below.
      */
     private float fluidCornerTop(BlockAccessor world, int cx, int wy, int cz, BlockType block, float selfTop) {
+        // Full-height cells (a falling column, or the block a waterfall lands
+        // on) have to meet the ceiling. Averaging them with a shallow pool
+        // pulled the landing down and left a hole straight through to dirt.
+        if (selfTop >= 0.999f) return selfTop;
         float sum = 0f;
         for (int dx = -1; dx <= 0; dx++) {
             for (int dz = -1; dz <= 0; dz++) {
@@ -703,6 +769,18 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         return sum / 4f;
     }
 
+    /**
+     * Whether a fluid cell should emit its top face.
+     * Submerged sources/ocean/columns (height ≥ {@link #SUBMERGED_SURFACE})
+     * stay open so you don't see a sheet floating inside the water. Shallow
+     * puddles under a waterfall still need a top or the pool holes to dirt.
+     */
+    static boolean shouldEmitFluidTop(boolean fluidAbove, boolean fluidBelow, float minCorner, float cellY) {
+        float height = minCorner - cellY;
+        if (fluidAbove) return height < SUBMERGED_SURFACE;
+        return height < 0.999f;
+    }
+
     /** Emits a lowered translucent surface for fluid instead of a solid full cube. */
     private void emitFluid(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
                             int wx, int wy, int wz, BlockType block, TextureAtlas atlas, float blockLight) {
@@ -724,30 +802,11 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         float ySE = wy + fluidCornerTop(world, wx + 1, wy, wz + 1, block, selfTop);
         float ySW = wy + fluidCornerTop(world, wx, wy, wz + 1, block, selfTop);
 
-        // isFaceVisible's water branch treats "fluid above" as fully hiding this
-        // top face - true when every corner is already at full height, but a
-        // corner pulled down by a shorter neighbor doesn't actually touch the
-        // cell above it when that neighbor *isn't* fluid (its own geometry
-        // only ever starts at this cell's ceiling, y+1, never lower). Skipping
-        // the face there left a real gap - looking down through it showed
-        // whatever was below (e.g. the floor a waterfall just landed on)
-        // instead of this cell's own water surface.
-        //
-        // But when the cell directly above *is* the same fluid family, this
-        // cell is genuinely submerged - fluidTop already gives a submerged
-        // cell full height (1f) for itself, so any corner dip here only ever
-        // comes from a shallower same-family neighbor at this same Y level
-        // (an underwater ledge/step), not a real hole: that neighbor draws
-        // its own top face to cover its own surface, and this cell stays
-        // sealed above by more fluid either way. Drawing a top face here too
-        // used to paint a spurious, wrongly-angled water surface partway
-        // through open water - exactly what you'd see swimming past an
-        // underwater ledge, a seam floating in the middle of the lake.
-        boolean sealedByFluidAbove = sameFluidFamily(world.getBlock(wx, wy + 1, wz), block);
+        boolean fluidAbove = sameFluidFamily(world.getBlock(wx, wy + 1, wz), block);
+        boolean fluidBelow = sameFluidFamily(world.getBlock(wx, wy - 1, wz), block);
         float minCorner = Math.min(Math.min(yNW, yNE), Math.min(ySE, ySW));
-        boolean topVisible = sealedByFluidAbove
-                ? false
-                : (minCorner < wy + 1f || isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block));
+        boolean topVisible = shouldEmitFluidTop(fluidAbove, fluidBelow, minCorner, wy)
+                || (!fluidAbove && isFaceVisible(world, wx - getOriginX(), wy + 1, wz - getOriginZ(), wx, wy + 1, wz, block));
         if (topVisible) {
             // A quad with 4 independently-graded corners usually isn't flat, so
             // splitting it into 2 triangles always bends it a little along
@@ -765,7 +824,10 @@ public class Chunk implements ChunkStorage.PersistableChunk {
             float[][] topUvs = altDiagonal
                     ? new float[][]{uvs[1], uvs[2], uvs[3], uvs[0]}
                     : uvs;
-            emitQuad(vertices, indices, vertexCounter, topPositions, topUvs, LIGHT_TOP, blockLight, flow, flowDir[0], flowDir[1]);
+            // Both windings: looking down you see the surface, looking up from
+            // underwater you see the underside instead of a hole straight to the sky.
+            emitQuadBothSides(vertices, indices, vertexCounter, topPositions, topUvs,
+                    LIGHT_TOP, blockLight, flow, flowDir[0], flowDir[1]);
         }
         if (isFaceVisible(world, wx - getOriginX(), wy - 1, wz - getOriginZ(), wx, wy - 1, wz, block)) {
             emitQuad(vertices, indices, vertexCounter,
@@ -776,6 +838,61 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.WEST, uvs, yNW, ySW);
         emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.SOUTH, uvs, ySW, ySE);
         emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.NORTH, uvs, yNW, yNE);
+        emitFluidDropSkirt(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs, selfTop);
+    }
+
+    /**
+     * When a full-height falling column sits on a shallow pool, extend the
+     * column's walls down to that pool's surface. Otherwise the column ends
+     * at this cell's floor and the landing (now a normal puddle so downhill
+     * water can slope) would show a gap to the dirt.
+     */
+    private void emitFluidDropSkirt(BlockAccessor world, FloatArray vertices, IntArray indices,
+                                    int[] vertexCounter, int wx, int wy, int wz, BlockType block,
+                                    float blockLight, float flow, float[][] uvs, float selfTop) {
+        if (selfTop < 0.999f) return;
+        BlockType below = world.getBlock(wx, wy - 1, wz);
+        if (!sameFluidFamily(below, block)) return;
+        float belowSelf = fluidTop(world, wx, wy - 1, wz, below);
+        if (belowSelf >= 0.999f) return;
+        float yNW = (wy - 1) + fluidCornerTop(world, wx,     wy - 1, wz,     below, belowSelf);
+        float yNE = (wy - 1) + fluidCornerTop(world, wx + 1, wy - 1, wz,     below, belowSelf);
+        float ySE = (wy - 1) + fluidCornerTop(world, wx + 1, wy - 1, wz + 1, below, belowSelf);
+        float ySW = (wy - 1) + fluidCornerTop(world, wx,     wy - 1, wz + 1, below, belowSelf);
+        float yTop = wy;
+        emitDropSkirtSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs,
+                Face.EAST,  ySE, yNE, yTop);
+        emitDropSkirtSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs,
+                Face.WEST,  yNW, ySW, yTop);
+        emitDropSkirtSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs,
+                Face.SOUTH, ySW, ySE, yTop);
+        emitDropSkirtSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs,
+                Face.NORTH, yNE, yNW, yTop);
+    }
+
+    private void emitDropSkirtSide(BlockAccessor world, FloatArray vertices, IntArray indices,
+                                   int[] vertexCounter, int wx, int wy, int wz, BlockType block,
+                                   float blockLight, float flow, float[][] uvs,
+                                   Face face, float yA, float yB, float yTop) {
+        int nx = wx + (face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0);
+        int nz = wz + (face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0);
+        BlockType neighbor = world.getBlock(nx, wy - 1, nz);
+        if (neighbor.isIce() || (neighbor.solid && !neighbor.isFluid() && !neighbor.cross && !neighbor.slab
+                && !neighbor.isStair() && !neighbor.isFence() && !neighbor.isDoor()
+                && !neighbor.isTrapdoor() && !neighbor.isTranslucent())) {
+            return;
+        }
+        float x0 = wx, x1 = wx + 1, z0 = wz, z1 = wz + 1;
+        float[][] positions = switch (face) {
+            case EAST  -> new float[][]{{x1, yA, z1}, {x1, yB, z0}, {x1, yTop, z0}, {x1, yTop, z1}};
+            case WEST  -> new float[][]{{x0, yA, z0}, {x0, yB, z1}, {x0, yTop, z1}, {x0, yTop, z0}};
+            case SOUTH -> new float[][]{{x0, yA, z1}, {x1, yB, z1}, {x1, yTop, z1}, {x0, yTop, z1}};
+            case NORTH -> new float[][]{{x1, yA, z0}, {x0, yB, z0}, {x0, yTop, z0}, {x1, yTop, z0}};
+            default -> throw new IllegalArgumentException("Fluid side must be horizontal");
+        };
+        float[][] sideUvs = fluidSideUvs(uvs, wy - 1f, yA, yB, yTop, yTop);
+        float light = face == Face.NORTH || face == Face.SOUTH ? LIGHT_NORTH_SOUTH : LIGHT_EAST_WEST;
+        emitQuad(vertices, indices, vertexCounter, positions, sideUvs, light, blockLight, flow, 0f, 1f);
     }
 
     /**
@@ -823,14 +940,12 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                 // already meets this one exactly here, no wall needed.
                 return;
             }
-            // They don't: patch the gap with a thin curtain from this edge's
-            // corners down (or up) to what the neighbor thinks they are,
-            // rather than leaving whatever's below exposed. Double-sided
-            // since either edge could be the taller one.
+            // Only the taller cell emits the curtain so the gap isn't drawn twice.
+            if (yA + yB < nyA + nyB) return;
             float xA = cxA[0], zA = cxA[1], xB = cxB[0], zB = cxB[1];
             emitQuadBothSides(vertices, indices, vertexCounter,
                     new float[][]{{xA, yA, zA}, {xB, yB, zB}, {xB, nyB, zB}, {xA, nyA, zA}},
-                    uvs, LIGHT_EAST_WEST, blockLight);
+                    uvs, LIGHT_EAST_WEST, blockLight, flow, 0f, 1f);
             return;
         }
         if (!isFaceVisible(world, nlx, wy, nlz, nx, wy, nz, block)) return;
@@ -843,17 +958,42 @@ public class Chunk implements ChunkStorage.PersistableChunk {
             case NORTH -> new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, yA, z0}, {x1, yB, z0}};
             default -> throw new IllegalArgumentException("Fluid side must be horizontal");
         };
+        // Stretch V with the actual face height so a ¼-block stream edge
+        // doesn't squash the whole ripple tile into a smear.
+        float yTop0 = positions[2][1], yTop1 = positions[3][1];
+        float[][] sideUvs = fluidSideUvs(uvs, wy, yTop0, yTop1);
         float light = face == Face.NORTH || face == Face.SOUTH ? LIGHT_NORTH_SOUTH : LIGHT_EAST_WEST;
         // Every side face's V axis runs the same way regardless of which
-        // direction it faces (see the uvs order above: v1 at the bottom
-        // corners, v0 at the top ones), so a flowing side always scrolls
-        // straight down its own texture - unlike the top face, there's no
-        // horizontal "away from source" direction for a vertical wall to
-        // follow. Previously these were left at (0,0) - always static -
-        // because scrolling the *old* flat-banded tile sideways looked
-        // wrong; now that it's a genuine vertical scroll on the wavy tile,
-        // it reads as falling water instead.
-        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, flow, 0f, flow > 0.5f ? 1f : 0f);
+        // direction it faces, so a flowing side always scrolls straight down
+        // its own texture - unlike the top face, there's no horizontal
+        // "away from source" direction for a vertical wall to follow.
+        emitQuad(vertices, indices, vertexCounter, positions, sideUvs, light, blockLight, flow, 0f, flow > 0.5f ? 1f : 0f);
+    }
+
+    /**
+     * Side-face UVs whose V range matches the face height (one tile per block)
+     * instead of always stretching the full tile onto a sliver of waterfall/stream.
+     * {@code yTop0}/{@code yTop1} are the two top-edge vertices in winding order.
+     */
+    static float[][] fluidSideUvs(float[][] uvs, float wy, float yTop0, float yTop1) {
+        return fluidSideUvs(uvs, wy, wy, wy, yTop0, yTop1);
+    }
+
+    /** Like {@link #fluidSideUvs(float[][], float, float, float)} but with independent bottom and top heights. */
+    static float[][] fluidSideUvs(float[][] uvs, float yBase, float yB0, float yB1, float yT0, float yT1) {
+        float vBottom = uvs[0][1];
+        float vFull = uvs[2][1];
+        float span = vFull - vBottom;
+        return new float[][]{
+                {uvs[0][0], vBottom + span * clamp01(yB0 - yBase)},
+                {uvs[1][0], vBottom + span * clamp01(yB1 - yBase)},
+                {uvs[2][0], vBottom + span * clamp01(yT0 - yBase)},
+                {uvs[3][0], vBottom + span * clamp01(yT1 - yBase)}
+        };
+    }
+
+    private static float clamp01(float t) {
+        return Math.max(0f, Math.min(1f, t));
     }
 
     private void emitFace(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,
@@ -872,10 +1012,20 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                 yield block.sideTile;
             }
         };
-        // See-through leaves use the alpha-cutout variant of the leaves texture
+        // See-through leaves use the alpha-cutout variant of that leaf's texture
         // (the shader discards its transparent holes) so the canopy is translucent.
-        if (leavesTransparent && (block == BlockType.LEAVES || block == BlockType.CHERRY_LEAVES)) {
-            tile = TextureAtlas.LEAVES_CUTOUT_TILE;
+        if (leavesTransparent && block.isLeaves()) {
+            tile = block == BlockType.CHERRY_LEAVES
+                    ? TextureAtlas.CHERRY_LEAVES_CUTOUT_TILE
+                    : TextureAtlas.LEAVES_CUTOUT_TILE;
+        }
+        Chest.Appearance chestLook = null;
+        if (block == BlockType.CHEST) {
+            chestLook = Chest.appearance(wx, wy, wz, world);
+            int nx = face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0;
+            int ny = face == Face.TOP ? 1 : face == Face.BOTTOM ? -1 : 0;
+            int nz = face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0;
+            tile = Chest.faceTile(chestLook, nx, ny, nz);
         }
         float[] uv = atlas.getUV(tile);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
@@ -891,6 +1041,9 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
         float[][] positions;
         float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+        if (chestLook != null && face == Face.TOP) {
+            uvs = Chest.lidUvs(u0, v0, u1, v1, chestLook.facing());
+        }
 
         switch (face) {
             case TOP -> positions = new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}};
@@ -1052,25 +1205,25 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         }
 
         BlockType east = world.getBlock(wx + 1, wy, wz);
-        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || (leavesTransparent && (east == BlockType.LEAVES || east == BlockType.CHERRY_LEAVES))) {
+        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || (leavesTransparent && east.isLeaves())) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}},
                     uvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType west = world.getBlock(wx - 1, wy, wz);
-        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || (leavesTransparent && (west == BlockType.LEAVES || west == BlockType.CHERRY_LEAVES))) {
+        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || (leavesTransparent && west.isLeaves())) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}},
                     uvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType south = world.getBlock(wx, wy, wz + 1);
-        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || (leavesTransparent && (south == BlockType.LEAVES || south == BlockType.CHERRY_LEAVES))) {
+        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || (leavesTransparent && south.isLeaves())) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
         }
         BlockType north = world.getBlock(wx, wy, wz - 1);
-        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || (leavesTransparent && (north == BlockType.LEAVES || north == BlockType.CHERRY_LEAVES))) {
+        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || (leavesTransparent && north.isLeaves())) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}},
                     uvs, LIGHT_NORTH_SOUTH, blockLight);
@@ -1117,7 +1270,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
         // East face (+X)
         BlockType east = world.getBlock(wx + 1, wy, wz);
-        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || east.isBed() || (leavesTransparent && east == BlockType.LEAVES)) {
+        if (east == BlockType.AIR || east.cross || east.slab || east.isStair() || east.isFence() || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || east.isBed() || (leavesTransparent && east.isLeaves())) {
             float[][] uvs = frontOnEast ? 
                 new float[][]{{frontUv[0], frontUv[3]}, {frontUv[2], frontUv[3]}, {frontUv[2], frontUv[1]}, {frontUv[0], frontUv[1]}} :
                 new float[][]{{sideUv[0], sideUv[3]}, {sideUv[2], sideUv[3]}, {sideUv[2], sideUv[1]}, {sideUv[0], sideUv[1]}};
@@ -1128,7 +1281,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         
         // West face (-X)
         BlockType west = world.getBlock(wx - 1, wy, wz);
-        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || west.isBed() || (leavesTransparent && west == BlockType.LEAVES)) {
+        if (west == BlockType.AIR || west.cross || west.slab || west.isStair() || west.isFence() || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || west.isBed() || (leavesTransparent && west.isLeaves())) {
             float[][] uvs = frontOnWest ? 
                 new float[][]{{frontUv[2], frontUv[3]}, {frontUv[0], frontUv[3]}, {frontUv[0], frontUv[1]}, {frontUv[2], frontUv[1]}} :
                 new float[][]{{sideUv[2], sideUv[3]}, {sideUv[0], sideUv[3]}, {sideUv[0], sideUv[1]}, {sideUv[2], sideUv[1]}};
@@ -1139,7 +1292,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         
         // South face (+Z)
         BlockType south = world.getBlock(wx, wy, wz + 1);
-        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || south.isBed() || (leavesTransparent && south == BlockType.LEAVES)) {
+        if (south == BlockType.AIR || south.cross || south.slab || south.isStair() || south.isFence() || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || south.isBed() || (leavesTransparent && south.isLeaves())) {
             float[][] uvs = frontOnSouth ? 
                 new float[][]{{frontUv[0], frontUv[3]}, {frontUv[2], frontUv[3]}, {frontUv[2], frontUv[1]}, {frontUv[0], frontUv[1]}} :
                 new float[][]{{sideUv[0], sideUv[3]}, {sideUv[2], sideUv[3]}, {sideUv[2], sideUv[1]}, {sideUv[0], sideUv[1]}};
@@ -1150,7 +1303,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         
         // North face (-Z)
         BlockType north = world.getBlock(wx, wy, wz - 1);
-        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || north.isBed() || (leavesTransparent && north == BlockType.LEAVES)) {
+        if (north == BlockType.AIR || north.cross || north.slab || north.isStair() || north.isFence() || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || north.isBed() || (leavesTransparent && north.isLeaves())) {
             float[][] uvs = frontOnNorth ? 
                 new float[][]{{frontUv[2], frontUv[3]}, {frontUv[0], frontUv[3]}, {frontUv[0], frontUv[1]}, {frontUv[2], frontUv[1]}} :
                 new float[][]{{sideUv[2], sideUv[3]}, {sideUv[0], sideUv[3]}, {sideUv[0], sideUv[1]}, {sideUv[2], sideUv[1]}};
@@ -1356,7 +1509,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         // translucent neighbors). When adjacent to a plain slab, emit only the
         // upper cap half - the lower slab half is shared and remains culled.
         BlockType east = world.getBlock(wx + 1, wy, wz);
-        if (east == BlockType.AIR || east.cross || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || (leavesTransparent && (east == BlockType.LEAVES || east == BlockType.CHERRY_LEAVES))) {
+        if (east == BlockType.AIR || east.cross || east.isWater() || east.isTranslucent() || east.isDoor() || east.isTrapdoor() || (leavesTransparent && east.isLeaves())) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, yBot, z1}, {x1, yBot, z0}, {x1, yMid, z0}, {x1, yMid, z1}},
                     slabUvs, LIGHT_EAST_WEST, blockLight);
@@ -1369,7 +1522,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                     capUvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType west = world.getBlock(wx - 1, wy, wz);
-        if (west == BlockType.AIR || west.cross || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || (leavesTransparent && (west == BlockType.LEAVES || west == BlockType.CHERRY_LEAVES))) {
+        if (west == BlockType.AIR || west.cross || west.isWater() || west.isTranslucent() || west.isDoor() || west.isTrapdoor() || (leavesTransparent && west.isLeaves())) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, yBot, z0}, {x0, yBot, z1}, {x0, yMid, z1}, {x0, yMid, z0}},
                     slabUvs, LIGHT_EAST_WEST, blockLight);
@@ -1382,7 +1535,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                     capUvs, LIGHT_EAST_WEST, blockLight);
         }
         BlockType south = world.getBlock(wx, wy, wz + 1);
-        if (south == BlockType.AIR || south.cross || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || (leavesTransparent && (south == BlockType.LEAVES || south == BlockType.CHERRY_LEAVES))) {
+        if (south == BlockType.AIR || south.cross || south.isWater() || south.isTranslucent() || south.isDoor() || south.isTrapdoor() || (leavesTransparent && south.isLeaves())) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x0, yBot, z1}, {x1, yBot, z1}, {x1, yMid, z1}, {x0, yMid, z1}},
                     slabUvs, LIGHT_NORTH_SOUTH, blockLight);
@@ -1395,7 +1548,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                     capUvs, LIGHT_NORTH_SOUTH, blockLight);
         }
         BlockType north = world.getBlock(wx, wy, wz - 1);
-        if (north == BlockType.AIR || north.cross || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || (leavesTransparent && (north == BlockType.LEAVES || north == BlockType.CHERRY_LEAVES))) {
+        if (north == BlockType.AIR || north.cross || north.isWater() || north.isTranslucent() || north.isDoor() || north.isTrapdoor() || (leavesTransparent && north.isLeaves())) {
             emitQuad(vertices, indices, vertexCounter,
                     new float[][]{{x1, yBot, z0}, {x0, yBot, z0}, {x0, yMid, z0}, {x1, yMid, z0}},
                     slabUvs, LIGHT_NORTH_SOUTH, blockLight);
@@ -1411,10 +1564,16 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
     private void emitQuadBothSides(FloatArray vertices, IntArray indices, int[] vertexCounter,
                                     float[][] positions, float[][] uvs, float light, float blockLight) {
-        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight);
+        emitQuadBothSides(vertices, indices, vertexCounter, positions, uvs, light, blockLight, 0f, 0f, 0f);
+    }
+
+    private void emitQuadBothSides(FloatArray vertices, IntArray indices, int[] vertexCounter,
+                                    float[][] positions, float[][] uvs, float light, float blockLight,
+                                    float fluidFlow, float flowDirX, float flowDirZ) {
+        emitQuad(vertices, indices, vertexCounter, positions, uvs, light, blockLight, fluidFlow, flowDirX, flowDirZ);
         float[][] reversed = {positions[3], positions[2], positions[1], positions[0]};
         float[][] uvsReversed = {uvs[3], uvs[2], uvs[1], uvs[0]};
-        emitQuad(vertices, indices, vertexCounter, reversed, uvsReversed, light, blockLight);
+        emitQuad(vertices, indices, vertexCounter, reversed, uvsReversed, light, blockLight, fluidFlow, flowDirX, flowDirZ);
     }
 
     private void emitQuad(FloatArray vertices, IntArray indices, int[] vertexCounter,

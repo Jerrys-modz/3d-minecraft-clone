@@ -98,11 +98,15 @@ public class Input {
     /**
      * Snapshot "previous" edge state and clear the per-frame scroll delta.
      * Must run at the very start of the frame, before glfwPollEvents.
+     * Typed characters from a previous frame that no text field consumed are
+     * dropped here so walking keys (WASD, etc.) can't leak into a search box
+     * the next time one opens.
      */
     public void beginFrame() {
         System.arraycopy(keysDown, 0, keysDownPrev, 0, keysDown.length);
         System.arraycopy(mouseDown, 0, mouseDownPrev, 0, mouseDown.length);
         scrollDelta = 0;
+        typedChars.setLength(0);
     }
 
     /** Call once per frame, after polling events, before reading "just pressed" state. */
@@ -363,5 +367,19 @@ public class Input {
     public void resetMouseDelta() {
         deltaX = 0;
         deltaY = 0;
+    }
+
+    /**
+     * Places the OS cursor (and this frame's mouse state) at a window-pixel
+     * position without injecting a look/drag delta.
+     */
+    public void setCursorPos(double x, double y) {
+        mouseX = x;
+        mouseY = y;
+        lastMouseX = x;
+        lastMouseY = y;
+        deltaX = 0;
+        deltaY = 0;
+        glfwSetCursorPos(windowHandle, x, y);
     }
 }

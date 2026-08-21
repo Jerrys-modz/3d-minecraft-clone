@@ -121,6 +121,9 @@ public final class Smelting {
         // Lapis minerals → SAPPHIRE (blue gem)
         smelt(BlockType.CRUSHED_SODALITE,      BlockType.SAPPHIRE);
         smelt(BlockType.CRUSHED_LAZURITE,      BlockType.SAPPHIRE);
+
+        // Farming: raw potato baked into cooked potato.
+        smelt(BlockType.POTATO, BlockType.POTATO_COOKED);
     }
 
     private Smelting() {

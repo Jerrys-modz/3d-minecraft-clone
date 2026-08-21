@@ -82,6 +82,10 @@ public final class Crafting {
         CHARS.put('U', BlockType.WOOL);
         CHARS.put('V', BlockType.WOLF_PELT);
         CHARS.put('B', BlockType.BEAR_HIDE);
+        CHARS.put('Y', BlockType.CLAY_BALL);    // Y = claY ball
+        CHARS.put('H', BlockType.WHEAT);        // H = wHeat
+        // Phase 0.5: Tinkers' Construct ingredient shortcuts
+        CHARS.put('Z', BlockType.SEARED_BRICK);       // Z = seared/sintered (kiln)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -150,6 +154,66 @@ public final class Crafting {
 
         // Fence
         shaped3x3("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);                       // 4 planks + 2 sticks -> 3 fence
+
+        // --- Farming recipes ---
+        // Hoes: two material on top, column of two sticks below (vanilla, mirrors for left-hand).
+        shaped3x3("PP.", ".S.", ".S.", BlockType.WOOD_HOE, 1);
+        shaped3x3("KK.", ".S.", ".S.", BlockType.STONE_HOE, 1);
+        shaped3x3("II.", ".S.", ".S.", BlockType.IRON_HOE, 1);
+        shaped3x3("DD.", ".S.", ".S.", BlockType.DIAMOND_HOE, 1);
+
+        // Bone meal: crush one bone into 3 piles (inventory 2x2 or crafting table).
+        shapeless2x2(BlockType.BONE_MEAL, 3, BlockType.BONES);
+        shapeless3x3(BlockType.BONE_MEAL, 3, BlockType.BONES);
+
+        // Clay canteen: 4 clay balls in a 2x2 (inventory grid). Crafting-table
+        // recipe uses a distinct 3x3 vessel shape so it does not collide with
+        // the seared-brick bootstrap (YY. / YY. / ...).
+        shaped2x2("YY", "YY", BlockType.CLAY_CANTEEN, 1);  // 4 clay balls -> 1 canteen
+        shaped3x3("Y.Y", "YYY", "Y.Y", BlockType.CLAY_CANTEEN, 1); // 7 clay balls -> 1 canteen
+
+        // Bread: 3 wheat in a row (crafting-table recipe; a 2x2 grid cannot hold 3 in a row)
+        shaped3x3("HHH", "...", "...", BlockType.BREAD, 1);
+
+        // ---------------------------------------------------------------
+        // Phase 0.5: Tinkers' Construct crafting station recipes
+        // ---------------------------------------------------------------
+        // Character key used in this section:
+        //   'Z' = SEARED_BRICK (mnemonic: "Zapped in a kiln")
+
+        // Seared Brick: fire clay balls in-world (Furnace: clay ball → seared brick).
+        // Also allow crafting 2 seared bricks from 4 clay balls as an early-game bootstrap.
+        // Use a 3x3 pattern to avoid conflict with the clay-canteen 2x2 recipe
+        shaped3x3("YY.", "YY.", "...", BlockType.SEARED_BRICK, 2);         // 4 clay balls → 2 seared bricks
+
+        // Smeltery Controller: 8 iron ingots in a ring around the centre (empty inside)
+        shaped3x3("III", "I.I", "III", BlockType.SMELTERY_CONTROLLER, 1);
+
+        // Seared Glass: seared brick + glass (2×1). Duplicate for 3x3 so it
+        // works at a crafting table (same translation/mirroring as other 2x2 copies).
+        shaped2x2("ZG", "..", BlockType.SEARED_GLASS, 2);          // seared brick + glass → 2 seared glass
+        shaped3x3("ZG.", "...", "...", BlockType.SEARED_GLASS, 2);
+
+        // Seared Tank: seared brick frame with glass inside (holds liquid)
+        shaped3x3("ZGZ", "G.G", "ZGZ", BlockType.SEARED_TANK, 1); // frame + glass interior
+
+        // Smeltery Drain: seared brick with iron at centre (the pour hole)
+        shaped3x3("ZZZ", "ZIZ", "ZZZ", BlockType.SMELTERY_DRAIN, 2);
+
+        // Casting Table: seared brick top + plank legs
+        shaped3x3("ZZZ", ".P.", ".P.", BlockType.CASTING_TABLE, 1);
+
+        // Casting Basin: U-shape of seared bricks (open top)
+        shaped3x3("Z.Z", "Z.Z", "ZZZ", BlockType.CASTING_BASIN, 1);
+
+        // Part Builder: planks workbench topped with seared brick
+        shaped3x3("ZZZ", "PPP", "...", BlockType.PART_BUILDER, 1);
+
+        // Tool Station: iron ingots on top, planks frame body
+        shaped3x3("III", "PZP", "PPP", BlockType.TOOL_STATION, 1);
+
+        // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
+        // the Tool Station — there are no crafting-table recipes for them.
 
         // --- 5x5 Advanced Crafting Table Recipes ---
         // These recipes require the full 5x5 grid and produce advanced items

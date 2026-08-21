@@ -1,5 +1,6 @@
 package com.minecraftclone.engine.gui;
 
+import com.minecraftclone.engine.audio.SoundEvent;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Grid;
 import com.minecraftclone.player.Inventory;
@@ -202,6 +203,24 @@ class ContainerGuiTest {
     }
 
     @Test
+    void chestScreenUsesLidSoundsInsteadOfTheUiBeep() {
+        Inventory inv = new Inventory();
+        ContainerGui chest = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), new Chest());
+        ContainerGui barrel = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(),
+                new com.minecraftclone.world.Barrel());
+        ContainerGui inventory = new ContainerGui(ContainerGui.Kind.INVENTORY, inv, new CraftingGrid(), null);
+        ContainerGui furnace = new ContainerGui(ContainerGui.Kind.FURNACE, inv, new CraftingGrid(), new Furnace());
+
+        assertEquals(SoundEvent.CHEST_OPEN, chest.openSound());
+        assertEquals(SoundEvent.CHEST_CLOSE, chest.closeSound());
+        assertEquals(SoundEvent.CHEST_OPEN, barrel.openSound(), "barrels reuse the chest screen");
+        assertEquals(SoundEvent.UI_OPEN, inventory.openSound());
+        assertEquals(SoundEvent.UI_CLOSE, inventory.closeSound());
+        assertEquals(SoundEvent.UI_OPEN, furnace.openSound());
+        assertEquals(SoundEvent.UI_CLOSE, furnace.closeSound());
+    }
+
+    @Test
     void shiftClickSendsAnythingIntoAChest() {
         Inventory inv = new Inventory();
         Chest chest = new Chest();
@@ -290,5 +309,25 @@ class ContainerGuiTest {
         assertEquals(9, nw.getCount(BlockType.APPLE), "NW fills first");
         assertTrue(ne.isEmpty(0) && sw.isEmpty(0) && se.isEmpty(0));
         assertTrue(inv.isEmpty(2));
+    }
+
+    @Test
+    void partBuilderHasNoCraftingGrid() {
+        Inventory inv = new Inventory();
+        ContainerGui gui = ContainerGui.forPartBuilder(inv, new com.minecraftclone.world.tinkers.PartBuilderGui());
+        assertFalse(gui.hasGrid());
+        assertEquals(0, gui.gridWidth());
+        assertEquals(0, gui.gridSize());
+        assertEquals(-1, gui.outputSlotId());
+    }
+
+    @Test
+    void toolStationHasNoCraftingGrid() {
+        Inventory inv = new Inventory();
+        ContainerGui gui = ContainerGui.forToolStation(inv, new com.minecraftclone.world.tinkers.ToolStationGui());
+        assertFalse(gui.hasGrid());
+        assertEquals(0, gui.gridWidth());
+        assertEquals(0, gui.gridSize());
+        assertEquals(-1, gui.outputSlotId());
     }
 }

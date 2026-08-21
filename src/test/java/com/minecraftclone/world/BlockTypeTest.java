@@ -1,9 +1,11 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.engine.graphics.TextureAtlas;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockTypeTest {
@@ -22,6 +24,9 @@ class BlockTypeTest {
         assertTrue(BlockType.GLASS.isTranslucent());
         assertTrue(BlockType.ICE.isTranslucent());
         assertFalse(BlockType.STONE.isTranslucent());
+        assertFalse(BlockType.WATER.isTranslucent(), "fluids use emitFluid, not the glass cube path");
+        assertFalse(BlockType.WATER_FLOW.isTranslucent());
+        assertFalse(BlockType.LAVA.isTranslucent());
     }
 
     @Test
@@ -33,6 +38,24 @@ class BlockTypeTest {
         // Ordinary cubes aren't directional.
         assertFalse(BlockType.STONE.isDirectional());
         assertFalse(BlockType.DIRT.isDirectional());
+    }
+
+    @Test
+    void oakAndCherryAreBothLeaves() {
+        assertTrue(BlockType.LEAVES.isLeaves());
+        assertTrue(BlockType.CHERRY_LEAVES.isLeaves());
+        assertFalse(BlockType.WOOD_LOG.isLeaves());
+        assertFalse(BlockType.TALL_GRASS.isLeaves());
+    }
+
+    @Test
+    void chestIsDirectionalWithDistinctLidFrontAndSides() {
+        assertTrue(BlockType.CHEST.isDirectional());
+        assertTrue(BlockType.CHEST.frontTile != BlockType.CHEST.sideTile);
+        assertTrue(BlockType.CHEST.topTile != BlockType.CHEST.sideTile);
+        assertTrue(BlockType.CHEST.bottomTile != BlockType.CHEST.topTile);
+        assertEquals(TextureAtlas.CHEST_TILE, BlockType.CHEST.frontTile);
+        assertFalse(BlockType.BARREL.isDirectional(), "barrels stay a single undirected stash");
     }
 
     @Test
@@ -144,6 +167,28 @@ class BlockTypeTest {
     }
 
     @Test
+    void farmlandSidesAreDirtNotGrassFringe() {
+        // Atlas tile 2 is the grass side (dirt + green fringe). Tile 3 is dirt.
+        assertEquals(BlockType.DIRT.sideTile, BlockType.FARMLAND.sideTile);
+        assertEquals(BlockType.DIRT.bottomTile, BlockType.FARMLAND.bottomTile);
+        assertEquals(BlockType.DIRT.sideTile, BlockType.FARMLAND_WET.sideTile);
+        assertEquals(BlockType.DIRT.bottomTile, BlockType.FARMLAND_WET.bottomTile);
+        assertEquals(3, BlockType.FARMLAND.sideTile);
+        assertNotEquals(BlockType.GRASS.sideTile, BlockType.FARMLAND.sideTile,
+                "farmland must not reuse the grass-fringe side tile");
+        assertNotEquals(BlockType.FARMLAND.topTile, BlockType.FARMLAND.sideTile);
+    }
+
+    @Test
+    void boneMealIsAnInventoryItem() {
+        assertTrue(BlockType.BONE_MEAL.isItem);
+        assertTrue(BlockType.BONE_MEAL.isBoneMeal());
+        assertFalse(BlockType.BONES.isBoneMeal());
+        assertEquals("Bone Meal", BlockType.BONE_MEAL.displayName());
+        assertEquals(455, BlockType.BONE_MEAL.id);
+    }
+
+    @Test
     void fenceIsAPartialCubeThatAutoConnects() {
         assertTrue(BlockType.WOODEN_FENCE.isFence());
         assertFalse(BlockType.PLANKS.isFence());
@@ -198,5 +243,66 @@ class BlockTypeTest {
         assertEquals(3, boxes[0].minX, 1e-6f);
         assertEquals(4, boxes[0].minY, 1e-6f);
         assertEquals(4f + BlockType.STONE.collisionHeight, boxes[0].maxY, 1e-6f);
+    }
+
+    @Test
+    void fluidSideUvsScaleWithFaceHeight() {
+        float[][] uvs = {{0f, 1f}, {1f, 1f}, {1f, 0f}, {0f, 0f}};
+        float[][] full = Chunk.fluidSideUvs(uvs, 10f, 11f, 11f);
+        assertEquals(0f, full[2][1], 0.001f, "full-height face uses the full tile");
+        assertEquals(0f, full[3][1], 0.001f);
+        float[][] shallow = Chunk.fluidSideUvs(uvs, 10f, 10.25f, 10.25f);
+        assertEquals(0.75f, shallow[2][1], 0.001f,
+                "quarter-height stream should use a quarter of the tile, not squash it");
+        assertEquals(1f, shallow[0][1], 0.001f);
+    }
+
+    @Test
+    void waterfallLandingAlwaysGetsATopFace() {
+        // A puddle the fall just landed on still needs a top, otherwise the
+        // pool holes through to dirt.
+        assertTrue(Chunk.shouldEmitFluidTop(true, false, 10.5f, 10f));
+        assertTrue(Chunk.shouldEmitFluidTop(true, false, 10f + 0.86f, 10f),
+                "fresh landing at FLOW_TOP_NEAR still needs a surface");
+        // Mid-column at full height: no extra slab floating in the shaft.
+        assertFalse(Chunk.shouldEmitFluidTop(true, true, 11f, 10f));
+        // Surface puddle (nothing above) with lowered corners.
+        assertTrue(Chunk.shouldEmitFluidTop(false, false, 10.4f, 10f));
+        // A water source / ocean cell at 0.9 with more water on top must NOT
+        // emit a top — that's the sheet you saw while swimming.
+        assertFalse(Chunk.shouldEmitFluidTop(true, true, 10.9f, 10f));
+        assertFalse(Chunk.shouldEmitFluidTop(true, false, 10.9f, 10f));
+    }
+
+    @Test
+    void onlyRealWaterfallsAreFullHeightColumns() {
+        assertTrue(Chunk.isContinuingFall(BlockType.AIR, BlockType.AIR),
+                "2+ blocks of air is a waterfall");
+        assertTrue(Chunk.isContinuingFall(BlockType.WATER_FLOW, BlockType.WATER_FLOW),
+                "stacked falling water is a column");
+        assertTrue(Chunk.isContinuingFall(BlockType.WATER_FLOW, BlockType.AIR));
+        assertFalse(Chunk.isContinuingFall(BlockType.WATER_FLOW, BlockType.GRASS),
+                "sitting on a landing puddle over dirt is a stream step, not a cube");
+        assertFalse(Chunk.isContinuingFall(BlockType.AIR, BlockType.STONE),
+                "1-block drop onto solid isn't a hanging cube");
+        assertFalse(Chunk.isDropThrough(BlockType.GRASS));
+        assertTrue(Chunk.isDropThrough(BlockType.WATER_FLOW));
+    }
+
+    @Test
+    void waterDoesNotDrawWallsThroughIce() {
+        assertTrue(BlockType.ICE.isIce());
+        assertFalse(BlockType.PACKED_ICE.isIce());
+        assertFalse(Chunk.fluidFaceVisibleToward(BlockType.ICE, BlockType.WATER, false),
+                "ice fills the cell — a water wall inside it shows through the frozen sheet");
+        assertTrue(BlockType.ICE.isTranslucent());
+        assertTrue(BlockType.ICE.isIce(), "ice is meshed opaque so it writes depth; glass stays see-through");
+        assertFalse(BlockType.GLASS.isIce());
+        assertTrue(Chunk.fluidFaceVisibleToward(BlockType.GLASS, BlockType.WATER, false),
+                "glass should still show the pool through a window");
+        assertTrue(Chunk.fluidFaceVisibleToward(BlockType.AIR, BlockType.WATER, false));
+        assertFalse(Chunk.fluidFaceVisibleToward(BlockType.WATER, BlockType.WATER, false));
+        assertFalse(Chunk.fluidFaceVisibleToward(BlockType.STONE, BlockType.WATER, false),
+                "seafloor keeps its own face; water doesn't need a wall into dirt");
     }
 }

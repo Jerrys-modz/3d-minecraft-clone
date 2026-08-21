@@ -14,10 +14,10 @@ import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.Crafting;
-import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
+import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.player.ToolDurability;
 import com.minecraftclone.world.gen.WorldGenSettings;
 import com.minecraftclone.util.FloatArray;
@@ -38,7 +38,8 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
 /**
  * Draws all 2D overlay elements: the crosshair, the wireframe outline around
  * the targeted block, the hotbar (a 9-slot strip of the player's inventory,
- * with the selected slot highlighted), the health/hunger/stamina bars,
+ * with the selected slot highlighted and the held item's name fading out
+ * above the bar), the health/hunger/stamina bars,
  * transient on-screen messages, the F3 debug overlay, and the Minecraft-style
  * inventory screen (36 slots + a 3x3 crafting grid with an output slot).
  * <p>
@@ -61,6 +62,147 @@ public class Hud {
     private static final float STAT_BAR_GAP = 0.007f;          // gap between stacked bars
     private static final float STAT_BAR_STACK_MARGIN = 0.014f; // gap between the bar stack and the hotbar panel below it
 
+    /** Seconds the held-item name stays fully visible after a hotbar change. */
+    public static final float HOTBAR_NAME_HOLD_SECONDS = 2.0f;
+    /** Seconds the held-item name takes to fade after the hold. */
+    public static final float HOTBAR_NAME_FADE_SECONDS = 1.0f;
+    private static final float HOTBAR_NAME_SIZE = 0.034f;
+
+    /** Bottom Y of the look-at overlay title (top of the logical square). */
+    public static final float LOOK_AT_TITLE_Y = 0.90f;
+
+    /**
+     * Mini-map on-screen height as a fraction of the logical square (−1..1).
+     * ~24% of the viewport, parked in the top-right with {@link #MINI_MAP_MARGIN}.
+     */
+    public static final float MINI_MAP_SIZE_Y = 0.48f;
+    public static final float MINI_MAP_SIZE_Y_MIN = 0.22f;
+    public static final float MINI_MAP_SIZE_Y_MAX = 0.90f;
+    /** Viewport margin (NDC units) around the mini-map on the top and right. */
+    public static final float MINI_MAP_MARGIN = 0.035f;
+    /** Corner-handle hit size in logical-Y units while the HUD is being edited. */
+    public static final float MINI_MAP_HANDLE = 0.05f;
+
+    public static final int MINIMAP_HIT_NONE = 0;
+    public static final int MINIMAP_HIT_BODY = 1;
+    public static final int MINIMAP_HIT_TL = 2;
+    public static final int MINIMAP_HIT_TR = 3;
+    public static final int MINIMAP_HIT_BL = 4;
+    public static final int MINIMAP_HIT_BR = 5;
+
+    /** On-screen mini-map rectangle in HUD logical-square space. */
+    public record MiniMapLayout(float sizeX, float sizeY, float cx, float cy) {
+        public float minX() { return cx - sizeX / 2f; }
+        public float maxX() { return cx + sizeX / 2f; }
+        public float minY() { return cy - sizeY / 2f; }
+        public float maxY() { return cy + sizeY / 2f; }
+    }
+
+    /** Logical width that keeps the mini-map square after the 1/aspect HUD scale. */
+    static float miniMapSizeX(float aspectRatio) {
+        return miniMapSizeX(aspectRatio, MINI_MAP_SIZE_Y);
+    }
+
+    static float miniMapSizeX(float aspectRatio, float sizeY) {
+        return clampMiniMapSizeY(sizeY) * aspectRatio;
+    }
+
+    /** Logical center-x: right edge sits {@link #MINI_MAP_MARGIN} in from the viewport. */
+    static float miniMapOffsetX(float aspectRatio) {
+        return miniMapLayout(aspectRatio, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN).cx;
+    }
+
+    /** Logical center-y: top edge sits {@link #MINI_MAP_MARGIN} down from the top. */
+    static float miniMapOffsetY() {
+        return miniMapLayout(1f, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN).cy;
+    }
+
+    static float clampMiniMapSizeY(float sizeY) {
+        return Math.max(MINI_MAP_SIZE_Y_MIN, Math.min(MINI_MAP_SIZE_Y_MAX, sizeY));
+    }
+
+    /**
+     * Resolves a persisted (or default) mini-map layout into logical-square
+     * coordinates. {@code ndcX}/{@code ndcY} of NaN parks it in the top-right.
+     */
+    public static MiniMapLayout miniMapLayout(float aspectRatio, float sizeY, float ndcX, float ndcY) {
+        float sy = clampMiniMapSizeY(sizeY);
+        float half = sy / 2f;
+        float minNdc = -1f + MINI_MAP_MARGIN + half;
+        float maxNdc = 1f - MINI_MAP_MARGIN - half;
+        if (minNdc > maxNdc) {
+            minNdc = maxNdc = 0f;
+        }
+        float nx = Float.isNaN(ndcX) ? (1f - MINI_MAP_MARGIN - half) : ndcX;
+        float ny = Float.isNaN(ndcY) ? (1f - MINI_MAP_MARGIN - half) : ndcY;
+        nx = Math.max(minNdc, Math.min(maxNdc, nx));
+        ny = Math.max(minNdc, Math.min(maxNdc, ny));
+        return new MiniMapLayout(sy * aspectRatio, sy, nx * aspectRatio, ny);
+    }
+
+    /** Hit-test the mini-map body and its four resize corners. */
+    public static int miniMapHit(MiniMapLayout layout, float logicalX, float logicalY) {
+        if (layout == null) return MINIMAP_HIT_NONE;
+        float hsY = MINI_MAP_HANDLE;
+        float hsX = MINI_MAP_HANDLE * (layout.sizeX() / Math.max(1e-6f, layout.sizeY()));
+        if (near(logicalX, layout.minX(), hsX) && near(logicalY, layout.maxY(), hsY)) return MINIMAP_HIT_TL;
+        if (near(logicalX, layout.maxX(), hsX) && near(logicalY, layout.maxY(), hsY)) return MINIMAP_HIT_TR;
+        if (near(logicalX, layout.minX(), hsX) && near(logicalY, layout.minY(), hsY)) return MINIMAP_HIT_BL;
+        if (near(logicalX, layout.maxX(), hsX) && near(logicalY, layout.minY(), hsY)) return MINIMAP_HIT_BR;
+        if (logicalX >= layout.minX() && logicalX <= layout.maxX()
+                && logicalY >= layout.minY() && logicalY <= layout.maxY()) {
+            return MINIMAP_HIT_BODY;
+        }
+        return MINIMAP_HIT_NONE;
+    }
+
+    private static boolean near(float a, float b, float slop) {
+        return Math.abs(a - b) <= slop;
+    }
+
+    /**
+     * New layout after dragging a corner. The opposite corner stays put and
+     * the map stays square on screen.
+     */
+    public static MiniMapLayout resizeMiniMap(int corner, MiniMapLayout cur, float mx, float my, float aspect) {
+        float fixedX;
+        float fixedY;
+        switch (corner) {
+            case MINIMAP_HIT_BR -> { fixedX = cur.minX(); fixedY = cur.maxY(); }
+            case MINIMAP_HIT_BL -> { fixedX = cur.maxX(); fixedY = cur.maxY(); }
+            case MINIMAP_HIT_TR -> { fixedX = cur.minX(); fixedY = cur.minY(); }
+            case MINIMAP_HIT_TL -> { fixedX = cur.maxX(); fixedY = cur.minY(); }
+            default -> { return cur; }
+        }
+        float sizeY = Math.max(Math.abs(mx - fixedX) / aspect, Math.abs(my - fixedY));
+        sizeY = clampMiniMapSizeY(sizeY);
+        float sizeX = sizeY * aspect;
+        float cx = mx >= fixedX ? fixedX + sizeX / 2f : fixedX - sizeX / 2f;
+        float cy = my >= fixedY ? fixedY + sizeY / 2f : fixedY - sizeY / 2f;
+        return miniMapLayout(aspect, sizeY, cx / aspect, cy);
+    }
+
+    /** Scale about the current centre, staying square and on-screen. */
+    public static MiniMapLayout scaleMiniMap(MiniMapLayout cur, float factor, float aspect) {
+        if (cur == null) return null;
+        return miniMapLayout(aspect, cur.sizeY() * factor, cur.cx() / aspect, cur.cy());
+    }
+
+    /** Layout from persisted settings (NaN NDC = default top-right). */
+    public static MiniMapLayout miniMapLayout(Settings settings, float aspect) {
+        if (settings == null) {
+            return miniMapLayout(aspect, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN);
+        }
+        return miniMapLayout(aspect, settings.getMiniMapSizeY(),
+                settings.getMiniMapNdcX(), settings.getMiniMapNdcY());
+    }
+
+    /** Persist a logical-square layout back to NDC centre + size. */
+    public static void writeMiniMapLayout(Settings settings, MiniMapLayout layout, float aspect) {
+        if (settings == null || layout == null) return;
+        settings.setMiniMapLayout(layout.sizeY(), layout.cx() / aspect, layout.cy());
+    }
+
     // Inventory screen layout (logical square units).
     private static final float INV_SLOT = 0.082f;
     private static final float INV_GAP = 0.012f;
@@ -76,6 +218,14 @@ public class Hud {
     /** Center x of the vertical armor-slot column, just left of the player's inventory grid. */
     private static final float ARMOR_X = -0.40f;
 
+    /**
+     * Gap between the player's inventory top row and the bottom row of a
+     * crafting-table grid. Same spacing the chest GUI uses so the 3x3/5x5
+     * sits <em>above</em> the bag instead of sharing the 2x2 inventory's
+     * left-hand corner.
+     */
+    private static final float TABLE_CRAFT_GAP = 0.15f;
+
     // Furnace GUI layout (logical square units). The input/fuel slots sit in a
     // column to the left of the inventory grid, the output between them and the
     // grid, with a burn flame and a progress arrow between the two columns.
@@ -86,6 +236,19 @@ public class Hud {
     private static final float FURNACE_FLAME_X = FURNACE_INPUT_X + 0.09f;
     private static final float FURNACE_ARROW_X0 = FURNACE_FLAME_X + 0.035f;
     private static final float FURNACE_ARROW_X1 = FURNACE_OUTPUT_X - 0.09f;
+
+    // Part Builder GUI layout. The station sits above the player's inventory
+    // with the same gap as the chest / crafting-table screens, so the shape
+    // buttons never collide with the bag. Material on the inventory's left
+    // column, a compact 4×2 shape grid in the middle, output on the right.
+    private static final int PB_SHAPE_COLS = 4;
+    private static final float PB_STATION_BOTTOM_Y = INV_TOP_ROW_Y + TABLE_CRAFT_GAP;
+
+    // Tool Station GUI layout. Head / rod / extras along the inventory's
+    // left columns, output on the right — same station band as the Part
+    // Builder, so the title and role labels sit above the slots instead
+    // of on top of them.
+    private static final float TS_STATION_Y = INV_TOP_ROW_Y + TABLE_CRAFT_GAP + INV_STEP / 2f;
 
     // Chest GUI layout: a grid of the chest's slots (3x9 single, 6x9 double)
     // stacked directly above the player's 3x9 main grid (the hotbar sits below
@@ -98,10 +261,18 @@ public class Hud {
     private static final float CAT_GAP = 0.014f;
     private static final float CAT_STEP = CAT_SLOT + CAT_GAP;
     private static final float CAT_GRID_TOP_Y = 0.44f;      // center y of the catalog's first row
+    private static final int CAT_COLUMNS = 9;
+    /** Gap between the last visible catalog row and the top of the hotbar panel. */
+    private static final float CAT_HOTBAR_GAP = 0.07f;
+    private static final float CAT_SCROLLBAR_W = 0.028f;
+    private static final float CAT_SCROLLBAR_GAP = 0.018f;
     private static final float TAB_W = 0.31f;
     private static final float TAB_GAP = 0.012f;
     private static final float TAB_CENTER_Y = 0.80f;        // center y of the tab strip
     private static final float TAB_H = 0.07f;
+    private static final float SEARCH_CENTER_Y = 0.615f;    // search field between tabs and the grid
+    private static final float SEARCH_H = 0.068f;
+    private static final int SEARCH_MAX_CHARS = 28;
 
     // Settings menu layout (logical square units) - shared by rendering and mouse hit-testing.
     private static final float SETTINGS_SIZE = 0.034f;
@@ -117,7 +288,12 @@ public class Hud {
     private static final float SETTINGS_TAB_GAP = 0.015f;
     private static final float SETTINGS_TAB_ROWS_GAP = 0.035f; // breathing room between the tabs and the first row
     private static final float SETTINGS_PAD = 0.035f;
+    private static final float SETTINGS_DONE_H = 0.07f;
     private static final float SETTINGS_CENTER_Y = 0.12f;
+    /** Create-world panel: wide enough that a full random long seed sits beside "Seed". */
+    private static final float WORLD_GEN_PANEL_W = 1.2f;
+    /** Gap between a world-gen row's label and its value so a long seed never runs into "Seed". */
+    private static final float WORLD_GEN_VALUE_GAP = 0.05f;
     // The panel is sized for the tallest tab (Controls: the keybind list) so the
     // tab strip stays in the same place when switching between tabs.
     private static final int SETTINGS_MAX_ROWS = Math.max(
@@ -185,6 +361,11 @@ public class Hud {
     private final Matrix4f modelMatrix = new Matrix4f();
     private final Matrix4f hudTransform = new Matrix4f();
 
+    /** Last hotbar slot whose name was shown — used to restart the fade on a change. */
+    private int hotbarNameSlot = Integer.MIN_VALUE;
+    private String hotbarNameShown = "";
+    private float hotbarNameAge = Float.POSITIVE_INFINITY;
+
     public Hud(Shader lineShader, Shader hudShader, FontAtlas font) {
         this.lineShader = lineShader;
         this.hudShader = hudShader;
@@ -248,6 +429,56 @@ public class Hud {
         glLineWidth(2f);
         crosshair.render();
         lineShader.unbind();
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
+     * WAILA-style overlay at the top of the screen: the name of whatever the
+     * crosshair is on, and a harvest line ({@code Can mine} / {@code Need Iron
+     * Pickaxe} / {@code Unbreakable}). Pass {@code harvest} null for mobs.
+     */
+    public void renderLookAt(String title, String harvest, float aspectRatio) {
+        if (title == null || title.isEmpty()) return;
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        float titleSize = 0.034f;
+        float hintSize = 0.024f;
+        float titleW = text.measure(title, titleSize);
+        float hintW = harvest == null ? 0f : text.measure(harvest, hintSize);
+        float textW = Math.max(titleW, hintW);
+        float padX = 0.028f;
+        float padY = 0.016f;
+        float lineGap = 0.010f;
+        float titleY = LOOK_AT_TITLE_Y;
+        float hintY = titleY - hintSize - lineGap;
+        float panelTop = titleY + titleSize + padY;
+        float panelBot = (harvest == null ? titleY : hintY) - padY;
+        float panelLeft = -textW / 2f - padX;
+        float panelRight = textW / 2f + padX;
+
+        float[] bg = {
+                panelLeft, panelBot, 0, panelRight, panelBot, 0, panelRight, panelTop, 0,
+                panelLeft, panelBot, 0, panelRight, panelTop, 0, panelLeft, panelTop, 0,
+        };
+        tooltipPanel.upload(bg);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.50f));
+        tooltipPanel.render();
+        lineShader.unbind();
+
+        drawCenteredText(title, 0f, titleY, titleSize, WHITE);
+        if (harvest != null && !harvest.isEmpty()) {
+            boolean ok = Mining.harvestHintPositive(harvest);
+            Vector4f color = ok
+                    ? new Vector4f(0.48f, 0.90f, 0.42f, 1f)
+                    : new Vector4f(0.95f, 0.38f, 0.32f, 1f);
+            drawCenteredText(harvest, 0f, hintY, hintSize, color);
+        }
+
         glEnable(GL_DEPTH_TEST);
     }
 
@@ -324,8 +555,9 @@ public class Hud {
 
     /** Renders the in-game 9-slot hotbar: the player's first 9 inventory slots. */
     public void renderHotbar(TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
-                              Inventory inventory, int selectedSlot, float aspectRatio) {
+                              Inventory inventory, int selectedSlot, float aspectRatio, float dt) {
         glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
 
         int count = Inventory.HOTBAR_SIZE;
         float centerY = slotCenterY();
@@ -365,7 +597,7 @@ public class Hud {
         float iconHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
         for (int i = 0; i < count; i++) {
             addSlotIcon(slotCenterX(i, count), centerY, iconHalf,
-                    inventory.typeOf(i), inventory.countOf(i), itemTextures, atlas, durability);
+                    inventory.stackOf(i), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
@@ -379,7 +611,99 @@ public class Hud {
 
         renderDurabilityBars(iconHalf);
 
+        renderHotbarHeldName(inventory.stackOf(selectedSlot), selectedSlot, dt);
+
+        glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /**
+     * Minecraft-style selected-item overlay: the name of whatever is in the
+     * highlighted hotbar slot, centred above the status bars, fully visible
+     * for {@link #HOTBAR_NAME_HOLD_SECONDS} then fading over
+     * {@link #HOTBAR_NAME_FADE_SECONDS}. Switching slots (or picking up a
+     * different item in the same slot) restarts the timer.
+     */
+    private void renderHotbarHeldName(ItemStack stack, int selectedSlot, float dt) {
+        String name = hotbarItemName(stack);
+        if (name == null) {
+            hotbarNameSlot = selectedSlot;
+            hotbarNameShown = "";
+            hotbarNameAge = Float.POSITIVE_INFINITY;
+            return;
+        }
+        if (selectedSlot != hotbarNameSlot || !name.equals(hotbarNameShown)) {
+            hotbarNameSlot = selectedSlot;
+            hotbarNameShown = name;
+            hotbarNameAge = 0f;
+        } else {
+            hotbarNameAge += Math.max(0f, dt);
+        }
+        float alpha = hotbarNameAlpha(hotbarNameAge);
+        if (alpha <= 0.01f) return;
+
+        float size = HOTBAR_NAME_SIZE;
+        float x = -text.measure(name, size) / 2f;
+        float y = hotbarHeldNameY();
+        float shadow = size * 0.06f;
+        text.begin();
+        text.add(name, x + shadow, y - shadow, size);
+        text.render(hudTransform, new Vector4f(0f, 0f, 0f, 0.55f * alpha));
+        text.begin();
+        text.add(name, x, y, size);
+        text.render(hudTransform, new Vector4f(1f, 1f, 1f, alpha));
+    }
+
+    /**
+     * Display name for the hotbar overlay, or {@code null} when the slot is empty.
+     */
+    public static String hotbarItemName(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        com.minecraftclone.world.tinkers.TinkersItem.Part part = stack.tinkersPart();
+        if (part != null) {
+            return part.material.displayName() + " " + titleFromEnum(part.shape.name());
+        }
+        com.minecraftclone.world.tinkers.TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) {
+            String kind = titleFromEnum(tool.kind.name());
+            BlockType head = tool.headMaterial();
+            return head != null ? head.displayName() + " " + kind : kind;
+        }
+        BlockType type = stack.type();
+        return type == null ? null : type.displayName();
+    }
+
+    /** 1 while holding, then linear fade to 0. */
+    public static float hotbarNameAlpha(float ageSeconds) {
+        if (ageSeconds < 0f) return 1f;
+        if (ageSeconds <= HOTBAR_NAME_HOLD_SECONDS) return 1f;
+        float fade = (ageSeconds - HOTBAR_NAME_HOLD_SECONDS) / HOTBAR_NAME_FADE_SECONDS;
+        return Math.max(0f, 1f - fade);
+    }
+
+    /**
+     * Bottom Y of the held-item name: sits above the four status bars so it
+     * doesn't draw through health/hunger.
+     */
+    public static float hotbarHeldNameY() {
+        float panelTop = -1f + HOTBAR_BOTTOM_MARGIN + HOTBAR_SLOT_SIZE + HOTBAR_PADDING;
+        return panelTop + STAT_BAR_STACK_MARGIN + 4f * (STAT_BAR_HEIGHT + STAT_BAR_GAP);
+    }
+
+    public static String titleFromEnum(String name) {
+        StringBuilder sb = new StringBuilder(name.length());
+        boolean upper = true;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c == '_') {
+                sb.append(' ');
+                upper = true;
+            } else {
+                sb.append(upper ? Character.toUpperCase(c) : Character.toLowerCase(c));
+                upper = false;
+            }
+        }
+        return sb.toString();
     }
 
     /** Resets the per-frame scratch buffers for a fresh slot batch. */
@@ -397,10 +721,16 @@ public class Hud {
      * Adds one slot's icon to the batch: block icons accumulate into the shared
      * atlas batch, item icons draw immediately (their own texture), counts go
      * to the text batch, and worn tools record a wear-bar entry.
+     * <p>
+     * Accepts a full {@link ItemStack} so Tinkers' Construct parts and tools
+     * render with their real per-item texture (via
+     * {@link ItemTextures#bindTinkersItem}) rather than the grey sentinel placeholder.
      */
-    private void addSlotIcon(float cx, float cy, float half, BlockType type, int count,
+    private void addSlotIcon(float cx, float cy, float half, ItemStack stack,
                              ItemTextures itemTextures, TextureAtlas atlas, ToolDurability durability) {
-        if (type == null) return;
+        if (stack == null || stack.isEmpty()) return;
+        BlockType type = stack.type();
+        int count = stack.count();
         if (type.isItem) {
             float[] qv = {
                     cx - half, cy - half, 0f, 1f,
@@ -413,7 +743,12 @@ public class Hud {
             hudShader.setUniform("transform", hudTransform);
             hudShader.setUniform("atlas", 0);
             hudShader.setUniform("color", WHITE);
-            itemTextures.bind(type);
+            // Tinkers items carry a per-item payload that determines the real texture.
+            if (stack.isTinkers()) {
+                itemTextures.bindTinkersItem(stack.tinkersItem());
+            } else {
+                itemTextures.bind(type);
+            }
             hotbarItemIcon.render();
             hudShader.unbind();
         } else {
@@ -426,7 +761,15 @@ public class Hud {
             float digitSize = 0.028f;
             text.add(countText, cx + half - text.measure(countText, digitSize), cy - half, digitSize);
         }
-        if (Mining.isTool(type) || Armor.isArmor(type)) {
+        // Durability bar: Tinkers tools track wear per-item; vanilla tools use the shared ToolDurability map.
+        if (stack.isTinkersTool()) {
+            float fraction = stack.tinkersTool().fraction();
+            if (fraction < 1f) {
+                barCx.add(cx);
+                barCy.add(cy);
+                barFrac.add(fraction);
+            }
+        } else if (Mining.isTool(type) || Armor.isArmor(type)) {
             float fraction = durability.fraction(type);
             if (fraction < 1f) {
                 barCx.add(cx);
@@ -434,6 +777,37 @@ public class Hud {
                 barFrac.add(fraction);
             }
         }
+    }
+
+    /**
+     * Silhouette of a Part Builder shape button. Uses the loaded material's
+     * colour when one is in the slot so the player can preview the part;
+     * the selected shape is gold-tinted, unselected ones are translucent
+     * so they read as buttons rather than items sitting in the bag.
+     */
+    private void addGhostPartIcon(float cx, float cy, float half,
+                                  com.minecraftclone.world.tinkers.ToolPartType shape,
+                                  BlockType material, ItemTextures itemTextures, boolean selected) {
+        if (itemTextures == null || shape == null) return;
+        BlockType mat = material != null ? material : BlockType.PLANKS;
+        ItemStack ghost = ItemStack.tinkersPart(
+                new com.minecraftclone.world.tinkers.TinkersItem.Part(shape, mat));
+        float[] qv = {
+                cx - half, cy - half, 0f, 1f,
+                cx + half, cy - half, 1f, 1f,
+                cx + half, cy + half, 1f, 0f,
+                cx - half, cy + half, 0f, 0f,
+        };
+        hotbarItemIcon.upload(qv, QUAD_INDICES);
+        hudShader.bind();
+        hudShader.setUniform("transform", hudTransform);
+        hudShader.setUniform("atlas", 0);
+        hudShader.setUniform("color", selected
+                ? new Vector4f(1f, 0.92f, 0.35f, 1f)
+                : new Vector4f(1f, 1f, 1f, 0.50f));
+        itemTextures.bindTinkersItem(ghost.tinkersItem());
+        hotbarItemIcon.render();
+        hudShader.unbind();
     }
 
     /** Uploads and draws the accumulated block-icon batch. */
@@ -490,12 +864,13 @@ public class Hud {
     private static final int[] QUAD_INDICES = {0, 1, 2, 0, 2, 3};
 
     /**
-     * Health (red), hunger (orange) and stamina (yellow) bars, stacked above the
-     * hotbar - plus a breath (cyan) bar on top, Minecraft-bubbles-style, but only
-     * while {@code submerged}: it's meaningless (and always full) on dry land, so
+     * Health (red), hunger (orange), thirst (cyan-blue) and stamina (yellow) bars,
+     * stacked above the hotbar - plus a breath (cyan) bar on top, Minecraft-bubbles-style,
+     * but only while {@code submerged}: it's meaningless (and always full) on dry land, so
      * showing it constantly would just be visual noise for a bar that never moves.
      */
     public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
+                                  float thirst, float maxThirst,
                                   float stamina, float maxStamina, float breath, float maxBreath,
                                   boolean submerged, int hotbarSlotCount, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
@@ -511,12 +886,13 @@ public class Hud {
         float maxX = width / 2f;
         float y = hotbarPanelTopY() + STAT_BAR_STACK_MARGIN;
 
-        // Bottom to top: stamina, hunger, health, (breath) - health ends up on top
-        // of the always-shown bars, most prominent; breath appears above even that
-        // while it's relevant, same as bubbles float above Minecraft's other bars.
+        // Bottom to top: stamina, thirst (cyan-blue), hunger, health, (breath).
+        // Thirst sits between hunger and stamina so the blue bar is easy to spot
+        // without dominating; breath still appears above health when submerged.
         y = renderStatBar(minX, maxX, y, stamina / maxStamina, new Vector4f(0.92f, 0.80f, 0.15f, 0.95f));
-        y = renderStatBar(minX, maxX, y, hunger / maxHunger, new Vector4f(0.85f, 0.55f, 0.15f, 0.95f));
-        y = renderStatBar(minX, maxX, y, health / maxHealth, new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
+        y = renderStatBar(minX, maxX, y, thirst  / maxThirst,  new Vector4f(0.20f, 0.60f, 0.90f, 0.95f));
+        y = renderStatBar(minX, maxX, y, hunger  / maxHunger,  new Vector4f(0.85f, 0.55f, 0.15f, 0.95f));
+        y = renderStatBar(minX, maxX, y, health  / maxHealth,  new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
         if (submerged) {
             renderStatBar(minX, maxX, y, breath / maxBreath, new Vector4f(0.25f, 0.65f, 0.85f, 0.95f));
         }
@@ -668,21 +1044,22 @@ public class Hud {
 
     /**
      * Draws the pause/settings menu: a semi-transparent panel with a title, a
-     * tab strip (Graphics / Gameplay / Controls) under it, and the rows of the
-     * active tab - setting rows for the first two tabs, the keybind list for
+     * tab strip (Video / Gameplay / Sound / Controls) under it, and the rows of
+     * the active tab - setting rows for the first two tabs, the keybind list for
      * Controls. The panel is always sized for the tallest tab so the tabs stay
      * put when switching. {@code selectedIndex} is a row index within the
      * active tab; {@code capturingAction} >= 0 means that keybind row is
-     * waiting for a key press.
+     * waiting for a key press. A Done button at the bottom returns to the
+     * pause Game Menu (in-world) or the title screen.
      */
-    public void renderSettingsMenu(Settings settings, int selectedTab, int selectedIndex, int capturingAction, float aspectRatio) {
+    public void renderSettingsMenu(Settings settings, int selectedTab, int selectedIndex, int capturingAction, float aspectRatio, boolean inWorld) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         float size = SETTINGS_SIZE;
         float panelW = settingsPanelWidth();
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
-                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H + SETTINGS_DONE_H;
         float left = -panelW / 2f;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
 
@@ -710,7 +1087,7 @@ public class Hud {
         }
 
         // Title, centered near the top of the panel.
-        drawCenteredText("Settings", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
+        drawCenteredText("Options", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
 
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
@@ -744,7 +1121,7 @@ public class Hud {
         // One row per entry in the active tab. The Controls tab shows the
         // keybind list, Controller shows the gamepad-binding list, the rest
         // show their Settings rows.
-        int rows = settingsRowsForTab(selectedTab);
+        int rows = settingsRowsForTab(selectedTab, inWorld);
         if (selectedTab == Settings.TAB_CONTROLS) {
             for (int action = 0; action < rows; action++) {
                 float baseline = settingsRowTop(selectedTab, action) - SETTINGS_ROW_H + 0.013f;
@@ -773,7 +1150,7 @@ public class Hud {
             }
         } else {
             for (int local = 0; local < rows; local++) {
-                int row = settingsRowForTab(selectedTab, local);
+                int row = settingsRowForTab(selectedTab, local, inWorld);
                 float baseline = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H + 0.013f;
                 boolean selected = local == selectedIndex;
                 drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
@@ -794,8 +1171,8 @@ public class Hud {
             lineShader.setUniform("view", identity);
             lineShader.setUniform("model", hudTransform);
             for (int local = 0; local < rows; local++) {
-                int row = settingsRowForTab(selectedTab, local);
-                if (Settings.isToggle(row)) continue;
+                int row = settingsRowForTab(selectedTab, local, inWorld);
+                if (Settings.isToggle(row) || Settings.isCycle(row)) continue;
                 float trackY = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H / 2f;
                 float trackH = 0.012f;
                 float frac = settings.fraction(row);
@@ -835,14 +1212,99 @@ public class Hud {
             lineShader.unbind();
         }
 
+        // Done: returns to the Game Menu (in-world) or the title screen.
+        float doneY = SETTINGS_CENTER_Y - panelH / 2f + SETTINGS_PAD + 0.01f;
+        drawCenteredText("Done", 0f, doneY, 0.032f, WHITE);
+
         drawCenteredText(selectedTab == Settings.TAB_CONTROLS || selectedTab == Settings.TAB_CONTROLLER
-                        ? "Click/Enter: rebind    Tab: next section    Esc: close"
-                        : "Click/Enter: toggle or adjust    Tab: next section    Esc: close",
+                        ? "Click/Enter: rebind    Tab: next section    Esc: back"
+                        : "Click/Enter: toggle or adjust    Tab: next section    Esc: back",
                 0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
 
         glEnable(GL_DEPTH_TEST);
     }
 
+
+    /** Pause menu (Game Menu) button indices. */
+    public static final int PAUSE_BACK = 0;
+    public static final int PAUSE_OPTIONS = 1;
+    public static final int PAUSE_QUIT = 2;
+    public static final int PAUSE_COUNT = 3;
+
+    private static final String[] PAUSE_ITEMS = {
+            "Back to Game",
+            "Options...",
+            "Save and Quit to Title"
+    };
+
+    /**
+     * The in-game pause overlay (Minecraft's Game Menu): Back to Game, Options,
+     * and Save and Quit to Title. Shown when Esc is pressed in a world, before
+     * opening Options.
+     */
+    public void renderPauseMenu(int selectedIndex, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+        Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
+        Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
+
+        float panelW = 1.05f;
+        float panelH = 0.62f;
+        float left = -panelW / 2f;
+        if (guiTextures != null) {
+            guiVerts.clear();
+            guiInds.clear();
+            renderGuiPanel(left, -0.18f, left + panelW, 0.44f);
+            flushGuiQuads();
+        } else {
+            float[] panel = {
+                    left, -0.18f, 0, left + panelW, -0.18f, 0,
+                    left + panelW, 0.44f, 0,
+                    left, -0.18f, 0, left + panelW, 0.44f, 0,
+                    left, 0.44f, 0,
+            };
+            settingsPanel.upload(panel);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.55f));
+            settingsPanel.render();
+            lineShader.unbind();
+        }
+
+        drawCenteredText("Game Menu", 0f, 0.32f, 0.055f, WHITE);
+        for (int i = 0; i < PAUSE_ITEMS.length; i++) {
+            boolean selected = i == selectedIndex;
+            float y = 0.16f - i * 0.12f;
+            drawCenteredText(PAUSE_ITEMS[i], 0f, y, 0.038f, selected ? highlight : idle);
+            if (selected) {
+                float w = text.measure(PAUSE_ITEMS[i], 0.038f);
+                drawCenteredText(">", -w / 2f - 0.06f, y, 0.038f, highlight);
+            }
+        }
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** The pause-menu button under the mouse, or -1. */
+    public int pauseMenuItemAt(float logicalX, float logicalY) {
+        for (int i = 0; i < PAUSE_ITEMS.length; i++) {
+            float y = 0.16f - i * 0.12f;
+            if (Math.abs(logicalY - y) <= 0.05f && Math.abs(logicalX) <= 0.5f) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** True if the mouse is over the Options Done button. */
+    public boolean settingsDoneAt(float logicalX, float logicalY) {
+        float panelW = settingsPanelWidth();
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H + SETTINGS_DONE_H;
+        float doneY = SETTINGS_CENTER_Y - panelH / 2f + SETTINGS_PAD + 0.01f;
+        return Math.abs(logicalY - doneY) <= 0.035f && Math.abs(logicalX) <= panelW / 2f;
+    }
 
     /** Main menu button indices. */
     public static final int MENU_PLAY = 0;
@@ -968,7 +1430,7 @@ public class Hud {
 
         int rows = WorldGenSettings.ROW_COUNT + 1; // options + Done
         float size = SETTINGS_SIZE;
-        float panelW = 0.95f;
+        float panelW = WORLD_GEN_PANEL_W;
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
         float left = -panelW / 2f;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
@@ -1009,10 +1471,14 @@ public class Hud {
                 boolean activeSeed = i == editingRow;
                 Vector4f color = selected ? highlight : (activeSeed ? highlight : idle);
                 drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
-                drawTextAt(WorldGenSettings.label(i), left + SETTINGS_LEFT_PAD, baseline, size, color);
+                String label = WorldGenSettings.label(i);
+                drawTextAt(label, left + SETTINGS_LEFT_PAD, baseline, size, color);
                 String value = activeSeed ? wgs.valueText(i) + "_" : wgs.valueText(i);
-                float valueWidth = text.measure(value, size);
-                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                float innerW = panelW - SETTINGS_LEFT_PAD - SETTINGS_RIGHT_PAD;
+                float valueSize = fitWorldGenValueSize(text.measure(label, size), text.measure(value, size),
+                        size, innerW);
+                float valueWidth = text.measure(value, valueSize);
+                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, valueSize,
                         activeSeed ? highlight : idleValue);
             } else {
                 // Done / back button.
@@ -1028,15 +1494,15 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
     /** Number of interactive rows for a settings tab (keybind/gamepad-binding actions on Controls/Controller, Settings rows elsewhere). */
-    private static int settingsRowsForTab(int tab) {
+    private static int settingsRowsForTab(int tab, boolean inWorld) {
         if (tab == Settings.TAB_CONTROLS) return KeyBindings.COUNT;
         if (tab == Settings.TAB_CONTROLLER) return GamepadBindings.COUNT;
-        return Settings.tabRowCount(tab);
+        return Settings.tabRowCount(tab, inWorld);
     }
 
     /** The Settings row index shown as local row {@code local} on {@code tab} (only valid for plain Settings tabs). */
-    private static int settingsRowForTab(int tab, int local) {
-        return Settings.rowInTab(tab, local);
+    private static int settingsRowForTab(int tab, int local, boolean inWorld) {
+        return Settings.rowInTab(tab, local, inWorld);
     }
 
     /**
@@ -1072,7 +1538,7 @@ public class Hud {
     /** Logical center-y of the tab strip. */
     private float settingsTabCenterY() {
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
-                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H + SETTINGS_DONE_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H / 2f;
     }
@@ -1094,7 +1560,7 @@ public class Hud {
     /** Top edge (logical y) of row {@code i} on the given tab. */
     private float settingsRowTop(int tab, int i) {
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
-                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H + SETTINGS_DONE_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H - SETTINGS_TAB_ROWS_GAP - i * SETTINGS_ROW_H;
     }
@@ -1107,10 +1573,25 @@ public class Hud {
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - i * SETTINGS_ROW_H;
     }
 
+    /**
+     * Font size for a world-gen value so a long seed never runs into its label.
+     * {@code innerWidth} is the row's content width (panel minus left/right pads).
+     */
+    static float fitWorldGenValueSize(float labelWidth, float valueWidth, float size, float innerWidth) {
+        float max = innerWidth - labelWidth - WORLD_GEN_VALUE_GAP;
+        if (valueWidth <= 0f || max <= 0f || valueWidth <= max) return size;
+        return size * (max / valueWidth);
+    }
+
+    /** Inner content width of the Create New World panel (label + gap + value). */
+    static float worldGenInnerWidth() {
+        return WORLD_GEN_PANEL_W - SETTINGS_LEFT_PAD - SETTINGS_RIGHT_PAD;
+    }
+
     /** The world-gen row (0..ROW_COUNT, with ROW_COUNT being the Done button) under the mouse, or -1. */
     public int worldGenRowAt(float logicalX, float logicalY) {
         int rows = WorldGenSettings.ROW_COUNT + 1;
-        float panelW = 0.95f;
+        float panelW = WORLD_GEN_PANEL_W;
         float left = -panelW / 2f;
         for (int i = 0; i < rows; i++) {
             float rowTop = worldGenRowTop(i);
@@ -1144,10 +1625,10 @@ public class Hud {
     }
 
     /** The settings-menu row (within tab {@code tab}) under the mouse, or -1. */
-    public int settingsRowAt(float logicalX, float logicalY, int tab) {
+    public int settingsRowAt(float logicalX, float logicalY, int tab, boolean inWorld) {
         float panelW = settingsPanelWidth();
         float left = -panelW / 2f;
-        for (int i = 0; i < settingsRowsForTab(tab); i++) {
+        for (int i = 0; i < settingsRowsForTab(tab, inWorld); i++) {
             float rowTop = settingsRowTop(tab, i);
             if (logicalX >= left && logicalX <= left + panelW
                     && logicalY <= rowTop && logicalY >= rowTop - SETTINGS_ROW_H) {
@@ -1158,10 +1639,11 @@ public class Hud {
     }
 
     /** If the mouse is over a range row's slider track, the click fraction (0..1); otherwise -1. */
-    public float settingsTrackAt(float logicalX, float logicalY, int tab) {
-        int row = settingsRowAt(logicalX, logicalY, tab);
+    public float settingsTrackAt(float logicalX, float logicalY, int tab, boolean inWorld) {
+        int row = settingsRowAt(logicalX, logicalY, tab, inWorld);
         if (row < 0 || tab == Settings.TAB_CONTROLS || tab == Settings.TAB_CONTROLLER
-                || Settings.isToggle(settingsRowForTab(tab, row))) return -1f;
+                || Settings.isToggle(settingsRowForTab(tab, row, inWorld))
+                || Settings.isCycle(settingsRowForTab(tab, row, inWorld))) return -1f;
         float[] cx = settingsControlX();
         if (logicalX < cx[0] - 0.012f || logicalX > cx[1] + 0.012f) return -1f;
         return settingsSliderAt(logicalX, row, tab);
@@ -1243,50 +1725,113 @@ public class Hud {
     }
 
     /**
-     * Renders a block as a 3D isometric cube in an inventory slot.
-     * Creates the illusion of depth by rendering three quads: the top face and two side faces
-     * in an isometric projection (45° rotation, 35° tilt).
+     * Renders a block as a 3D isometric shape in an inventory slot.
+     * Full cubes fill the slot; slabs are the bottom half; stairs are two
+     * steps (low tread in front, high tread in back).
      */
     private void addIsometricBlock(float cx, float cy, float half, BlockType type, TextureAtlas atlas) {
-        // The isometric projection creates depth by offsetting side faces
-        float depth = half * 0.32f;  // Depth of the side faces (how much they extend)
+        float[] topUv = atlas.getUV(type.topTile);
+        float[] sideUv = atlas.getUV(type.sideTile);
+        float[] frontUv = type.isDirectional() ? atlas.getUV(type.frontTile) : sideUv;
+        if (type.stair) {
+            // Low step: full footprint, half height. High step: back half, top half.
+            addIsometricBox(cx, cy, half, 0f, 0f, 0f, 1f, 0.5f, 1f, topUv, sideUv);
+            addIsometricBox(cx, cy, half, 0f, 0.5f, 0.5f, 1f, 1f, 1f, topUv, sideUv);
+            return;
+        }
+        float height = isometricIconHeight(type);
+        addIsometricBox(cx, cy, half, 0f, 0f, 0f, 1f, height, 1f, topUv, sideUv, frontUv);
+    }
 
-        // Draw in back-to-front order for correct overlap (though z-ordering doesn't matter for 2D HUD)
+    /**
+     * One axis-aligned box in unit-cube space (0..1), projected to 2:1 dimetric
+     * slot coordinates. Only the three camera-facing faces are emitted (top,
+     * west, south) — the same three a Minecraft inventory cube shows.
+     */
+    private void addIsometricBox(float cx, float cy, float half,
+                                 float x0, float y0, float z0, float x1, float y1, float z1,
+                                 float[] topUv, float[] sideUv) {
+        addIsometricBox(cx, cy, half, x0, y0, z0, x1, y1, z1, topUv, sideUv, sideUv);
+    }
 
-        // Left side face (X- in world space, shows as left in isometric) - trapezoid
-        // Bottom-left, bottom-right, top-right, top-left
-        addArbitraryQuad(
-            cx - half, cy,                          // bottom-left
-            cx - half + depth, cy - half + depth,   // bottom-right
-            cx - half + depth, cy - half,           // top-right
-            cx - half, cy - depth,                  // top-left
-            atlas.getUV(type.sideTile));
+    private void addIsometricBox(float cx, float cy, float half,
+                                 float x0, float y0, float z0, float x1, float y1, float z1,
+                                 float[] topUv, float[] sideUv, float[] frontUv) {
+        // West (x = x0): left parallelogram, CCW y-up
+        addIsoQuad(cx, cy, half,
+                x0, y0, z1,  x0, y0, z0,  x0, y1, z0,  x0, y1, z1, sideUv);
+        // South (z = z0): right parallelogram — lock/front on directional blocks
+        addIsoQuad(cx, cy, half,
+                x0, y0, z0,  x1, y0, z0,  x1, y1, z0,  x0, y1, z0, frontUv);
+        // Top (y = y1)
+        addIsoQuad(cx, cy, half,
+                x0, y1, z1,  x0, y1, z0,  x1, y1, z0,  x1, y1, z1, topUv);
+    }
 
-        // Right side face (Z+ in world space, shows as right in isometric) - trapezoid
-        // Bottom-left, bottom-right, top-right, top-left
-        addArbitraryQuad(
-            cx + half - depth, cy - half + depth,   // bottom-left
-            cx + half, cy,                          // bottom-right
-            cx + half, cy - depth,                  // top-right
-            cx + half - depth, cy - half,           // top-left
-            atlas.getUV(type.sideTile));
+    private void addIsoQuad(float cx, float cy, float half,
+                            float x0, float y0, float z0,
+                            float x1, float y1, float z1,
+                            float x2, float y2, float z2,
+                            float x3, float y3, float z3,
+                            float[] uv) {
+        float[] p0 = isoPoint(cx, cy, half, x0, y0, z0);
+        float[] p1 = isoPoint(cx, cy, half, x1, y1, z1);
+        float[] p2 = isoPoint(cx, cy, half, x2, y2, z2);
+        float[] p3 = isoPoint(cx, cy, half, x3, y3, z3);
+        addArbitraryQuad(p0[0], p0[1], p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], uv);
+    }
 
-        // Top face (Y+ in world space) - diamond-shaped quad
-        // Bottom vertex, right vertex, top vertex, left vertex
-        addArbitraryQuad(
-            cx, cy,                                 // bottom vertex
-            cx + half - depth, cy - half + depth,   // right vertex
-            cx, cy - half + 2 * depth,              // top vertex
-            cx - half + depth, cy - half + depth,   // left vertex
-            atlas.getUV(type.topTile));
+    /**
+     * Vertical extent of an inventory icon in unit-cube space. Slabs (and other
+     * half-height blocks) are 0.5; stairs are drawn as two steps instead.
+     */
+    static float isometricIconHeight(BlockType type) {
+        if (type == null) return 1f;
+        if (type.slab || type.isSnowCappedSlab() || type.isBed()) return 0.5f;
+        float h = type.collisionHeight;
+        if (h <= 0f || h > 1f) return 1f;
+        return h;
+    }
+
+    /**
+     * 2:1 dimetric projection of a point in unit-cube space (x,y,z in 0..1)
+     * into slot coordinates. Package-visible for icon-shape tests.
+     */
+    static float[] isoPoint(float cx, float cy, float half, float xw, float yw, float zw) {
+        float x = half * 0.92f;
+        float sx = cx + (xw - zw) * x;
+        float sy = (cy - x) + yw * x + (xw + zw) * (x * 0.5f);
+        return new float[]{sx, sy};
+    }
+
+    /**
+     * 2:1 dimetric cube in slot space. Returns
+     * {@code {halfWidth, topY, eqY, frontY, botEqY, botFrontY}}.
+     * A full cube ({@code height == 1}) is a square centered on {@code cy};
+     * shorter heights sit on that same ground line so slabs read as the
+     * bottom half of a block.
+     */
+    static float[] isometricCube(float cx, float cy, float half, float height) {
+        float h = height <= 0f || height > 1f ? 1f : height;
+        float x = half * 0.92f;
+        float[] backTop  = isoPoint(cx, cy, half, 1f, h, 1f);
+        float[] leftTop  = isoPoint(cx, cy, half, 0f, h, 1f);
+        float[] frontTop = isoPoint(cx, cy, half, 0f, h, 0f);
+        float[] leftBot  = isoPoint(cx, cy, half, 0f, 0f, 1f);
+        float[] frontBot = isoPoint(cx, cy, half, 0f, 0f, 0f);
+        return new float[]{x, backTop[1], leftTop[1], frontTop[1], leftBot[1], frontBot[1]};
     }
 
     private static float[] outlineLines(float cx, float cy, float half) {
+        return outlineRect(cx - half, cy - half, cx + half, cy + half);
+    }
+
+    private static float[] outlineRect(float minX, float minY, float maxX, float maxY) {
         return new float[]{
-                cx - half, cy - half, 0, cx + half, cy - half, 0,
-                cx + half, cy - half, 0, cx + half, cy + half, 0,
-                cx + half, cy + half, 0, cx - half, cy + half, 0,
-                cx - half, cy + half, 0, cx - half, cy - half, 0,
+                minX, minY, 0, maxX, minY, 0,
+                maxX, minY, 0, maxX, maxY, 0,
+                maxX, maxY, 0, minX, maxY, 0,
+                minX, maxY, 0, minX, minY, 0,
         };
     }
 
@@ -1295,7 +1840,135 @@ public class Hud {
     }
 
     private float invGridLeft() {
-        return INV_GRID_CENTER_X - invGridWidth() / 2f + INV_SLOT / 2f;
+        return invGridLeftX();
+    }
+
+    /** Center x of the player's inventory column 0. Package-visible for layout tests. */
+    static float invGridLeftX() {
+        float gridW = 9 * INV_SLOT + 8 * INV_GAP;
+        return INV_GRID_CENTER_X - gridW / 2f + INV_SLOT / 2f;
+    }
+
+    /** Hit-box size of a container slot in logical-square units. */
+    static float containerSlotSize() {
+        return INV_SLOT;
+    }
+
+    static float pbStationBottomY() {
+        return PB_STATION_BOTTOM_Y;
+    }
+
+    static float pbShapeTopY() {
+        int rows = (ContainerGui.PB_SHAPE_COUNT + PB_SHAPE_COLS - 1) / PB_SHAPE_COLS;
+        return PB_STATION_BOTTOM_Y + (rows - 1) * INV_STEP;
+    }
+
+    static float pbShapeLeftX() {
+        return invGridLeftX() + 2 * INV_STEP;
+    }
+
+    static float pbMatX() { return invGridLeftX(); }
+    static float pbOutX() { return invGridLeftX() + 8 * INV_STEP; }
+    static float pbMatY() { return (PB_STATION_BOTTOM_Y + pbShapeTopY()) / 2f; }
+    static float pbOutY() { return pbMatY(); }
+
+    static float pbShapeX(int index) {
+        return pbShapeLeftX() + (index % PB_SHAPE_COLS) * INV_STEP;
+    }
+
+    static float pbShapeY(int index) {
+        return pbShapeTopY() - (index / PB_SHAPE_COLS) * INV_STEP;
+    }
+
+    /** Logical-square center of a Part Builder slot, or {@code null} if not a PB slot. */
+    static float[] partBuilderSlotCenter(int slotId) {
+        if (slotId == ContainerGui.PB_MATERIAL_SLOT) return new float[]{pbMatX(), pbMatY()};
+        if (slotId == ContainerGui.PB_OUTPUT_SLOT)   return new float[]{pbOutX(), pbOutY()};
+        if (slotId >= ContainerGui.PB_SHAPE_SLOT_0
+                && slotId < ContainerGui.PB_SHAPE_SLOT_0 + ContainerGui.PB_SHAPE_COUNT) {
+            int i = slotId - ContainerGui.PB_SHAPE_SLOT_0;
+            return new float[]{pbShapeX(i), pbShapeY(i)};
+        }
+        return null;
+    }
+
+    /** Logical-square center of a player-inventory slot (0..35), ignoring chest shift. */
+    static float[] playerInventorySlotCenter(int slotId) {
+        int r, c;
+        if (slotId < Inventory.HOTBAR_SIZE) {
+            r = 3;
+            c = slotId;
+        } else {
+            int s = slotId - Inventory.HOTBAR_SIZE;
+            r = s / 9;
+            c = s % 9;
+        }
+        return new float[]{invGridLeftX() + c * INV_STEP, INV_TOP_ROW_Y - r * INV_STEP};
+    }
+
+    static float tsSlotX(int index) {
+        return invGridLeftX() + index * INV_STEP;
+    }
+
+    static float tsSlotY() {
+        return TS_STATION_Y;
+    }
+
+    static float tsOutX() {
+        return invGridLeftX() + 8 * INV_STEP;
+    }
+
+    static float tsOutY() {
+        return TS_STATION_Y;
+    }
+
+    /** Logical-square center of a Tool Station slot, or {@code null} if not a TS slot. */
+    static float[] toolStationSlotCenter(int slotId) {
+        if (slotId >= ContainerGui.TS_SLOT_0
+                && slotId < ContainerGui.TS_SLOT_0 + com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS) {
+            return new float[]{tsSlotX(slotId - ContainerGui.TS_SLOT_0), tsSlotY()};
+        }
+        if (slotId == ContainerGui.TS_OUTPUT_SLOT) return new float[]{tsOutX(), tsOutY()};
+        return null;
+    }
+
+    /** Role name drawn above a Tool Station input slot. */
+    static String tsRoleLabel(int index) {
+        return switch (index) {
+            case 0 -> "Head";
+            case 1 -> "Rod";
+            default -> "Extra";
+        };
+    }
+
+    /** True for the placed 3x3 / 5x5 workbenches (not the player's 2x2). */
+    private static boolean isTableCrafting(ContainerGui gui) {
+        return gui.kind() == ContainerGui.Kind.CRAFTING_TABLE
+                || gui.kind() == ContainerGui.Kind.ADVANCED_CRAFTING_TABLE;
+    }
+
+    /** Center y of a table-crafting grid's bottom row, stacked above the player inventory. */
+    private static float tableCraftBottomY() {
+        return INV_TOP_ROW_Y + TABLE_CRAFT_GAP;
+    }
+
+    /** Center x of column 0 of a table-crafting grid, aligned to the player's 9-wide bag. */
+    private float tableCraftLeftX() {
+        return invGridLeft();
+    }
+
+    /** Center y of row 0 of a table-crafting grid {@code height} rows tall. */
+    private float tableCraftTopY(int height) {
+        return tableCraftBottomY() + (height - 1) * INV_STEP;
+    }
+
+    /** Output slot just to the right of a {@code width}-column table grid, vertically centered. */
+    private float tableCraftOutputX(int width) {
+        return tableCraftLeftX() + width * INV_STEP + 0.06f;
+    }
+
+    private float tableCraftOutputY(int height) {
+        return tableCraftTopY(height) - (height - 1) * INV_STEP / 2f;
     }
 
     /** Center y of the chest grid's bottom row - fixed, so the gap to the player grid below it is always the same. */
@@ -1321,12 +1994,34 @@ public class Hud {
 
     /** Center (logical x, y) of the given slot id in the open gui; see {@link ContainerGui} for numbering. */
     private float[] slotCenter(ContainerGui gui, int slotId) {
+        // Part Builder slots — stacked above the bag, 4×2 shape grid.
+        if (gui.kind() == ContainerGui.Kind.PART_BUILDER) {
+            float[] pb = partBuilderSlotCenter(slotId);
+            if (pb != null) return pb;
+        }
+        // Tool Station slots — stacked above the bag, aligned to inventory columns.
+        if (gui.kind() == ContainerGui.Kind.TOOL_STATION) {
+            float[] ts = toolStationSlotCenter(slotId);
+            if (ts != null) return ts;
+        }
+
         if (gui.isOutputSlot(slotId)) {
+            if (isTableCrafting(gui)) {
+                int n = gui.gridWidth();
+                return new float[]{tableCraftOutputX(n), tableCraftOutputY(n)};
+            }
             return new float[]{OUTPUT_X, OUTPUT_Y};
         }
         if (gui.isGridSlot(slotId)) {
             int g = slotId - ContainerGui.GRID_START;
-            int r = g / CraftingGrid.WIDTH, c = g % CraftingGrid.WIDTH;
+            int width = gui.gridWidth();
+            int r = g / width, c = g % width;
+            if (isTableCrafting(gui)) {
+                return new float[]{
+                        tableCraftLeftX() + c * INV_STEP,
+                        tableCraftTopY(width) - r * INV_STEP
+                };
+            }
             return new float[]{CRAFT_LEFT_X + c * INV_STEP, CRAFT_TOP_ROW_Y - r * INV_STEP};
         }
         if (gui.isArmorSlot(slotId)) {
@@ -1366,7 +2061,9 @@ public class Hud {
 
     /** Resolves a mouse position (in logical-square coords) to a slot id in the open gui, or -1 if it's over nothing. */
     public int containerSlotAt(ContainerGui gui, float logicalX, float logicalY) {
-        for (int id = 0; id < gui.slotCount(); id++) {
+        // Walk high ids first so the 2x2/3x3 crafting grid, output, and armor
+        // win if they sit near the player inventory (low ids 0..35).
+        for (int id = gui.slotCount() - 1; id >= 0; id--) {
             float[] c = slotCenter(gui, id);
             if (c == null) continue;
             float half = INV_SLOT / 2f;
@@ -1384,12 +2081,121 @@ public class Hud {
         return left + i * (TAB_W + TAB_GAP);
     }
 
-    /** Center (logical x, y) of catalog item {@code index} (row-major, 9 per row). */
-    private float[] catalogItemCenter(int index) {
-        int r = index / 9, c = index % 9;
-        float gridW = 9 * CAT_SLOT + 8 * CAT_GAP;
+    /** Center (logical x, y) of catalog item {@code index} (row-major, 9 per row), shifted by {@code scrollRows}. */
+    static float[] catalogItemCenter(int index, float scrollRows) {
+        int r = index / CAT_COLUMNS, c = index % CAT_COLUMNS;
+        float gridW = CAT_COLUMNS * CAT_SLOT + (CAT_COLUMNS - 1) * CAT_GAP;
         float left = -gridW / 2f + CAT_SLOT / 2f;
-        return new float[]{left + c * CAT_STEP, CAT_GRID_TOP_Y - r * CAT_STEP};
+        return new float[]{left + c * CAT_STEP, CAT_GRID_TOP_Y - r * CAT_STEP + scrollRows * CAT_STEP};
+    }
+
+    /** Bottom of the last fully-visible catalog row — sits above the hotbar. */
+    static float catalogClipBottomY() {
+        return -1f + HOTBAR_BOTTOM_MARGIN + HOTBAR_SLOT_SIZE + HOTBAR_PADDING + CAT_HOTBAR_GAP;
+    }
+
+    static int catalogVisibleRows() {
+        return Math.max(1, (int) Math.floor((CAT_GRID_TOP_Y - catalogClipBottomY()) / CAT_STEP) + 1);
+    }
+
+    static int catalogRowCount(int itemCount) {
+        return (itemCount + CAT_COLUMNS - 1) / CAT_COLUMNS;
+    }
+
+    static float catalogMaxScroll(int itemCount) {
+        return Math.max(0f, catalogRowCount(itemCount) - catalogVisibleRows());
+    }
+
+    public static float clampCatalogScroll(float scrollRows, int itemCount) {
+        float max = catalogMaxScroll(itemCount);
+        if (scrollRows < 0f) return 0f;
+        if (scrollRows > max) return max;
+        return scrollRows;
+    }
+
+    static boolean catalogItemVisible(int index, float scrollRows) {
+        float y = catalogItemCenter(index, scrollRows)[1];
+        return y <= CAT_GRID_TOP_Y + 1e-4f && y >= catalogClipBottomY() - 1e-4f;
+    }
+
+    static float catalogGridRightX() {
+        float gridW = CAT_COLUMNS * CAT_SLOT + (CAT_COLUMNS - 1) * CAT_GAP;
+        return gridW / 2f;
+    }
+
+    static float catalogScrollbarX() {
+        return catalogGridRightX() + CAT_SCROLLBAR_GAP + CAT_SCROLLBAR_W / 2f;
+    }
+
+    static float catalogScrollbarTopY() {
+        return CAT_GRID_TOP_Y + CAT_SLOT / 2f;
+    }
+
+    static float catalogScrollbarBottomY() {
+        int vis = catalogVisibleRows();
+        return CAT_GRID_TOP_Y - (vis - 1) * CAT_STEP - CAT_SLOT / 2f;
+    }
+
+    /** True if the mouse is over the catalog scrollbar track (only when the tab overflows). */
+    public boolean creativeScrollbarAt(float logicalX, float logicalY, int itemCount) {
+        if (catalogMaxScroll(itemCount) <= 0f) return false;
+        float cx = catalogScrollbarX();
+        float top = catalogScrollbarTopY();
+        float bot = catalogScrollbarBottomY();
+        return Math.abs(logicalX - cx) <= CAT_SCROLLBAR_W / 2f + 0.006f
+                && logicalY <= top + 0.004f && logicalY >= bot - 0.004f;
+    }
+
+    static float catalogGridLeftX() {
+        return -catalogGridRightX();
+    }
+
+    static float searchBoxLeft() {
+        return catalogGridLeftX();
+    }
+
+    static float searchBoxRight() {
+        return catalogGridRightX();
+    }
+
+    static float searchBoxTop() {
+        return SEARCH_CENTER_Y + SEARCH_H / 2f;
+    }
+
+    static float searchBoxBottom() {
+        return SEARCH_CENTER_Y - SEARCH_H / 2f;
+    }
+
+    static float searchClearX() {
+        return searchBoxRight() - 0.038f;
+    }
+
+    /** True if the mouse is over the creative search field. */
+    public boolean creativeSearchAt(float logicalX, float logicalY) {
+        return logicalX >= searchBoxLeft() && logicalX <= searchBoxRight()
+                && Math.abs(logicalY - SEARCH_CENTER_Y) <= SEARCH_H / 2f;
+    }
+
+    /** True if the mouse is over the search field's clear "x". */
+    public boolean creativeSearchClearAt(float logicalX, float logicalY) {
+        return Math.abs(logicalX - searchClearX()) <= 0.03f
+                && Math.abs(logicalY - SEARCH_CENTER_Y) <= SEARCH_H / 2f;
+    }
+
+    public static int searchMaxChars() {
+        return SEARCH_MAX_CHARS;
+    }
+
+    /** Maps a click on the scrollbar to a scroll-row offset. */
+    public float catalogScrollForY(float logicalY, int itemCount) {
+        float top = catalogScrollbarTopY();
+        float bot = catalogScrollbarBottomY();
+        float span = top - bot;
+        if (span <= 1e-4f) return 0f;
+        float t = (top - logicalY) / span;
+        if (t < 0f) t = 0f;
+        if (t > 1f) t = 1f;
+        return t * catalogMaxScroll(itemCount);
     }
 
     /** Center (logical x) of the creative "destroy item" slot, just right of the hotbar. */
@@ -1407,12 +2213,16 @@ public class Hud {
         return -1;
     }
 
-    /** The index (into the given tab's items) of the catalog item under the mouse, or -1. */
-    public int creativeItemAt(float logicalX, float logicalY, int tab) {
-        BlockType[] items = CreativeCatalog.TABS[tab].items();
+    /** The index into the currently shown catalog list under the mouse, or -1. */
+    public int creativeItemAt(float logicalX, float logicalY, int itemCount, float scrollRows) {
+        return catalogItemAt(logicalX, logicalY, itemCount, scrollRows);
+    }
+
+    static int catalogItemAt(float logicalX, float logicalY, int itemCount, float scrollRows) {
         float half = CAT_SLOT / 2f;
-        for (int i = 0; i < items.length; i++) {
-            float[] c = catalogItemCenter(i);
+        for (int i = 0; i < itemCount; i++) {
+            if (!catalogItemVisible(i, scrollRows)) continue;
+            float[] c = catalogItemCenter(i, scrollRows);
             if (Math.abs(logicalX - c[0]) <= half && Math.abs(logicalY - c[1]) <= half) return i;
         }
         return -1;
@@ -1497,6 +2307,7 @@ public class Hud {
                                    int hoveredSlot, TextureAtlas atlas, ItemTextures itemTextures,
                                    ToolDurability durability, float aspectRatio, float cursorLx, float cursorLy) {
         glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         // Panel background spanning the container area and the inventory grid.
@@ -1507,15 +2318,33 @@ public class Hud {
         // crafting grid. Tall chests shift the whole screen down so every slot
         // stays the same size.
         float gridW = invGridWidth();
-        boolean chest = gui.kind() == ContainerGui.Kind.CHEST;
+        boolean chest  = gui.kind() == ContainerGui.Kind.CHEST;
+        boolean tinkers = gui.kind() == ContainerGui.Kind.PART_BUILDER
+                       || gui.kind() == ContainerGui.Kind.TOOL_STATION;
         float shift = chestLayoutShift(gui);
-        float panelLeft = chest
-                ? INV_GRID_CENTER_X - gridW / 2f - 0.03f
-                : CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
-        float panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
-        float panelTop = chest
-                ? chestTopRowY(gui) + INV_SLOT / 2f + 0.055f - shift
-                : INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
+        float panelLeft, panelRight, panelTop;
+        if (chest) {
+            panelLeft  = INV_GRID_CENTER_X - gridW / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = chestTopRowY(gui) + INV_SLOT / 2f + 0.055f - shift;
+        } else if (gui.kind() == ContainerGui.Kind.PART_BUILDER) {
+            panelLeft  = INV_GRID_CENTER_X - gridW / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = pbShapeTopY() + INV_SLOT / 2f + 0.10f;
+        } else if (gui.kind() == ContainerGui.Kind.TOOL_STATION) {
+            panelLeft  = INV_GRID_CENTER_X - gridW / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = tsSlotY() + INV_SLOT / 2f + 0.10f;
+        } else if (isTableCrafting(gui)) {
+            int n = gui.gridWidth();
+            panelLeft  = invGridLeft() - INV_SLOT / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = tableCraftTopY(n) + INV_SLOT / 2f + 0.055f;
+        } else {
+            panelLeft  = CRAFT_LEFT_X - INV_SLOT / 2f - 0.03f;
+            panelRight = INV_GRID_CENTER_X + gridW / 2f + 0.03f;
+            panelTop   = INV_TOP_ROW_Y + INV_SLOT / 2f + 0.055f;
+        }
         float panelBottom = (INV_TOP_ROW_Y - 3 * INV_STEP) - INV_SLOT / 2f - 0.07f - shift;
 
         // Minecraft-style textured panel (9-slice) behind the whole screen.
@@ -1566,12 +2395,30 @@ public class Hud {
             renderFurnaceProgress(gui.furnace());
         }
 
+        // Part Builder decorations: selected-shape highlight + arrow.
+        if (gui.kind() == ContainerGui.Kind.PART_BUILDER) {
+            renderPartBuilderDecorations(gui);
+        }
+
+        // Tool Station decorations: arrow from inputs to output.
+        if (gui.kind() == ContainerGui.Kind.TOOL_STATION) {
+            renderToolStationDecorations(gui);
+        }
+
+        // Crafting-table arrow from the 3x3/5x5 to the result slot.
+        if (isTableCrafting(gui)) {
+            renderCraftingTableDecorations(gui);
+        }
+
         // A solid divider band between the chest's grid and the player's
         // inventory, so the two spaces read as separate sections at a glance.
         // The chest's bottom row sits CHEST_BOTTOM_ROW_Y above the player's top
-        // row, leaving a clear gap for it.
-        if (chest) {
-            float sepCenter = (CHEST_BOTTOM_ROW_Y + INV_TOP_ROW_Y) / 2f - shift;
+        // row, leaving a clear gap for it. Table crafting uses the same gap.
+        if (chest || isTableCrafting(gui) || tinkers) {
+            float upperBottom = chest ? CHEST_BOTTOM_ROW_Y
+                    : isTableCrafting(gui) ? tableCraftBottomY()
+                    : PB_STATION_BOTTOM_Y;
+            float sepCenter = (upperBottom + INV_TOP_ROW_Y) / 2f - shift;
             float sepHalf = 0.016f;
             inventoryPanel.upload(new float[]{
                     panelLeft + 0.02f, sepCenter - sepHalf, 0, panelRight - 0.02f, sepCenter - sepHalf, 0,
@@ -1610,15 +2457,41 @@ public class Hud {
         // output is derived from the recipe rather than stored).
         beginSlotBatch();
         float iconHalf = INV_SLOT / 2f - 0.006f;
+        com.minecraftclone.world.tinkers.PartBuilderGui pbGui =
+                gui.kind() == ContainerGui.Kind.PART_BUILDER ? gui.partBuilderGui() : null;
+        BlockType pbGhostMat = (pbGui != null && pbGui.materialType() != null)
+                ? pbGui.materialType() : BlockType.PLANKS;
+        com.minecraftclone.world.tinkers.ToolPartType pbSelected =
+                pbGui != null ? pbGui.selectedShape() : null;
         for (int id = 0; id < gui.slotCount(); id++) {
             float[] c = slotCenter(gui, id);
-            BlockType t = gui.typeOf(id);
-            if (t != null) addSlotIcon(c[0], c[1], iconHalf, t, gui.countOf(id), itemTextures, atlas, durability);
+            if (c == null) continue;
+            if (gui.isPbShapeSlot(id)) {
+                int idx = id - ContainerGui.PB_SHAPE_SLOT_0;
+                com.minecraftclone.world.tinkers.ToolPartType shape =
+                        com.minecraftclone.world.tinkers.ToolPartType.values()[idx];
+                addGhostPartIcon(c[0], c[1], iconHalf, shape, pbGhostMat, itemTextures,
+                        shape == pbSelected);
+                continue;
+            }
+            if (gui.isTsInputSlot(id) && gui.stackOf(id).isEmpty()) {
+                int idx = id - ContainerGui.TS_SLOT_0;
+                com.minecraftclone.world.tinkers.ToolPartType ghost = switch (idx) {
+                    case 0 -> com.minecraftclone.world.tinkers.ToolPartType.PICK_HEAD;
+                    case 1 -> com.minecraftclone.world.tinkers.ToolPartType.TOOL_ROD;
+                    default -> com.minecraftclone.world.tinkers.ToolPartType.BINDING;
+                };
+                addGhostPartIcon(c[0], c[1], iconHalf, ghost, BlockType.PLANKS, itemTextures, false);
+                continue;
+            }
+            addSlotIcon(c[0], c[1], iconHalf, gui.stackOf(id), itemTextures, atlas, durability);
         }
         Crafting.Recipe recipe = gui.currentRecipe();
         if (recipe != null) {
-            float[] c = slotCenter(gui, ContainerGui.OUTPUT_SLOT);
-            addSlotIcon(c[0], c[1], iconHalf, recipe.output(), recipe.outputAmount(), itemTextures, atlas, durability);
+            float[] c = slotCenter(gui, gui.outputSlotId());
+            if (c != null) {
+                addSlotIcon(c[0], c[1], iconHalf, ItemStack.of(recipe.output(), recipe.outputAmount()), itemTextures, atlas, durability);
+            }
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
@@ -1626,19 +2499,37 @@ public class Hud {
 
         // Cursor stack following the mouse, drawn on top.
         if (controller.hasCursorItem()) {
-            drawCursorStack(atlas, itemTextures, controller.cursorType(), controller.cursorCount(),
-                    cursorLx + 0.02f, cursorLy - 0.02f);
+            drawCursorStack(atlas, itemTextures, controller.cursor(), cursorLx + 0.02f, cursorLy - 0.02f);
         }
 
         // Tooltip for the hovered slot.
-        BlockType tip = null;
-        if (gui.isOutputSlot(hoveredSlot)) {
-            tip = recipe != null ? recipe.output() : null;
+        if (gui.isPbShapeSlot(hoveredSlot)) {
+            int idx = hoveredSlot - ContainerGui.PB_SHAPE_SLOT_0;
+            com.minecraftclone.world.tinkers.ToolPartType shape = com.minecraftclone.world.tinkers.ToolPartType.values()[idx];
+            renderTooltip(new String[]{"Shape: " + shape.name()
+                    .replace('_', ' ').toLowerCase(java.util.Locale.ROOT)}, cursorLx, cursorLy, aspectRatio);
+        } else if (gui.isTsInputSlot(hoveredSlot) && gui.stackOf(hoveredSlot).isEmpty()) {
+            int idx = hoveredSlot - ContainerGui.TS_SLOT_0;
+            String[] lines = switch (idx) {
+                case 0 -> new String[]{"Head", "Pick, axe, sword or shovel head"};
+                case 1 -> new String[]{"Rod", "Tool rod or tough rod"};
+                default -> new String[]{"Extra", "Binding, plate or extra part"};
+            };
+            renderTooltip(lines, cursorLx, cursorLy, aspectRatio);
         } else if (hoveredSlot >= 0) {
-            tip = gui.typeOf(hoveredSlot);
-        }
-        if (tip != null) {
-            renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
+            ItemStack hovered;
+            if (gui.isPbOutputSlot(hoveredSlot)) {
+                hovered = gui.partBuilderGui() != null ? gui.partBuilderGui().currentOutput() : ItemStack.EMPTY;
+            } else if (gui.isTsOutputSlot(hoveredSlot)) {
+                hovered = gui.toolStationGui() != null ? gui.toolStationGui().currentOutput() : ItemStack.EMPTY;
+            } else if (gui.isOutputSlot(hoveredSlot)) {
+                hovered = recipe != null ? ItemStack.of(recipe.output(), recipe.outputAmount()) : ItemStack.EMPTY;
+            } else {
+                hovered = gui.stackOf(hoveredSlot);
+            }
+            if (!hovered.isEmpty()) {
+                renderTooltip(tooltipLines(hovered, durability), cursorLx, cursorLy, aspectRatio);
+            }
         }
 
         // Title + hint line. The title gets a shadow so it stays legible on the
@@ -1647,6 +2538,7 @@ public class Hud {
         drawCenteredText("Left: take/place stack    Right: one item    Shift-click: move    Drag: spread    Esc: close",
                 0f, panelBottom - 0.04f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
+        glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
     }
 
@@ -1706,8 +2598,150 @@ public class Hud {
         lineShader.unbind();
     }
 
+    /**
+     * Draws Part Builder decorations: a gold selection border around the active
+     * shape button, an arrow from the shape grid to the output slot (never
+     * through the buttons), and Material / Output labels that sit above those
+     * slots — well clear of the shape grid and the inventory below.
+     */
+    private void renderPartBuilderDecorations(ContainerGui gui) {
+        com.minecraftclone.world.tinkers.PartBuilderGui pb = gui.partBuilderGui();
+        if (pb == null) return;
+
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
+        // Gold border around selected shape button.
+        com.minecraftclone.world.tinkers.ToolPartType sel = pb.selectedShape();
+        if (sel != null) {
+            com.minecraftclone.world.tinkers.ToolPartType[] shapes =
+                    com.minecraftclone.world.tinkers.ToolPartType.values();
+            for (int i = 0; i < shapes.length; i++) {
+                if (shapes[i] == sel) {
+                    float sx = pbShapeX(i);
+                    float sy = pbShapeY(i);
+                    float h = INV_SLOT / 2f + 0.005f;
+                    inventoryHover.upload(outlineLines(sx, sy, h));
+                    lineShader.setUniform("color", new Vector4f(1.0f, 0.82f, 0.1f, 1f));
+                    glLineWidth(2.5f);
+                    inventoryHover.render();
+                    break;
+                }
+            }
+        }
+
+        // Arrow from the last shape column → output. Stops short of the grid
+        // so it never paints over the buttons.
+        float arrowHalf = 0.016f;
+        float lastShapeX = pbShapeX(PB_SHAPE_COLS - 1);
+        float arrowX0 = lastShapeX + INV_SLOT / 2f + 0.02f;
+        float arrowX1 = pbOutX() - INV_SLOT / 2f - 0.02f;
+        if (arrowX1 > arrowX0) {
+            furnaceDeco.clear();
+            addQuad3(furnaceDeco, arrowX0, pbOutY() - arrowHalf, arrowX1, pbOutY() + arrowHalf);
+            inventoryPanel.upload(furnaceDeco.toArray());
+            lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
+            inventoryPanel.render();
+        }
+
+        lineShader.unbind();
+
+        // Short labels above the material and output slots only — shape names
+        // live in the hover tooltip so they don't collide with neighbouring buttons.
+        float labelSize = 0.020f;
+        float labelY = pbShapeTopY() + INV_SLOT / 2f + 0.012f;
+        text.begin();
+        String mat = "Material";
+        String out = "Output";
+        text.add(mat, pbMatX() - text.measure(mat, labelSize) / 2f, labelY, labelSize);
+        text.add(out, pbOutX() - text.measure(out, labelSize) / 2f, labelY, labelSize);
+        text.render(hudTransform, new Vector4f(0.9f, 0.9f, 0.9f, 1f));
+    }
+
+    /**
+     * Draws the workbench arrow from the last column of the 3x3/5x5 to the result
+     * slot. Binds {@link #lineShader} itself — the textured panel path unbinds
+     * whatever shader it used right before decorations run.
+     */
+    private void renderCraftingTableDecorations(ContainerGui gui) {
+        int n = gui.gridWidth();
+        float lastColX = tableCraftLeftX() + (n - 1) * INV_STEP;
+        float outX = tableCraftOutputX(n);
+        float midY = tableCraftOutputY(n);
+        float arrowHalf = 0.016f;
+        float arrowX0 = lastColX + INV_SLOT / 2f + 0.02f;
+        float arrowX1 = outX - INV_SLOT / 2f - 0.02f;
+        if (arrowX1 <= arrowX0) return;
+
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        furnaceDeco.clear();
+        addQuad3(furnaceDeco, arrowX0, midY - arrowHalf, arrowX1, midY + arrowHalf);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
+        inventoryPanel.render();
+        lineShader.unbind();
+    }
+
+    /**
+     * Draws Tool Station decorations: an arrow from the last extra slot to the
+     * output, a ready highlight, and centred role labels above each slot.
+     */
+    private void renderToolStationDecorations(ContainerGui gui) {
+        com.minecraftclone.world.tinkers.ToolStationGui ts = gui.toolStationGui();
+        if (ts == null) return;
+
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
+        // Arrow from last input slot → output slot.
+        float arrowHalf = 0.016f;
+        int last = com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS - 1;
+        float arrowX0 = tsSlotX(last) + INV_SLOT / 2f + 0.04f;
+        float arrowX1 = tsOutX() - INV_SLOT / 2f - 0.04f;
+        furnaceDeco.clear();
+        addQuad3(furnaceDeco, arrowX0, tsSlotY() - arrowHalf, arrowX1, tsSlotY() + arrowHalf);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.7f, 0.7f, 0.7f, 0.6f));
+        inventoryPanel.render();
+
+        // "Ready!" highlight on output when assembly is possible.
+        if (ts.canAssemble()) {
+            float h = INV_SLOT / 2f + 0.005f;
+            inventoryHover.upload(outlineLines(tsOutX(), tsOutY(), h));
+            lineShader.setUniform("color", new Vector4f(0.2f, 1f, 0.2f, 1f));
+            glLineWidth(2.5f);
+            inventoryHover.render();
+        }
+
+        lineShader.unbind();
+
+        // Slot-role labels centred above each slot so they don't collide.
+        text.begin();
+        float labelY = tsSlotY() + INV_SLOT / 2f + 0.012f;
+        float labelSize = 0.018f;
+        int n = com.minecraftclone.world.tinkers.ToolStationGui.INPUT_SLOTS;
+        for (int i = 0; i < n; i++) {
+            String role = tsRoleLabel(i);
+            float w = text.measure(role, labelSize);
+            text.add(role, tsSlotX(i) - w / 2f, labelY, labelSize);
+        }
+        float outW = text.measure("Output", labelSize);
+        text.add("Output", tsOutX() - outW / 2f, labelY, labelSize);
+        text.render(hudTransform, new Vector4f(0.9f, 0.9f, 0.9f, 1f));
+    }
+
     /** Draws the cursor stack (icon + count) at the given logical position, above everything else. */
-    private void drawCursorStack(TextureAtlas atlas, ItemTextures itemTextures, BlockType type, int count, float cx, float cy) {
+    private void drawCursorStack(TextureAtlas atlas, ItemTextures itemTextures, ItemStack stack, float cx, float cy) {
+        if (stack == null || stack.isEmpty()) return;
+        BlockType type = stack.type();
+        int count = stack.count();
         float half = INV_SLOT / 2f;
         if (type.isItem) {
             float[] qv = {
@@ -1721,14 +2755,18 @@ public class Hud {
             hudShader.setUniform("transform", hudTransform);
             hudShader.setUniform("atlas", 0);
             hudShader.setUniform("color", WHITE);
-            itemTextures.bind(type);
+            if (stack.isTinkers()) {
+                itemTextures.bindTinkersItem(stack.tinkersItem());
+            } else {
+                itemTextures.bind(type);
+            }
             hotbarItemIcon.render();
             hudShader.unbind();
         } else {
             blockVertices.clear();
             blockIndices.clear();
             blockVertexCounter = 0;
-            addQuad(cx - half, cy - half, cx + half, cy + half, atlas.getUV(type.topTile));
+            addIsometricBlock(cx, cy, half, type, atlas);
             hotbarBlockIcons.upload(blockVertices.toArray(), blockIndices.toArray());
             hudShader.bind();
             hudShader.setUniform("transform", hudTransform);
@@ -1748,8 +2786,36 @@ public class Hud {
 
     /** The tooltip lines for an item: its display name, plus durability for tools and armor. */
     private String[] tooltipLines(BlockType type, ToolDurability durability) {
+        return tooltipLines(type == null ? ItemStack.EMPTY : ItemStack.of(type, 1), durability);
+    }
+
+    /** Tooltip for a full stack, including Tinkers' part/tool payload. */
+    private String[] tooltipLines(ItemStack stack, ToolDurability durability) {
+        if (stack == null || stack.isEmpty()) return new String[]{""};
+        com.minecraftclone.world.tinkers.TinkersItem.Part part = stack.tinkersPart();
+        if (part != null) {
+            return new String[]{"Tinkers Part",
+                    part.shape.name().replace('_', ' ').toLowerCase(java.util.Locale.ROOT)
+                            + " / " + part.material.displayName()};
+        }
+        com.minecraftclone.world.tinkers.TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) {
+            return new String[]{"Tinkers Tool",
+                    tool.kind.name().toLowerCase(java.util.Locale.ROOT),
+                    "Durability: " + tool.remaining() + "/" + tool.maxDurability};
+        }
+        BlockType type = stack.type();
+        if (type == null) return new String[]{""};
+        if (type.isTinkersToolPart()) return new String[]{"Tinkers Part"};
+        if (type.isTinkersTool()) return new String[]{"Tinkers Tool"};
         if (Mining.isTool(type) || Armor.isArmor(type)) {
-            int maxUses = Armor.isArmor(type) ? Armor.maxUses(type) : Mining.toolStats(type).maxUses();
+            int maxUses;
+            if (Armor.isArmor(type)) {
+                maxUses = Armor.maxUses(type);
+            } else {
+                Mining.ToolStats stats = Mining.toolStats(type);
+                maxUses = stats != null ? stats.maxUses() : 0;
+            }
             int rem = durability.remaining(type);
             return new String[]{type.displayName(), "Durability: " + rem + " / " + maxUses};
         }
@@ -1798,16 +2864,122 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
 
+    private void renderCreativeSearchBox(String query, boolean focused) {
+        float left = searchBoxLeft();
+        float right = searchBoxRight();
+        float top = SEARCH_CENTER_Y + SEARCH_H / 2f;
+        float bot = SEARCH_CENTER_Y - SEARCH_H / 2f;
+        slotBgVerts.clear();
+        addQuad3(slotBgVerts, left, bot, right, top);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", focused
+                ? new Vector4f(0.18f, 0.18f, 0.22f, 0.95f)
+                : new Vector4f(0.10f, 0.10f, 0.12f, 0.90f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+
+        float[] border = {
+                left, bot, 0, right, bot, 0,
+                right, bot, 0, right, top, 0,
+                right, top, 0, left, top, 0,
+                left, top, 0, left, bot, 0,
+        };
+        inventoryHover.upload(border);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", focused
+                ? new Vector4f(0.95f, 0.95f, 0.95f, 0.95f)
+                : new Vector4f(0.55f, 0.55f, 0.55f, 0.85f));
+        glLineWidth(1.5f);
+        inventoryHover.render();
+        lineShader.unbind();
+
+        float textSize = 0.028f;
+        float textX = left + 0.02f;
+        float textY = SEARCH_CENTER_Y - 0.014f;
+        boolean empty = query.isEmpty();
+        String shown = empty ? (focused ? "" : "Search items...") : query;
+        drawTextAt(shown, textX, textY, textSize, empty
+                ? new Vector4f(0.55f, 0.55f, 0.55f, 1f)
+                : WHITE);
+
+        if (!empty) {
+            drawCenteredText("x", searchClearX(), SEARCH_CENTER_Y - 0.014f, 0.030f,
+                    new Vector4f(0.85f, 0.85f, 0.85f, 1f));
+        }
+
+        if (focused && (System.currentTimeMillis() / 400) % 2 == 0) {
+            float caretX = textX + text.measure(query, textSize) + 0.004f;
+            slotBgVerts.clear();
+            addQuad3(slotBgVerts, caretX, SEARCH_CENTER_Y - 0.018f, caretX + 0.006f, SEARCH_CENTER_Y + 0.020f);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            inventorySlotBg.upload(slotBgVerts.toArray());
+            lineShader.setUniform("color", WHITE);
+            inventorySlotBg.render();
+            lineShader.unbind();
+        }
+    }
+
+    private void renderCatalogScrollbar(int itemCount, float scrollRows) {
+        float max = catalogMaxScroll(itemCount);
+        if (max <= 0f) return;
+        float cx = catalogScrollbarX();
+        float halfW = CAT_SCROLLBAR_W / 2f;
+        float top = catalogScrollbarTopY();
+        float bot = catalogScrollbarBottomY();
+        float trackH = top - bot;
+        float thumbH = Math.max(0.055f, catalogVisibleRows() / (float) Math.max(catalogRowCount(itemCount), 1) * trackH);
+        if (thumbH > trackH) thumbH = trackH;
+        float t = scrollRows / max;
+        float thumbTop = top - t * (trackH - thumbH);
+        float thumbBot = thumbTop - thumbH;
+
+        slotBgVerts.clear();
+        addQuad3(slotBgVerts, cx - halfW, bot, cx + halfW, top);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", new Vector4f(0.12f, 0.12f, 0.12f, 0.85f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+
+        slotBgVerts.clear();
+        addQuad3(slotBgVerts, cx - halfW + 0.004f, thumbBot, cx + halfW - 0.004f, thumbTop);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", new Vector4f(0.62f, 0.62f, 0.62f, 0.95f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+    }
+
     /**
      * Draws the creative-mode inventory screen: a tabbed item catalog on top of
      * the normal 9-slot hotbar plus a "destroy item" slot, with the cursor stack
-     * following the mouse. {@code selectedTab} is the active category and
-     * {@code selectedSlot} the highlighted hotbar slot.
+     * following the mouse. {@code selectedTab} is the active category,
+     * {@code catalogScroll} is how many rows the catalog has been scrolled,
+     * {@code searchQuery} filters the grid (blank = current tab; otherwise all
+     * items matching the query), and {@code searchFocused} draws the caret.
      */
     public void renderCreative(Inventory inventory, InventoryController controller, int selectedTab, int selectedSlot,
                                TextureAtlas atlas, ItemTextures itemTextures, ToolDurability durability,
-                               float aspectRatio, float cursorLx, float cursorLy) {
+                               float aspectRatio, float cursorLx, float cursorLy, float catalogScroll,
+                               String searchQuery, boolean searchFocused) {
         glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
         // Full-screen dim behind everything (logical x spans the whole viewport).
@@ -1850,16 +3022,21 @@ public class Hud {
                     selected ? WHITE : new Vector4f(0.72f, 0.72f, 0.72f, 1f));
         }
 
+        if (searchQuery == null) searchQuery = "";
+        renderCreativeSearchBox(searchQuery, searchFocused);
+
         // Textured slot cells for the catalog grid and the hotbar + destroy slot.
         float centerY = slotCenterY();
         float dx = destroySlotX();
+        BlockType[] items = CreativeCatalog.itemsFor(selectedTab, searchQuery);
+        catalogScroll = clampCatalogScroll(catalogScroll, items.length);
         if (guiTextures != null) {
             guiVerts.clear();
             guiInds.clear();
             float half = CAT_SLOT / 2f - 0.005f;
-            BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
             for (int i = 0; i < items.length; i++) {
-                float[] c = catalogItemCenter(i);
+                if (!catalogItemVisible(i, catalogScroll)) continue;
+                float[] c = catalogItemCenter(i, catalogScroll);
                 renderGuiSlot(c[0], c[1], half);
             }
             for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
@@ -1870,11 +3047,11 @@ public class Hud {
             flushGuiQuads();
         } else {
             // Fallback: flat dark slot squares.
-            BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
             float half = CAT_SLOT / 2f - 0.005f;
             slotBgVerts.clear();
             for (int i = 0; i < items.length; i++) {
-                float[] c = catalogItemCenter(i);
+                if (!catalogItemVisible(i, catalogScroll)) continue;
+                float[] c = catalogItemCenter(i, catalogScroll);
                 addQuad3(slotBgVerts, c[0] - half, c[1] - half, c[0] + half, c[1] + half);
             }
             lineShader.bind();
@@ -1902,21 +3079,28 @@ public class Hud {
             lineShader.unbind();
         }
 
-        // Catalog item icons.
-        BlockType[] items = CreativeCatalog.TABS[selectedTab].items();
+        // Catalog item icons (only the rows currently in the viewport).
         float half = CAT_SLOT / 2f - 0.005f;
         beginSlotBatch();
         for (int i = 0; i < items.length; i++) {
-            float[] c = catalogItemCenter(i);
-            addSlotIcon(c[0], c[1], half, items[i], 1, itemTextures, atlas, durability);
+            if (!catalogItemVisible(i, catalogScroll)) continue;
+            float[] c = catalogItemCenter(i, catalogScroll);
+            addSlotIcon(c[0], c[1], half, ItemStack.of(items[i], 1), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
 
+        renderCatalogScrollbar(items.length, catalogScroll);
+
+        if (items.length == 0) {
+            drawCenteredText("No matching items", 0f, CAT_GRID_TOP_Y - 0.01f, 0.028f,
+                    new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+        }
+
         // Catalog item hover highlight.
-        int hoverItem = creativeItemAt(cursorLx, cursorLy, selectedTab);
+        int hoverItem = creativeItemAt(cursorLx, cursorLy, items.length, catalogScroll);
         if (hoverItem >= 0) {
-            float[] c = catalogItemCenter(hoverItem);
+            float[] c = catalogItemCenter(hoverItem, catalogScroll);
             inventoryHover.upload(outlineLines(c[0], c[1], CAT_SLOT / 2f + 0.004f));
             lineShader.bind();
             lineShader.setUniform("projection", identity);
@@ -1932,7 +3116,7 @@ public class Hud {
         float hotbarHalf = HOTBAR_SLOT_SIZE / 2f - 0.008f;
         for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
             addSlotIcon(slotCenterX(i, Inventory.HOTBAR_SIZE), centerY, hotbarHalf,
-                    inventory.typeOf(i), inventory.countOf(i), itemTextures, atlas, durability);
+                    inventory.stackOf(i), itemTextures, atlas, durability);
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);
@@ -1976,49 +3160,63 @@ public class Hud {
 
         // Cursor stack following the mouse.
         if (controller.hasCursorItem()) {
-            drawCursorStack(atlas, itemTextures, controller.cursorType(), controller.cursorCount(),
-                    cursorLx + 0.02f, cursorLy - 0.02f);
+            drawCursorStack(atlas, itemTextures, controller.cursor(), cursorLx + 0.02f, cursorLy - 0.02f);
         }
 
         // Tooltip for the hovered catalog item or hotbar slot.
         BlockType tip = null;
+        ItemStack tipStack = null;
         int hb = hotbarSlotAt(cursorLx, cursorLy);
-        int ci = creativeItemAt(cursorLx, cursorLy, selectedTab);
+        int ci = creativeItemAt(cursorLx, cursorLy, items.length, catalogScroll);
         if (hb >= 0) {
-            tip = inventory.typeOf(hb);
+            tipStack = inventory.stackOf(hb);
         } else if (ci >= 0) {
-            tip = CreativeCatalog.TABS[selectedTab].items()[ci];
+            tip = items[ci];
         }
-        if (tip != null) {
+        if (tipStack != null && !tipStack.isEmpty()) {
+            renderTooltip(tooltipLines(tipStack, durability), cursorLx, cursorLy, aspectRatio);
+        } else if (tip != null) {
             renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
         }
 
-        drawCenteredText("Creative    Click: add to cursor    Shift-click: to hotbar    X: delete",
-                0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.022f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+        drawCenteredText("Creative    Click search    Click: add    Shift-click: hotbar    Scroll: more    X: delete",
+                0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.020f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
+        glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
     }
 
     /**
-     * Renders a mini-map image in the top-right corner of the screen.
+     * Renders a mini-map image using the given layout.
      * Caches the texture and mesh to avoid recreating them every frame.
      * Pass {@code null} image to clear the cache (e.g., when changing worlds).
      * {@code imageVersion} comes from {@link com.minecraftclone.engine.MapRenderer#getMiniMapVersion()}
      * and increments each time the renderer redraws into its cached image; Hud uses it
      * to detect pixel changes that don't change the image reference.
+     * {@code editing} draws resize handles and a move hint (hold Alt).
      */
-    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion, float sizeX, float sizeY, float offsetX, float offsetY, float aspectRatio) {
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion,
+                              float aspectRatio, MiniMapLayout layout, boolean editing) {
         if (miniMapImage == null) {
-            // Clear cache when no image provided
+            // Drop the cached texture only. Destroying miniMapMesh here used to
+            // crash the next world: Save and Quit cleared the map, then Create
+            // New World uploaded into a deleted VAO.
             if (cachedMiniMapTextureId >= 0) {
                 glDeleteTextures(cachedMiniMapTextureId);
                 cachedMiniMapTextureId = -1;
-                miniMapMesh.destroy();
             }
             cachedMiniMapImage = null;
             cachedMiniMapVersion = -1;
             return;
         }
+        if (layout == null) {
+            layout = miniMapLayout(aspectRatio, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN);
+        }
+
+        float sizeX = layout.sizeX();
+        float sizeY = layout.sizeY();
+        float offsetX = layout.cx();
+        float offsetY = layout.cy();
 
         // Check if image pixels or layout has changed
         boolean imageChanged = cachedMiniMapImage != miniMapImage || cachedMiniMapVersion != imageVersion;
@@ -2042,10 +3240,10 @@ public class Hud {
             cachedMiniMapOffsetX = offsetX;
             cachedMiniMapOffsetY = offsetY;
 
-            float minX = offsetX - sizeX / 2f;
-            float maxX = offsetX + sizeX / 2f;
-            float minY = offsetY - sizeY / 2f;
-            float maxY = offsetY + sizeY / 2f;
+            float minX = layout.minX();
+            float maxX = layout.maxX();
+            float minY = layout.minY();
+            float maxY = layout.maxY();
 
             float[] verts = {
                 minX, minY, 0f, 1f,  // bottom-left: v=1
@@ -2067,7 +3265,56 @@ public class Hud {
         miniMapMesh.render();
         hudShader.unbind();
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        if (editing) {
+            hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+            inventoryHover.upload(outlineRect(layout.minX(), layout.minY(), layout.maxX(), layout.maxY()));
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.95f));
+            glLineWidth(2f);
+            inventoryHover.render();
+            lineShader.unbind();
+
+            float hsY = 0.018f;
+            float hsX = hsY * aspectRatio;
+            float[] quads = handleQuad(layout.minX(), layout.maxY(), hsX, hsY);
+            float[] tr = handleQuad(layout.maxX(), layout.maxY(), hsX, hsY);
+            float[] br = handleQuad(layout.maxX(), layout.minY(), hsX, hsY);
+            float[] bl = handleQuad(layout.minX(), layout.minY(), hsX, hsY);
+            float[] all = new float[quads.length * 4];
+            System.arraycopy(quads, 0, all, 0, quads.length);
+            System.arraycopy(tr, 0, all, quads.length, tr.length);
+            System.arraycopy(br, 0, all, quads.length * 2, br.length);
+            System.arraycopy(bl, 0, all, quads.length * 3, bl.length);
+            inventoryPanel.upload(all);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.95f));
+            inventoryPanel.render();
+            lineShader.unbind();
+
+            drawCenteredText("Drag to move  ·  Corner to resize  ·  Scroll to scale  ·  R to reset",
+                    offsetX, layout.minY() - 0.045f, 0.022f, new Vector4f(1f, 1f, 1f, 0.95f));
+        }
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Convenience overload: default top-right layout, no edit chrome. */
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion, float aspectRatio) {
+        renderMiniMap(miniMapImage, imageVersion, aspectRatio,
+                miniMapLayout(aspectRatio, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN), false);
+    }
+
+    private static float[] handleQuad(float cx, float cy, float halfX, float halfY) {
+        return new float[]{
+                cx - halfX, cy - halfY, 0, cx + halfX, cy - halfY, 0, cx + halfX, cy + halfY, 0,
+                cx - halfX, cy - halfY, 0, cx + halfX, cy + halfY, 0, cx - halfX, cy + halfY, 0,
+        };
     }
 
     /**
@@ -2081,7 +3328,6 @@ public class Hud {
             if (cachedFullMapTextureId >= 0) {
                 glDeleteTextures(cachedFullMapTextureId);
                 cachedFullMapTextureId = -1;
-                fullMapMesh.destroy();
             }
             cachedFullMapImage = null;
             cachedFullMapVersion = -1;

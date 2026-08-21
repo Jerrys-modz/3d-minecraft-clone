@@ -85,6 +85,8 @@ public class MobTextures {
             case SKELETON -> paintSkeleton(img, rnd);
             case WOLF -> paintWolf(img, rnd);
             case POLAR_BEAR -> paintPolarBear(img, rnd);
+            case SPIDER -> paintSpider(img, rnd);
+            case CREEPER -> paintCreeper(img, rnd);
         }
         return img;
     }
@@ -313,6 +315,63 @@ public class MobTextures {
         for (int y = 14; y <= 15; y++) {
             for (int x = 0; x <= 15; x++) set(img, x, y, shade(boneDark, 1f - 0.06f * (y - 14)));
         }
+    }
+
+    /** A dark spider with red eyes - a wide, fast nocturnal hunter. */
+    private void paintSpider(BufferedImage img, Random rnd) {
+        int body = 0x2A2A2E, bodyDark = 0x1A1A1E, bodyLight = 0x3A3A42;
+        int redEye = 0xC81A1A;
+        // Body: dark grey/black with subtle shading.
+        for (int y = 0; y <= 5; y++) {
+            float f = 1.02f - 0.04f * (y / 5f);
+            for (int x = 0; x <= 15; x++) {
+                int c = shade(body, f);
+                if (rnd.nextFloat() < 0.08f) c = shade(bodyDark, f);
+                set(img, x, y, c);
+            }
+        }
+        fill(img, 0, 15, 6, 6, shade(bodyLight, 1f)); // body top
+        // Head side: dark with a red eye in profile.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(body, 1f - 0.03f * (y - 7)));
+        }
+        set(img, 13, 8, redEye); set(img, 14, 8, redEye);
+        // Head front: multiple red eyes (spider has 8 eyes).
+        for (int y = 10; y <= 13; y++) for (int x = 0; x <= 15; x++) set(img, x, y, body);
+        set(img, 2, 11, redEye); set(img, 3, 11, redEye);
+        set(img, 6, 11, redEye); set(img, 9, 11, redEye);
+        set(img, 12, 11, redEye); set(img, 13, 11, redEye);
+        set(img, 4, 12, redEye); set(img, 11, 12, redEye);
+        fill(img, 0, 15, 14, 15, bodyDark); // legs
+    }
+
+    /** A green creeper with a dark face pattern - explodes when close. */
+    private void paintCreeper(BufferedImage img, Random rnd) {
+        int green = 0x0DA70B, greenDark = 0x087A07, greenLight = 0x12C910;
+        int facePattern = 0x054705;
+        // Body: mottled green.
+        for (int y = 0; y <= 5; y++) {
+            float f = 1.03f - 0.05f * (y / 5f);
+            for (int x = 0; x <= 15; x++) {
+                int c = shade(green, f);
+                if (rnd.nextFloat() < 0.10f) c = shade(greenDark, f);
+                else if (rnd.nextFloat() < 0.05f) c = shade(greenLight, f);
+                set(img, x, y, c);
+            }
+        }
+        fill(img, 0, 15, 6, 6, shade(greenLight, 1f)); // body top
+        // Head side: green shading.
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 0; x <= 15; x++) set(img, x, y, shade(green, 1f - 0.03f * (y - 7)));
+        }
+        // Head front: the iconic creeper face pattern (dark eyes and mouth).
+        for (int y = 10; y <= 13; y++) for (int x = 0; x <= 15; x++) set(img, x, y, green);
+        fill(img, 3, 5, 10, 11, facePattern);   // left eye
+        fill(img, 10, 12, 10, 11, facePattern); // right eye
+        fill(img, 6, 9, 12, 12, facePattern);   // nose
+        fill(img, 5, 6, 13, 13, facePattern);   // mouth left
+        fill(img, 9, 10, 13, 13, facePattern);  // mouth right
+        fill(img, 0, 15, 14, 15, greenDark);    // legs
     }
 
     /** Sprinkles a few {@code color} pixels through a region for a speckled, textured look. */

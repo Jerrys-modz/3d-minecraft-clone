@@ -2,6 +2,10 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.tinkers.PartBuilderGui;
+import com.minecraftclone.world.tinkers.ToolPartType;
+import com.minecraftclone.world.tinkers.TinkersRegistry;
+import com.minecraftclone.world.tinkers.ToolStationGui;
 
 /**
  * Drives the mouse interaction on any container screen, Minecraft-style. It
@@ -15,6 +19,10 @@ import com.minecraftclone.world.BlockType;
  * {@code 45} the crafting result, and {@code 46..48} a furnace's slots. The
  * caller (Main) resolves which slot the mouse is over and forwards the events;
  * this class is pure logic so the whole interaction is testable without GL.
+ * <p>
+ * The cursor is stored as a full {@link ItemStack} so Tinkers' Construct parts
+ * and assembled tools (which carry a per-item payload beyond their sentinel
+ * {@link BlockType}) are never truncated when the player drags or clicks them.
  */
 public class InventoryController {
 
@@ -24,8 +32,8 @@ public class InventoryController {
     private final Inventory inventory;
     private ContainerGui gui;
 
-    private BlockType cursorType;
-    private int cursorCount;
+    /** The item stack currently "held" by the mouse cursor.  Never {@code null}. */
+    private ItemStack cursor = ItemStack.EMPTY;
 
     // Click/drag state: a mouse press starts a session that resolves on release -
     // a single touched slot is a plain click, several touched slots is a drag that
@@ -59,23 +67,35 @@ public class InventoryController {
         return gui;
     }
 
-    public BlockType cursorType() {
-        return cursorType;
+    /** The full cursor {@link ItemStack}, including any Tinkers' payload. */
+    public ItemStack cursor() {
+        return cursor;
     }
 
+    /** Convenience: the {@link BlockType} of the cursor item (null if cursor is empty). */
+    public BlockType cursorType() {
+        return cursor.type();
+    }
+
+    /** Convenience: the count of the cursor item (0 if cursor is empty). */
     public int cursorCount() {
-        return cursorCount;
+        return cursor.count();
     }
 
     public boolean hasCursorItem() {
-        return cursorType != null && cursorCount > 0;
+        return !cursor.isEmpty();
     }
 
     public boolean isDragging() {
         return dragging;
     }
 
-    /** A slot's type (null if empty); the output slot is handled separately and never reported here. */
+    /** The full {@link ItemStack} in a slot; output slot is separate and not reported here. */
+    private ItemStack slotStack(int slotId) {
+        return gui.stackOf(slotId);
+    }
+
+    /** A slot's type (null if empty); kept for callers that only need the type. */
     private BlockType slotType(int slotId) {
         return gui.typeOf(slotId);
     }
@@ -85,14 +105,30 @@ public class InventoryController {
         return gui.countOf(slotId);
     }
 
+    /** Writes a full stack to a slot, preserving Tinkers payloads for player slots. */
+    private void setStack(int slotId, ItemStack stack) {
+        gui.setStack(slotId, stack);
+    }
+
     /** Writes a whole stack to a slot; grid cells ignore {@code count} and just record the type. */
     private void setSlot(int slotId, BlockType type, int count) {
         gui.setSlot(slotId, type, count);
     }
 
     private void clearCursor() {
-        cursorType = null;
-        cursorCount = 0;
+        cursor = ItemStack.EMPTY;
+    }
+
+    /**
+     * True when the two stacks can be merged (same type, both vanilla, not
+     * Tinkers items).  Tinkers parts and tools are always count=1 and unique,
+     * so they are never mergeable — a click on a slot holding a different
+     * Tinkers item always resolves as a swap.
+     */
+    private static boolean isSameType(ItemStack a, ItemStack b) {
+        if (a.isEmpty() || b.isEmpty()) return false;
+        if (a.isTinkers() || b.isTinkers()) return false; // Tinkers items are unique, never merge
+        return a.type() == b.type();
     }
 
     /**
@@ -103,6 +139,35 @@ public class InventoryController {
      */
     public void click(int slotId, boolean right, boolean shift) {
         if (slotId < 0 || slotId >= gui.slotCount()) return;
+
+        // Tinkers GUI: shape-button click - select/deselect the shape.
+        if (gui.isPbShapeSlot(slotId)) {
+            int shapeIdx = slotId - ContainerGui.PB_SHAPE_SLOT_0;
+            gui.partBuilderGui().toggleShape(ToolPartType.values()[shapeIdx]);
+            return;
+        }
+        // Tinkers GUI: material slot only accepts registered materials.
+        if (gui.isPbMaterialSlot(slotId)) {
+            if (shift) { quickMove(slotId); return; }
+            clickPartBuilderMaterial(right);
+            return;
+        }
+        // Tinkers GUI: output clicks trigger craft/assemble rather than pick-up.
+        if (gui.isPbOutputSlot(slotId)) {
+            if (shift) craftPartBuilderToInventory(); else craftPartBuilder();
+            return;
+        }
+        if (gui.isTsOutputSlot(slotId)) {
+            if (shift) assembleToolStationToInventory(); else assembleToolStation();
+            return;
+        }
+        // Tinkers GUI: Tool Station input slots only accept Tinkers parts.
+        if (gui.isTsInputSlot(slotId)) {
+            if (shift) { quickMove(slotId); return; }
+            clickToolStationSlot(slotId, right);
+            return;
+        }
+
         if (shift) {
             quickMove(slotId);
             return;
@@ -116,17 +181,18 @@ public class InventoryController {
             return;
         }
 
-        BlockType st = slotType(slotId);
-        int sc = slotCount(slotId);
+        ItemStack slot = slotStack(slotId);
+        BlockType st = slot.type();
+        int sc = slot.count();
         boolean isGrid = gui.isGridSlot(slotId);
 
         // Clicking an armor piece held in the main inventory with an empty
         // cursor auto-equips it into its matching armor slot (Minecraft
         // behaviour: the piece jumps straight from the bag to the slot).
         if (!hasCursorItem() && st != null && Armor.isArmor(st) && !isGrid) {
-            Armor.Slot slot = Armor.slotOf(st);
-            if (slot != null && gui.isArmorSlot(armorSlotIdFor(slot))) {
-                int armorId = armorSlotIdFor(slot);
+            Armor.Slot armorSlot = Armor.slotOf(st);
+            if (armorSlot != null && gui.isArmorSlot(armorSlotIdFor(armorSlot))) {
+                int armorId = armorSlotIdFor(armorSlot);
                 if (gui.typeOf(armorId) == null) {
                     gui.setSlot(slotId, null, 0);
                     gui.setSlot(armorId, st, 1);
@@ -136,40 +202,40 @@ public class InventoryController {
         }
 
         if (!hasCursorItem()) {
-            if (st == null) return;                       // empty click on empty slot
-            int take = right ? (sc + 1) / 2 : sc;         // right-click lifts half the stack
+            if (slot.isEmpty()) return;                    // empty click on empty slot
+            int take = right ? (sc + 1) / 2 : sc;          // right-click lifts half the stack
             if (isGrid) take = 1;
-            cursorType = st;
-            cursorCount = take;
+            cursor = slot.withCount(take);                  // preserves TinkersItem payload
             if (take < sc) {
-                setSlot(slotId, st, sc - take);
+                setStack(slotId, slot.withCount(sc - take));
             } else {
                 setSlot(slotId, null, 0);
             }
-        } else if (st == null) {
+        } else if (slot.isEmpty()) {
             // Place into the empty slot: one item (right) or the whole stack (left);
             // a grid cell only ever accepts a single item.
-            int place = isGrid ? 1 : (right ? 1 : cursorCount);
-            setSlot(slotId, cursorType, place);
-            cursorCount -= place;
-            if (cursorCount <= 0) clearCursor();
-        } else if (st == cursorType) {
-            if (isGrid) return;                           // grid cells are single-item and already full
+            if (cursor.isTinkers() && !gui.isPlayerSlot(slotId)) return;
+            int place = isGrid ? 1 : (right ? 1 : cursor.count());
+            setStack(slotId, cursor.withCount(place));
+            cursor = cursor.withCount(cursor.count() - place);
+            if (cursor.isEmpty()) clearCursor();
+        } else if (isSameType(slot, cursor)) {
+            if (isGrid) return;                            // grid cells are single-item and already full
             int space = Inventory.maxStack(st) - sc;
             if (space > 0) {
-                int add = right ? 1 : Math.min(space, cursorCount);
+                int add = right ? 1 : Math.min(space, cursor.count());
                 setSlot(slotId, st, sc + add);
-                cursorCount -= add;
-                if (cursorCount <= 0) clearCursor();
+                cursor = cursor.withCount(cursor.count() - add);
+                if (cursor.isEmpty()) clearCursor();
             }
         } else {
             // Different type: only a left-click swaps; right-click does nothing
             // (right-click means "one item at a time", never a swap - so the
             // crafting grid can't be scrambled by a mis-click either).
             if (right) return;
-            setSlot(slotId, cursorType, isGrid ? 1 : cursorCount);
-            cursorType = st;
-            cursorCount = isGrid ? 1 : sc;
+            if (cursor.isTinkers() && !gui.isPlayerSlot(slotId)) return;
+            setStack(slotId, cursor.withCount(isGrid ? 1 : cursor.count()));
+            cursor = isGrid ? slot.withCount(1) : slot;    // preserves TinkersItem payload
         }
     }
 
@@ -189,19 +255,18 @@ public class InventoryController {
         BlockType in = slotType(slotId);
         if (!hasCursorItem()) {
             if (in != null) {
-                cursorType = in;
-                cursorCount = 1;
+                cursor = ItemStack.of(in, 1);
                 setSlot(slotId, null, 0);
             }
             return;
         }
-        if (Armor.slotOf(cursorType) != wanted) return;   // wrong piece for this slot
+        if (Armor.slotOf(cursor.type()) != wanted) return;   // wrong piece for this slot
         if (in != null) {
-            if (in == cursorType) return;                 // already wearing it
-            setSlot(slotId, cursorType, 1);               // swap: old piece goes to cursor
-            cursorType = in;
+            if (in == cursor.type()) return;              // already wearing it
+            setSlot(slotId, cursor.type(), 1);            // swap: old piece goes to cursor
+            cursor = ItemStack.of(in, 1);
         } else {
-            setSlot(slotId, cursorType, 1);
+            setSlot(slotId, cursor.type(), 1);
             clearCursor();
         }
     }
@@ -238,23 +303,29 @@ public class InventoryController {
     /** Mouse release: resolve the session as a click (one slot) or a drag (several). */
     public void endDrag(int releaseSlot) {
         if (!dragging) return;
+        // Output slots craft on press-release. The result sits right next to the
+        // armor column / grid, so a tiny mouse slip would otherwise turn the
+        // click into a multi-slot drag and silently skip craft().
+        if (gui.isOutputSlot(dragStart) || gui.isPbOutputSlot(dragStart) || gui.isTsOutputSlot(dragStart)) {
+            click(dragStart, dragRight, false);
+            dragging = false;
+            dragStart = -1;
+            dragDistinct = 0;
+            dragRight = false;
+            return;
+        }
         if (releaseSlot >= 0 && releaseSlot < gui.slotCount() && !gui.isOutputSlot(releaseSlot) && !dragVisited[releaseSlot]) {
             dragVisited[releaseSlot] = true;
             dragDistinct++;
         }
-        // A single, non-stackable item (a tool or an armor piece) can't be
-        // "spread" one-per-slot across several touched slots the way a stack
-        // can - there's only one of it. Minecraft just resolves that drag as
-        // a normal click on wherever the mouse released, so a swipe that
-        // merely passes over unrelated slots on the way to (say) the wrong
-        // armor slot doesn't drop the item in the first empty slot it
-        // crossed - it's still refused by the same rules a direct click on
-        // the release slot would apply (e.g. clickArmorSlot's slot match).
-        // The item can already be on the cursor, or still sitting in
-        // dragStart (a press-and-drag starting on a filled slot) - either
-        // way it's the same non-spreadable case.
-        BlockType dragType = hasCursorItem() ? cursorType
-                : (gui.isOutputSlot(dragStart) ? null : slotType(dragStart));
+        // A single, non-stackable item (a tool, armor piece, or Tinkers item) can't
+        // be "spread" one-per-slot across several touched slots the way a stack can -
+        // there's only one of it.  Minecraft just resolves that drag as a normal click
+        // on wherever the mouse released.  The item can already be on the cursor, or
+        // still sitting in dragStart (a press-and-drag starting on a filled slot).
+        ItemStack dragStack = hasCursorItem() ? cursor
+                : (gui.isOutputSlot(dragStart) ? ItemStack.EMPTY : slotStack(dragStart));
+        BlockType dragType = dragStack.type();
         if (dragDistinct <= 1) {
             click(dragStart, dragRight, false);
         } else if (dragType != null && Inventory.maxStack(dragType) <= 1) {
@@ -263,8 +334,7 @@ public class InventoryController {
                 // bagged armor piece with an empty cursor auto-equips it into its
                 // matching armor slot (see click()'s auto-equip shortcut), which would
                 // ignore wherever this drag actually released.
-                cursorType = dragType;
-                cursorCount = 1;
+                cursor = dragStack;                          // preserves TinkersItem payload
                 setSlot(dragStart, null, 0);
             }
             click(releaseSlot, dragRight, false);
@@ -313,26 +383,30 @@ public class InventoryController {
 
     /** Places one cursor item into {@code slotId} (or merges it onto a same-type stack). */
     private void depositOne(int slotId) {
+        if (cursor.isEmpty()) return;
+        if (cursor.isTinkers() && !gui.isPlayerSlot(slotId)) return;
+        BlockType curType = cursor.type();
+        int curCount = cursor.count();
         BlockType st = slotType(slotId);
         if (st == null) {
             // Armor slots: only accept matching armor type into an empty slot.
             if (gui.isArmorSlot(slotId)) {
                 Armor.Slot wantedSlot = Armor.Slot.values()[slotId - ContainerGui.ARMOR_START];
-                if (Armor.slotOf(cursorType) != wantedSlot) {
+                if (Armor.slotOf(curType) != wantedSlot) {
                     return; // Wrong armor type for this slot, skip.
                 }
             }
-            setSlot(slotId, cursorType, 1);
-            cursorCount--;
-        } else if (st == cursorType && (gui.isPlayerSlot(slotId) || gui.isContainerSlot(slotId))) {
+            setStack(slotId, cursor.withCount(1));          // preserves TinkersItem payload
+            cursor = cursor.withCount(curCount - 1);
+        } else if (st == curType && !cursor.isTinkers() && (gui.isPlayerSlot(slotId) || gui.isContainerSlot(slotId))) {
             int max = Inventory.maxStack(st);
             if (slotCount(slotId) < max) {
                 setSlot(slotId, st, slotCount(slotId) + 1);
-                cursorCount--;
+                cursor = cursor.withCount(curCount - 1);
             }
         }
         // Different type: skip the slot (like Minecraft, which doesn't overwrite on drag).
-        if (cursorCount <= 0) clearCursor();
+        if (cursor.isEmpty()) clearCursor();
     }
 
     /**
@@ -343,6 +417,37 @@ public class InventoryController {
      * and main inventory.
      */
     private void quickMove(int slotId) {
+        // Tinkers: Part Builder output shift-click.
+        if (gui.isPbOutputSlot(slotId)) {
+            craftPartBuilderToInventory();
+            return;
+        }
+        // Tinkers: Part Builder material slot shift-click returns to inventory.
+        if (gui.isPbMaterialSlot(slotId)) {
+            ItemStack mat = gui.partBuilderGui().materialSlot();
+            if (!mat.isEmpty()) {
+                int leftover = inventory.add(mat.type(), mat.count());
+                gui.partBuilderGui().setMaterial(leftover > 0 ? mat.withCount(leftover) : ItemStack.EMPTY);
+            }
+            return;
+        }
+        // Tinkers: Tool Station output shift-click.
+        if (gui.isTsOutputSlot(slotId)) {
+            assembleToolStationToInventory();
+            return;
+        }
+        // Tinkers: Tool Station input slot shift-click returns part to inventory.
+        if (gui.isTsInputSlot(slotId)) {
+            ItemStack part = gui.toolStationGui().slot(slotId - ContainerGui.TS_SLOT_0);
+            if (!part.isEmpty()) {
+                ItemStack leftover = inventory.addStack(part);
+                if (leftover.isEmpty()) {
+                    gui.toolStationGui().setSlot(slotId - ContainerGui.TS_SLOT_0, ItemStack.EMPTY);
+                }
+            }
+            return;
+        }
+
         if (gui.isOutputSlot(slotId)) {
             // Craft repeatedly into the inventory while the grid keeps matching.
             Crafting.Recipe recipe = gui.currentRecipe();
@@ -389,6 +494,47 @@ public class InventoryController {
                 gui.setSlot(armorId, t, 1);
                 return;
             }
+        }
+
+        // Tinkers Part Builder: shift-click a material from inventory → material slot.
+        if (gui.kind() == ContainerGui.Kind.PART_BUILDER
+                && gui.partBuilderGui() != null
+                && com.minecraftclone.world.tinkers.TinkersRegistry.isMaterial(t)) {
+            if (gui.partBuilderGui().materialSlot().isEmpty()) {
+                int moved = Math.min(count, Inventory.maxStack(t));
+                gui.partBuilderGui().setMaterial(ItemStack.of(t, moved));
+                inventory.setSlot(slotId, count - moved == 0 ? null : t, count - moved);
+            }
+            return;
+        }
+
+        // Tinkers Tool Station: shift-click a Tinkers part from inventory into
+        // the slot that matches its role (head → 0, rod → 1, extras → 2–4).
+        // Dumping everything into the first empty slot used to put a rod in
+        // Head and a pick head in Rod, so the station never assembled.
+        if (gui.kind() == ContainerGui.Kind.TOOL_STATION && gui.toolStationGui() != null) {
+            ItemStack stack = inventory.stackOf(slotId);
+            if (stack.isTinkersPart()) {
+                ToolStationGui ts = gui.toolStationGui();
+                int dest = ts.preferredEmptySlot(stack);
+                if (dest >= 0) {
+                    ts.setSlot(dest, stack.withCount(1));
+                    inventory.setSlot(slotId, null, 0);
+                }
+            }
+            return;
+        }
+
+        ItemStack src = inventory.stackOf(slotId);
+        if (src.isTinkers()) {
+            // Unique Tinkers items cannot go through BlockType-only destinations
+            // (chest, furnace, grid). Hop between hotbar and main via addStack.
+            inventory.setStack(slotId, ItemStack.EMPTY);
+            int from = slotId < Inventory.HOTBAR_SIZE ? Inventory.HOTBAR_SIZE : 0;
+            int to = slotId < Inventory.HOTBAR_SIZE ? Inventory.SIZE : Inventory.HOTBAR_SIZE;
+            ItemStack leftover = addStackInRange(src, from, to);
+            if (!leftover.isEmpty()) inventory.setStack(slotId, leftover);
+            return;
         }
 
         // Prefer the open container: ore/fuel into a furnace, anything into a
@@ -458,6 +604,17 @@ public class InventoryController {
         }
     }
 
+    /** Places a unique Tinkers stack into the first empty slot in {@code [from, to)}. */
+    private ItemStack addStackInRange(ItemStack stack, int from, int to) {
+        for (int i = from; i < to; i++) {
+            if (inventory.isEmpty(i)) {
+                inventory.setStack(i, stack);
+                return ItemStack.EMPTY;
+            }
+        }
+        return stack;
+    }
+
     /** Moves up to {@code count} of {@code t} into a furnace slot, topping up a same-type stack; returns items moved. */
     private int moveToFurnaceSlot(int slotId, BlockType t, int count) {
         com.minecraftclone.world.Furnace f = gui.furnace();
@@ -471,6 +628,117 @@ public class InventoryController {
         return add;
     }
 
+    // -----------------------------------------------------------------------
+    // Tinkers GUI craft / assemble helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * Part Builder material slot: only registered Tinkers materials are accepted.
+     * Invalid items stay on the cursor instead of being swallowed by setMaterial().
+     */
+    private void clickPartBuilderMaterial(boolean right) {
+        PartBuilderGui pb = gui.partBuilderGui();
+        if (pb == null) return;
+        ItemStack slotItem = pb.materialSlot();
+        if (!hasCursorItem()) {
+            if (slotItem.isEmpty()) return;
+            int take = right ? (slotItem.count() + 1) / 2 : slotItem.count();
+            cursor = slotItem.withCount(take);
+            int leftover = slotItem.count() - take;
+            pb.setMaterial(leftover <= 0 ? ItemStack.EMPTY : slotItem.withCount(leftover));
+            return;
+        }
+        if (cursor.isTinkers() || !TinkersRegistry.isMaterial(cursor.type())) {
+            return;
+        }
+        if (slotItem.isEmpty()) {
+            int place = right ? 1 : cursor.count();
+            pb.setMaterial(cursor.withCount(place));
+            cursor = cursor.withCount(cursor.count() - place);
+            return;
+        }
+        if (slotItem.type() == cursor.type()) {
+            int space = Inventory.maxStack(cursor.type()) - slotItem.count();
+            if (space <= 0) return;
+            int add = right ? 1 : Math.min(space, cursor.count());
+            pb.setMaterial(slotItem.withCount(slotItem.count() + add));
+            cursor = cursor.withCount(cursor.count() - add);
+            return;
+        }
+        if (right) return;
+        ItemStack prev = slotItem;
+        pb.setMaterial(cursor);
+        cursor = prev;
+    }
+
+    /**
+     * Tool Station input slot click: only accepts Tinkers parts (or the vanilla
+     * pick-up/place logic when the cursor is empty).
+     */
+    private void clickToolStationSlot(int slotId, boolean right) {
+        ItemStack slotItem = slotStack(slotId);
+        if (!hasCursorItem()) {
+            // Pick up whatever is in the slot.
+            if (!slotItem.isEmpty()) {
+                cursor = slotItem;
+                setStack(slotId, ItemStack.EMPTY);
+            }
+        } else {
+            // Place cursor into slot — only the matching part role is accepted
+            // (head in 0, rod in 1, extras in 2–4). Rejecting here keeps the
+            // cursor intact; setSlot would otherwise silently ignore the drop.
+            if (!cursor.isTinkersPart()) return;
+            int tsSlot = slotId - ContainerGui.TS_SLOT_0;
+            ToolStationGui ts = gui.toolStationGui();
+            if (ts == null || !ts.accepts(tsSlot, cursor)) return;
+            if (slotItem.isEmpty()) {
+                setStack(slotId, cursor.withCount(1));
+                cursor = cursor.withCount(cursor.count() - 1);
+                if (cursor.isEmpty()) clearCursor();
+            } else {
+                ItemStack prev = slotItem;
+                setStack(slotId, cursor.withCount(1));
+                cursor = prev;
+            }
+        }
+    }
+
+    /** Crafts one part from the Part Builder into the cursor; the material is consumed. */
+    private void craftPartBuilder() {
+        PartBuilderGui pb = gui.partBuilderGui();
+        if (pb == null || !pb.canCraft()) return;
+        // Refuse if the cursor is occupied — otherwise craft() consumes the
+        // material and addStack may drop the unique part on the floor of a full bag.
+        if (!cursor.isEmpty()) return;
+        cursor = pb.craft();
+    }
+
+    /** Shift-click on Part Builder output: craft and deposit directly into inventory. */
+    private void craftPartBuilderToInventory() {
+        PartBuilderGui pb = gui.partBuilderGui();
+        if (pb == null || !pb.canCraft()) return;
+        if (inventory.isFull()) return;
+        ItemStack result = pb.craft();
+        if (!result.isEmpty()) inventory.addStack(result);
+    }
+
+    /** Assembles the current Tool Station parts into the cursor. */
+    private void assembleToolStation() {
+        ToolStationGui ts = gui.toolStationGui();
+        if (ts == null || !ts.canAssemble()) return;
+        if (!cursor.isEmpty()) return;
+        cursor = ts.assemble();
+    }
+
+    /** Shift-click on Tool Station output: assemble and deposit directly into inventory. */
+    private void assembleToolStationToInventory() {
+        ToolStationGui ts = gui.toolStationGui();
+        if (ts == null || !ts.canAssemble()) return;
+        if (inventory.isFull()) return;
+        ItemStack result = ts.assemble();
+        if (!result.isEmpty()) inventory.addStack(result);
+    }
+
     /** Crafts the current grid match into the cursor (if there's room), consuming the ingredients. */
     private void craft() {
         Crafting.Recipe recipe = gui.currentRecipe();
@@ -478,12 +746,11 @@ public class InventoryController {
         BlockType out = recipe.output();
         int amount = recipe.outputAmount();
         if (hasCursorItem()) {
-            if (cursorType != out) return;
-            if (cursorCount + amount > Inventory.maxStack(out)) return;
-            cursorCount += amount;
+            if (cursor.type() != out) return;
+            if (cursor.count() + amount > Inventory.maxStack(out)) return;
+            cursor = cursor.withCount(cursor.count() + amount);
         } else {
-            cursorType = out;
-            cursorCount = amount;
+            cursor = ItemStack.of(out, amount);
         }
         gui.grid().reset();
     }
@@ -491,7 +758,12 @@ public class InventoryController {
     /** Returns any items still on the cursor to the inventory - called when the screen closes. */
     public void returnCursorToInventory() {
         if (hasCursorItem()) {
-            inventory.add(cursorType, cursorCount);
+            if (cursor.isTinkers()) {
+                cursor = inventory.addStack(cursor);
+                return;
+            } else {
+                inventory.add(cursor.type(), cursor.count());
+            }
             clearCursor();
         }
     }
@@ -519,11 +791,15 @@ public class InventoryController {
             inventory.add(type, Inventory.maxStack(type));
             return;
         }
-        if (hasCursorItem() && cursorType != type) {
-            inventory.add(cursorType, cursorCount);
+        if (hasCursorItem() && (cursor.isTinkers() || cursor.type() != type)) {
+            if (cursor.isTinkers()) {
+                // Keep the unique item on the cursor when the bag is full.
+                if (!inventory.addStack(cursor).isEmpty()) return;
+            } else {
+                inventory.add(cursor.type(), cursor.count());
+            }
         }
-        cursorType = type;
-        cursorCount = Inventory.maxStack(type);
+        cursor = ItemStack.of(type, Inventory.maxStack(type));
     }
 
     /** Creative mode: drops whatever the cursor is holding (the "destroy item" slot). */

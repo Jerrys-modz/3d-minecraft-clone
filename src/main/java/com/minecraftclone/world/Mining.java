@@ -1,5 +1,8 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.player.ItemStack;
+import com.minecraftclone.world.tinkers.TinkersItem;
+
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -64,6 +67,46 @@ public final class Mining {
         TOOLS.put(BlockType.STONE_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_STONE, 132));
         TOOLS.put(BlockType.IRON_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_IRON, 251));
         TOOLS.put(BlockType.DIAMOND_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_DIAMOND, 1562));
+        // Hoes till dirt on use; they are NOT shovels. Registering them as
+        // SHOVEL used to make left-click delete dirt at shovel speed (a
+        // diamond hoe broke dirt in ~0.03s — it looked like the block vanished).
+        TOOLS.put(BlockType.WOOD_HOE,    new ToolStats(ToolKind.NONE, TIER_WOOD,    60));
+        TOOLS.put(BlockType.STONE_HOE,   new ToolStats(ToolKind.NONE, TIER_STONE,  132));
+        TOOLS.put(BlockType.IRON_HOE,    new ToolStats(ToolKind.NONE, TIER_IRON,   251));
+        TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.NONE, TIER_DIAMOND, 1562));
+
+        // Phase 0.5: Tinkers' Construct assembled tools are handled dynamically via
+        // TinkersItem.Tool and TinkersRegistry — no static TOOLS entries needed.
+        // Mining speed / tier for Tinkers tools is read from toolStatsFor(ItemStack).
+
+        // Phase 0.5: Tinkers' Construct structure blocks (pickaxe required; moderate hardness)
+        put(BlockType.SEARED_BRICK,         3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SEARED_GLASS,         0.3f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.SEARED_TANK,          3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMELTERY_DRAIN,       3.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.SMELTERY_CONTROLLER,  3.5f, ToolKind.PICKAXE, TIER_STONE);
+        // Crafting station blocks
+        put(BlockType.CASTING_TABLE,        2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.CASTING_BASIN,        2.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.PART_BUILDER,         2.5f, ToolKind.AXE,     TIER_HAND);
+        put(BlockType.TOOL_STATION,         2.5f, ToolKind.AXE,     TIER_HAND);
+
+        // Farming blocks
+        put(BlockType.FARMLAND,     0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.FARMLAND_WET, 0.6f, ToolKind.SHOVEL, TIER_HAND);
+        put(BlockType.CLAY,         0.6f, ToolKind.SHOVEL, TIER_HAND);
+        // Crops: instant, no tool required.
+        put(BlockType.WHEAT_STAGE_1,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.WHEAT_STAGE_2,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.WHEAT_STAGE_3,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.WHEAT_STAGE_4,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.POTATO_CROP_1,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.POTATO_CROP_2,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.POTATO_CROP_3,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.CARROT_CROP_1,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.CARROT_CROP_2,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.CARROT_CROP_3,  0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.SUGAR_CANE,     0f, ToolKind.NONE, TIER_HAND);
 
         // Soft earth - a shovel makes it quick (no tier requirement, just speed).
         put(BlockType.DIRT, 0.5f, ToolKind.SHOVEL, TIER_HAND);
@@ -339,11 +382,37 @@ public final class Mining {
     }
 
     public static boolean isTool(BlockType type) {
-        return TOOLS.containsKey(type);
+        return TOOLS.containsKey(type) || (type != null && type.isTinkersTool());
+    }
+
+    /**
+     * True if the held {@link ItemStack} is a tool (vanilla or Tinkers').
+     */
+    public static boolean isTool(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        return isTool(stack.type());
     }
 
     public static ToolStats toolStats(BlockType type) {
         return TOOLS.get(type);
+    }
+
+    /**
+     * Returns synthetic {@link ToolStats} for a Tinkers' assembled tool read
+     * from the {@link TinkersItem.Tool} payload, or {@code null} for non-tools.
+     */
+    public static ToolStats toolStatsFor(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        // Vanilla tool — look up the static table.
+        ToolStats vanillaStats = TOOLS.get(stack.type());
+        if (vanillaStats != null) return vanillaStats;
+        // Tinkers' tool — derive stats from the item payload.
+        TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) {
+            ToolKind kind = tool.kind;
+            return new ToolStats(kind, tool.miningTier(), tool.maxDurability);
+        }
+        return null;
     }
 
     private static BlockInfo infoFor(BlockType block) {
@@ -356,6 +425,87 @@ public final class Mining {
         if (info.requiredTier() <= TIER_HAND) return true;
         ToolStats held = TOOLS.get(heldItem);
         return held != null && held.kind() == info.effectiveTool() && held.tier() >= info.requiredTier();
+    }
+
+    /**
+     * True if the held {@link ItemStack} (vanilla or Tinkers') is sufficient
+     * to break {@code block} at all (ignoring speed).
+     * <p>Named {@code canBreakItem} rather than {@code canBreak} to avoid
+     * overload ambiguity when callers pass {@code null} as the second argument.
+     */
+    public static boolean canBreakItem(BlockType block, ItemStack heldItem) {
+        if (heldItem == null || heldItem.isEmpty()) return canBreak(block, (BlockType) null);
+        // For Tinkers' tools read tier and kind from the payload.
+        TinkersItem.Tool tinkersTool = heldItem.tinkersTool();
+        if (tinkersTool != null) {
+            BlockInfo info = infoFor(block);
+            if (info.requiredTier() <= TIER_HAND) return true;
+            return tinkersTool.kind == info.effectiveTool()
+                && tinkersTool.miningTier() >= info.requiredTier();
+        }
+        return canBreak(block, heldItem.type());
+    }
+
+    /**
+     * Whether the player can actually remove {@code block} right now.
+     * Creative ignores tool-tier gates (bare hands break iron ore); bedrock
+     * and air are never removable. Survival still needs the right tool.
+     */
+    public static boolean canRemove(BlockType block, ItemStack held, boolean creative) {
+        if (block == null || block == BlockType.AIR || block == BlockType.BEDROCK) return false;
+        return creative || canBreakItem(block, held);
+    }
+
+    /**
+     * One-line harvest status for the look-at overlay: {@code "Can mine"},
+     * {@code "Need Iron Pickaxe"}, {@code "Unbreakable"}, or {@code "Can't mine"}.
+     * {@code null} if there's nothing to show (air / missing block).
+     *
+     * @param instantBreak creative-style: any breakable block is harvestable
+     * @param canBreakBlocks false in adventure/spectator
+     */
+    public static String harvestHint(BlockType block, ItemStack held, boolean instantBreak, boolean canBreakBlocks) {
+        if (block == null || block == BlockType.AIR) return null;
+        if (block == BlockType.BEDROCK) return "Unbreakable";
+        if (!canBreakBlocks) return "Can't mine";
+        if (instantBreak || canBreakItem(block, held)) return "Can mine";
+        BlockInfo info = infoFor(block);
+        String tool = prettyEnum(info.effectiveTool().name());
+        String tier = tierName(info.requiredTier());
+        if (info.effectiveTool() == ToolKind.NONE) return "Need a better tool";
+        if (tier.isEmpty()) return "Need " + tool;
+        return "Need " + tier + " " + tool;
+    }
+
+    /** True when {@link #harvestHint} is the success line (green on the overlay). */
+    public static boolean harvestHintPositive(String hint) {
+        return "Can mine".equals(hint);
+    }
+
+    static String tierName(int tier) {
+        return switch (tier) {
+            case TIER_WOOD -> "Wood";
+            case TIER_STONE -> "Stone";
+            case TIER_IRON -> "Iron";
+            case TIER_DIAMOND -> "Diamond";
+            default -> "";
+        };
+    }
+
+    static String prettyEnum(String name) {
+        StringBuilder sb = new StringBuilder(name.length());
+        boolean upper = true;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c == '_') {
+                sb.append(' ');
+                upper = true;
+            } else {
+                sb.append(upper ? Character.toUpperCase(c) : Character.toLowerCase(c));
+                upper = false;
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -379,16 +529,65 @@ public final class Mining {
         return info.hardnessSeconds() / speedMultiplier;
     }
 
+    /**
+     * Seconds required to break {@code block} with the held {@link ItemStack}
+     * (vanilla or Tinkers').  Returns {@link Float#POSITIVE_INFINITY} if the
+     * item cannot break the block at all.
+     * <p>Named {@code breakTimeItem} rather than {@code breakTimeSeconds} to
+     * avoid overload ambiguity when callers pass {@code null} as the second
+     * argument (both {@code BlockType} and {@code ItemStack} are reference types).
+     */
+    public static float breakTimeItem(BlockType block, ItemStack heldItem) {
+        if (!canBreakItem(block, heldItem)) return Float.POSITIVE_INFINITY;
+        BlockInfo info = infoFor(block);
+        if (info.hardnessSeconds() <= 0f) return 0f;
+
+        TinkersItem.Tool tinkersTool = (heldItem != null) ? heldItem.tinkersTool() : null;
+        float speedMultiplier = 1f;
+        if (tinkersTool != null && tinkersTool.kind == info.effectiveTool()) {
+            // Tinkers' speed is a float multiplier from the head material.
+            speedMultiplier = tinkersTool.miningSpeed();
+        } else if (heldItem != null) {
+            ToolStats held = TOOLS.get(heldItem.type());
+            if (held != null && held.kind() == info.effectiveTool()) {
+                int power = held.tier() + (held.kind() == ToolKind.BROADAXE ? 1 : 0);
+                speedMultiplier = 1 << power;
+            }
+        }
+        return info.hardnessSeconds() / speedMultiplier;
+    }
+
     /** True if {@code item} is one of the swords (the combat tool). */
     public static boolean isSword(BlockType item) {
         ToolStats stats = TOOLS.get(item);
         return stats != null && stats.kind() == ToolKind.SWORD;
     }
 
+    /** True if the held stack is a sword (vanilla or Tinkers'). */
+    public static boolean isSword(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) return tool.kind == ToolKind.SWORD;
+        return isSword(stack.type());
+    }
+
     /** True if {@code item} is a hammer (the 3x3 area-mining tool). */
     public static boolean isHammer(BlockType item) {
         ToolStats stats = TOOLS.get(item);
         return stats != null && stats.kind() == ToolKind.HAMMER;
+    }
+
+    /** True if the held stack is a hammer (vanilla or Tinkers'). */
+    public static boolean isHammer(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null) return tool.kind == ToolKind.HAMMER;
+        return isHammer(stack.type());
+    }
+
+    /** True if {@code item} is a hoe (used to till dirt into farmland via right-click). */
+    public static boolean isHoe(BlockType item) {
+        return item != null && item.isHoe();
     }
 
     /**
@@ -406,5 +605,23 @@ public final class Mining {
             };
         }
         return 1f;
+    }
+
+    /**
+     * Hit damage for the held {@link ItemStack}. Tinkers' swords use the head
+     * material's mining tier (wood/stone/iron/diamond → 4/5/6/7).
+     */
+    public static float attackDamage(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return 1f;
+        TinkersItem.Tool tool = stack.tinkersTool();
+        if (tool != null && tool.kind == ToolKind.SWORD) {
+            return switch (tool.miningTier()) {
+                case TIER_WOOD -> 4f;
+                case TIER_STONE -> 5f;
+                case TIER_IRON -> 6f;
+                default -> tool.miningTier() >= TIER_DIAMOND ? 7f : 4f;
+            };
+        }
+        return attackDamage(stack.type());
     }
 }

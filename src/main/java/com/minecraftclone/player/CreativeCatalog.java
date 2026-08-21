@@ -2,6 +2,9 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * The creative-mode item catalog, organized into Minecraft-style tabs. Each
  * tab lists every item in that category; the creative inventory screen renders
@@ -28,6 +31,14 @@ public final class CreativeCatalog {
                     BlockType.PUMPKIN,
                     BlockType.NETHERRACK, BlockType.SOUL_SAND, BlockType.GLOWSTONE, BlockType.END_STONE, BlockType.OBSIDIAN,
                     BlockType.NETHER_PORTAL, BlockType.END_PORTAL,
+                    // Phase 0: farming structures
+                    BlockType.FARMLAND, BlockType.FARMLAND_WET,
+                    BlockType.CLAY,
+                    // Phase 0.5: Tinkers' Construct structure blocks
+                    BlockType.SEARED_BRICK, BlockType.SEARED_GLASS, BlockType.SEARED_TANK,
+                    BlockType.SMELTERY_DRAIN, BlockType.SMELTERY_CONTROLLER,
+                    BlockType.CASTING_TABLE, BlockType.CASTING_BASIN,
+                    BlockType.PART_BUILDER, BlockType.TOOL_STATION,
             }),
             new Tab("Decoration", new BlockType[]{
                     BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,
@@ -35,11 +46,16 @@ public final class CreativeCatalog {
                     BlockType.MUSHROOM_RED, BlockType.MUSHROOM_BROWN, BlockType.VINE,
                     BlockType.BAMBOO, BlockType.LILY_PAD, BlockType.SEAWEED, BlockType.DOOR, BlockType.TRAPDOOR,
                     BlockType.BED, BlockType.BED_HEAD,
+                    // Phase 0: crops (all stages) and sugar cane as decoration
+                    BlockType.WHEAT_STAGE_1, BlockType.WHEAT_STAGE_2, BlockType.WHEAT_STAGE_3, BlockType.WHEAT_STAGE_4,
+                    BlockType.POTATO_CROP_1, BlockType.POTATO_CROP_2, BlockType.POTATO_CROP_3,
+                    BlockType.CARROT_CROP_1, BlockType.CARROT_CROP_2, BlockType.CARROT_CROP_3,
+                    BlockType.SUGAR_CANE,
             }),
             new Tab("Materials", new BlockType[]{
                     BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
                     BlockType.COAL, BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
-                    BlockType.WOOL,
+                    BlockType.WOOL, BlockType.BONES, BlockType.BONE_MEAL,
                     // GTNH Ores - early game
                     BlockType.COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.COPPER_DUST, BlockType.COPPER_INGOT,
                     BlockType.TIN_ORE, BlockType.CRUSHED_TIN, BlockType.TIN_DUST, BlockType.TIN_INGOT,
@@ -154,13 +170,7 @@ public final class CreativeCatalog {
                     BlockType.GRAPHITE_ORE, BlockType.CRUSHED_GRAPHITE,
                     BlockType.PYROCHLORE_ORE, BlockType.CRUSHED_PYROCHLORE,
             }),
-            new Tab("Tools", new BlockType[]{
-                    BlockType.WOOD_PICKAXE, BlockType.STONE_PICKAXE, BlockType.IRON_PICKAXE, BlockType.DIAMOND_PICKAXE,
-                    BlockType.WOOD_AXE, BlockType.STONE_AXE, BlockType.IRON_AXE, BlockType.DIAMOND_AXE,
-                    BlockType.WOOD_SHOVEL, BlockType.STONE_SHOVEL, BlockType.IRON_SHOVEL, BlockType.DIAMOND_SHOVEL,
-                    BlockType.WOOD_HAMMER, BlockType.STONE_HAMMER, BlockType.IRON_HAMMER, BlockType.DIAMOND_HAMMER,
-                    BlockType.WOOD_BROADAXE, BlockType.STONE_BROADAXE, BlockType.IRON_BROADAXE, BlockType.DIAMOND_BROADAXE,
-            }),
+            new Tab("Tools", buildToolsTab()),
             new Tab("Combat", new BlockType[]{
                     BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD,
             }),
@@ -176,8 +186,70 @@ public final class CreativeCatalog {
             new Tab("Food", new BlockType[]{
                     BlockType.APPLE, BlockType.BERRIES,
                     BlockType.RAW_PORKCHOP, BlockType.RAW_BEEF, BlockType.MUTTON,
+                    // Phase 0: farming food items + canteen
+                    BlockType.SEEDS, BlockType.WHEAT, BlockType.BREAD,
+                    BlockType.POTATO, BlockType.POTATO_COOKED, BlockType.CARROT,
+                    BlockType.BONE_MEAL,
+                    BlockType.CLAY_BALL, BlockType.CLAY_CANTEEN, BlockType.CLAY_CANTEEN_FULL,
             }),
     };
+
+    /**
+     * Builds the Tools tab item array with all vanilla tools.
+     * Tinkers' Construct parts and assembled tools are dynamic (infinite
+     * material combinations) and will get their own creative tab later.
+     */
+    private static BlockType[] buildToolsTab() {
+        List<BlockType> list = new ArrayList<>();
+        // Vanilla tools
+        list.add(BlockType.WOOD_PICKAXE);    list.add(BlockType.STONE_PICKAXE);
+        list.add(BlockType.IRON_PICKAXE);    list.add(BlockType.DIAMOND_PICKAXE);
+        list.add(BlockType.WOOD_AXE);        list.add(BlockType.STONE_AXE);
+        list.add(BlockType.IRON_AXE);        list.add(BlockType.DIAMOND_AXE);
+        list.add(BlockType.WOOD_SHOVEL);     list.add(BlockType.STONE_SHOVEL);
+        list.add(BlockType.IRON_SHOVEL);     list.add(BlockType.DIAMOND_SHOVEL);
+        list.add(BlockType.WOOD_HAMMER);     list.add(BlockType.STONE_HAMMER);
+        list.add(BlockType.IRON_HAMMER);     list.add(BlockType.DIAMOND_HAMMER);
+        list.add(BlockType.WOOD_BROADAXE);   list.add(BlockType.STONE_BROADAXE);
+        list.add(BlockType.IRON_BROADAXE);   list.add(BlockType.DIAMOND_BROADAXE);
+        list.add(BlockType.WOOD_HOE);        list.add(BlockType.STONE_HOE);
+        list.add(BlockType.IRON_HOE);        list.add(BlockType.DIAMOND_HOE);
+        return list.toArray(new BlockType[0]);
+    }
+
+    /**
+     * Items shown in the creative grid: the selected tab when {@code query} is
+     * blank, otherwise every catalog item whose display name matches (all tabs,
+     * de-duplicated). Words are ANDed, case-insensitive, so "small copper"
+     * hits Small Copper Ore and misses Copper Ingot.
+     */
+    public static BlockType[] itemsFor(int tab, String query) {
+        if (tab < 0 || tab >= TABS.length) return new BlockType[0];
+        BlockType[] tabItems = TABS[tab].items();
+        if (query == null || query.isBlank()) return tabItems;
+        List<BlockType> out = new ArrayList<>();
+        java.util.HashSet<BlockType> seen = new java.util.HashSet<>();
+        for (Tab t : TABS) {
+            for (BlockType type : t.items()) {
+                if (seen.add(type) && matches(type, query)) out.add(type);
+            }
+        }
+        return out.toArray(new BlockType[0]);
+    }
+
+    /** True if every whitespace-separated word of {@code query} appears in the item's name. */
+    public static boolean matches(BlockType type, String query) {
+        if (type == null) return false;
+        String q = query == null ? "" : query.trim().toLowerCase();
+        if (q.isEmpty()) return true;
+        String name = type.displayName().toLowerCase();
+        String raw = type.name().toLowerCase().replace('_', ' ');
+        for (String word : q.split("\\s+")) {
+            if (word.isEmpty()) continue;
+            if (!name.contains(word) && !raw.contains(word)) return false;
+        }
+        return true;
+    }
 
     private CreativeCatalog() {
     }

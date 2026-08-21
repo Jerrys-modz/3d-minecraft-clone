@@ -1,6 +1,7 @@
 package com.minecraftclone.player;
 
 import com.minecraftclone.GameMode;
+import com.minecraftclone.Difficulty;
 import com.minecraftclone.engine.Camera;
 import com.minecraftclone.engine.Input;
 import com.minecraftclone.engine.KeyBindings;
@@ -95,6 +96,11 @@ public class Player {
     private boolean viewBobbing = true;
     private float bobPhase = 0f;
     private boolean sleeping = false;
+    /** True when the player has slept in a bed; death uses this instead of world spawn. */
+    private boolean spawnSet = false;
+    private int spawnX;
+    private int spawnY;
+    private int spawnZ;
 
     public void setKeyBinds(KeyBindings keyBinds) {
         this.keyBinds = keyBinds;
@@ -152,6 +158,62 @@ public class Player {
     }
 
     /**
+     * Death respawn at an exact block (a bed). Unlike {@link #respawn} this
+     * does not search for the surface - the caller already verified the bed.
+     */
+    public void respawnAt(float x, float y, float z) {
+        teleportTo(x, y, z);
+        stats.reset();
+        landingArmed = false;
+    }
+
+    /** Records the bed the player last slept in (overworld block coords of the foot). */
+    public void setSpawnPoint(int x, int y, int z) {
+        spawnSet = true;
+        spawnX = x;
+        spawnY = y;
+        spawnZ = z;
+    }
+
+    public void clearSpawnPoint() {
+        spawnSet = false;
+    }
+
+    public boolean hasSpawnPoint() {
+        return spawnSet;
+    }
+
+    public int spawnX() { return spawnX; }
+    public int spawnY() { return spawnY; }
+    public int spawnZ() { return spawnZ; }
+
+    /**
+     * Clears inventory, stats and flight so Save and Quit (or loading another
+     * world in the same session) starts empty, matching a process restart.
+     */
+    public void resetSession() {
+        inventory.clear();
+        inventory.clearArmor();
+        durability.reset();
+        stats.reset();
+        spaceHeat.clear();
+        flying = false;
+        sleeping = false;
+        velocity.set(0, 0, 0);
+        lastFallImpactSpeed = 0f;
+        onGround = false;
+        wasOnGround = true;
+        landingArmed = false;
+        submerged = false;
+        inWater = false;
+        swimming = false;
+        gameMode = GameMode.SURVIVAL;
+        sprintLatched = false;
+        bobPhase = 0f;
+        spawnSet = false;
+    }
+
+    /**
      * Teleports the player to the given absolute position, zeroing all velocity.
      * Unlike spawn/respawn this doesn't probe the world for a surface - the
      * caller (dimension teleporting) has already picked a safe landing spot.
@@ -191,6 +253,17 @@ public class Player {
 
     public boolean isFlying() {
         return flying;
+    }
+
+    /** Restores flight from a save. Creative/spectator keep it; survival ignores it. */
+    public void setFlying(boolean flying) {
+        if (gameMode.isSpectator()) {
+            this.flying = true;
+        } else if (gameMode.isCreative()) {
+            this.flying = flying;
+        } else {
+            this.flying = false;
+        }
     }
 
     /** Overrides mouse-look sensitivity (from the settings menu). */
@@ -269,11 +342,21 @@ public class Player {
     }
 
     /**
-     * @param coldFactor 0..1 how cold the current weather is (snow/blizzard); the
+     * @param coldFactor  0..1 how cold the current weather is (snow/blizzard); the
      *                    player's shelter and nearby fires cut it down to the
      *                    effective coldness that drains hunger/freezes (see PlayerStats).
      */
     public void update(float dt, Input input, World world, float coldFactor) {
+        update(dt, input, world, coldFactor, Difficulty.NORMAL);
+    }
+
+    /**
+     * @param coldFactor  0..1 how cold the current weather is (snow/blizzard); the
+     *                    player's shelter and nearby fires cut it down to the
+     *                    effective coldness that drains hunger/freezes (see PlayerStats).
+     * @param difficulty  the loaded world's difficulty (hunger drain, regen).
+     */
+    public void update(float dt, Input input, World world, float coldFactor, Difficulty difficulty) {
         updateLook(input);
         // Skip movement while sleeping - player is in bed, time is being skipped
         if (sleeping) {
@@ -346,7 +429,7 @@ public class Player {
             }
             if (fireNearby(world)) coldness *= 0.15f;
             coldness *= Armor.coldMultiplier(inventory.totalArmorWarmth());
-            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness);
+            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness, difficulty);
         }
         lastFallImpactSpeed = 0f;
     }

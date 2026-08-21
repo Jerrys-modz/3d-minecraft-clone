@@ -35,6 +35,19 @@ public final class Bed {
     }
 
     /**
+     * World-space of the foot half of the bed at {@code (x,y,z)}. Clicking either
+     * half resolves to the same foot, so a spawn point stored from the pillow
+     * still finds the bed after reload.
+     */
+    public static int[] footPos(BlockAccessor world, int x, int y, int z) {
+        BlockType cur = world.getBlock(x, y, z);
+        if (!isBed(cur)) return new int[]{x, y, z};
+        if (!isHead(cur)) return new int[]{x, y, z};
+        byte orientation = world.getBlockOrientation(x, y, z);
+        return getOtherHalf(world, x, y, z, orientation);
+    }
+
+    /**
      * Gets the second position of the bed (the other half).
      * Returns the position of the head given foot position, or vice versa.
      */

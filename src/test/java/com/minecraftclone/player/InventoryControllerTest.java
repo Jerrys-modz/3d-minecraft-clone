@@ -2,6 +2,9 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Chest;
+import com.minecraftclone.world.tinkers.TinkersItem;
+import com.minecraftclone.world.tinkers.ToolPartType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -61,6 +64,39 @@ class InventoryControllerTest {
         InventoryController c = new InventoryController(inv, grid);
         assertEquals(BlockType.STICK, Crafting.match(grid.snapshot()).output());
         c.click(InventoryController.OUTPUT_SLOT, false, false);
+        assertEquals(BlockType.STICK, c.cursorType());
+        assertEquals(4, c.cursorCount());
+        assertTrue(grid.isEmpty());
+    }
+
+    @Test
+    void inventoryTwoByTwoStillCraftsAfterSwitchingFromCraftingTable() {
+        Inventory inv = new Inventory();
+        CraftingGrid playerGrid = new CraftingGrid();
+        ContainerGui inventoryGui = new ContainerGui(ContainerGui.Kind.INVENTORY, inv, playerGrid, null);
+        InventoryController c = new InventoryController(inventoryGui);
+        c.setGui(new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, inv, playerGrid, null));
+        c.setGui(inventoryGui);
+        playerGrid.set(0, BlockType.PLANKS);
+        playerGrid.set(2, BlockType.PLANKS);
+        c.click(inventoryGui.outputSlotId(), false, false);
+        assertEquals(BlockType.STICK, c.cursorType());
+        assertEquals(4, c.cursorCount());
+        assertTrue(playerGrid.isEmpty());
+    }
+
+    @Test
+    void draggingOffTheOutputSlotStillCrafts() {
+        Inventory inv = new Inventory();
+        CraftingGrid grid = new CraftingGrid();
+        grid.set(0, BlockType.PLANKS);
+        grid.set(2, BlockType.PLANKS);
+        InventoryController c = new InventoryController(inv, grid);
+        int output = InventoryController.OUTPUT_SLOT;
+        int armor = ContainerGui.ARMOR_START;
+        c.beginDrag(output, false);
+        c.continueDrag(armor);
+        c.endDrag(armor);
         assertEquals(BlockType.STICK, c.cursorType());
         assertEquals(4, c.cursorCount());
         assertTrue(grid.isEmpty());
@@ -357,5 +393,110 @@ class InventoryControllerTest {
         assertEquals(BlockType.PLANKS, grid.get(2), "grid cell 2 should have plank");
         assertEquals(BlockType.PLANKS, grid.get(3), "grid cell 3 should have plank");
         assertFalse(c.hasCursorItem(), "cursor should be empty after placing all 4 items");
+    }
+
+    @Test
+    void pickCreativeKeepsTinkersCursorWhenInventoryIsFull() {
+        Inventory inv = new Inventory();
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT));
+        inv.setStack(0, part);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(0, false, false);
+        for (int i = 0; i < Inventory.SIZE; i++) inv.setSlot(i, BlockType.DIRT, 1);
+        c.pickCreativeItem(BlockType.STONE, false);
+        assertTrue(c.cursor().isTinkers(), "unique Tinkers item must stay on the cursor when the bag is full");
+        assertEquals(ToolPartType.PICK_HEAD, c.cursor().tinkersPart().shape);
+    }
+
+    @Test
+    void pickCreativeReturnsTinkersCursorWhenThereIsRoom() {
+        Inventory inv = new Inventory();
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.AXE_HEAD, BlockType.IRON_INGOT));
+        inv.setStack(0, part);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(0, false, false);
+        c.pickCreativeItem(BlockType.STONE, false);
+        assertEquals(BlockType.STONE, c.cursorType());
+        assertEquals(64, c.cursorCount());
+        boolean found = false;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inv.stackOf(i).isTinkers()) found = true;
+        }
+        assertTrue(found, "the Tinkers part should be returned to the bag");
+    }
+
+    @Test
+    void pickCreativeDoesNotOverwriteADifferentTinkersToolOfTheSameSentinel() {
+        Inventory inv = new Inventory();
+        ItemStack tool = ItemStack.tinkersTool(new TinkersItem.Tool(
+                com.minecraftclone.world.Mining.ToolKind.PICKAXE,
+                java.util.List.of(
+                        new TinkersItem.ToolLayer(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT),
+                        new TinkersItem.ToolLayer(ToolPartType.TOOL_ROD, BlockType.PLANKS))));
+        inv.setStack(0, tool);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(0, false, false);
+        c.pickCreativeItem(BlockType.TINKERS_TOOL, false);
+        // Sentinel type matches, but payloads differ — the held tool must be
+        // returned (bag has room) rather than silently overwritten.
+        assertTrue(c.cursor().isEmpty() || c.cursorType() == BlockType.TINKERS_TOOL);
+        boolean found = false;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inv.stackOf(i).isTinkersTool()) found = true;
+        }
+        assertTrue(found, "the assembled tool must be returned to the bag, not discarded");
+    }
+
+    @Test
+    void returnCursorKeepsTinkersItemWhenInventoryIsFull() {
+        Inventory inv = new Inventory();
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT));
+        inv.setStack(0, part);
+        for (int i = 1; i < Inventory.SIZE; i++) inv.setSlot(i, BlockType.DIRT, 1);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(0, false, false);
+        inv.setSlot(0, BlockType.DIRT, 1);
+        c.returnCursorToInventory();
+        assertTrue(c.cursor().isTinkers(), "unique Tinkers item must stay on the cursor when the bag is full");
+        assertTrue(inv.isEmpty(0) || inv.typeOf(0) == BlockType.DIRT);
+        boolean found = false;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inv.stackOf(i).isTinkers()) found = true;
+        }
+        assertFalse(found, "the part must not be forced into a full bag");
+    }
+
+    @Test
+    void clickDoesNotDepositTinkersIntoAChest() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+        inv.setStack(0, ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.AXE_HEAD, BlockType.IRON_INGOT)));
+        c.click(0, false, false);
+        c.click(ContainerGui.CONTAINER_START, false, false);
+        assertTrue(c.hasCursorItem(), "cursor must keep the Tinkers part");
+        assertTrue(c.cursor().isTinkers());
+        assertTrue(chest.isEmpty(0), "chest must not receive a payload-stripped sentinel");
+    }
+
+    @Test
+    void shiftClickHopsTinkersBetweenHotbarAndMainInsteadOfChest() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.TOOL_ROD, BlockType.PLANKS));
+        inv.setStack(0, part);
+        c.click(0, false, true);
+        assertTrue(chest.isEmpty(0), "Tinkers parts cannot be shift-clicked into a chest");
+        assertTrue(inv.stackOf(Inventory.HOTBAR_SIZE).isTinkersPart(),
+                "the part should hop from hotbar to the first main-inventory slot");
+        assertTrue(inv.isEmpty(0));
     }
 }

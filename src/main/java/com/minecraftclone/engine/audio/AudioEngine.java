@@ -42,6 +42,7 @@ public class AudioEngine {
     private final Map<SoundMaterial, Integer> breakBuffers = new EnumMap<>(SoundMaterial.class);
     private final Map<SoundMaterial, Integer> placeBuffers = new EnumMap<>(SoundMaterial.class);
     private final Map<SoundMaterial, Integer> stepBuffers = new EnumMap<>(SoundMaterial.class);
+    private final Map<SoundMaterial, Integer> hitBuffers = new EnumMap<>(SoundMaterial.class);
     private final java.util.List<Integer> allBuffers = new java.util.ArrayList<>();
 
     private final Map<SoundCategory, Float> categoryVolumes = new EnumMap<>(SoundCategory.class);
@@ -92,6 +93,7 @@ public class AudioEngine {
                 breakBuffers.put(m, upload(sounds.get(m, BlockAction.BREAK)));
                 placeBuffers.put(m, upload(sounds.get(m, BlockAction.PLACE)));
                 stepBuffers.put(m, upload(sounds.get(m, BlockAction.STEP)));
+                hitBuffers.put(m, upload(sounds.get(m, BlockAction.HIT)));
             }
 
             enabled = true;
@@ -162,6 +164,7 @@ public class AudioEngine {
             case BREAK -> breakBuffers;
             case PLACE -> placeBuffers;
             case STEP -> stepBuffers;
+            case HIT -> hitBuffers;
         };
         playPositional(table.get(material), categoryFor(action), x, y, z, volume);
     }

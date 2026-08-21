@@ -26,6 +26,11 @@ class SoundMaterialTest {
         assertEquals(SoundMaterial.GLASS, SoundMaterial.of(BlockType.GLASS));
         assertEquals(SoundMaterial.LEAVES, SoundMaterial.of(BlockType.LEAVES));
         assertEquals(SoundMaterial.LEAVES, SoundMaterial.of(BlockType.TALL_GRASS));
+        assertEquals(SoundMaterial.WOOD, SoundMaterial.of(BlockType.CHEST));
+        assertEquals(SoundMaterial.WOOD, SoundMaterial.of(BlockType.BARREL));
+        assertEquals(SoundMaterial.STONE, SoundMaterial.of(BlockType.COPPER_ORE));
+        assertEquals(SoundMaterial.STONE, SoundMaterial.of(BlockType.NETHERRACK));
+        assertEquals(SoundMaterial.DIRT, SoundMaterial.of(BlockType.FARMLAND));
     }
 
     @Test

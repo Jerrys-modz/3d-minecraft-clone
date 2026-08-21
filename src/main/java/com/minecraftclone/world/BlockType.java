@@ -70,7 +70,7 @@ public enum BlockType {
     MUSHROOM_BROWN(56, false, true, 36),
     VINE(57, false, true, 39),
     CHERRY_LEAVES(58, true, true, 40, 40, 40),
-    PACKED_ICE(59, true, false, 41),
+    PACKED_ICE(59, true, false, 41, 41, 41),
     BAMBOO(60, false, true, 42),
     LILY_PAD(61, false, true, 43),
     PUMPKIN(62, true, false, 44, 44, 44),
@@ -81,7 +81,7 @@ public enum BlockType {
     TRAPDOOR_OPEN(72, false, true, 47),
     CRAFTING_TABLE(73, true, false, 48, 48, 48), // workbench: right-click opens the 3x3 crafting GUI
     ADVANCED_CRAFTING_TABLE(137, true, false, 48, 48, 48), // advanced workbench: right-click opens the 5x5 crafting GUI
-    CHEST(87, true, false, 50, 50, 50),          // storage: right-click opens a 27-slot container GUI (54 when doubled)
+    CHEST(87, true, false, TextureAtlas.CHEST_TOP_TILE, TextureAtlas.CHEST_SIDE_TILE, TextureAtlas.CHEST_BOTTOM_TILE, TextureAtlas.CHEST_TILE, 0, 0), // oak chest: lock faces the player, 27 slots (54 when doubled)
     BARREL(88, true, false, 51, 51, 51),         // storage: cheaper single 27-slot container, never doubles
 
     // Dimension blocks: Nether terrain, End terrain, and the portal blocks that
@@ -606,7 +606,151 @@ public enum BlockType {
     // Gem items: smelted outputs for the gemstone ore chain (inventory-only, no atlas tile).
     RUBY(416, 0),          // smelted from ruby ore / crushed ruby
     SAPPHIRE(417, 0),      // smelted from sapphire ore / crushed sapphire
-    GREEN_SAPPHIRE(418, 0); // smelted from green sapphire ore / crushed green sapphire
+    GREEN_SAPPHIRE(418, 0), // smelted from green sapphire ore / crushed green sapphire
+
+    // =========================================================================
+    // Phase 0: Deep Survival Foundation
+    // =========================================================================
+
+    // --- Farming world blocks (atlas tiles 220-231) ---
+    // Farmland: tilled dirt that crops grow on (top = tile 220, sides/bottom = dirt tile 3).
+    // Tile 2 is the grass side (dirt + green fringe) — never use it for farmland sides.
+    FARMLAND(419, true, false, 220, 3, 3),
+
+    // Wheat: 4 growth stages (cross-shaped billboard tiles 221-224).
+    WHEAT_STAGE_1(420, false, true, 221),
+    WHEAT_STAGE_2(421, false, true, 222),
+    WHEAT_STAGE_3(422, false, true, 223),
+    WHEAT_STAGE_4(423, false, true, 224),  // mature, ready to harvest
+
+    // Potato: 3 growth stages (cross tiles 225-227).
+    POTATO_CROP_1(424, false, true, 225),
+    POTATO_CROP_2(425, false, true, 226),
+    POTATO_CROP_3(426, false, true, 227),  // mature
+
+    // Carrot: 3 growth stages (cross tiles 228-230).
+    CARROT_CROP_1(427, false, true, 228),
+    CARROT_CROP_2(428, false, true, 229),
+    CARROT_CROP_3(429, false, true, 230),  // mature
+
+    // Sugar cane: single cross tile (231), grows in stacked columns.
+    SUGAR_CANE(430, false, true, 231),
+
+    // --- Farming inventory items ---
+    SEEDS(431, 0),          // wheat seeds - dropped by breaking tall grass; plant on farmland
+    WHEAT(432, 0),          // harvested wheat - craft 3 in a row into BREAD
+    BREAD(433, 4),          // baked bread: restores 4 hunger
+    POTATO(434, 3),         // raw potato: restores 3 hunger; smelt to POTATO_COOKED
+    POTATO_COOKED(435, 5),  // baked potato: restores 5 hunger
+    CARROT(436, 3),         // carrot: restores 3 hunger
+
+    // --- Thirst system ---
+    CLAY_CANTEEN(437, 0),       // empty clay canteen - right-click a water source to fill
+    CLAY_CANTEEN_FULL(438, 0),  // full canteen - right-click (or use) to restore thirst
+
+    // --- Hoe tools: till DIRT / GRASS into FARMLAND ---
+    WOOD_HOE(439, 0),
+    STONE_HOE(440, 0),
+    IRON_HOE(441, 0),
+    DIAMOND_HOE(442, 0),
+
+    // --- Clay (terrain block + item drop) ---
+    /** Blue-grey clay block; spawns on river/lake beds. Drops CLAY_BALL when broken. */
+    CLAY(443, true, false, 232, 232, 232),
+    /** Item dropped from CLAY blocks; 4 arranged in a 2×2 craft CLAY_CANTEEN. */
+    CLAY_BALL(444, 0),
+
+    // --- Hydrated farmland ---
+    /**
+     * Moist farmland (within 4 blocks of a water source).
+     * Visually darker than dry FARMLAND. Crops only grow on this variant.
+     * Reverts to dry FARMLAND when no water is nearby, and to DIRT if trampled.
+     */
+    FARMLAND_WET(445, true, false, 233, 3, 3),
+
+    // =========================================================================
+    // Phase 0.5 — Tinkers' Construct: Smeltery multi-block + crafting stations
+    // =========================================================================
+
+    // --- Smeltery structural blocks (atlas tiles 234-240) ---
+
+    /**
+     * Primary structural block for the Smeltery.  Dark brownish-black fired
+     * brick with orange mortar highlights.  Tile 234.
+     */
+    SEARED_BRICK(446, true, false, 234, 234, 234),
+
+    /**
+     * Transparent window block for the Smeltery shell; lets players see the
+     * molten metal inside without opening the structure.  Tile 235.
+     */
+    SEARED_GLASS(447, true, true, 235, 235, 235),
+
+    /**
+     * Liquid-storage block for the Smeltery shell; holds extra molten metal
+     * capacity (each tank block adds capacity in the future smelting logic).
+     * Tile 236.
+     */
+    SEARED_TANK(448, true, false, 236, 236, 236),
+
+    /**
+     * Drain block on a Smeltery wall; used (in future) to pour molten metal
+     * into Casting Tables / Casting Basins below.  Tile 237.
+     */
+    SMELTERY_DRAIN(449, true, false, 237, 237, 237),
+
+    /**
+     * Smeltery controller — the "brain" of the multi-block.  Directional
+     * (faces the front wall like a furnace).  Inactive tile 238 (dark void
+     * hole), active tile 239 (glowing orange mouth, lit when formed).
+     * Atlas: top/side/bottom = 238, front = 238, litFront = 239.
+     */
+    SMELTERY_CONTROLLER(450, true, false, 238, 238, 238, 238, 239, 0, 0),
+
+    // --- Tinkers' Construct crafting station blocks (atlas tiles 240-244) ---
+
+    /**
+     * Casting Table — a flat-topped slab where poured metal solidifies into
+     * tool parts using a clay cast.  Tile 240.
+     */
+    CASTING_TABLE(451, true, false, 240, 240, 240),
+
+    /**
+     * Casting Basin — a deeper mould for large tool parts (large plates,
+     * tough rods).  Tile 241.
+     */
+    CASTING_BASIN(452, true, false, 241, 241, 241),
+
+    /**
+     * Part Builder — the workbench for shaping raw material (planks, stone,
+     * metal ingots) into tool parts using a pattern.  Tile 242.
+     */
+    PART_BUILDER(453, true, false, 242, 242, 242),
+
+    /**
+     * Tool Station — where assembled tool parts are combined into a finished
+     * modular Tinkers' tool.  Tile 243.
+     */
+    TOOL_STATION(454, true, false, 243, 243, 243),
+
+    /**
+     * Bone meal — crushed bones used to instantly grow crops and sprout
+     * tall grass / flowers on grass. Crafted shapeless: 1 {@link #BONES} → 3.
+     */
+    BONE_MEAL(455, 0),
+
+    // -----------------------------------------------------------------------
+    // Tinkers' Construct sentinels: two inventory-item slots that carry the
+    // real part/tool data in a TinkersItem payload inside ItemStack.
+    // All materials are supported dynamically via TinkersRegistry — no per-
+    // material enum entries are needed.
+    // -----------------------------------------------------------------------
+
+    /** Sentinel for any Tinkers' tool part; the real data lives in {@code ItemStack.tinkersItem()}. */
+    TINKERS_PART(500, 0),
+
+    /** Sentinel for any assembled Tinkers' modular tool; the real data lives in {@code ItemStack.tinkersItem()}. */
+    TINKERS_TOOL(501, 0);
 
     public final short id;
     public final boolean solid;
@@ -814,9 +958,12 @@ public enum BlockType {
         return solid;
     }
 
-    /** True if this block has a distinct front face that faces its orientation (e.g. a furnace). */
+    /** True if this block has a distinct front face that faces its orientation (e.g. a furnace).
+     *  Also returns true when only the lit/active front tile differs from the side tile —
+     *  this covers blocks like {@code SMELTERY_CONTROLLER} whose inactive front is the same
+     *  as the side tile but whose active (lit) front is distinct and must be oriented. */
     public boolean isDirectional() {
-        return frontTile != sideTile;
+        return frontTile != sideTile || litFrontTile != sideTile;
     }
 
     public boolean isEdible() {
@@ -909,9 +1056,14 @@ public enum BlockType {
         return this == AIR || isFluid();
     }
 
-    /** True if this block is drawn in the see-through translucent render pass (glass, ice). */
+    /** True if this block is drawn in the see-through translucent render pass (glass, ice, seared glass). */
     public boolean isTranslucent() {
-        return this == GLASS || this == ICE;
+        return this == GLASS || this == ICE || this == SEARED_GLASS;
+    }
+
+    /** Regular ice (not packed). Water culls against it so you don't see water walls through a frozen sheet. */
+    public boolean isIce() {
+        return this == ICE;
     }
 
     /**
@@ -933,6 +1085,11 @@ public enum BlockType {
     /** True for a functional trapdoor (closed solid panel, or open walk-through). */
     public boolean isTrapdoor() {
         return this == TRAPDOOR || this == TRAPDOOR_OPEN;
+    }
+
+    /** True for oak or cherry leaf cubes. */
+    public boolean isLeaves() {
+        return this == LEAVES || this == CHERRY_LEAVES;
     }
 
     /** True for a stepped stair block (stone or planks). */
@@ -958,6 +1115,66 @@ public enum BlockType {
     /** True for any partial-cube block that needs its own meshing (stairs, fences). */
     public boolean isPartialCube() {
         return stair || fence;
+    }
+
+    /** True for any crop world-block (any growth stage of wheat, potato, or carrot, plus sugar cane). */
+    public boolean isCrop() {
+        return this == WHEAT_STAGE_1 || this == WHEAT_STAGE_2 || this == WHEAT_STAGE_3 || this == WHEAT_STAGE_4
+                || this == POTATO_CROP_1 || this == POTATO_CROP_2 || this == POTATO_CROP_3
+                || this == CARROT_CROP_1 || this == CARROT_CROP_2 || this == CARROT_CROP_3
+                || this == SUGAR_CANE;
+    }
+
+    /** True for items that can be planted on FARMLAND (seeds, raw potato, raw carrot). */
+    public boolean isPlantable() {
+        return this == SEEDS || this == POTATO || this == CARROT;
+    }
+
+    /** True for any hoe item (used to till DIRT/GRASS into FARMLAND). */
+    public boolean isHoe() {
+        return this == WOOD_HOE || this == STONE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
+    }
+
+    /** True for bone meal (right-click crops to grow them, or grass to sprout plants). */
+    public boolean isBoneMeal() {
+        return this == BONE_MEAL;
+    }
+
+    /** True for either variant of tilled farmland (dry or hydrated). */
+    public boolean isFarmland() {
+        return this == FARMLAND || this == FARMLAND_WET;
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 0.5 — Tinkers' Construct helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * True for any block that can form the shell of a Smeltery multi-block
+     * (brick, glass, tank, drain, or controller).
+     */
+    public boolean isSearedBlock() {
+        return this == SEARED_BRICK || this == SEARED_GLASS
+            || this == SEARED_TANK  || this == SMELTERY_DRAIN
+            || this == SMELTERY_CONTROLLER;
+    }
+
+    /**
+     * True for the {@link #TINKERS_PART} sentinel — the item is a Tinkers'
+     * tool part whose real data (shape + material) lives in the
+     * {@code TinkersItem.Part} carried by its {@code ItemStack}.
+     */
+    public boolean isTinkersToolPart() {
+        return this == TINKERS_PART;
+    }
+
+    /**
+     * True for the {@link #TINKERS_TOOL} sentinel — the item is an assembled
+     * Tinkers' modular tool whose real data (layers + durability) lives in the
+     * {@code TinkersItem.Tool} carried by its {@code ItemStack}.
+     */
+    public boolean isTinkersTool() {
+        return this == TINKERS_TOOL;
     }
 
     /**

@@ -34,7 +34,19 @@ public class Mob {
         // pelts that the higher fur-armor tiers are made from, and being wild
         // animals (not undead), they stay out by day.
         WOLF(0.8f, 0.8f, 1.4f, 14f, true, 3f, false),
-        POLAR_BEAR(1.4f, 1.2f, 1.4f, 30f, true, 6f, false);
+        POLAR_BEAR(1.4f, 1.2f, 1.4f, 30f, true, 6f, false),
+        // Phase 0 hostile mobs:
+        // Spider: wide and fast, active both day and night (unlike undead it
+        // doesn't burn at dawn). Wall-climbing is flagged here but implemented
+        // only as a speed boost toward the player; true surface-clinging is a
+        // future physics extension.
+        SPIDER(1.4f, 0.9f, 2.8f, 16f, true, 3f, false),
+        // Creeper: slow-moving hostile that deals high contact damage via the
+        // standard melee path (attackDamage=10).  In vanilla Tinkers' Construct
+        // a Creeper explodes on close contact; explosion support is a planned
+        // future feature.  dawnDespawns=true so it fades at sunrise rather than
+        // lingering in daylight.
+        CREEPER(0.6f, 1.8f, 1.6f, 20f, true, 10f, true);
 
         public final float width;     // x/z footprint
         public final float height;    // full body height
@@ -152,6 +164,8 @@ public class Mob {
             case SKELETON -> BlockType.BONES;
             case WOLF -> BlockType.WOLF_PELT;
             case POLAR_BEAR -> BlockType.BEAR_HIDE;
+            case SPIDER -> BlockType.COAL;        // spiders drop string in vanilla; coal is the closest available item
+            case CREEPER -> BlockType.COAL;       // creepers drop gunpowder; coal is the placeholder
         };
     }
 

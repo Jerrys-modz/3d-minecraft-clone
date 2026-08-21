@@ -57,4 +57,45 @@ class SoundsTest {
                 "splash (" + splash.length + " samples) should run well longer than a footstep tap ("
                         + sandStep.length + " samples), not read as one more dry crunch");
     }
+
+    /**
+     * Opening a chest used to play the generic UI_OPEN beep. The lid creak
+     * has to last long enough (and be a distinct buffer) that it can't be
+     * mistaken for a 90ms menu chirp.
+     */
+    @Test
+    void chestOpenIsALongerWoodenCreakThanTheUiBeep() {
+        Sounds sounds = new Sounds();
+        short[] open = sounds.get(SoundEvent.CHEST_OPEN);
+        short[] close = sounds.get(SoundEvent.CHEST_CLOSE);
+        short[] uiOpen = sounds.get(SoundEvent.UI_OPEN);
+        short[] door = sounds.get(SoundEvent.DOOR);
+
+        assertTrue(open.length > uiOpen.length * 3,
+                "chest open (" + open.length + ") should outlast the UI beep (" + uiOpen.length + ")");
+        assertTrue(close.length > uiOpen.length * 2,
+                "chest close (" + close.length + ") should outlast the UI beep");
+        assertTrue(open.length != close.length, "open creak and close slam should not be the same clip");
+        assertTrue(open.length != door.length, "chest lid should not reuse the door clip");
+    }
+
+    @Test
+    void hitIsAShorterPunchThanTheFinalBreak() {
+        Sounds sounds = new Sounds();
+        short[] stoneHit = sounds.get(SoundMaterial.STONE, BlockAction.HIT);
+        short[] stoneBreak = sounds.get(SoundMaterial.STONE, BlockAction.BREAK);
+        short[] woodHit = sounds.get(SoundMaterial.WOOD, BlockAction.HIT);
+        short[] dirtHit = sounds.get(SoundMaterial.DIRT, BlockAction.HIT);
+        assertTrue(stoneHit.length < stoneBreak.length,
+                "a mining punch should be shorter than the block actually breaking");
+        assertTrue(woodHit.length > 0 && dirtHit.length > 0);
+        assertTrue(stoneHit.length != woodHit.length || energy(stoneHit) != energy(woodHit),
+                "stone and wood punches should not be identical clips");
+    }
+
+    private static long energy(short[] pcm) {
+        long sum = 0;
+        for (short s : pcm) sum += Math.abs(s);
+        return sum;
+    }
 }

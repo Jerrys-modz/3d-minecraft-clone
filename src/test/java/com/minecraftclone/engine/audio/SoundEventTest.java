@@ -30,6 +30,8 @@ class SoundEventTest {
         assertEquals(SoundCategory.MOBS, SoundEvent.MOB_DEATH.category());
         assertEquals(SoundCategory.MACHINES, SoundEvent.TOOL_BREAK.category());
         assertEquals(SoundCategory.MACHINES, SoundEvent.DOOR.category());
+        assertEquals(SoundCategory.MACHINES, SoundEvent.CHEST_OPEN.category());
+        assertEquals(SoundCategory.MACHINES, SoundEvent.CHEST_CLOSE.category());
         assertEquals(SoundCategory.MACHINES, SoundEvent.CRAFT.category());
     }
 }

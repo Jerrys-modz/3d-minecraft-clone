@@ -39,6 +39,8 @@ public class TextureAtlas {
 
     /** Tile index of the alpha-cutout leaves texture used when the "see-through leaves" setting is on. */
     public static final int LEAVES_CUTOUT_TILE = 24;
+    /** Pink blossom cutout — cherry leaves must not share the green oak holes. */
+    public static final int CHERRY_LEAVES_CUTOUT_TILE = 77;
     /** Tile index of the full-cube lamp texture. */
     public static final int LAMP_TILE = 25;
     /** Tile index of the furnace's front/side face. */
@@ -47,8 +49,37 @@ public class TextureAtlas {
     public static final int CRAFTING_TABLE_TILE = 48;
     /** Tile index of the furnace's front face when it's actively burning - the mouth glows orange. */
     public static final int FURNACE_LIT_TILE = 49;
-    /** Tile index of the chest's lid/front face. */
+    /** Tile index of the chest's front face (lid, body, brass lock). */
     public static final int CHEST_TILE = 50;
+    /** Tile index of the chest's lid, viewed from above. */
+    public static final int CHEST_TOP_TILE = 64;
+    /** Tile index of the chest's side (lid seam, no lock). */
+    public static final int CHEST_SIDE_TILE = 65;
+    /** Tile index of the chest's underside. */
+    public static final int CHEST_BOTTOM_TILE = 66;
+    /** Left half of a double/quad chest front (lock sits on the join). */
+    public static final int CHEST_DOUBLE_FRONT_L = 244;
+    /** Right half of a double/quad chest front. */
+    public static final int CHEST_DOUBLE_FRONT_R = 245;
+    /** Left half of a double-chest lid (latch on the join). */
+    public static final int CHEST_DOUBLE_TOP_L = 246;
+    /** Right half of a double-chest lid. */
+    public static final int CHEST_DOUBLE_TOP_R = 247;
+    /** Left half of a quad-chest back-row lid (no latch). */
+    public static final int CHEST_DOUBLE_TOP_PLAIN_L = 248;
+    /** Right half of a quad-chest back-row lid. */
+    public static final int CHEST_DOUBLE_TOP_PLAIN_R = 249;
+    /** Left half of a double/quad chest back. */
+    public static final int CHEST_DOUBLE_BACK_L = 250;
+    /** Right half of a double/quad chest back. */
+    public static final int CHEST_DOUBLE_BACK_R = 251;
+    /** Left half of a double/quad chest underside. */
+    public static final int CHEST_DOUBLE_BOTTOM_L = 252;
+    /** Right half of a double/quad chest underside. */
+    public static final int CHEST_DOUBLE_BOTTOM_R = 253;
+    /** First of {@link #DESTROY_STAGE_COUNT} accumulating crack overlays (hold-to-break). */
+    public static final int DESTROY_STAGE_TILE = 67;
+    public static final int DESTROY_STAGE_COUNT = 10;
     /** Tile index of the barrel's face. */
     public static final int BARREL_TILE = 51;
     /** Tile index of the lightning-lit fire cross. */
@@ -82,10 +113,10 @@ public class TextureAtlas {
         paintGravel(image, 14, rnd);
         paintCactus(image, 15, rnd);
 
-        paintOreTile(image, 16, rnd, 0x242424, 0x0E0E0E);                // coal ore
+        paintOreTile(image, 16, rnd, 0x2A2A2A, 0x0C0C0C);                // coal ore
         paintOreTile(image, 17, rnd, 0xD8A66A, 0xA87C44);                // iron ore
-        paintOreTile(image, 18, rnd, 0xFFD93A, 0xE0A81E);                // gold ore
-        paintOreTile(image, 19, rnd, 0x6FE8E8, 0x3FBFBF);                // diamond ore
+        paintOreTile(image, 18, rnd, 0xFFD93A, 0xC49212);                // gold ore
+        paintOreTile(image, 19, rnd, 0x6FE8E8, 0x2EA8B8, OreStyle.GEM);  // diamond ore
         paintFluidTile(image, 20, rnd, 0xF2A93B, 0x9E2A0C, 225, 0xFFE066); // lava
 
         paintCrossGrass(image, 21, rnd, 0x4C8C2C);                        // tall grass
@@ -115,165 +146,158 @@ public class TextureAtlas {
         paintWool(image, 59, rnd);
 
         // --- GTNH Ores: early-game (tiles 80-85) ---
-        paintOreTile(image, 80, rnd, 0xB87333, 0x8B5A2B);                // copper ore (reddish-brown)
-        paintOreTile(image, 81, rnd, 0xC0C0C0, 0xA0A0A0);                // tin ore (silver-gray)
-        paintOreTile(image, 82, rnd, 0xE8E8E8, 0xD0D0D0);                // bauxite ore (white/aluminum)
-        paintOreTile(image, 83, rnd, 0xA8B8C8, 0x8898A8);                // zinc ore (silver-blue)
-        paintOreTile(image, 84, rnd, 0x4A4A4A, 0x2A2A2A);                // lead ore (dark gray)
-        paintOreTile(image, 85, rnd, 0xE0E0E0, 0xC0C0C0);                // silver ore (bright silver)
+        paintOreTile(image, 80, rnd, 0xE8772F, 0x9A3E12);                // copper (bright orange)
+        paintOreTile(image, 81, rnd, 0xD2E4EA, 0x6A8A9A);                // tin (pale cyan-silver)
+        paintOreTile(image, 82, rnd, 0xC65A2A, 0x7A2A10);                // bauxite (rusty terracotta)
+        paintOreTile(image, 83, rnd, 0xA8D890, 0x4A8A40);                // zinc (apple-sage)
+        paintOreTile(image, 84, rnd, 0x5C6A88, 0x2A3048);                // lead (blue-grey)
+        paintOreTile(image, 85, rnd, 0xF2F4FF, 0x8A96B0);                // silver (cool white)
 
         // --- GTNH Ores: mid-game (tiles 86-90) ---
-        paintOreTile(image, 86, rnd, 0xC8D8C8, 0xA8B8A8);                // nickel ore (pale gray-green)
-        paintOreTile(image, 87, rnd, 0x5A6AB8, 0x404890);                // cobalt ore (blue-ish)
-        paintOreTile(image, 88, rnd, 0x3A3A3A, 0x1A1A1A);                // tungsten ore (dark gray)
-        paintOreTile(image, 89, rnd, 0x5A5A5A, 0x3A3A3A);                // molybdenum ore (dark metallic)
-        paintOreTile(image, 90, rnd, 0xF0F0F0, 0xD0D0D0);                // platinum ore (silver-white)
+        paintOreTile(image, 86, rnd, 0xE6DC9A, 0x9A8C50);                // nickel (pale brass)
+        paintOreTile(image, 87, rnd, 0x3A62F0, 0x1A28A8);                // cobalt (vivid blue)
+        paintOreTile(image, 88, rnd, 0x6A88A8, 0x1A2838);                // tungsten (steel blue)
+        paintOreTile(image, 89, rnd, 0x7A96B0, 0x3A5068);                // molybdenum (slate)
+        paintOreTile(image, 90, rnd, 0xFFF4C8, 0xC0A86A);                // platinum (warm cream)
 
         // --- GTNH Ores: advanced (tiles 91-95) ---
-        paintOreTile(image, 91, rnd, 0xD8D8D8, 0xB8B8B8);                // chromium ore (silvery)
-        paintOreTile(image, 92, rnd, 0x4A4A5A, 0x2A2A3A);                // manganese ore (dark gray-purple)
-        paintOreTile(image, 93, rnd, 0x5A6A7A, 0x3A4A5A);                // vanadium ore (dark blue-gray)
-        paintOreTile(image, 94, rnd, 0xE0E0E0, 0xC0C0C0);                // beryllium ore (light silver)
-        paintOreTile(image, 95, rnd, 0xD0D0D0, 0xB0B0B0);                // titanium ore (metallic silver)
+        paintOreTile(image, 91, rnd, 0xC0E8DC, 0x5A9888);                // chromium (teal-silver)
+        paintOreTile(image, 92, rnd, 0xC86890, 0x782848);                // manganese (mauve)
+        paintOreTile(image, 93, rnd, 0x7A9A48, 0x3A5818);                // vanadium (olive)
+        paintOreTile(image, 94, rnd, 0xD0E8A8, 0x7AAA58);                // beryllium (pale mint)
+        paintOreTile(image, 95, rnd, 0xB0C8E8, 0x5878A8);                // titanium (ice blue)
 
         // --- GTNH Ores: late-game (tiles 96-99) ---
-        paintOreTile(image, 96, rnd, 0x7AB850, 0x5A9830);                // uranium ore (greenish)
-        paintOreTile(image, 97, rnd, 0x5A5A5A, 0x3A3A3A);                // thorium ore (dark gray)
-        paintOreTile(image, 98, rnd, 0x4A6A3A, 0x2A4A1A);                // plutonium ore (dark greenish-black)
-        paintOreTile(image, 99, rnd, 0xD8D8F0, 0xB8B8D0);                // iridium ore (bright silver-rainbow)
+        paintOreTile(image, 96, rnd, 0x8CFF40, 0x3A9808, OreStyle.GLOW); // uranium (radioactive lime)
+        paintOreTile(image, 97, rnd, 0x7A5A48, 0x3A2818);                // thorium (taupe)
+        paintOreTile(image, 98, rnd, 0x3A7040, 0x102818, OreStyle.GLOW); // plutonium (sickly green)
+        paintOreTile(image, 99, rnd, 0xE8DCFF, 0x8878C0);                // iridium (lavender-white)
 
-        // --- Small GTNH Ores: Striped indicator ores (tiles 100-119) ---
-        // Early-game small ores (striped, mineable with stone tools)
-        paintSmallOreTile(image, 100, rnd, 0xB87333, 0x8B5A2B);           // small copper ore (striped)
-        paintSmallOreTile(image, 101, rnd, 0xC0C0C0, 0xA0A0A0);           // small tin ore (striped)
-        paintSmallOreTile(image, 102, rnd, 0xE8E8E8, 0xD0D0D0);           // small bauxite ore (striped)
-        paintSmallOreTile(image, 103, rnd, 0xA8B8C8, 0x8898A8);           // small zinc ore (striped)
-        paintSmallOreTile(image, 104, rnd, 0x4A4A4A, 0x2A2A2A);           // small lead ore (striped)
-        paintSmallOreTile(image, 105, rnd, 0xE0E0E0, 0xC0C0C0);           // small silver ore (striped)
-
-        // Mid-game small ores (striped, mineable with iron tools)
-        paintSmallOreTile(image, 106, rnd, 0xC8D8C8, 0xA8B8A8);           // small nickel ore (striped)
-        paintSmallOreTile(image, 107, rnd, 0x5A6AB8, 0x404890);           // small cobalt ore (striped)
-        paintSmallOreTile(image, 108, rnd, 0x3A3A3A, 0x1A1A1A);           // small tungsten ore (striped)
-        paintSmallOreTile(image, 109, rnd, 0x5A5A5A, 0x3A3A3A);           // small molybdenum ore (striped)
-        paintSmallOreTile(image, 110, rnd, 0xF0F0F0, 0xD0D0D0);           // small platinum ore (striped)
-
-        // Advanced small ores (striped, mineable with diamond tools)
-        paintSmallOreTile(image, 111, rnd, 0xD8D8D8, 0xB8B8B8);           // small chromium ore (striped)
-        paintSmallOreTile(image, 112, rnd, 0x4A4A5A, 0x2A2A3A);           // small manganese ore (striped)
-        paintSmallOreTile(image, 113, rnd, 0x5A6A7A, 0x3A4A5A);           // small vanadium ore (striped)
-        paintSmallOreTile(image, 114, rnd, 0xE0E0E0, 0xC0C0C0);           // small beryllium ore (striped)
-        paintSmallOreTile(image, 115, rnd, 0xD0D0D0, 0xB0B0B0);           // small titanium ore (striped)
-
-        // Late-game small ores (striped, mineable with diamond tools)
-        paintSmallOreTile(image, 116, rnd, 0x7AB850, 0x5A9830);           // small uranium ore (striped)
-        paintSmallOreTile(image, 117, rnd, 0x5A5A5A, 0x3A3A3A);           // small thorium ore (striped)
-        paintSmallOreTile(image, 118, rnd, 0x4A6A3A, 0x2A4A1A);           // small plutonium ore (striped)
-        paintSmallOreTile(image, 119, rnd, 0xD8D8F0, 0xB8B8D0);           // small iridium ore (striped)
+        // --- Small GTNH Ores: sparse flecks, not stripes (tiles 100-119) ---
+        paintSmallOreTile(image, 100, rnd, 0xE8772F, 0x9A3E12);          // small copper
+        paintSmallOreTile(image, 101, rnd, 0xD2E4EA, 0x6A8A9A);          // small tin
+        paintSmallOreTile(image, 102, rnd, 0xC65A2A, 0x7A2A10);          // small bauxite
+        paintSmallOreTile(image, 103, rnd, 0xA8D890, 0x4A8A40);          // small zinc
+        paintSmallOreTile(image, 104, rnd, 0x5C6A88, 0x2A3048);          // small lead
+        paintSmallOreTile(image, 105, rnd, 0xF2F4FF, 0x8A96B0);          // small silver
+        paintSmallOreTile(image, 106, rnd, 0xE6DC9A, 0x9A8C50);          // small nickel
+        paintSmallOreTile(image, 107, rnd, 0x3A62F0, 0x1A28A8);          // small cobalt
+        paintSmallOreTile(image, 108, rnd, 0x6A88A8, 0x1A2838);          // small tungsten
+        paintSmallOreTile(image, 109, rnd, 0x7A96B0, 0x3A5068);          // small molybdenum
+        paintSmallOreTile(image, 110, rnd, 0xFFF4C8, 0xC0A86A);          // small platinum
+        paintSmallOreTile(image, 111, rnd, 0xC0E8DC, 0x5A9888);          // small chromium
+        paintSmallOreTile(image, 112, rnd, 0xC86890, 0x782848);          // small manganese
+        paintSmallOreTile(image, 113, rnd, 0x7A9A48, 0x3A5818);          // small vanadium
+        paintSmallOreTile(image, 114, rnd, 0xD0E8A8, 0x7AAA58);          // small beryllium
+        paintSmallOreTile(image, 115, rnd, 0xB0C8E8, 0x5878A8);          // small titanium
+        paintSmallOreTile(image, 116, rnd, 0x8CFF40, 0x3A9808, OreStyle.GLOW); // small uranium
+        paintSmallOreTile(image, 117, rnd, 0x7A5A48, 0x3A2818);          // small thorium
+        paintSmallOreTile(image, 118, rnd, 0x3A7040, 0x102818, OreStyle.GLOW); // small plutonium
+        paintSmallOreTile(image, 119, rnd, 0xE8DCFF, 0x8878C0);          // small iridium
 
         // --- New GTNH ore blocks (tiles 120-179) ---
-        paintOreTile(image, 120, rnd, 0x4A4A5A, 0x2A2A3A); // magnetite
-        paintOreTile(image, 121, rnd, 0x8B3A3A, 0x6B1A1A); // hematite
-        paintOreTile(image, 122, rnd, 0xA0784A, 0x7A5828); // brown limonite
-        paintOreTile(image, 123, rnd, 0xD4B44A, 0xA88A28); // yellow limonite
-        paintOreTile(image, 124, rnd, 0x8A6A5A, 0x6A4A3A); // banded iron
-        paintOreTile(image, 125, rnd, 0x6A6A8A, 0x4A4A6A); // vanadium magnetite
-        paintOreTile(image, 126, rnd, 0xC89A40, 0x9A7020); // chalcopyrite
-        paintOreTile(image, 127, rnd, 0x7A8A7A, 0x5A6A5A); // tetrahedrite
-        paintOreTile(image, 128, rnd, 0x2A8A4A, 0x0A6A2A); // malachite
-        paintOreTile(image, 129, rnd, 0x8A8AA0, 0x6A6A80); // galena
-        paintOreTile(image, 130, rnd, 0xB4A080, 0x947A60); // sphalerite
-        paintOreTile(image, 131, rnd, 0x7AAA7A, 0x5A8A5A); // garnierite
-        paintOreTile(image, 132, rnd, 0x9A8A5A, 0x7A6A3A); // pentlandite
-        paintOreTile(image, 133, rnd, 0x4A5A9A, 0x2A3A7A); // cobaltite
-        paintOreTile(image, 134, rnd, 0xC8B840, 0xA89820); // pyrite
-        paintOreTile(image, 135, rnd, 0x8A9A7A, 0x6A7A5A); // arsenopyrite
-        paintOreTile(image, 136, rnd, 0xE8E050, 0xC8C030); // sulfur
-        paintOreTile(image, 137, rnd, 0xD43A2A, 0xB41A0A); // cinnabar
-        paintOreTile(image, 138, rnd, 0xD0C8B8, 0xA8A090); // cassiterite
-        paintOreTile(image, 139, rnd, 0xE8D880, 0xC8B860); // scheelite
-        paintOreTile(image, 140, rnd, 0x6A5A7A, 0x4A3A5A); // wolframite
-        paintOreTile(image, 141, rnd, 0x7A7A8A, 0x5A5A6A); // molybdenite
-        paintOreTile(image, 142, rnd, 0x5A4A5A, 0x3A2A3A); // ferberite
-        paintOreTile(image, 143, rnd, 0x3A4A3A, 0x1A2A1A); // chromite
-        paintOreTile(image, 144, rnd, 0x6A5A6A, 0x4A3A4A); // ilmenite
-        paintOreTile(image, 145, rnd, 0xC87A5A, 0xA85A3A); // rutile
-        paintOreTile(image, 146, rnd, 0x4A7A3A, 0x2A5A1A); // uraninite
-        paintOreTile(image, 147, rnd, 0x5A6A3A, 0x3A4A1A); // pitchblende
-        paintOreTile(image, 148, rnd, 0xC8A870, 0xA88850); // monazite
-        paintOreTile(image, 149, rnd, 0xD49A60, 0xB47A40); // bastnasite
-        paintOreTile(image, 150, rnd, 0xD45A3A, 0xB43A1A); // vanadinite
-        paintOreTile(image, 151, rnd, 0x6A6A7A, 0x4A4A5A); // pyrolusite
-        paintOreTile(image, 152, rnd, 0x3A3A4A, 0x1A1A2A); // graphite
-        paintOreTile(image, 153, rnd, 0xD0D8E8, 0xB0B8C8); // lithium
-        paintOreTile(image, 154, rnd, 0x2A3A2A, 0x0A1A0A); // naquadah
-        paintOreTile(image, 155, rnd, 0x1A4A1A, 0x002A00); // naquadah enriched
-        paintOreTile(image, 156, rnd, 0xC0D0D0, 0xA0B0B0); // trinium
-        paintOreTile(image, 157, rnd, 0x9A8AC8, 0x7A6AA8); // neodymium
-        paintOreTile(image, 158, rnd, 0xE8D0A0, 0xC8B080); // cerium
-        paintOreTile(image, 159, rnd, 0x4A5A6A, 0x2A3A4A); // osmium
-        paintOreTile(image, 160, rnd, 0xD0C0A8, 0xB0A088); // palladium
-        paintOreTile(image, 161, rnd, 0xF0EEE0, 0xD0CEC0); // calcite
-        paintOreTile(image, 162, rnd, 0x7A9A4A, 0x5A7A2A); // olivine
-        paintOreTile(image, 163, rnd, 0xC8D0B8, 0xA8B098); // talc
-        paintOreTile(image, 164, rnd, 0xC8B8A0, 0xA89880); // bentonite
-        paintOreTile(image, 165, rnd, 0x3A5AA0, 0x1A3A80); // sodalite
-        paintOreTile(image, 166, rnd, 0x2A4A9A, 0x0A2A7A); // lazurite
-        paintOreTile(image, 167, rnd, 0xF0F0F0, 0xD0D0D0); // salt
-        paintOreTile(image, 168, rnd, 0xE0D8D0, 0xC0B8B0); // rock salt
-        paintOreTile(image, 169, rnd, 0xE8E0D0, 0xC8C0B0); // saltpeter
-        paintOreTile(image, 170, rnd, 0xF0E8E0, 0xD0C8C0); // borax
-        paintOreTile(image, 171, rnd, 0x8AB8D8, 0x6A98B8); // apatite
-        paintOreTile(image, 172, rnd, 0xC8C080, 0xA8A060); // phosphate
-        paintOreTile(image, 173, rnd, 0x7A6A5A, 0x5A4A3A); // pyrochlore
-        paintOreTile(image, 174, rnd, 0xD8B8D8, 0xB898B8); // lepidolite
-        paintOreTile(image, 175, rnd, 0xD43060, 0xB41040); // ruby
-        paintOreTile(image, 176, rnd, 0x2050D0, 0x0030B0); // sapphire
-        paintOreTile(image, 177, rnd, 0x30A060, 0x108040); // green sapphire
-        paintOreTile(image, 178, rnd, 0xA02040, 0x800020); // pyrope
-        paintOreTile(image, 179, rnd, 0xE07030, 0xC05010); // spessartine
+        paintOreTile(image, 120, rnd, 0x5A5A78, 0x181828); // magnetite
+        paintOreTile(image, 121, rnd, 0xC04030, 0x701810); // hematite
+        paintOreTile(image, 122, rnd, 0xC08040, 0x804818); // brown limonite
+        paintOreTile(image, 123, rnd, 0xF0C040, 0xC08818); // yellow limonite
+        paintOreTile(image, 124, rnd, 0xC07040, 0x402010, OreStyle.BANDED); // banded iron
+        paintOreTile(image, 125, rnd, 0x505888, 0x282840); // vanadium magnetite
+        paintOreTile(image, 126, rnd, 0xD8B028, 0x6A7010); // chalcopyrite
+        paintOreTile(image, 127, rnd, 0x506858, 0x283838); // tetrahedrite
+        paintOreTile(image, 128, rnd, 0x20C060, 0x087030, OreStyle.BANDED); // malachite
+        paintOreTile(image, 129, rnd, 0x90A0C0, 0x506080); // galena
+        paintOreTile(image, 130, rnd, 0xC8A070, 0x806040); // sphalerite
+        paintOreTile(image, 131, rnd, 0x70D070, 0x388838); // garnierite
+        paintOreTile(image, 132, rnd, 0xC8B060, 0x887830); // pentlandite
+        paintOreTile(image, 133, rnd, 0x5070D0, 0x284090); // cobaltite
+        paintOreTile(image, 134, rnd, 0xF0D030, 0xB09010); // pyrite
+        paintOreTile(image, 135, rnd, 0xA8B888, 0x687858); // arsenopyrite
+        paintOreTile(image, 136, rnd, 0xFFF050, 0xC8A010, OreStyle.CRYSTAL); // sulfur
+        paintOreTile(image, 137, rnd, 0xE82820, 0xA01008); // cinnabar
+        paintOreTile(image, 138, rnd, 0xC8B898, 0x887858); // cassiterite
+        paintOreTile(image, 139, rnd, 0xF0E090, 0xC0A040); // scheelite
+        paintOreTile(image, 140, rnd, 0x584868, 0x281838); // wolframite
+        paintOreTile(image, 141, rnd, 0x6880A0, 0x384860); // molybdenite
+        paintOreTile(image, 142, rnd, 0x403848, 0x181820); // ferberite
+        paintOreTile(image, 143, rnd, 0x384838, 0x182018); // chromite
+        paintOreTile(image, 144, rnd, 0x584850, 0x281828); // ilmenite
+        paintOreTile(image, 145, rnd, 0xE87840, 0xA84818); // rutile
+        paintOreTile(image, 146, rnd, 0x508830, 0x284810, OreStyle.GLOW); // uraninite
+        paintOreTile(image, 147, rnd, 0x3A4A28, 0x1A2410); // pitchblende
+        paintOreTile(image, 148, rnd, 0xE0A050, 0xA06820); // monazite
+        paintOreTile(image, 149, rnd, 0xF0A040, 0xC06818); // bastnasite
+        paintOreTile(image, 150, rnd, 0xE84828, 0xA82010); // vanadinite
+        paintOreTile(image, 151, rnd, 0x686878, 0x383848); // pyrolusite
+        paintOreTile(image, 152, rnd, 0x2A2A32, 0x101018); // graphite
+        paintOreTile(image, 153, rnd, 0xE8F0FF, 0xA0B8D8); // lithium
+        paintOreTile(image, 154, rnd, 0x2A8050, 0x0A2818, OreStyle.GLOW); // naquadah
+        paintOreTile(image, 155, rnd, 0x208020, 0x084008, OreStyle.GLOW); // naquadah enriched
+        paintOreTile(image, 156, rnd, 0xA0D8D8, 0x60A0A0); // trinium
+        paintOreTile(image, 157, rnd, 0xB090E8, 0x7050B0); // neodymium
+        paintOreTile(image, 158, rnd, 0xF0D890, 0xC0A050); // cerium
+        paintOreTile(image, 159, rnd, 0x486878, 0x284050); // osmium
+        paintOreTile(image, 160, rnd, 0xE8D0B0, 0xB09070); // palladium
+        paintOreTile(image, 161, rnd, 0xFFF8F0, 0xD8D0C0, OreStyle.CRYSTAL); // calcite
+        paintOreTile(image, 162, rnd, 0x88C040, 0x508018, OreStyle.GEM); // olivine
+        paintOreTile(image, 163, rnd, 0xE8F0D8, 0xB0C0A0); // talc
+        paintOreTile(image, 164, rnd, 0xD8C8A0, 0xA09070); // bentonite
+        paintOreTile(image, 165, rnd, 0x4060E0, 0x2030A0); // sodalite
+        paintOreTile(image, 166, rnd, 0x2040C0, 0x102080); // lazurite
+        paintOreTile(image, 167, rnd, 0xFFFFFF, 0xD0D0E0, OreStyle.CRYSTAL); // salt
+        paintOreTile(image, 168, rnd, 0xF0E0D0, 0xC8B0A0, OreStyle.CRYSTAL); // rock salt
+        paintOreTile(image, 169, rnd, 0xF8F0D8, 0xD0C8A8, OreStyle.CRYSTAL); // saltpeter
+        paintOreTile(image, 170, rnd, 0xF8F0E8, 0xD8D0C0, OreStyle.CRYSTAL); // borax
+        paintOreTile(image, 171, rnd, 0x60B0E8, 0x3080B8); // apatite
+        paintOreTile(image, 172, rnd, 0xD8D070, 0xA8A040); // phosphate
+        paintOreTile(image, 173, rnd, 0xA08060, 0x685038); // pyrochlore
+        paintOreTile(image, 174, rnd, 0xE0A0D8, 0xB070B0, OreStyle.BANDED); // lepidolite
+        paintOreTile(image, 175, rnd, 0xFF2060, 0xB00030, OreStyle.GEM); // ruby
+        paintOreTile(image, 176, rnd, 0x2060FF, 0x0030C0, OreStyle.GEM); // sapphire
+        paintOreTile(image, 177, rnd, 0x20D070, 0x009040, OreStyle.GEM); // green sapphire
+        paintOreTile(image, 178, rnd, 0xC01840, 0x800020, OreStyle.GEM); // pyrope
+        paintOreTile(image, 179, rnd, 0xF87820, 0xC05010, OreStyle.GEM); // spessartine
 
         // --- New GTNH small ores (tiles 180-219) ---
-        paintSmallOreTile(image, 180, rnd, 0x4A4A5A, 0x2A2A3A); // small magnetite
-        paintSmallOreTile(image, 181, rnd, 0x8B3A3A, 0x6B1A1A); // small hematite
-        paintSmallOreTile(image, 182, rnd, 0xA0784A, 0x7A5828); // small brown limonite
-        paintSmallOreTile(image, 183, rnd, 0xD4B44A, 0xA88A28); // small yellow limonite
-        paintSmallOreTile(image, 184, rnd, 0x8A6A5A, 0x6A4A3A); // small banded iron
-        paintSmallOreTile(image, 185, rnd, 0x6A6A8A, 0x4A4A6A); // small vanadium magnetite
-        paintSmallOreTile(image, 186, rnd, 0xC89A40, 0x9A7020); // small chalcopyrite
-        paintSmallOreTile(image, 187, rnd, 0x7A8A7A, 0x5A6A5A); // small tetrahedrite
-        paintSmallOreTile(image, 188, rnd, 0x2A8A4A, 0x0A6A2A); // small malachite
-        paintSmallOreTile(image, 189, rnd, 0x8A8AA0, 0x6A6A80); // small galena
-        paintSmallOreTile(image, 190, rnd, 0xB4A080, 0x947A60); // small sphalerite
-        paintSmallOreTile(image, 191, rnd, 0x7AAA7A, 0x5A8A5A); // small garnierite
-        paintSmallOreTile(image, 192, rnd, 0x9A8A5A, 0x7A6A3A); // small pentlandite
-        paintSmallOreTile(image, 193, rnd, 0x4A5A9A, 0x2A3A7A); // small cobaltite
-        paintSmallOreTile(image, 194, rnd, 0xC8B840, 0xA89820); // small pyrite
-        paintSmallOreTile(image, 195, rnd, 0x8A9A7A, 0x6A7A5A); // small arsenopyrite
-        paintSmallOreTile(image, 196, rnd, 0xE8E050, 0xC8C030); // small sulfur
-        paintSmallOreTile(image, 197, rnd, 0xD43A2A, 0xB41A0A); // small cinnabar
-        paintSmallOreTile(image, 198, rnd, 0xD0C8B8, 0xA8A090); // small cassiterite
-        paintSmallOreTile(image, 199, rnd, 0xE8D880, 0xC8B860); // small scheelite
-        paintSmallOreTile(image, 200, rnd, 0x6A5A7A, 0x4A3A5A); // small wolframite
-        paintSmallOreTile(image, 201, rnd, 0x7A7A8A, 0x5A5A6A); // small molybdenite
-        paintSmallOreTile(image, 202, rnd, 0x3A4A3A, 0x1A2A1A); // small chromite
-        paintSmallOreTile(image, 203, rnd, 0x6A5A6A, 0x4A3A4A); // small ilmenite
-        paintSmallOreTile(image, 204, rnd, 0xC87A5A, 0xA85A3A); // small rutile
-        paintSmallOreTile(image, 205, rnd, 0x4A7A3A, 0x2A5A1A); // small uraninite
-        paintSmallOreTile(image, 206, rnd, 0x5A6A3A, 0x3A4A1A); // small pitchblende
-        paintSmallOreTile(image, 207, rnd, 0xC8A870, 0xA88850); // small monazite
-        paintSmallOreTile(image, 208, rnd, 0xD49A60, 0xB47A40); // small bastnasite
-        paintSmallOreTile(image, 209, rnd, 0xD45A3A, 0xB43A1A); // small vanadinite
-        paintSmallOreTile(image, 210, rnd, 0x6A6A7A, 0x4A4A5A); // small pyrolusite
-        paintSmallOreTile(image, 211, rnd, 0x3A3A4A, 0x1A1A2A); // small graphite
-        paintSmallOreTile(image, 212, rnd, 0xD0D8E8, 0xB0B8C8); // small lithium
-        paintSmallOreTile(image, 213, rnd, 0x2A3A2A, 0x0A1A0A); // small naquadah
-        paintSmallOreTile(image, 214, rnd, 0xC0D0D0, 0xA0B0B0); // small trinium
-        paintSmallOreTile(image, 215, rnd, 0x9A8AC8, 0x7A6AA8); // small neodymium
-        paintSmallOreTile(image, 216, rnd, 0xE8D0A0, 0xC8B080); // small cerium
-        paintSmallOreTile(image, 217, rnd, 0x4A5A6A, 0x2A3A4A); // small osmium
-        paintSmallOreTile(image, 218, rnd, 0xD0C0A8, 0xB0A088); // small palladium
-        paintSmallOreTile(image, 219, rnd, 0xD43060, 0xB41040); // small ruby
+        paintSmallOreTile(image, 180, rnd, 0x5A5A78, 0x181828); // small magnetite
+        paintSmallOreTile(image, 181, rnd, 0xC04030, 0x701810); // small hematite
+        paintSmallOreTile(image, 182, rnd, 0xC08040, 0x804818); // small brown limonite
+        paintSmallOreTile(image, 183, rnd, 0xF0C040, 0xC08818); // small yellow limonite
+        paintSmallOreTile(image, 184, rnd, 0xC07040, 0x402010, OreStyle.BANDED); // small banded iron
+        paintSmallOreTile(image, 185, rnd, 0x505888, 0x282840); // small vanadium magnetite
+        paintSmallOreTile(image, 186, rnd, 0xD8B028, 0x6A7010); // small chalcopyrite
+        paintSmallOreTile(image, 187, rnd, 0x506858, 0x283838); // small tetrahedrite
+        paintSmallOreTile(image, 188, rnd, 0x20C060, 0x087030, OreStyle.BANDED); // small malachite
+        paintSmallOreTile(image, 189, rnd, 0x90A0C0, 0x506080); // small galena
+        paintSmallOreTile(image, 190, rnd, 0xC8A070, 0x806040); // small sphalerite
+        paintSmallOreTile(image, 191, rnd, 0x70D070, 0x388838); // small garnierite
+        paintSmallOreTile(image, 192, rnd, 0xC8B060, 0x887830); // small pentlandite
+        paintSmallOreTile(image, 193, rnd, 0x5070D0, 0x284090); // small cobaltite
+        paintSmallOreTile(image, 194, rnd, 0xF0D030, 0xB09010); // small pyrite
+        paintSmallOreTile(image, 195, rnd, 0xA8B888, 0x687858); // small arsenopyrite
+        paintSmallOreTile(image, 196, rnd, 0xFFF050, 0xC8A010, OreStyle.CRYSTAL); // small sulfur
+        paintSmallOreTile(image, 197, rnd, 0xE82820, 0xA01008); // small cinnabar
+        paintSmallOreTile(image, 198, rnd, 0xC8B898, 0x887858); // small cassiterite
+        paintSmallOreTile(image, 199, rnd, 0xF0E090, 0xC0A040); // small scheelite
+        paintSmallOreTile(image, 200, rnd, 0x584868, 0x281838); // small wolframite
+        paintSmallOreTile(image, 201, rnd, 0x6880A0, 0x384860); // small molybdenite
+        paintSmallOreTile(image, 202, rnd, 0x384838, 0x182018); // small chromite
+        paintSmallOreTile(image, 203, rnd, 0x584850, 0x281828); // small ilmenite
+        paintSmallOreTile(image, 204, rnd, 0xE87840, 0xA84818); // small rutile
+        paintSmallOreTile(image, 205, rnd, 0x508830, 0x284810, OreStyle.GLOW); // small uraninite
+        paintSmallOreTile(image, 206, rnd, 0x3A4A28, 0x1A2410); // small pitchblende
+        paintSmallOreTile(image, 207, rnd, 0xE0A050, 0xA06820); // small monazite
+        paintSmallOreTile(image, 208, rnd, 0xF0A040, 0xC06818); // small bastnasite
+        paintSmallOreTile(image, 209, rnd, 0xE84828, 0xA82010); // small vanadinite
+        paintSmallOreTile(image, 210, rnd, 0x686878, 0x383848); // small pyrolusite
+        paintSmallOreTile(image, 211, rnd, 0x2A2A32, 0x101018); // small graphite
+        paintSmallOreTile(image, 212, rnd, 0xE8F0FF, 0xA0B8D8); // small lithium
+        paintSmallOreTile(image, 213, rnd, 0x2A8050, 0x0A2818, OreStyle.GLOW); // small naquadah
+        paintSmallOreTile(image, 214, rnd, 0xA0D8D8, 0x60A0A0); // small trinium
+        paintSmallOreTile(image, 215, rnd, 0xB090E8, 0x7050B0); // small neodymium
+        paintSmallOreTile(image, 216, rnd, 0xF0D890, 0xC0A050); // small cerium
+        paintSmallOreTile(image, 217, rnd, 0x486878, 0x284050); // small osmium
+        paintSmallOreTile(image, 218, rnd, 0xE8D0B0, 0xB09070); // small palladium
+        paintSmallOreTile(image, 219, rnd, 0xFF2060, 0xB00030, OreStyle.GEM); // small ruby
 
         // --- Nether / End dimension blocks ---
         paintNetherrack(image, 52, rnd);
@@ -291,15 +315,55 @@ public class TextureAtlas {
 
         // --- Furniture / fixtures ---
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
+        paintLeavesCutout(image, CHERRY_LEAVES_CUTOUT_TILE, rnd, 0xF2AEBF, 0xC97E97);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
         paintFurnaceLit(image, FURNACE_LIT_TILE);
         paintCraftingTable(image, CRAFTING_TABLE_TILE);
-        paintChest(image, CHEST_TILE);
+        paintChest(image, CHEST_TILE, ChestFace.FRONT);
+        paintChest(image, CHEST_TOP_TILE, ChestFace.TOP);
+        paintChest(image, CHEST_SIDE_TILE, ChestFace.SIDE);
+        paintChest(image, CHEST_BOTTOM_TILE, ChestFace.BOTTOM);
+        paintChestPair(image, CHEST_DOUBLE_FRONT_L, CHEST_DOUBLE_FRONT_R, ChestFace.FRONT);
+        paintChestPair(image, CHEST_DOUBLE_TOP_L, CHEST_DOUBLE_TOP_R, ChestFace.TOP);
+        paintChestPair(image, CHEST_DOUBLE_TOP_PLAIN_L, CHEST_DOUBLE_TOP_PLAIN_R, ChestFace.TOP_PLAIN);
+        paintChestPair(image, CHEST_DOUBLE_BACK_L, CHEST_DOUBLE_BACK_R, ChestFace.BACK);
+        paintChestPair(image, CHEST_DOUBLE_BOTTOM_L, CHEST_DOUBLE_BOTTOM_R, ChestFace.BOTTOM);
         paintBarrel(image, BARREL_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
         paintFire(image, FIRE_TILE, rnd);
+        for (int s = 0; s < DESTROY_STAGE_COUNT; s++) {
+            paintDestroyStage(image, DESTROY_STAGE_TILE + s, s);
+        }
+
+        // --- Phase 0: Farming tiles (220-231) ---
+        paintFarmlandTop(image, 220, rnd);       // FARMLAND top (tilled dark dirt)
+        paintCropStage(image, 221, rnd, 0x90C840, 0.20f); // WHEAT_STAGE_1 (tiny sprout)
+        paintCropStage(image, 222, rnd, 0x90C840, 0.40f); // WHEAT_STAGE_2 (young wheat)
+        paintCropStage(image, 223, rnd, 0xB8D840, 0.70f); // WHEAT_STAGE_3 (growing)
+        paintCropStage(image, 224, rnd, 0xE8C840, 1.00f); // WHEAT_STAGE_4 (mature golden wheat)
+        paintCropStage(image, 225, rnd, 0x60B030, 0.25f); // POTATO_CROP_1 (sprout)
+        paintCropStage(image, 226, rnd, 0x60B030, 0.60f); // POTATO_CROP_2 (growing)
+        paintCropStage(image, 227, rnd, 0x78C040, 1.00f); // POTATO_CROP_3 (mature, leafy)
+        paintCropStage(image, 228, rnd, 0x48A828, 0.25f); // CARROT_CROP_1 (sprout)
+        paintCropStage(image, 229, rnd, 0x48A828, 0.60f); // CARROT_CROP_2 (growing)
+        paintCropStage(image, 230, rnd, 0xFF8020, 1.00f); // CARROT_CROP_3 (mature, orange tips)
+        paintSugarCane(image, 231, rnd);                  // SUGAR_CANE
+        paintClayBlock(image, 232, rnd);                  // CLAY (blue-grey terrain block)
+        paintWetFarmlandTop(image, 233, rnd);             // FARMLAND_WET top (dark moist soil)
+
+        // --- Phase 0.5: Tinkers' Construct blocks (234-243) ---
+        paintSearedBrick(image, 234, rnd);                // SEARED_BRICK
+        paintSearedGlass(image, 235);                     // SEARED_GLASS
+        paintSearedTank(image, 236, rnd);                 // SEARED_TANK
+        paintSmelteryDrain(image, 237, rnd);              // SMELTERY_DRAIN
+        paintSmelteryController(image, 238, rnd, false);  // SMELTERY_CONTROLLER sides/top/bottom
+        paintSmelteryController(image, 239, rnd, true);   // SMELTERY_CONTROLLER front (active/lit)
+        paintCastingTable(image, 240, rnd);               // CASTING_TABLE
+        paintCastingBasin(image, 241, rnd);               // CASTING_BASIN
+        paintPartBuilder(image, 242, rnd);                // PART_BUILDER
+        paintToolStation(image, 243, rnd);                // TOOL_STATION
 
         return image;
     }
@@ -651,49 +715,173 @@ public class TextureAtlas {
         }
     }
 
-    /** Stone base with a few clustered "ore" blobs (highlighted top edge, darker rim). */
+    /**
+     * How mineral pixels are stamped onto stone. VEIN is the Minecraft-style
+     * irregular overlay used by metals; GEM/CRYSTAL use angular faces;
+     * BANDED stripes the vein (malachite, banded iron); GLOW adds bright specks.
+     */
+    private enum OreStyle { VEIN, GEM, CRYSTAL, BANDED, GLOW }
+
+    /**
+     * Hand-authored 16x16 overlays. Digits: 0 = leave stone, 1 = dark rim,
+     * 2 = body, 3 = highlight. Pattern inspired by vanilla Minecraft's unique
+     * ore overlay so veins read as embedded mineral, not random circles or
+     * full-tile stripes.
+     */
+    private static final String[] ORE_VEIN_MASK = {
+            "0002200000230000",
+            "0023320002332000",
+            "0023210000220002",
+            "0002000000000233",
+            "2200002300000232",
+            "3320023320000021",
+            "0220002210033000",
+            "0000000100233200",
+            "0002300000022100",
+            "0023320000002000",
+            "0023210000000033",
+            "0002000220000232",
+            "0200023320000221",
+            "3320023210000000",
+            "2210002000000000",
+            "0000000000000000"
+    };
+
+    private static final String[] ORE_SMALL_MASK = {
+            "0000000000000000",
+            "0002300000000000",
+            "0003210000023000",
+            "0000000000020000",
+            "0000000000000000",
+            "0000002300000000",
+            "0020003210000000",
+            "0000000000000230",
+            "0000000000000210",
+            "0000230000000000",
+            "0000020000000000",
+            "0000000002300000",
+            "0230000003210000",
+            "0020000000000000",
+            "0000000000002300",
+            "0000000000000000"
+    };
+
+    private static final String[] ORE_GEM_MASK = {
+            "0000300000003000",
+            "0003230000032300",
+            "0002320000023200",
+            "0000100000001000",
+            "0030000030000000",
+            "0323000323000000",
+            "0232000232000300",
+            "0010000010003230",
+            "0000000000002320",
+            "0000030000000100",
+            "0000323000000000",
+            "0300232000300000",
+            "3230010003230000",
+            "2320000002320000",
+            "0100003000100000",
+            "0000032300000000"
+    };
+
+    private static final String[] ORE_CRYSTAL_MASK = {
+            "0002220000000000",
+            "0023332000222000",
+            "0232223202333200",
+            "0023112002322300",
+            "0002220000231100",
+            "0000000000022000",
+            "0000222000000000",
+            "0002333200022200",
+            "0023222300233320",
+            "0023112002322230",
+            "0002220000231100",
+            "0000000000022000",
+            "0222000000000000",
+            "2333200022200000",
+            "2322300233320000",
+            "0231100023110000"
+    };
+
+    /** Stone base with a Minecraft-style irregular mineral vein overlay. */
     private void paintOreTile(BufferedImage img, int index, Random rnd, int oreColor, int oreDark) {
+        paintOreTile(img, index, rnd, oreColor, oreDark, OreStyle.VEIN);
+    }
+
+    private void paintOreTile(BufferedImage img, int index, Random rnd, int oreColor, int oreDark, OreStyle style) {
         paintStone(img, index, rnd);
+        stampOreMask(img, index, oreColor, oreDark, style, false);
+    }
+
+    /** Stone with a few sparse mineral flecks - small ores used to be ugly full-tile stripes. */
+    private void paintSmallOreTile(BufferedImage img, int index, Random rnd, int oreColor, int oreDark) {
+        paintSmallOreTile(img, index, rnd, oreColor, oreDark, OreStyle.VEIN);
+    }
+
+    private void paintSmallOreTile(BufferedImage img, int index, Random rnd, int oreColor, int oreDark, OreStyle style) {
+        paintStone(img, index, rnd);
+        stampOreMask(img, index, oreColor, oreDark, style, true);
+    }
+
+    private void stampOreMask(BufferedImage img, int index, int oreColor, int oreDark, OreStyle style, boolean small) {
         int ox = tileX(index);
         int oy = tileY(index);
-        int blobs = 3 + rnd.nextInt(3);
-        for (int b = 0; b < blobs; b++) {
-            int cx = 2 + rnd.nextInt(TILE_PX - 4);
-            int cy = 2 + rnd.nextInt(TILE_PX - 4);
-            int size = 1 + rnd.nextInt(2);
-            for (int dy = -size - 1; dy <= size + 1; dy++) {
-                for (int dx = -size - 1; dx <= size + 1; dx++) {
-                    int px = cx + dx, py = cy + dy;
-                    if (px < 0 || px >= TILE_PX || py < 0 || py >= TILE_PX) continue;
-                    float d = dx * dx + dy * dy;
-                    if (d <= size * size && rnd.nextFloat() < 0.85f) {
-                        // Rim darker, centre brighter, top lit.
-                        float t = 1f - Math.min(1f, d / (size * size + 1f));
-                        int color = lerpColor(oreDark, oreColor, t);
-                        if (dy < 0) color = shade(color, 1.18f);
-                        img.setRGB(ox + px, oy + py, 0xFF000000 | color);
-                    } else if (d <= (size + 1) * (size + 1) && rnd.nextFloat() < 0.5f) {
-                        img.setRGB(ox + px, oy + py, 0xFF000000 | oreDark);
+        String[] mask = oreMask(style, small);
+        int oreHi = lerpColor(oreColor, 0xFFFFFF, 0.38f);
+        // Flip so neighbouring ore types don't share the exact silhouette.
+        boolean flipX = (index & 1) != 0;
+        boolean flipY = (index & 2) != 0;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int mx = flipX ? TILE_PX - 1 - x : x;
+                int my = flipY ? TILE_PX - 1 - y : y;
+                int cell = mask[my].charAt(mx) - '0';
+                if (cell <= 0) continue;
+                int color;
+                if (style == OreStyle.BANDED) {
+                    int band = Math.floorMod(x + y / 2, 3);
+                    color = band == 0 ? oreDark : band == 1 ? oreColor : oreHi;
+                } else {
+                    color = cell == 1 ? oreDark : cell == 3 ? oreHi : oreColor;
+                }
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+        if (style == OreStyle.GLOW) {
+            // Extra radioactive sparkles on top of the vein.
+            for (int y = 0; y < TILE_PX; y++) {
+                for (int x = 0; x < TILE_PX; x++) {
+                    int mx = flipX ? TILE_PX - 1 - x : x;
+                    int my = flipY ? TILE_PX - 1 - y : y;
+                    int cell = mask[my].charAt(mx) - '0';
+                    if (cell == 3) {
+                        img.setRGB(ox + x, oy + y, 0xFF000000 | lerpColor(oreColor, 0xFFFFFF, 0.62f));
+                    }
+                }
+            }
+        }
+        if (style == OreStyle.GEM) {
+            // White facet glints on the top-left of each highlight pixel.
+            for (int y = 1; y < TILE_PX - 1; y++) {
+                for (int x = 1; x < TILE_PX - 1; x++) {
+                    int mx = flipX ? TILE_PX - 1 - x : x;
+                    int my = flipY ? TILE_PX - 1 - y : y;
+                    if (mask[my].charAt(mx) == '3') {
+                        img.setRGB(ox + x, oy + y, 0xFF000000 | 0xFFFFFF);
                     }
                 }
             }
         }
     }
 
-    /** Stone base with horizontal stripes of ore color (visual indicator for small ores). */
-    private void paintSmallOreTile(BufferedImage img, int index, Random rnd, int oreColor, int oreDark) {
-        paintStone(img, index, rnd);
-        int ox = tileX(index);
-        int oy = tileY(index);
-        // Paint alternating horizontal stripes for distinctive small ore appearance.
-        int stripeHeight = 2;
-        for (int y = 0; y < TILE_PX; y++) {
-            int stripePhase = (y / stripeHeight) & 1;
-            int color = stripePhase == 0 ? oreColor : oreDark;
-            for (int x = 0; x < TILE_PX; x++) {
-                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
-            }
-        }
+    private static String[] oreMask(OreStyle style, boolean small) {
+        if (small) return ORE_SMALL_MASK;
+        return switch (style) {
+            case GEM -> ORE_GEM_MASK;
+            case CRYSTAL -> ORE_CRYSTAL_MASK;
+            default -> ORE_VEIN_MASK;
+        };
     }
 
     // ---------------------------------------------------------------------
@@ -990,6 +1178,128 @@ public class TextureAtlas {
     }
 
     // ---------------------------------------------------------------------
+    // Phase 0: Farming tiles
+    // ---------------------------------------------------------------------
+
+    /**
+     * Farmland top: dark brown tilled dirt with faint horizontal furrow lines.
+     * The sides and bottom reuse the dirt tile (index 3) directly from the atlas;
+     * only the top face uses this special tile. Index 2 is the grass side
+     * (dirt + green fringe) and must not be used for farmland sides.
+     */
+    private void paintFarmlandTop(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Base: slightly darker, moister-looking dirt
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int t = (int) (valueNoise(x, y, 4) * 20);
+                int c = lerpColor(0x5A3A18, 0x3D2410, t / 20f);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | c);
+            }
+        }
+        // Horizontal furrow lines every 4 pixels
+        for (int y = 3; y < TILE_PX; y += 4) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int cur = img.getRGB(ox + x, oy + y) & 0xFFFFFF;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(cur, 0.6f));
+            }
+        }
+    }
+
+    /**
+     * A crop growth stage rendered as a thin upright cross (same X-shape the
+     * renderer uses for any {@code cross=true} block). {@code fillFrac} (0..1)
+     * controls how tall the plant appears: 0.25 = a tiny sprout, 1.0 = fully grown.
+     * The colour shifts from pure green when young to golden when ripe.
+     */
+    private void paintCropStage(BufferedImage img, int index, Random rnd, int topColor, float fillFrac) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Clear to transparent first (crops render as a cutout cross)
+        for (int y = 0; y < TILE_PX; y++)
+            for (int x = 0; x < TILE_PX; x++)
+                img.setRGB(ox + x, oy + y, 0);
+
+        int stemColor = shade(topColor, 0.65f);
+        int maxY  = TILE_PX - 1;
+        // Clamp to 0: when fillFrac==1.0, raw minY would be 15-16=-1, which
+        // overpaints one row of the tile above in the atlas.
+        int minY  = Math.max(0, maxY - Math.max(2, Math.round(TILE_PX * fillFrac)));
+
+        // Two crossing diagonal stripes (X plant) - each 2px wide
+        for (int y = minY; y <= maxY; y++) {
+            // Stripe from top-left to bottom-right
+            int x1 = (int) ((y - minY) * (TILE_PX - 1f) / Math.max(1, maxY - minY));
+            // Stripe from top-right to bottom-left
+            int x2 = TILE_PX - 1 - x1;
+
+            int c = y > maxY - Math.round((maxY - minY) * 0.3f) ? stemColor : topColor;
+            for (int dx = -1; dx <= 1; dx++) {
+                if (x1 + dx >= 0 && x1 + dx < TILE_PX)
+                    img.setRGB(ox + x1 + dx, oy + y, 0xFF000000 | c);
+                if (x2 + dx >= 0 && x2 + dx < TILE_PX)
+                    img.setRGB(ox + x2 + dx, oy + y, 0xFF000000 | c);
+            }
+        }
+    }
+
+    /** Sugar cane: a tall, segmented green stalk rendered as a cross billboard. */
+    private void paintSugarCane(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        // Transparent background
+        for (int y = 0; y < TILE_PX; y++)
+            for (int x = 0; x < TILE_PX; x++)
+                img.setRGB(ox + x, oy + y, 0);
+
+        // Draw two vertical stripes (the X stripes are wide for sugar cane)
+        int[] xCols = {5, 6, 9, 10};
+        for (int x : xCols) {
+            for (int y = 0; y < TILE_PX; y++) {
+                // Segment lines every 5 pixels (horizontal marks on the stalk)
+                boolean segLine = (y % 5 == 0);
+                int c = segLine ? 0x3A8A28 : (y < TILE_PX / 3 ? 0x58C040 : 0x48A830);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | c);
+            }
+        }
+    }
+
+    /** Blue-grey clay block: a uniform fine-grained surface with subtle speckle. */
+    private void paintClayBlock(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int base = 0x9BA7B0; // muted blue-grey
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(18) - 9;
+                int r = Math.max(0, Math.min(255, ((base >> 16) & 0xFF) + noise));
+                int g = Math.max(0, Math.min(255, ((base >> 8)  & 0xFF) + noise));
+                int b = Math.max(0, Math.min(255, ( base        & 0xFF) + noise));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /** Wet/hydrated farmland top: dark near-black moist soil with faint furrow lines. */
+    private void paintWetFarmlandTop(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int base = 0x2A1A0E; // very dark moist brown
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                boolean furrow = (y % 4 == 0);
+                int noise = rnd.nextInt(12) - 6;
+                int br = furrow ? base - 0x100800 : base;
+                int r = Math.max(0, Math.min(255, ((br >> 16) & 0xFF) + noise));
+                int g = Math.max(0, Math.min(255, ((br >> 8)  & 0xFF) + noise));
+                int b = Math.max(0, Math.min(255, ( br        & 0xFF) + noise));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
     // Furniture / fixtures
     // ---------------------------------------------------------------------
 
@@ -1249,34 +1559,191 @@ public class TextureAtlas {
         }
     }
 
-    /** A wooden chest front: plank fill with a curved lid seam, a brass lock plate and a latch. */
-    private void paintChest(BufferedImage img, int index) {
-        int ox = tileX(index);
-        int oy = tileY(index);
-        int plank = 0xB8863F;
-        int grain = 0x9A6F2F;
-        int seam = 0x7A5A2E;
-        int metal = 0xC9B458;
-        int lock = 0x8A6E2E;
+    /** A wooden oak chest: distinct lid/body, dark frame, brass lock on the front. */
+    private enum ChestFace { FRONT, SIDE, TOP, BOTTOM, BACK, TOP_PLAIN }
+
+    private void paintChest(BufferedImage img, int index, ChestFace face) {
+        paintChestInto(img, tileX(index), tileY(index), TILE_PX, face);
+    }
+
+    /**
+     * Paints a 32-wide chest and blits the left/right 16px halves. The join
+     * has no rim and the lock/latch sits on the center so a pair reads as
+     * one chest, the way Minecraft's large-chest texture does.
+     */
+    private void paintChestPair(BufferedImage img, int leftIndex, int rightIndex, ChestFace face) {
+        BufferedImage wide = new BufferedImage(TILE_PX * 2, TILE_PX, BufferedImage.TYPE_INT_ARGB);
+        paintChestInto(wide, 0, 0, TILE_PX * 2, face);
+        blitChestHalf(wide, 0, img, leftIndex);
+        blitChestHalf(wide, TILE_PX, img, rightIndex);
+    }
+
+    private void blitChestHalf(BufferedImage src, int srcX, BufferedImage dest, int destIndex) {
+        int dx = tileX(destIndex);
+        int dy = tileY(destIndex);
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
-                img.setRGB(ox + x, oy + y, 0xFF000000 | (x % 2 == 0 && y % 4 == 1 ? grain : plank));
+                dest.setRGB(dx + x, dy + y, src.getRGB(srcX + x, y));
             }
         }
-        // Curved lid seam near the top (a shallow arc), splitting lid from body.
-        for (int x = 1; x < TILE_PX - 1; x++) {
-            int y = 4 + Math.round(2f * (float) Math.sin(x * (Math.PI / (TILE_PX - 2))));
-            img.setRGB(ox + x, oy + y, 0xFF000000 | seam);
-        }
-        // Brass lock plate at the front-center, with a darker keyhole.
-        for (int dy = -2; dy <= 2; dy++) {
-            for (int dx = -2; dx <= 2; dx++) {
-                int x = 8 + dx, y = 8 + dy;
-                if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
-                img.setRGB(ox + x, oy + y, 0xFF000000 | metal);
+    }
+
+    private void paintChestInto(BufferedImage img, int ox, int oy, int width, ChestFace face) {
+        Random rnd = new Random(50 + face.ordinal() * 31);
+        ChestFace palette = switch (face) {
+            case BACK -> ChestFace.FRONT;
+            case TOP_PLAIN -> ChestFace.TOP;
+            default -> face;
+        };
+        int light = switch (palette) {
+            case TOP, TOP_PLAIN -> 0xD4B06C;
+            case BOTTOM -> 0x8A5E2C;
+            case FRONT, SIDE, BACK -> 0xC9A15B;
+        };
+        int dark = switch (palette) {
+            case TOP, TOP_PLAIN -> 0x8E5C28;
+            case BOTTOM -> 0x5A3818;
+            case FRONT, SIDE, BACK -> 0x7A4E22;
+        };
+        float oxs = noiseOffset(rnd);
+        float oys = noiseOffset(rnd);
+        float xMid = (width - 1) / 2f;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < width; x++) {
+                float n = (fbm(x + oxs, y + oys) - 0.5f) * 0.42f + 0.5f;
+                int color = lerpColor(dark, light, n);
+                float dx = (x - xMid) / xMid;
+                float dy = (y - 7.5f) / 7.5f;
+                float top = 1f + 0.04f - 0.09f * (y / (TILE_PX - 1f));
+                float f = top * (1f - 0.04f * (dx * dx + dy * dy));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(color, f));
             }
         }
-        img.setRGB(ox + 8, oy + 8, 0xFF000000 | lock);
+        int rim = 0x2C1A0C;
+        int inner = 0x5A3818;
+        int seam = 0x3A2410;
+        int lidHi = 0xD8B878;
+        int brassHi = 0xF2D878;
+        int brass = 0xD4B44A;
+        int brassLo = 0x8A6A18;
+        int hole = 0x1A1008;
+
+        boolean wall = face == ChestFace.FRONT || face == ChestFace.SIDE || face == ChestFace.BACK;
+        int seamY = 5;
+
+        if (wall) {
+            // Lid is the top band: lift it; body below the seam: drop it.
+            for (int y = 1; y < TILE_PX - 1; y++) {
+                for (int x = 1; x < width - 1; x++) {
+                    int rgb = img.getRGB(ox + x, oy + y) & 0xFFFFFF;
+                    float f = y < seamY ? 1.10f : 0.88f;
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | shade(rgb, f));
+                }
+            }
+            for (int x = 1; x < width - 1; x++) {
+                img.setRGB(ox + x, oy + seamY, 0xFF000000 | seam);
+                if (seamY + 1 < TILE_PX - 1) {
+                    img.setRGB(ox + x, oy + seamY + 1, 0xFF000000 | shade(seam, 1.35f));
+                }
+            }
+            for (int x = 2; x < width - 2; x++) {
+                img.setRGB(ox + x, oy + 2, 0xFF000000 | shade(lidHi, 0.92f + 0.04f * (x % 3)));
+            }
+        }
+
+        for (int x = 1; x < width - 1; x++) {
+            img.setRGB(ox + x, oy + 1, 0xFF000000 | inner);
+            img.setRGB(ox + x, oy + TILE_PX - 2, 0xFF000000 | inner);
+        }
+        for (int y = 1; y < TILE_PX - 1; y++) {
+            img.setRGB(ox + 1, oy + y, 0xFF000000 | inner);
+            img.setRGB(ox + width - 2, oy + y, 0xFF000000 | inner);
+        }
+
+        if (face == ChestFace.FRONT) {
+            // Brass lock plate centred on the lid seam, with a keyhole.
+            int lockX = width / 2 - 2;
+            int[][] lock = {
+                    {0, 1, brassHi}, {0, 2, brassHi},
+                    {1, 0, brass}, {1, 1, brassHi}, {1, 2, brassHi}, {1, 3, brass},
+                    {2, 0, brass}, {2, 1, hole}, {2, 2, hole}, {2, 3, brass},
+                    {3, 0, brassLo}, {3, 1, brass}, {3, 2, brass}, {3, 3, brassLo},
+                    {4, 1, brassLo}, {4, 2, brassLo},
+            };
+            for (int[] p : lock) {
+                int y = seamY - 1 + p[0];
+                int x = lockX + p[1];
+                img.setRGB(ox + x, oy + y, 0xFF000000 | p[2]);
+            }
+        }
+
+        if (face == ChestFace.TOP) {
+            // Latch tab on the front edge of the lid, centred so a pair shares one.
+            int latchX0 = width / 2 - 2;
+            for (int y = 12; y <= 14; y++) {
+                for (int x = latchX0; x <= latchX0 + 3; x++) {
+                    int c = (y == 12) ? brassHi : ((x == latchX0 || x == latchX0 + 3) ? brassLo : brass);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | c);
+                }
+            }
+        }
+
+        if (face == ChestFace.SIDE && width == TILE_PX) {
+            // Thin dark straps so the side doesn't read as a plain plank.
+            for (int y = 2; y < TILE_PX - 2; y++) {
+                img.setRGB(ox + 3, oy + y, 0xFF000000 | inner);
+                img.setRGB(ox + 12, oy + y, 0xFF000000 | inner);
+            }
+        }
+
+        for (int x = 0; x < width; x++) {
+            img.setRGB(ox + x, oy, 0xFF000000 | rim);
+            img.setRGB(ox + x, oy + TILE_PX - 1, 0xFF000000 | rim);
+        }
+        for (int y = 0; y < TILE_PX; y++) {
+            img.setRGB(ox, oy + y, 0xFF000000 | rim);
+            img.setRGB(ox + width - 1, oy + y, 0xFF000000 | rim);
+        }
+    }
+
+    /**
+     * Destroy-stage crack overlay: transparent with accumulating dark cracks.
+     * Same seed every stage so later frames keep earlier cracks and add more.
+     */
+    private void paintDestroyStage(BufferedImage img, int index, int stage) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        int cracks = 4 + stage * 3;
+        for (int c = 0; c < cracks; c++) {
+            // Per-crack seed: crack c is identical in every stage, so later
+            // stages keep the earlier cracks and only add new ones.
+            java.util.Random rnd = new java.util.Random(4242L + c * 7919L);
+            int x = 1 + rnd.nextInt(TILE_PX - 2);
+            int y = 1 + rnd.nextInt(TILE_PX - 2);
+            int len = 3 + rnd.nextInt(5) + stage / 3;
+            int dx = rnd.nextInt(3) - 1;
+            int dy = rnd.nextInt(3) - 1;
+            if (dx == 0 && dy == 0) dy = 1;
+            int color = (c % 4 == 0) ? 0xFF3A3A3A : 0xFF0A0A0A;
+            for (int i = 0; i < len; i++) {
+                if (x >= 0 && x < TILE_PX && y >= 0 && y < TILE_PX) {
+                    img.setRGB(ox + x, oy + y, color);
+                    if (stage >= 5 && x + 1 < TILE_PX) {
+                        img.setRGB(ox + x + 1, oy + y, color);
+                    }
+                }
+                x += dx;
+                y += dy;
+                if (rnd.nextFloat() < 0.35f) {
+                    int ndx = rnd.nextInt(3) - 1;
+                    int ndy = rnd.nextInt(3) - 1;
+                    if (ndx != 0 || ndy != 0) {
+                        dx = ndx;
+                        dy = ndy;
+                    }
+                }
+            }
+        }
     }
 
     /** A red bed: a wool top with a darker foot-end panel and pillow area. */
@@ -1468,12 +1935,16 @@ public class TextureAtlas {
 
     /** A "fast leaves" tile: same palette as the solid leaves tile but with small square holes carved out. */
     private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {
+        paintLeavesCutout(img, index, rnd, 0x3E8E35, 0x2F701F);
+    }
+
+    private void paintLeavesCutout(BufferedImage img, int index, Random rnd, int light, int dark) {
         int ox = tileX(index);
         int oy = tileY(index);
         for (int cy = 0; cy < TILE_PX; cy += 2) {
             for (int cx = 0; cx < TILE_PX; cx += 2) {
                 boolean hole = rnd.nextFloat() < 0.32f;
-                int base = rnd.nextFloat() < 0.55f ? 0x3E8E35 : 0x2F701F;
+                int base = rnd.nextFloat() < 0.55f ? light : dark;
                 for (int y = 0; y < 2; y++) {
                     for (int x = 0; x < 2; x++) {
                         int px = ox + cx + x, py = oy + cy + y;
@@ -1487,6 +1958,12 @@ public class TextureAtlas {
     /** Wool: soft, fluffy texture in white. */
     private void paintWool(BufferedImage img, int index, Random rnd) {
         paintTile(img, index, rnd, 0xF5F5F5, 0xE0E0E0, true);
+    }
+
+    /** Atlas tile for destroy-stage {@code stage} (0..{@link #DESTROY_STAGE_COUNT}-1). */
+    public static int destroyStageTile(int stage) {
+        int s = Math.max(0, Math.min(DESTROY_STAGE_COUNT - 1, stage));
+        return DESTROY_STAGE_TILE + s;
     }
 
     public void bind() {
@@ -1509,4 +1986,256 @@ public class TextureAtlas {
     public void destroy() {
         glDeleteTextures(textureId);
     }
+
+    // =========================================================================
+    // Phase 0.5 — Tinkers' Construct tile painters
+    // =========================================================================
+
+    /**
+     * SEARED_BRICK (tile 234): fired, blackened brick with orange-red mortar
+     * lines.  The dark soot colour (#1A1008) contrasts with hot mortar (#8B3A10).
+     */
+    private void paintSearedBrick(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int brickColor = 0x1E1208;
+        int mortarColor = 0x7A3010;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // Horizontal mortar every 5 rows, vertical mortar offset per row
+                int rowOffset = ((y / 5) % 2) * 4;
+                boolean mortarH = (y % 5 == 0);
+                boolean mortarV = ((x + rowOffset) % 8 == 0);
+                int noise = rnd.nextInt(10) - 5;
+                int base = (mortarH || mortarV) ? mortarColor : brickColor;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8)  & 0xFF) + noise);
+                int b = clamp(( base        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * SEARED_GLASS (tile 235): dark smoky-brown semi-transparent glass with a
+     * copper-tinted grid frame.  Resembles Tinkers' classic seared glass.
+     */
+    private void paintSearedGlass(BufferedImage img, int index) {
+        int ox = tileX(index), oy = tileY(index);
+        int fill = 0x3A2010; // dark smoky interior
+        int frame = 0x6B3A1A;// copper-brown frame
+        int alpha = 160;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                boolean onFrame = (x == 0 || x == TILE_PX-1 || y == 0 || y == TILE_PX-1
+                                || x == TILE_PX/2 || y == TILE_PX/2);
+                int color = onFrame ? frame : fill;
+                img.setRGB(ox + x, oy + y, (alpha << 24) | color);
+            }
+        }
+    }
+
+    /**
+     * SEARED_TANK (tile 236): looks like a seared brick block but with a
+     * small translucent window in the centre revealing molten orange inside.
+     */
+    private void paintSearedTank(BufferedImage img, int index, Random rnd) {
+        // Start with seared brick
+        paintSearedBrick(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        // Draw a 6x8 window in the centre, orange-glow fill
+        int wx = ox + 5, wy = oy + 4;
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 6; x++) {
+                boolean border = (x == 0 || x == 5 || y == 0 || y == 7);
+                int color = border ? 0x6B3A1A : 0xC84000;
+                img.setRGB(wx + x, wy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * SMELTERY_DRAIN (tile 237): dark seared brick face with a square drain
+     * hole (a 4×4 dark void in the centre).
+     */
+    private void paintSmelteryDrain(BufferedImage img, int index, Random rnd) {
+        paintSearedBrick(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        // Drain hole (6x6 void square centred on face)
+        for (int y = 5; y < 11; y++) {
+            for (int x = 5; x < 11; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF050502); // near-black void
+            }
+        }
+        // Highlight rim
+        for (int i = 5; i < 11; i++) {
+            img.setRGB(ox + i, oy + 5,  0xFF6B3A1A);
+            img.setRGB(ox + i, oy + 10, 0xFF3A1A08);
+            img.setRGB(ox + 5,  oy + i, 0xFF6B3A1A);
+            img.setRGB(ox + 10, oy + i, 0xFF3A1A08);
+        }
+    }
+
+    /**
+     * SMELTERY_CONTROLLER face (tiles 238 = inactive, 239 = active/lit).
+     * Inactive: a dark square mouth on a seared brick background.
+     * Active: the mouth glows deep orange-white (molten metal visible inside).
+     */
+    private void paintSmelteryController(BufferedImage img, int index, Random rnd, boolean active) {
+        paintSearedBrick(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        if (active) {
+            // Glowing orange-white opening
+            for (int y = 3; y < 13; y++) {
+                for (int x = 3; x < 13; x++) {
+                    float dist = (float) Math.sqrt((x - 7.5) * (x - 7.5) + (y - 7.5) * (y - 7.5));
+                    int glow = (int) Math.max(0, 255 - dist * 22);
+                    int r = Math.min(255, glow + 160);
+                    int g = Math.min(255, glow * 80 / 255);
+                    int b = 0;
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+                }
+            }
+        } else {
+            // Dark void opening
+            for (int y = 3; y < 13; y++) {
+                for (int x = 3; x < 13; x++) {
+                    img.setRGB(ox + x, oy + y, 0xFF0A0502);
+                }
+            }
+            // Rim highlight
+            for (int i = 3; i < 13; i++) {
+                img.setRGB(ox + i, oy + 3, 0xFF4A2810);
+                img.setRGB(ox + 3, oy + i, 0xFF4A2810);
+                img.setRGB(ox + i, oy + 12, 0xFF1A0A04);
+                img.setRGB(ox + 12, oy + i, 0xFF1A0A04);
+            }
+        }
+    }
+
+    /**
+     * CASTING_TABLE top (tile 240): dark wood surface with a recessed casting
+     * indent in the centre (where the cast sits).
+     */
+    private void paintCastingTable(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int wood = 0x3A2410;
+        int recess = 0x1A0E06;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(8) - 4;
+                boolean inRecess = (x >= 4 && x <= 11 && y >= 4 && y <= 11);
+                int base = inRecess ? recess : wood;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8)  & 0xFF) + noise);
+                int b = clamp(( base        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Rim highlight on recess
+        for (int i = 4; i <= 11; i++) {
+            img.setRGB(ox + i, oy + 4, 0xFF5A3820);
+            img.setRGB(ox + 4, oy + i, 0xFF5A3820);
+        }
+    }
+
+    /**
+     * CASTING_BASIN top (tile 241): seared brick frame with a deep square
+     * basin depression (orange-glow gradient inside).
+     */
+    private void paintCastingBasin(BufferedImage img, int index, Random rnd) {
+        paintSearedBrick(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        // Basin depression
+        for (int y = 2; y < 14; y++) {
+            for (int x = 2; x < 14; x++) {
+                int r = clamp(180 + rnd.nextInt(16) - 8);
+                int g = clamp(60 + rnd.nextInt(10));
+                int b = 0;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Dark rim
+        for (int i = 2; i < 14; i++) {
+            img.setRGB(ox + i, oy + 2,  0xFF6B3A1A);
+            img.setRGB(ox + i, oy + 13, 0xFF3A1A08);
+            img.setRGB(ox + 2, oy + i,  0xFF6B3A1A);
+            img.setRGB(ox + 13, oy + i, 0xFF3A1A08);
+        }
+    }
+
+    /**
+     * PART_BUILDER top (tile 242): looks like a small crafting table with a
+     * pattern grid overlay in one half and raw material in the other.
+     */
+    private void paintPartBuilder(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int wood = 0x5A3820;
+        // Wood base
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(10) - 5;
+                int r = clamp(((wood >> 16) & 0xFF) + noise);
+                int g = clamp(((wood >> 8)  & 0xFF) + noise);
+                int b = clamp(( wood        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Pattern grid (left half)
+        for (int y = 2; y < 14; y += 4) {
+            for (int x = 1; x < 7; x++) {
+                img.setRGB(ox + x, oy + y, 0xFF2A1808);
+            }
+        }
+        for (int x = 1; x < 7; x += 3) {
+            for (int y = 2; y < 14; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF2A1808);
+            }
+        }
+        // Material block (right half) — grey stone
+        for (int y = 4; y < 12; y++) {
+            for (int x = 9; x < 15; x++) {
+                int g2 = 0x9E9E9E;
+                int noise = rnd.nextInt(12) - 6;
+                int r = clamp(((g2 >> 16) & 0xFF) + noise);
+                int gv = clamp(((g2 >> 8)  & 0xFF) + noise);
+                int bv = clamp(( g2        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (gv << 8) | bv);
+            }
+        }
+    }
+
+    /**
+     * TOOL_STATION top (tile 243): assembly-bench look — dark iron plate with
+     * a groove for aligning tool parts and a hammer detail.
+     */
+    private void paintToolStation(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int iron = 0x9090A8;
+        // Iron plate base
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(12) - 6;
+                int r = clamp(((iron >> 16) & 0xFF) + noise);
+                int g = clamp(((iron >> 8)  & 0xFF) + noise);
+                int b = clamp(( iron        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Alignment groove (horizontal channel)
+        for (int x = 1; x < 15; x++) {
+            img.setRGB(ox + x, oy + 7,  0xFF505060);
+            img.setRGB(ox + x, oy + 8,  0xFF404050);
+        }
+        // Small hammer icon (top-left, 4x5 shape)
+        int hColor = 0x303040;
+        img.setRGB(ox + 2, oy + 2, 0xFF000000 | hColor);
+        img.setRGB(ox + 3, oy + 2, 0xFF000000 | hColor);
+        img.setRGB(ox + 4, oy + 2, 0xFF000000 | hColor);
+        img.setRGB(ox + 3, oy + 3, 0xFF000000 | hColor);
+        img.setRGB(ox + 3, oy + 4, 0xFF000000 | hColor);
+        img.setRGB(ox + 3, oy + 5, 0xFF000000 | hColor);
+    }
+
+    /** Clamp a colour channel to [0, 255]. */
+    private static int clamp(int v) { return Math.max(0, Math.min(255, v)); }
 }
