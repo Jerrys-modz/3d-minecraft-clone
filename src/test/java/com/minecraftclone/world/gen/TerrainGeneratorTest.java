@@ -71,14 +71,25 @@ class TerrainGeneratorTest {
 
     @Test
     void villagesAreSparseAndDeterministic() {
-        int count = 0;
-        for (int cx = 0; cx < 1000; cx++) {
-            if (TerrainGenerator.isVillageChunk(12345L, cx, 7)) count++;
+        int inFirstCell = 0;
+        for (int cx = 0; cx < 32; cx++) {
+            for (int cz = 0; cz < 32; cz++) {
+                if (TerrainGenerator.isVillageChunk(12345L, cx, cz)) inFirstCell++;
+            }
         }
-        assertTrue(count > 0, "some chunks should be village origins");
-        assertTrue(count < 100, "villages should be rare");
+        assertEquals(1, inFirstCell, "exactly one origin per 32×32 chunk region");
+
+        int count = 0;
+        for (int cx = 0; cx < 256; cx++) {
+            for (int cz = 0; cz < 256; cz++) {
+                if (TerrainGenerator.isVillageChunk(12345L, cx, cz)) count++;
+            }
+        }
+        assertEquals(64, count, "8×8 regions in a 256×256 chunk square");
         assertEquals(TerrainGenerator.isVillageChunk(12345L, 12, 7),
                 TerrainGenerator.isVillageChunk(12345L, 12, 7));
+        // Old 1-in-36-chunks density would light up ~1800 origins in this square.
+        assertTrue(count < 100, "villages should be rare");
     }
 
     @Test
