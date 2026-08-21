@@ -914,7 +914,7 @@ public class Hud {
      * active tab; {@code capturingAction} >= 0 means that keybind row is
      * waiting for a key press.
      */
-    public void renderSettingsMenu(Settings settings, int selectedTab, int selectedIndex, int capturingAction, float aspectRatio) {
+    public void renderSettingsMenu(Settings settings, int selectedTab, int selectedIndex, int capturingAction, float aspectRatio, boolean inWorld) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
@@ -983,7 +983,7 @@ public class Hud {
         // One row per entry in the active tab. The Controls tab shows the
         // keybind list, Controller shows the gamepad-binding list, the rest
         // show their Settings rows.
-        int rows = settingsRowsForTab(selectedTab);
+        int rows = settingsRowsForTab(selectedTab, inWorld);
         if (selectedTab == Settings.TAB_CONTROLS) {
             for (int action = 0; action < rows; action++) {
                 float baseline = settingsRowTop(selectedTab, action) - SETTINGS_ROW_H + 0.013f;
@@ -1012,7 +1012,7 @@ public class Hud {
             }
         } else {
             for (int local = 0; local < rows; local++) {
-                int row = settingsRowForTab(selectedTab, local);
+                int row = settingsRowForTab(selectedTab, local, inWorld);
                 float baseline = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H + 0.013f;
                 boolean selected = local == selectedIndex;
                 drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
@@ -1033,7 +1033,7 @@ public class Hud {
             lineShader.setUniform("view", identity);
             lineShader.setUniform("model", hudTransform);
             for (int local = 0; local < rows; local++) {
-                int row = settingsRowForTab(selectedTab, local);
+                int row = settingsRowForTab(selectedTab, local, inWorld);
                 if (Settings.isToggle(row)) continue;
                 float trackY = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H / 2f;
                 float trackH = 0.012f;
@@ -1267,15 +1267,15 @@ public class Hud {
         glEnable(GL_DEPTH_TEST);
     }
     /** Number of interactive rows for a settings tab (keybind/gamepad-binding actions on Controls/Controller, Settings rows elsewhere). */
-    private static int settingsRowsForTab(int tab) {
+    private static int settingsRowsForTab(int tab, boolean inWorld) {
         if (tab == Settings.TAB_CONTROLS) return KeyBindings.COUNT;
         if (tab == Settings.TAB_CONTROLLER) return GamepadBindings.COUNT;
-        return Settings.tabRowCount(tab);
+        return Settings.tabRowCount(tab, inWorld);
     }
 
     /** The Settings row index shown as local row {@code local} on {@code tab} (only valid for plain Settings tabs). */
-    private static int settingsRowForTab(int tab, int local) {
-        return Settings.rowInTab(tab, local);
+    private static int settingsRowForTab(int tab, int local, boolean inWorld) {
+        return Settings.rowInTab(tab, local, inWorld);
     }
 
     /**
@@ -1383,10 +1383,10 @@ public class Hud {
     }
 
     /** The settings-menu row (within tab {@code tab}) under the mouse, or -1. */
-    public int settingsRowAt(float logicalX, float logicalY, int tab) {
+    public int settingsRowAt(float logicalX, float logicalY, int tab, boolean inWorld) {
         float panelW = settingsPanelWidth();
         float left = -panelW / 2f;
-        for (int i = 0; i < settingsRowsForTab(tab); i++) {
+        for (int i = 0; i < settingsRowsForTab(tab, inWorld); i++) {
             float rowTop = settingsRowTop(tab, i);
             if (logicalX >= left && logicalX <= left + panelW
                     && logicalY <= rowTop && logicalY >= rowTop - SETTINGS_ROW_H) {
@@ -1397,10 +1397,10 @@ public class Hud {
     }
 
     /** If the mouse is over a range row's slider track, the click fraction (0..1); otherwise -1. */
-    public float settingsTrackAt(float logicalX, float logicalY, int tab) {
-        int row = settingsRowAt(logicalX, logicalY, tab);
+    public float settingsTrackAt(float logicalX, float logicalY, int tab, boolean inWorld) {
+        int row = settingsRowAt(logicalX, logicalY, tab, inWorld);
         if (row < 0 || tab == Settings.TAB_CONTROLS || tab == Settings.TAB_CONTROLLER
-                || Settings.isToggle(settingsRowForTab(tab, row))) return -1f;
+                || Settings.isToggle(settingsRowForTab(tab, row, inWorld))) return -1f;
         float[] cx = settingsControlX();
         if (logicalX < cx[0] - 0.012f || logicalX > cx[1] + 0.012f) return -1f;
         return settingsSliderAt(logicalX, row, tab);

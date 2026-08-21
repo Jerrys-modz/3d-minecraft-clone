@@ -165,16 +165,20 @@ public class Main {
      * null (main menu) - {@link #applySettings} tolerates that. {@code tab}
      * selects the active section (Graphics / Gameplay / Controls); navigation
      * wraps within the active tab's rows, and Tab (or clicking a tab) switches.
+     * Game mode is a per-world setting: the title-screen page hides it
+     * ({@code inWorld == false}), and changing it in-game writes this world's
+     * {@code world.txt}.
      */
     private void handleSettingsMenuInput(Input input, Settings settings, Path settingsFile, World[] worlds,
                                          Player player, Window window, Hud hud, AudioEngine audio,
                                          int[] menuSelection, int[] sliderDragRow, int[] bindingAction,
-                                         int[] settingsTab) {
+                                         int[] settingsTab, WorldGenSettings worldGen, Path worldDir,
+                                         boolean inWorld) {
         int tab = settingsTab[0];
         boolean bindingTab = tab == Settings.TAB_CONTROLS || tab == Settings.TAB_CONTROLLER;
         int rows = tab == Settings.TAB_CONTROLS ? KeyBindings.COUNT
                 : tab == Settings.TAB_CONTROLLER ? GamepadBindings.COUNT
-                : Settings.tabRowCount(tab);
+                : Settings.tabRowCount(tab, inWorld);
 
         // Tab key switches to the next section; the selection resets to the top.
         if (input.isKeyJustPressed(GLFW_KEY_TAB)) {
@@ -229,13 +233,13 @@ public class Main {
             if (input.isKeyJustPressed(GLFW_KEY_LEFT)) {
                 if (!bindingTab) {
                     adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
-                            Settings.rowInTab(tab, menuSelection[0]), -1);
+                            Settings.rowInTab(tab, menuSelection[0], inWorld), -1, worldGen, worldDir);
                 }
             }
             if (input.isKeyJustPressed(GLFW_KEY_RIGHT)) {
                 if (!bindingTab) {
                     adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
-                            Settings.rowInTab(tab, menuSelection[0]), +1);
+                            Settings.rowInTab(tab, menuSelection[0], inWorld), +1, worldGen, worldDir);
                 }
             }
             if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE)) {
@@ -247,7 +251,7 @@ public class Main {
                     input.consumeLastGamepadButtonPressed();
                 } else {
                     adjustSettingsRow(settings, settingsFile, worlds, player, window, audio,
-                            Settings.rowInTab(tab, menuSelection[0]), +1);
+                            Settings.rowInTab(tab, menuSelection[0], inWorld), +1, worldGen, worldDir);
                 }
             }
         }
@@ -267,12 +271,12 @@ public class Main {
             }
             return;
         }
-        int hoverRow = hud.settingsRowAt(sLx, sLy, tab);
+        int hoverRow = hud.settingsRowAt(sLx, sLy, tab, inWorld);
         if (hoverRow >= 0) {
             menuSelection[0] = hoverRow;
         }
         if (bindingAction[0] < 0 && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-            int clicked = hud.settingsRowAt(sLx, sLy, tab);
+            int clicked = hud.settingsRowAt(sLx, sLy, tab, inWorld);
             if (clicked >= 0) {
                 if (bindingTab) {
                     bindingAction[0] = clicked;
@@ -280,15 +284,16 @@ public class Main {
                     input.consumeLastGamepadButtonPressed();
                     audio.play(SoundEvent.UI_CLICK);
                 } else {
-                    int row = Settings.rowInTab(tab, clicked);
+                    int row = Settings.rowInTab(tab, clicked, inWorld);
                     if (Settings.isToggle(row)) {
-                        adjustSettingsRow(settings, settingsFile, worlds, player, window, audio, row, +1);
+                        adjustSettingsRow(settings, settingsFile, worlds, player, window, audio, row, +1,
+                                worldGen, worldDir);
                     } else {
-                        float frac = hud.settingsTrackAt(sLx, sLy, tab);
+                        float frac = hud.settingsTrackAt(sLx, sLy, tab, inWorld);
                         if (frac >= 0f) {
                             settings.setFromFraction(row, frac);
-                            applySettings(settings, worlds, player, window, audio);
-                            settings.save(settingsFile);
+                            applyAndSaveSettings(settings, settingsFile, worlds, player, window, audio,
+                                    worldGen, worldDir, row);
                             sliderDragRow[0] = clicked;
                         }
                     }
@@ -297,9 +302,10 @@ public class Main {
         }
         if (input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && sliderDragRow[0] >= 0) {
             float frac = hud.settingsSliderAt(sLx, sliderDragRow[0], tab);
-            settings.setFromFraction(Settings.rowInTab(tab, sliderDragRow[0]), frac);
-            applySettings(settings, worlds, player, window, audio);
-            settings.save(settingsFile);
+            int row = Settings.rowInTab(tab, sliderDragRow[0], inWorld);
+            settings.setFromFraction(row, frac);
+            applyAndSaveSettings(settings, settingsFile, worlds, player, window, audio,
+                    worldGen, worldDir, row);
         }
         if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
             sliderDragRow[0] = -1;
@@ -308,11 +314,33 @@ public class Main {
 
     /** Steps/toggles a single settings row and pushes the change everywhere it applies. */
     private void adjustSettingsRow(Settings settings, Path settingsFile, World[] worlds, Player player,
-                                   Window window, AudioEngine audio, int row, int direction) {
+                                   Window window, AudioEngine audio, int row, int direction,
+                                   WorldGenSettings worldGen, Path worldDir) {
         settings.adjust(row, direction);
+        applyAndSaveSettings(settings, settingsFile, worlds, player, window, audio, worldGen, worldDir, row);
+        audio.play(SoundEvent.UI_CLICK);
+    }
+
+    /**
+     * Pushes settings into the live game, writes global {@code settings.txt}, and if
+     * game mode changed while a world is loaded, writes that world's {@code world.txt}.
+     */
+    private void applyAndSaveSettings(Settings settings, Path settingsFile, World[] worlds, Player player,
+                                      Window window, AudioEngine audio, WorldGenSettings worldGen,
+                                      Path worldDir, int changedRow) {
         applySettings(settings, worlds, player, window, audio);
         settings.save(settingsFile);
-        audio.play(SoundEvent.UI_CLICK);
+        if (changedRow == Settings.GAME_MODE && worldGen != null && worldDir != null) {
+            worldGen.setGameMode(settings.getGameMode());
+            saveWorldGenSettings(worldDir, worldGen);
+        }
+    }
+
+    /** Copies this world's game mode onto Settings/Player so it isn't the leftover global default. */
+    private void applyWorldGameMode(Settings settings, WorldGenSettings genSettings, World[] worlds,
+                                    Player player, Window window, AudioEngine audio) {
+        settings.setGameMode(genSettings.getGameMode());
+        applySettings(settings, worlds, player, window, audio);
     }
 
     /** Closes any open container screen (inventory/crafting table/furnace), returning cursor/grid items to the inventory. */
@@ -707,6 +735,7 @@ public class Main {
             worldSelectOpen[0] = true;
         }
         if (System.getenv("MCCLONE_AUTOTEST_WORLDGEN") != null) {
+            genSettings.rollFreshSeed();
             worldGenOpen[0] = true;
         }
         if (System.getenv("MCCLONE_AUTOTEST_DEBUG") != null) {
@@ -737,6 +766,7 @@ public class Main {
                 w.setRenderDistance(settings.getRenderDistance());
                 w.setLeavesTransparent(settings.isLeavesTransparent());
             }
+            applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
             for (int i = 0; i < 200; i++) world.update(0, 0);
             float[] spawn = findSpawn(world);
             player.spawn(world, spawn[0], spawn[1]);
@@ -1179,7 +1209,8 @@ public class Main {
                     // Settings page opened from the main menu: same controls as the
                     // in-game Esc menu, but Esc returns to the main menu.
                     handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
-                            menuSelection, sliderDragRow, bindingAction, settingsTab);
+                            menuSelection, sliderDragRow, bindingAction, settingsTab,
+                            null, null, false);
                     if (input.isKeyJustPressed(GLFW_KEY_ESCAPE) && bindingAction[0] < 0) {
                         mainSettingsOpen[0] = false;
                         sliderDragRow[0] = -1;
@@ -1254,6 +1285,7 @@ public class Main {
                                     w.setRenderDistance(settings.getRenderDistance());
                                     w.setLeavesTransparent(settings.isLeavesTransparent());
                                 }
+                                applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
                                 for (int i = 0; i < 200; i++) world.update(0, 0);
                                 float[] spawn = findSpawn(world);
                                 player.spawn(world, spawn[0], spawn[1]);
@@ -1321,6 +1353,7 @@ public class Main {
                                 w.setRenderDistance(settings.getRenderDistance());
                                 w.setLeavesTransparent(settings.isLeavesTransparent());
                             }
+                            applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
                             for (int i = 0; i < 200; i++) world.update(0, 0);
                             float[] spawn = findSpawn(world);
                             player.spawn(world, spawn[0], spawn[1]);
@@ -1335,6 +1368,7 @@ public class Main {
                         } else {
                             genSettings = new WorldGenSettings();
                             genSettings.setName(uniqueWorldName(worldNames));
+                            genSettings.rollFreshSeed();
                             worldGenOpen[0] = true;
                             worldGenSelection[0] = 0;
                         }
@@ -1573,7 +1607,8 @@ public class Main {
                 }
             } else if (menuOpen[0]) {
                 handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
-                        menuSelection, sliderDragRow, bindingAction, settingsTab);
+                        menuSelection, sliderDragRow, bindingAction, settingsTab,
+                        genSettings, currentWorldDir[0], true);
             }
 
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.DEBUG))) {
@@ -2381,11 +2416,11 @@ public class Main {
                 }
             }
             if (menuOpen[0]) {
-                hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio());
+                hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio(), true);
             }
             if (!started[0]) {
                 if (mainSettingsOpen[0]) {
-                    hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio());
+                    hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio(), false);
                 } else if (worldGenOpen[0]) {
                     hud.renderWorldGenMenu(genSettings, worldGenSelection[0], editingRow[0], window.getAspectRatio());
                 } else if (worldSelectOpen[0]) {

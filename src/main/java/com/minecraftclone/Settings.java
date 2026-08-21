@@ -19,6 +19,8 @@ import java.util.List;
  * <p>
  * Settings are persisted to a small {@code key=value} text file via
  * {@link #save(Path)} / {@link #load(Path)} and restored on the next launch.
+ * Game mode is not stored here — it lives on each world's {@code world.txt}
+ * and is only shown on the in-game pause menu (and Create New World).
  */
 public class Settings {
 
@@ -32,7 +34,7 @@ public class Settings {
     public static final int CLOUD_SPEED = 6;        // 0-2: slow/normal/fast (Graphics)
     public static final int STARS = 7;              // toggle (Graphics)
     public static final int DARK_GUI = 8;           // toggle (Graphics)
-    public static final int GAME_MODE = 9;          // Gameplay
+    public static final int GAME_MODE = 9;          // Gameplay (in-world only; stored on the world)
     public static final int SENSITIVITY = 10;       // Gameplay
     public static final int INVERT_MOUSE_Y = 11;    // toggle (Gameplay)
     public static final int VIEW_BOBBING = 12;      // toggle (Gameplay)
@@ -71,12 +73,43 @@ public class Settings {
 
     /** Number of setting rows on {@code tab} (0 for the keybinds-only Controls tab). */
     public static int tabRowCount(int tab) {
-        return TAB_ROW_END[tab] - TAB_ROW_START[tab];
+        return tabRowCount(tab, true);
+    }
+
+    /**
+     * Number of setting rows on {@code tab}. Game mode lives on the world, so the
+     * title-screen Settings page ({@code inWorld == false}) hides that Gameplay row;
+     * the in-game pause menu still shows it so you can change the current world's mode.
+     */
+    public static int tabRowCount(int tab, boolean inWorld) {
+        return TAB_ROW_END[tab] - tabRowStart(tab, inWorld);
     }
 
     /** The Settings row index shown as local row {@code local} on tab {@code tab}. */
     public static int rowInTab(int tab, int local) {
-        return TAB_ROW_START[tab] + local;
+        return rowInTab(tab, local, true);
+    }
+
+    /** The Settings row index shown as local row {@code local} on tab {@code tab}. */
+    public static int rowInTab(int tab, int local, boolean inWorld) {
+        return tabRowStart(tab, inWorld) + local;
+    }
+
+    /**
+     * First Settings row of {@code tab}. Title-screen Settings skip {@link #GAME_MODE}
+     * so it isn't treated as a global option.
+     */
+    public static int tabRowStart(int tab, boolean inWorld) {
+        int start = TAB_ROW_START[tab];
+        if (!inWorld && tab == TAB_GAMEPLAY) {
+            return SENSITIVITY;
+        }
+        return start;
+    }
+
+    /** True for rows that belong to a loaded world rather than global {@code settings.txt}. */
+    public static boolean isWorldSetting(int row) {
+        return row == GAME_MODE;
     }
 
     private final boolean[] toggles = new boolean[ROW_COUNT];
@@ -265,7 +298,6 @@ public class Settings {
         lines.add("fov=" + Math.round(ranges[FOV]));
         lines.add("brightness=" + ranges[BRIGHTNESS]);
         lines.add("mouse_sensitivity=" + ranges[SENSITIVITY]);
-        lines.add("game_mode=" + getGameMode().ordinal());
         lines.add("clouds=" + getCloudAmount());
         lines.add("cloud_speed=" + getCloudSpeed());
         lines.add("stars=" + (toggles[STARS] ? 1 : 0));
@@ -281,7 +313,8 @@ public class Settings {
         lines.add("ui_volume=" + ranges[UI_VOLUME]);
         keyBinds.saveLines(lines);
         gamepadBinds.saveLines(lines);
-        worldGen.saveLines(lines);
+        // World-generation choices (seed, game mode, …) live in each world's
+        // world.txt — they are not global settings, so they are not written here.
         try {
             if (file.getParent() != null) {
                 Files.createDirectories(file.getParent());
@@ -314,7 +347,7 @@ public class Settings {
                         case "fov" -> s.ranges[FOV] = clamp(FOV, Float.parseFloat(value));
                         case "brightness" -> s.ranges[BRIGHTNESS] = clamp(BRIGHTNESS, Float.parseFloat(value));
                         case "mouse_sensitivity" -> s.ranges[SENSITIVITY] = clamp(SENSITIVITY, Float.parseFloat(value));
-                        case "game_mode" -> s.ranges[GAME_MODE] = clamp(GAME_MODE, Float.parseFloat(value));
+                        case "game_mode" -> { /* per-world; ignored in global settings.txt */ }
                         case "clouds" -> s.ranges[CLOUDS] = clamp(CLOUDS, Float.parseFloat(value));
                         case "cloud_speed" -> s.ranges[CLOUD_SPEED] = clamp(CLOUD_SPEED, Float.parseFloat(value));
                         case "stars" -> s.toggles[STARS] = parseBool(value);
@@ -385,6 +418,11 @@ public class Settings {
         int idx = Math.round(ranges[GAME_MODE]);
         GameMode[] modes = GameMode.values();
         return modes[Math.max(0, Math.min(modes.length - 1, idx))];
+    }
+
+    /** Sets the in-memory game mode (persisted on the loaded world's {@code world.txt}, not here). */
+    public void setGameMode(GameMode mode) {
+        ranges[GAME_MODE] = mode == null ? 0 : mode.ordinal();
     }
 
     /** 0 = off, 1 = light, 2 = normal, 3 = heavy. */

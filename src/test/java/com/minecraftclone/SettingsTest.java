@@ -312,4 +312,48 @@ class SettingsTest {
             Files.deleteIfExists(file);
         }
     }
+
+    @Test
+    void gameModeIsNotPersistedInGlobalSettings() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Settings s = new Settings();
+            s.setGameMode(GameMode.CREATIVE);
+            assertEquals(GameMode.CREATIVE, s.getGameMode());
+            s.save(file);
+            String body = Files.readString(file);
+            assertFalse(body.contains("game_mode="), "game mode belongs on the world, not settings.txt");
+            assertFalse(body.contains("worldgen_seed="), "world seeds must not leak into global settings");
+
+            Settings loaded = Settings.load(file);
+            assertEquals(GameMode.SURVIVAL, loaded.getGameMode());
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void legacyGlobalGameModeLineIsIgnored() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Files.writeString(file, "game_mode=2\nrender_distance=8\n");
+            Settings loaded = Settings.load(file);
+            assertEquals(GameMode.SURVIVAL, loaded.getGameMode());
+            assertEquals(8, loaded.getRenderDistance());
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void titleScreenGameplayTabHidesGameMode() {
+        assertTrue(Settings.isWorldSetting(Settings.GAME_MODE));
+        assertEquals(Settings.GAME_MODE, Settings.rowInTab(Settings.TAB_GAMEPLAY, 0, true));
+        assertEquals(Settings.SENSITIVITY, Settings.rowInTab(Settings.TAB_GAMEPLAY, 0, false));
+        assertEquals(Settings.tabRowCount(Settings.TAB_GAMEPLAY, true) - 1,
+                Settings.tabRowCount(Settings.TAB_GAMEPLAY, false));
+        for (int local = 0; local < Settings.tabRowCount(Settings.TAB_GAMEPLAY, false); local++) {
+            assertFalse(Settings.isWorldSetting(Settings.rowInTab(Settings.TAB_GAMEPLAY, local, false)));
+        }
+    }
 }
