@@ -1714,16 +1714,37 @@ public class Main {
             }
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
-            // Full-screen map controls (WASD pan, scroll zoom, R reset)
+            // Full-screen map controls: grab-and-drag (JourneyMap-style), WASD /
+            // arrows, scroll zoom, R reset. Shift speeds up keyboard pan.
             if (mapOpen[0] && mapRenderer[0] != null) {
-                float panSpeed = 280f * dt;
-                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.FORWARD))) mapRenderer[0].pan(0, -panSpeed);
-                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.BACK)))    mapRenderer[0].pan(0,  panSpeed);
-                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.LEFT)))    mapRenderer[0].pan(-panSpeed, 0);
-                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.RIGHT)))   mapRenderer[0].pan( panSpeed, 0);
+                boolean shift = input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT);
+                float panSpeed = Math.max(window.getWidth(), window.getHeight()) * (shift ? 1.4f : 0.65f) * dt;
+                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.FORWARD)) || input.isKeyDown(GLFW_KEY_UP)) {
+                    mapRenderer[0].pan(0, -panSpeed);
+                }
+                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.BACK)) || input.isKeyDown(GLFW_KEY_DOWN)) {
+                    mapRenderer[0].pan(0, panSpeed);
+                }
+                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.LEFT)) || input.isKeyDown(GLFW_KEY_LEFT)) {
+                    mapRenderer[0].pan(-panSpeed, 0);
+                }
+                if (input.isKeyDown(settings.getKeyBinds().get(KeyBindings.RIGHT)) || input.isKeyDown(GLFW_KEY_RIGHT)) {
+                    mapRenderer[0].pan(panSpeed, 0);
+                }
+                if ((input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) || input.isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE))
+                        && !input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)
+                        && !input.isMouseJustPressed(GLFW_MOUSE_BUTTON_MIDDLE)) {
+                    // Grab-and-drag: the map follows the cursor, same as JourneyMap.
+                    // Skip the press frame so the move-to-click doesn't jump the view.
+                    mapRenderer[0].pan(-(float) input.getDeltaX(), -(float) input.getDeltaY());
+                }
                 double scroll = input.getScrollDelta();
-                if (scroll != 0) mapRenderer[0].zoom((float) Math.pow(1.2, scroll));
-                if (input.isKeyJustPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_R)) mapRenderer[0].resetView();
+                if (scroll != 0) {
+                    mapRenderer[0].zoomAt((float) Math.pow(1.2, scroll),
+                            (int) input.getMouseX(), (int) input.getMouseY(),
+                            window.getWidth(), window.getHeight());
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_R)) mapRenderer[0].resetView();
             }
 
             if (started[0] && world != null && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {

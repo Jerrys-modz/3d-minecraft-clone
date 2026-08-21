@@ -155,6 +155,40 @@ class MapRendererTest {
         assertEquals(MapRenderer.DEFAULT_SCALE, renderer.getMapScale(), 0.01f);
     }
 
+    @Test
+    void panMovesTheViewInScreenPixels() {
+        MapRenderer renderer = new MapRenderer(new MapData());
+        assertEquals(0f, renderer.getPanWorldX(), 0.01f);
+        assertEquals(0f, renderer.getPanWorldZ(), 0.01f);
+        renderer.pan(3f, 0f); // 3 px at 3 px/block = 1 block east
+        assertEquals(1f, renderer.getPanWorldX(), 0.01f);
+        renderer.pan(0f, -6f); // 2 blocks north
+        assertEquals(-2f, renderer.getPanWorldZ(), 0.01f);
+        renderer.resetView();
+        assertEquals(0f, renderer.getPanWorldX(), 0.01f);
+        assertEquals(0f, renderer.getPanWorldZ(), 0.01f);
+    }
+
+    @Test
+    void zoomAtKeepsTheCursorWorldPointStable() {
+        MapRenderer renderer = new MapRenderer(new MapData());
+        int width = 800, height = 600;
+        int legendW = Math.min(220, Math.max(160, width / 6));
+        int mapW = width - legendW;
+        int mouseX = mapW / 2 + 90;
+        int mouseY = height / 2;
+        float old = renderer.getMapScale();
+        float worldOff = (mouseX - mapW / 2f) / old;
+        renderer.zoomAt(2f, mouseX, mouseY, width, height);
+        float newOff = (mouseX - mapW / 2f) / renderer.getMapScale();
+        assertEquals(worldOff, renderer.getPanWorldX() + newOff, 0.05f);
+        assertEquals(0f, renderer.getPanWorldZ(), 0.05f);
+        float panBefore = renderer.getPanWorldX();
+        renderer.zoomAt(2f, mapW + 10, height / 2, width, height);
+        assertEquals(panBefore, renderer.getPanWorldX(), 0.01f,
+                "zoom over the legend should not recentre");
+    }
+
     private static BlockAccessor oreColumn(int oreX, int oreZ, BlockType ore) {
         return (x, y, z) -> {
             if (y == 22 && x == oreX && z == oreZ) return ore;

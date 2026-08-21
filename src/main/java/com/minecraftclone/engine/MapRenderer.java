@@ -458,7 +458,7 @@ public class MapRenderer {
         g.drawString(title, mapW / 2 - tfm.stringWidth(title) / 2, 21);
 
         g.setFont(hudFont);
-        String hint = "WASD: pan  |  Scroll: zoom  |  R: reset  |  Hover a diamond for mix info  |  M / Esc: close";
+        String hint = "Drag: pan  |  WASD / arrows  |  Scroll: zoom  |  R: reset  |  Hover a diamond  |  M / Esc: close";
         FontMetrics hfm = g.getFontMetrics();
         int hintW = hfm.stringWidth(hint);
         g.setColor(new Color(0, 0, 0, 170));
@@ -543,6 +543,23 @@ public class MapRenderer {
     }
 
     /**
+     * Zoom keeping the world column under the cursor still under the cursor,
+     * so scroll-to-inspect doesn't throw you back to the player. Mouse over
+     * the legend just zooms on the view centre.
+     */
+    public void zoomAt(float factor, int mouseX, int mouseY, int width, int height) {
+        int legendW = Math.min(220, Math.max(160, width / 6));
+        int mapW = Math.max(1, width - legendW);
+        float old = mapScale;
+        zoom(factor);
+        if (mouseX < 0 || mouseX >= mapW || mouseY < 0 || mouseY >= height) return;
+        float halfW = mapW / 2f;
+        float halfH = height / 2f;
+        panWorldX += (mouseX - halfW) * (1f / old - 1f / mapScale);
+        panWorldZ += (mouseY - halfH) * (1f / old - 1f / mapScale);
+    }
+
+    /**
      * Pan the full-screen map. {@code deltaX}/{@code deltaZ} are in screen
      * pixels; converted to world blocks using the current zoom so motion
      * feels constant on-screen.
@@ -561,6 +578,14 @@ public class MapRenderer {
 
     public float getMapScale() {
         return mapScale;
+    }
+
+    public float getPanWorldX() {
+        return panWorldX;
+    }
+
+    public float getPanWorldZ() {
+        return panWorldZ;
     }
 
     // ── Terrain colour ────────────────────────────────────────────────────────
