@@ -141,6 +141,67 @@ class TextureAtlasTest {
         assertTrue(blue > 6, "sapphire should have saturated blue facets");
     }
 
+    @Test
+    void oakChestFacesAreDistinctWithABrassLockOnTheFront() {
+        BufferedImage image = atlas();
+        BufferedImage front = tile(image, TextureAtlas.CHEST_TILE);
+        BufferedImage top = tile(image, TextureAtlas.CHEST_TOP_TILE);
+        BufferedImage side = tile(image, TextureAtlas.CHEST_SIDE_TILE);
+        BufferedImage bottom = tile(image, TextureAtlas.CHEST_BOTTOM_TILE);
+
+        int frontBrass = countWhere(front, TextureAtlasTest::isBrass);
+        int sideBrass = countWhere(side, TextureAtlasTest::isBrass);
+        int topBrass = countWhere(top, TextureAtlasTest::isBrass);
+        assertTrue(frontBrass >= 8, "front should show a real brass lock, got " + frontBrass);
+        assertTrue(frontBrass > sideBrass, "lock lives on the front, not the side");
+        assertTrue(topBrass >= 4, "top should show the latch tab on the front edge");
+
+        // Dark frame on every face so it doesn't read as a flat plank tile.
+        assertTrue(isDark(front.getRGB(0, 0)), "front needs a dark rim");
+        assertTrue(isDark(top.getRGB(0, 0)), "top needs a dark rim");
+        assertTrue(isDark(side.getRGB(0, 0)), "side needs a dark rim");
+
+        assertTrue(signature(front) != signature(top), "top and front must not share one tile");
+        assertTrue(signature(front) != signature(side), "side and front must not share one tile");
+        assertTrue(signature(top) != signature(bottom), "underside should be darker than the lid");
+        assertTrue(distinctColors(front) > 6, "front should have grain, frame and lock, not a flat fill");
+    }
+
+    private static boolean isBrass(int r, int g, int b) {
+        return r > 150 && g > 90 && r > g && g > b + 20 && b < 140;
+    }
+
+    private static boolean isDark(int argb) {
+        int rgb = argb & 0xFFFFFF;
+        int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+        return r + g + b < 160;
+    }
+
+    private static long signature(BufferedImage t) {
+        long sumR = 0, sumG = 0, sumB = 0;
+        int px = TextureAtlas.TILE_PX;
+        for (int y = 0; y < px; y++) {
+            for (int x = 0; x < px; x++) {
+                int rgb = t.getRGB(x, y) & 0xFFFFFF;
+                sumR += (rgb >> 16) & 0xFF;
+                sumG += (rgb >> 8) & 0xFF;
+                sumB += rgb & 0xFF;
+            }
+        }
+        return (sumR << 32) ^ (sumG << 16) ^ sumB;
+    }
+
+    private static int distinctColors(BufferedImage t) {
+        Set<Integer> colors = new HashSet<>();
+        int px = TextureAtlas.TILE_PX;
+        for (int y = 0; y < px; y++) {
+            for (int x = 0; x < px; x++) {
+                colors.add(t.getRGB(x, y) & 0xFFFFFF);
+            }
+        }
+        return colors.size();
+    }
+
     private static int countWhere(BufferedImage tile, ChannelPred pred) {
         int n = 0, px = TextureAtlas.TILE_PX;
         for (int y = 0; y < px; y++) {

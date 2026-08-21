@@ -1,5 +1,6 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.player.JoinedStorage;
 import com.minecraftclone.player.StorageContainer;
 
 import java.io.DataInput;
@@ -11,12 +12,12 @@ import java.io.IOException;
  * slots, persisted with its chunk via {@link ChunkStorage} so its contents
  * survive a restart. Right-clicking it opens the container GUI.
  * <p>
- * The pattern is deliberately the same as {@link Furnace}: implement
- * {@link BlockEntity} for persistence and {@link StorageContainer} for the
- * slot API, and the GUI, mouse controller and quick-move logic all work
- * against it with no per-container code - the point of the shared
- * {@link StorageContainer} contract. A future item network (AE2-style) can
- * expose the same interface backed by virtual storage.
+ * Adjacent chests merge at open-time: two mutual neighbours on any
+ * horizontal axis become a 54-slot double, and a 2x2 square becomes a
+ * 108-slot quad. Pairing looks at the placed block, not the entity, so a
+ * chest that has never been opened still joins. The pattern is the same as
+ * {@link Furnace}: implement {@link BlockEntity} for persistence and
+ * {@link StorageContainer} for the slot API.
  */
 public class Chest implements BlockEntity, StorageContainer {
 
@@ -25,8 +26,105 @@ public class Chest implements BlockEntity, StorageContainer {
     /** 3 rows of 9, like Minecraft's single chest. */
     public static final int SLOT_COUNT = 27;
 
+    /**
+     * True when a world cell holds a chest block. Used so pairing can see
+     * a neighbour that has been placed but never opened (no entity yet).
+     */
+    @FunctionalInterface
+    public interface Occupied {
+        boolean isChest(int x, int y, int z);
+    }
+
+    /** Supplies the persisted chest at a cell, creating it on first use. */
+    @FunctionalInterface
+    public interface Factory {
+        Chest getOrCreate(int x, int y, int z);
+    }
+
+    /** Horizontal neighbour a chest would merge with, same y. */
+    public record Partner(int x, int z) {}
+
+    /** Cardinal offsets in preference order: west, east, north, south. */
+    private static final int[][] CARDINALS = {
+            {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+    };
+
     private final BlockType[] types = new BlockType[SLOT_COUNT];
     private final int[] counts = new int[SLOT_COUNT];
+
+    /**
+     * The unique neighbour this chest forms a double with, or null if it
+     * stays single. Preference is west, then east, then north, then south;
+     * a neighbour is accepted only when this cell is also that neighbour's
+     * preferred partner, so a 3-in-a-row never oscillates (the west pair
+     * sticks, the leftover east chest stays single) and an L-shape pairs
+     * on the east-west axis.
+     */
+    public static Partner doublePartner(int x, int y, int z, Occupied occupied) {
+        if (occupied == null || !occupied.isChest(x, y, z)) return null;
+        for (int[] d : CARDINALS) {
+            int nx = x + d[0];
+            int nz = z + d[1];
+            if (!occupied.isChest(nx, y, nz)) continue;
+            Partner theirs = preferredPartner(nx, y, nz, occupied);
+            if (theirs != null && theirs.x() == x && theirs.z() == z) {
+                return new Partner(nx, nz);
+            }
+        }
+        return null;
+    }
+
+    private static Partner preferredPartner(int x, int y, int z, Occupied occupied) {
+        for (int[] d : CARDINALS) {
+            int nx = x + d[0];
+            int nz = z + d[1];
+            if (occupied.isChest(nx, y, nz)) return new Partner(nx, nz);
+        }
+        return null;
+    }
+
+    /**
+     * Storage shown when opening the chest at {@code (x,y,z)}: a 2x2 of
+     * chest blocks becomes a 108-slot quad (row-major, west-to-east then
+     * north-to-south); otherwise two mutual neighbours become a 54-slot
+     * double; otherwise the single 27-slot chest. Neighbours are detected
+     * by {@code occupied} (the placed block, not the entity), so a chest
+     * that has never been opened still joins.
+     */
+    public static StorageContainer containerAt(int x, int y, int z, Occupied occupied, Factory factory) {
+        if (occupied == null || factory == null) return null;
+        if (!occupied.isChest(x, y, z)) return null;
+        Chest here = factory.getOrCreate(x, y, z);
+        if (here == null) return null;
+
+        for (int ox = -1; ox <= 0; ox++) {
+            for (int oz = -1; oz <= 0; oz++) {
+                int x0 = ox == 0 ? x : x - 1;
+                int z0 = oz == 0 ? z : z - 1;
+                if (occupied.isChest(x0, y, z0)
+                        && occupied.isChest(x0 + 1, y, z0)
+                        && occupied.isChest(x0, y, z0 + 1)
+                        && occupied.isChest(x0 + 1, y, z0 + 1)) {
+                    Chest a = factory.getOrCreate(x0, y, z0);
+                    Chest b = factory.getOrCreate(x0 + 1, y, z0);
+                    Chest c = factory.getOrCreate(x0, y, z0 + 1);
+                    Chest d = factory.getOrCreate(x0 + 1, y, z0 + 1);
+                    if (a != null && b != null && c != null && d != null) {
+                        return new JoinedStorage(new JoinedStorage(a, b), new JoinedStorage(c, d));
+                    }
+                }
+            }
+        }
+
+        Partner p = doublePartner(x, y, z, occupied);
+        if (p == null) return here;
+        Chest other = factory.getOrCreate(p.x(), y, p.z());
+        if (other == null) return here;
+        if (p.x() < x || (p.x() == x && p.z() < z)) {
+            return new JoinedStorage(other, here);
+        }
+        return new JoinedStorage(here, other);
+    }
 
     @Override
     public String type() {

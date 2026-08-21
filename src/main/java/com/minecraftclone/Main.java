@@ -1938,7 +1938,7 @@ public class Main {
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.CHEST) {
                         // Right-click a chest to open its storage gui; an adjacent
-                        // chest merges into a 54-slot double chest.
+                        // chest on any horizontal axis merges into a 54-slot double.
                         world.getOrCreateChest(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.chestContainerAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));

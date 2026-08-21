@@ -81,7 +81,7 @@ public enum BlockType {
     TRAPDOOR_OPEN(72, false, true, 47),
     CRAFTING_TABLE(73, true, false, 48, 48, 48), // workbench: right-click opens the 3x3 crafting GUI
     ADVANCED_CRAFTING_TABLE(137, true, false, 48, 48, 48), // advanced workbench: right-click opens the 5x5 crafting GUI
-    CHEST(87, true, false, 50, 50, 50),          // storage: right-click opens a 27-slot container GUI (54 when doubled)
+    CHEST(87, true, false, TextureAtlas.CHEST_TOP_TILE, TextureAtlas.CHEST_SIDE_TILE, TextureAtlas.CHEST_BOTTOM_TILE, TextureAtlas.CHEST_TILE, 0, 0), // oak chest: lock faces the player, 27 slots (54 when doubled)
     BARREL(88, true, false, 51, 51, 51),         // storage: cheaper single 27-slot container, never doubles
 
     // Dimension blocks: Nether terrain, End terrain, and the portal blocks that

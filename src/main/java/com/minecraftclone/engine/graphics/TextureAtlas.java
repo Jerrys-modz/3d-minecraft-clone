@@ -47,8 +47,14 @@ public class TextureAtlas {
     public static final int CRAFTING_TABLE_TILE = 48;
     /** Tile index of the furnace's front face when it's actively burning - the mouth glows orange. */
     public static final int FURNACE_LIT_TILE = 49;
-    /** Tile index of the chest's lid/front face. */
+    /** Tile index of the chest's front face (lid, body, brass lock). */
     public static final int CHEST_TILE = 50;
+    /** Tile index of the chest's lid, viewed from above. */
+    public static final int CHEST_TOP_TILE = 64;
+    /** Tile index of the chest's side (lid seam, no lock). */
+    public static final int CHEST_SIDE_TILE = 65;
+    /** Tile index of the chest's underside. */
+    public static final int CHEST_BOTTOM_TILE = 66;
     /** Tile index of the barrel's face. */
     public static final int BARREL_TILE = 51;
     /** Tile index of the lightning-lit fire cross. */
@@ -288,7 +294,10 @@ public class TextureAtlas {
         paintFurnace(image, FURNACE_TILE);
         paintFurnaceLit(image, FURNACE_LIT_TILE);
         paintCraftingTable(image, CRAFTING_TABLE_TILE);
-        paintChest(image, CHEST_TILE);
+        paintChest(image, CHEST_TILE, ChestFace.FRONT);
+        paintChest(image, CHEST_TOP_TILE, ChestFace.TOP);
+        paintChest(image, CHEST_SIDE_TILE, ChestFace.SIDE);
+        paintChest(image, CHEST_BOTTOM_TILE, ChestFace.BOTTOM);
         paintBarrel(image, BARREL_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
@@ -1515,34 +1524,107 @@ public class TextureAtlas {
         }
     }
 
-    /** A wooden chest front: plank fill with a curved lid seam, a brass lock plate and a latch. */
-    private void paintChest(BufferedImage img, int index) {
+    /** A wooden oak chest: distinct lid/body, dark frame, brass lock on the front. */
+    private enum ChestFace { FRONT, SIDE, TOP, BOTTOM }
+
+    private void paintChest(BufferedImage img, int index, ChestFace face) {
+        Random rnd = new Random(50 + face.ordinal() * 31);
+        int light = switch (face) {
+            case TOP -> 0xD4B06C;
+            case BOTTOM -> 0x8A5E2C;
+            case FRONT, SIDE -> 0xC9A15B;
+        };
+        int dark = switch (face) {
+            case TOP -> 0x8E5C28;
+            case BOTTOM -> 0x5A3818;
+            case FRONT, SIDE -> 0x7A4E22;
+        };
+        paintNoiseTile(img, index, light, dark, 0.42f, rnd);
         int ox = tileX(index);
         int oy = tileY(index);
-        int plank = 0xB8863F;
-        int grain = 0x9A6F2F;
-        int seam = 0x7A5A2E;
-        int metal = 0xC9B458;
-        int lock = 0x8A6E2E;
-        for (int y = 0; y < TILE_PX; y++) {
-            for (int x = 0; x < TILE_PX; x++) {
-                img.setRGB(ox + x, oy + y, 0xFF000000 | (x % 2 == 0 && y % 4 == 1 ? grain : plank));
+        int rim = 0x2C1A0C;
+        int inner = 0x5A3818;
+        int seam = 0x3A2410;
+        int lidHi = 0xD8B878;
+        int brassHi = 0xF2D878;
+        int brass = 0xD4B44A;
+        int brassLo = 0x8A6A18;
+        int hole = 0x1A1008;
+
+        boolean wall = face == ChestFace.FRONT || face == ChestFace.SIDE;
+        int seamY = 5;
+
+        if (wall) {
+            // Lid is the top band: lift it; body below the seam: drop it.
+            for (int y = 1; y < TILE_PX - 1; y++) {
+                for (int x = 1; x < TILE_PX - 1; x++) {
+                    int rgb = img.getRGB(ox + x, oy + y) & 0xFFFFFF;
+                    float f = y < seamY ? 1.10f : 0.88f;
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | shade(rgb, f));
+                }
+            }
+            for (int x = 1; x < TILE_PX - 1; x++) {
+                img.setRGB(ox + x, oy + seamY, 0xFF000000 | seam);
+                if (seamY + 1 < TILE_PX - 1) {
+                    img.setRGB(ox + x, oy + seamY + 1, 0xFF000000 | shade(seam, 1.35f));
+                }
+            }
+            for (int x = 2; x < TILE_PX - 2; x++) {
+                img.setRGB(ox + x, oy + 2, 0xFF000000 | shade(lidHi, 0.92f + 0.04f * (x % 3)));
             }
         }
-        // Curved lid seam near the top (a shallow arc), splitting lid from body.
+
         for (int x = 1; x < TILE_PX - 1; x++) {
-            int y = 4 + Math.round(2f * (float) Math.sin(x * (Math.PI / (TILE_PX - 2))));
-            img.setRGB(ox + x, oy + y, 0xFF000000 | seam);
+            img.setRGB(ox + x, oy + 1, 0xFF000000 | inner);
+            img.setRGB(ox + x, oy + TILE_PX - 2, 0xFF000000 | inner);
         }
-        // Brass lock plate at the front-center, with a darker keyhole.
-        for (int dy = -2; dy <= 2; dy++) {
-            for (int dx = -2; dx <= 2; dx++) {
-                int x = 8 + dx, y = 8 + dy;
-                if (x < 0 || x >= TILE_PX || y < 0 || y >= TILE_PX) continue;
-                img.setRGB(ox + x, oy + y, 0xFF000000 | metal);
+        for (int y = 1; y < TILE_PX - 1; y++) {
+            img.setRGB(ox + 1, oy + y, 0xFF000000 | inner);
+            img.setRGB(ox + TILE_PX - 2, oy + y, 0xFF000000 | inner);
+        }
+
+        if (face == ChestFace.FRONT) {
+            // Brass lock plate centred on the lid seam, with a keyhole.
+            int[][] lock = {
+                    {0, 7, brassHi}, {0, 8, brassHi},
+                    {1, 6, brass}, {1, 7, brassHi}, {1, 8, brassHi}, {1, 9, brass},
+                    {2, 6, brass}, {2, 7, hole}, {2, 8, hole}, {2, 9, brass},
+                    {3, 6, brassLo}, {3, 7, brass}, {3, 8, brass}, {3, 9, brassLo},
+                    {4, 7, brassLo}, {4, 8, brassLo},
+            };
+            for (int[] p : lock) {
+                int y = seamY - 1 + p[0];
+                int x = p[1];
+                img.setRGB(ox + x, oy + y, 0xFF000000 | p[2]);
             }
         }
-        img.setRGB(ox + 8, oy + 8, 0xFF000000 | lock);
+
+        if (face == ChestFace.TOP) {
+            // Latch tab on the front edge of the lid.
+            for (int y = 12; y <= 14; y++) {
+                for (int x = 6; x <= 9; x++) {
+                    int c = (y == 12) ? brassHi : ((x == 6 || x == 9) ? brassLo : brass);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | c);
+                }
+            }
+        }
+
+        if (face == ChestFace.SIDE) {
+            // Thin dark straps so the side doesn't read as a plain plank.
+            for (int y = 2; y < TILE_PX - 2; y++) {
+                img.setRGB(ox + 3, oy + y, 0xFF000000 | inner);
+                img.setRGB(ox + 12, oy + y, 0xFF000000 | inner);
+            }
+        }
+
+        for (int x = 0; x < TILE_PX; x++) {
+            img.setRGB(ox + x, oy, 0xFF000000 | rim);
+            img.setRGB(ox + x, oy + TILE_PX - 1, 0xFF000000 | rim);
+        }
+        for (int y = 0; y < TILE_PX; y++) {
+            img.setRGB(ox, oy + y, 0xFF000000 | rim);
+            img.setRGB(ox + TILE_PX - 1, oy + y, 0xFF000000 | rim);
+        }
     }
 
     /** A red bed: a wool top with a darker foot-end panel and pillow area. */

@@ -170,9 +170,10 @@ public class HandRenderer {
         float[] topUv = atlas.getUV(block.topTile);
         float[] sideUv = atlas.getUV(block.sideTile);
         float[] botUv = atlas.getUV(block.bottomTile);
+        float[] frontUv = block.isDirectional() ? atlas.getUV(block.frontTile) : sideUv;
         addFace(topUv, LIGHT_TOP, new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}});
         addFace(botUv, LIGHT_BOTTOM, new float[][]{{x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}, {x0, y0, z1}});
-        addFace(sideUv, LIGHT_NORTH_SOUTH, new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}});
+        addFace(frontUv, LIGHT_NORTH_SOUTH, new float[][]{{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}});
         addFace(sideUv, LIGHT_NORTH_SOUTH, new float[][]{{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}});
         addFace(sideUv, LIGHT_EAST_WEST, new float[][]{{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}});
         addFace(sideUv, LIGHT_EAST_WEST, new float[][]{{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}});

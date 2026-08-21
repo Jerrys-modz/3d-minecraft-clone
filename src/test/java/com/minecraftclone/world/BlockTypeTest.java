@@ -1,5 +1,6 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.engine.graphics.TextureAtlas;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,6 +34,16 @@ class BlockTypeTest {
         // Ordinary cubes aren't directional.
         assertFalse(BlockType.STONE.isDirectional());
         assertFalse(BlockType.DIRT.isDirectional());
+    }
+
+    @Test
+    void chestIsDirectionalWithDistinctLidFrontAndSides() {
+        assertTrue(BlockType.CHEST.isDirectional());
+        assertTrue(BlockType.CHEST.frontTile != BlockType.CHEST.sideTile);
+        assertTrue(BlockType.CHEST.topTile != BlockType.CHEST.sideTile);
+        assertTrue(BlockType.CHEST.bottomTile != BlockType.CHEST.topTile);
+        assertEquals(TextureAtlas.CHEST_TILE, BlockType.CHEST.frontTile);
+        assertFalse(BlockType.BARREL.isDirectional(), "barrels stay a single undirected stash");
     }
 
     @Test

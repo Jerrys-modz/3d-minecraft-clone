@@ -473,40 +473,18 @@ public class World implements BlockAccessor {
     /**
      * The storage the player sees when opening the chest at a position: a single
      * 27-slot chest, a 54-slot {@link JoinedStorage} when it has a chest
-     * immediately beside it on the east-west axis (a Minecraft-style double
+     * immediately beside it on any horizontal axis (a Minecraft-style double
      * chest), or a 108-slot container when four chests form a 2x2 square (a
-     * "quad chest"). Each block keeps its own persisted slots - the merge is
-     * just a combined view, ordered so the layout is stable whichever half you
-     * open. Same-y/z requirement keeps stacked or north-south chests single.
+     * "quad chest"). Pairing looks at the placed {@link BlockType#CHEST} block,
+     * not the entity, so a neighbour that has never been opened still joins,
+     * and north-south pairs merge the same way east-west ones do. Each block
+     * keeps its own persisted slots - the merge is just a combined view,
+     * ordered so the layout is stable whichever half you open.
      */
     public com.minecraftclone.player.StorageContainer chestContainerAt(int x, int y, int z) {
-        Chest here = chestAt(x, y, z);
-        if (here == null) return null;
-        // A 2x2 square of chests (all four cells present, at the same y) merges
-        // into one 108-slot container, ordered row-major by world position so
-        // it reads the same no matter which corner you open.
-        for (int ox = -1; ox <= 0; ox++) {
-            for (int oz = -1; oz <= 0; oz++) {
-                int x0 = ox == 0 ? x : x - 1;
-                int z0 = oz == 0 ? z : z - 1;
-                Chest a = chestAt(x0, y, z0);
-                Chest b = chestAt(x0 + 1, y, z0);
-                Chest c = chestAt(x0, y, z0 + 1);
-                Chest d = chestAt(x0 + 1, y, z0 + 1);
-                if (a != null && b != null && c != null && d != null) {
-                    // Make sure the whole 2x2 is present regardless of which
-                    // corner was clicked, and order west-to-east, north-to-south.
-                    return new com.minecraftclone.player.JoinedStorage(
-                            new com.minecraftclone.player.JoinedStorage(a, b),
-                            new com.minecraftclone.player.JoinedStorage(c, d));
-                }
-            }
-        }
-        Chest west = chestAt(x - 1, y, z);
-        Chest east = chestAt(x + 1, y, z);
-        if (west != null) return new com.minecraftclone.player.JoinedStorage(west, here);
-        if (east != null) return new com.minecraftclone.player.JoinedStorage(here, east);
-        return here;
+        return Chest.containerAt(x, y, z,
+                (cx, cy, cz) -> getBlock(cx, cy, cz) == BlockType.CHEST,
+                this::getOrCreateChest);
     }
 
     /** True if the block at this position is currently active - for a furnace, that it's burning (its front glows). */

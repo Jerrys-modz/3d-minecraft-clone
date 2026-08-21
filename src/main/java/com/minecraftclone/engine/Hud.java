@@ -1489,6 +1489,7 @@ public class Hud {
     private void addIsometricBlock(float cx, float cy, float half, BlockType type, TextureAtlas atlas) {
         float[] topUv = atlas.getUV(type.topTile);
         float[] sideUv = atlas.getUV(type.sideTile);
+        float[] frontUv = type.isDirectional() ? atlas.getUV(type.frontTile) : sideUv;
         if (type.stair) {
             // Low step: full footprint, half height. High step: back half, top half.
             addIsometricBox(cx, cy, half, 0f, 0f, 0f, 1f, 0.5f, 1f, topUv, sideUv);
@@ -1496,7 +1497,7 @@ public class Hud {
             return;
         }
         float height = isometricIconHeight(type);
-        addIsometricBox(cx, cy, half, 0f, 0f, 0f, 1f, height, 1f, topUv, sideUv);
+        addIsometricBox(cx, cy, half, 0f, 0f, 0f, 1f, height, 1f, topUv, sideUv, frontUv);
     }
 
     /**
@@ -1507,12 +1508,18 @@ public class Hud {
     private void addIsometricBox(float cx, float cy, float half,
                                  float x0, float y0, float z0, float x1, float y1, float z1,
                                  float[] topUv, float[] sideUv) {
+        addIsometricBox(cx, cy, half, x0, y0, z0, x1, y1, z1, topUv, sideUv, sideUv);
+    }
+
+    private void addIsometricBox(float cx, float cy, float half,
+                                 float x0, float y0, float z0, float x1, float y1, float z1,
+                                 float[] topUv, float[] sideUv, float[] frontUv) {
         // West (x = x0): left parallelogram, CCW y-up
         addIsoQuad(cx, cy, half,
                 x0, y0, z1,  x0, y0, z0,  x0, y1, z0,  x0, y1, z1, sideUv);
-        // South (z = z0): right parallelogram
+        // South (z = z0): right parallelogram — lock/front on directional blocks
         addIsoQuad(cx, cy, half,
-                x0, y0, z0,  x1, y0, z0,  x1, y1, z0,  x0, y1, z0, sideUv);
+                x0, y0, z0,  x1, y0, z0,  x1, y1, z0,  x0, y1, z0, frontUv);
         // Top (y = y1)
         addIsoQuad(cx, cy, half,
                 x0, y1, z1,  x0, y1, z0,  x1, y1, z0,  x1, y1, z1, topUv);
