@@ -1,5 +1,6 @@
 package com.minecraftclone.engine.gui;
 
+import com.minecraftclone.engine.audio.SoundEvent;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.Grid;
 import com.minecraftclone.player.Inventory;
@@ -199,6 +200,24 @@ class ContainerGuiTest {
         assertEquals(BlockType.DIAMOND, chest.typeOf(5));
         assertEquals(3, chest.countOf(5));
         assertTrue(inv.isEmpty(0));
+    }
+
+    @Test
+    void chestScreenUsesLidSoundsInsteadOfTheUiBeep() {
+        Inventory inv = new Inventory();
+        ContainerGui chest = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), new Chest());
+        ContainerGui barrel = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(),
+                new com.minecraftclone.world.Barrel());
+        ContainerGui inventory = new ContainerGui(ContainerGui.Kind.INVENTORY, inv, new CraftingGrid(), null);
+        ContainerGui furnace = new ContainerGui(ContainerGui.Kind.FURNACE, inv, new CraftingGrid(), new Furnace());
+
+        assertEquals(SoundEvent.CHEST_OPEN, chest.openSound());
+        assertEquals(SoundEvent.CHEST_CLOSE, chest.closeSound());
+        assertEquals(SoundEvent.CHEST_OPEN, barrel.openSound(), "barrels reuse the chest screen");
+        assertEquals(SoundEvent.UI_OPEN, inventory.openSound());
+        assertEquals(SoundEvent.UI_CLOSE, inventory.closeSound());
+        assertEquals(SoundEvent.UI_OPEN, furnace.openSound());
+        assertEquals(SoundEvent.UI_CLOSE, furnace.closeSound());
     }
 
     @Test

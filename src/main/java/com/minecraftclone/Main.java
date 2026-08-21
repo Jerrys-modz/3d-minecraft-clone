@@ -318,10 +318,11 @@ public class Main {
     private void closeInventory(InventoryController controller, ContainerGui[] activeGui, ContainerGui inventoryGui, boolean[] inventoryOpen, AudioEngine audio) {
         controller.returnGridToInventory();
         controller.returnCursorToInventory();
+        SoundEvent closeSound = activeGui[0] != null ? activeGui[0].closeSound() : SoundEvent.UI_CLOSE;
         activeGui[0] = inventoryGui;
         controller.setGui(inventoryGui);
         inventoryOpen[0] = false;
-        audio.play(SoundEvent.UI_CLOSE);
+        audio.play(closeSound);
     }
 
     /** Opens the given container gui, rebinding the controller and releasing the cursor for mouse use. */
@@ -330,7 +331,7 @@ public class Main {
         inventoryOpen[0] = true;
         window.setCursorCaptured(false);
         input.resetMouseDelta();
-        audio.play(SoundEvent.UI_OPEN);
+        audio.play(activeGui[0] != null ? activeGui[0].openSound() : SoundEvent.UI_OPEN);
     }
 
     /** Plays the "took a craft/smelt result" chime for the output slot, a generic click for anything else. */

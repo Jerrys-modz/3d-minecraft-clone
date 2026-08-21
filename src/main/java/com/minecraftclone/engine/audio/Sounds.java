@@ -99,6 +99,19 @@ public final class Sounds {
                 SoundSynth.noise(113, 0.18f, 0.5f, 0f, 0.25f),
                 SoundSynth.tone(150, 120, 0.18f, 0.3f, 0f)));
 
+        // A wooden lid: scrape + descending creak, latch click at the start.
+        // Longer and lower than UI_OPEN so opening a chest doesn't read as a menu beep.
+        fixed.put(SoundEvent.CHEST_OPEN, SoundSynth.mix(
+                SoundSynth.noise(114, 0.38f, 0.42f, 0.06f, 0.26f),
+                SoundSynth.tone(260, 130, 0.36f, 0.40f, 0.04f),
+                SoundSynth.concat(SoundSynth.tone(980, 620, 0.05f, 0.38f, 0f), SoundSynth.silence(0.33f))));
+
+        // Lid dropping shut: a shorter, heavier thud with the latch catching.
+        fixed.put(SoundEvent.CHEST_CLOSE, SoundSynth.mix(
+                SoundSynth.noise(115, 0.24f, 0.55f, 0.04f, 0.20f),
+                SoundSynth.tone(170, 80, 0.22f, 0.45f, 0f),
+                SoundSynth.concat(SoundSynth.silence(0.07f), SoundSynth.tone(720, 380, 0.05f, 0.32f, 0f))));
+
         // A simple ascending major arpeggio (C5-E5-G5) - a pleasant "ding" for
         // taking a crafting/smelting result, distinct from the generic UI click.
         fixed.put(SoundEvent.CRAFT, SoundSynth.concat(

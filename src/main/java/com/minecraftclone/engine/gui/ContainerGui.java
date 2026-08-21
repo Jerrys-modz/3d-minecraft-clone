@@ -1,5 +1,6 @@
 package com.minecraftclone.engine.gui;
 
+import com.minecraftclone.engine.audio.SoundEvent;
 import com.minecraftclone.player.AdvancedCraftingTableGrid;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CraftingGrid;
@@ -149,6 +150,22 @@ public class ContainerGui {
 
     public Kind kind() {
         return kind;
+    }
+
+    /**
+     * Sound played when this screen opens: a wooden lid for a chest/barrel,
+     * the generic UI open beep for everything else.
+     */
+    public SoundEvent openSound() {
+        return kind == Kind.CHEST ? SoundEvent.CHEST_OPEN : SoundEvent.UI_OPEN;
+    }
+
+    /**
+     * Sound played when this screen closes: a wooden lid slam for a chest/barrel,
+     * the generic UI close beep for everything else.
+     */
+    public SoundEvent closeSound() {
+        return kind == Kind.CHEST ? SoundEvent.CHEST_CLOSE : SoundEvent.UI_CLOSE;
     }
 
     public String title() {
