@@ -8,6 +8,7 @@ import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.util.AABB;
+import com.minecraftclone.Difficulty;
 import com.minecraftclone.world.gen.EndGenerator;
 import com.minecraftclone.world.gen.NetherGenerator;
 import com.minecraftclone.world.gen.TerrainGenerator;
@@ -1393,11 +1394,20 @@ public class World implements BlockAccessor {
      *                   passives, rather than uselessly stalking someone they can
      *                   never actually hurt. Spawning/despawning around the
      *                   player's position still happens either way.
+     * @param difficulty  world difficulty: Peaceful despawns hostiles and never
+     *                   spawns them; Easy/Hard scale damage and spawn rate.
      */
     public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd, boolean targetable) {
+        return updateMobs(dt, playerPos, playerBox, night, rnd, targetable, Difficulty.NORMAL);
+    }
+
+    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd,
+                            boolean targetable, Difficulty difficulty) {
+        if (difficulty == null) difficulty = Difficulty.NORMAL;
         float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
         Vector3f targetPos = targetable ? playerPos : null;
         float damage = 0f;
+        float damageMul = difficulty.mobDamageMultiplier();
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
             Mob mob = it.next();
             float dx = mob.position.x - playerPos.x;
@@ -1405,7 +1415,10 @@ public class World implements BlockAccessor {
             // The undead are gone by daylight (they burn/melt at dawn); everything
             // far away or fallen out of the world despawns. Wild animals (wolves,
             // bears) don't have the dawn-despawn flag, so they stay out by day.
-            boolean gone = mob.isHostile() && mob.type.dawnDespawns && !night;
+            // Peaceful despawns every hostile immediately.
+            boolean gone = mob.isHostile() && (
+                    !difficulty.allowsHostileMobs()
+                            || (mob.type.dawnDespawns && !night));
             if (gone || dx * dx + dz * dz > despawnSq || mob.position.y < -64f) {
                 it.remove();
                 continue;
@@ -1418,20 +1431,22 @@ public class World implements BlockAccessor {
                 it.remove();
                 continue;
             }
-            damage += mob.getMeleeRequest();
+            damage += mob.getMeleeRequest() * damageMul;
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, playerPos, rnd);
             }
         }
 
-        if (night && hostileCount() < MAX_HOSTILES && rnd.nextInt(HOSTILE_SPAWN_ODDS) == 0) {
+        if (difficulty.allowsHostileMobs()
+                && night && hostileCount() < difficulty.maxHostiles()
+                && rnd.nextInt(difficulty.hostileSpawnOdds()) == 0) {
             trySpawnHostile(rnd, playerPos.x, playerPos.z);
         }
         if (mobs.size() < MAX_MOBS && rnd.nextInt(MOB_SPAWN_ODDS) == 0) {
-            trySpawnMob(rnd, playerPos.x, playerPos.z);
+            trySpawnMob(rnd, playerPos.x, playerPos.z, difficulty);
         }
 
-        damage += updateArrows(dt, playerBox);
+        damage += updateArrows(dt, playerBox) * damageMul;
         return damage;
     }
 
@@ -1489,8 +1504,13 @@ public class World implements BlockAccessor {
 
     /** Seeds the world with an initial scattering of mobs so it feels alive from the start. */
     public void spawnInitialMobs(Random rnd, float playerWorldX, float playerWorldZ, int count) {
+        spawnInitialMobs(rnd, playerWorldX, playerWorldZ, count, Difficulty.NORMAL);
+    }
+
+    public void spawnInitialMobs(Random rnd, float playerWorldX, float playerWorldZ, int count, Difficulty difficulty) {
+        if (difficulty == null) difficulty = Difficulty.NORMAL;
         for (int i = 0; i < count && mobs.size() < MAX_MOBS; i++) {
-            trySpawnMob(rnd, playerWorldX, playerWorldZ);
+            trySpawnMob(rnd, playerWorldX, playerWorldZ, difficulty);
         }
     }
 
@@ -1535,7 +1555,7 @@ public class World implements BlockAccessor {
     }
 
     /** Spawns one mob on a random grass/snow surface within range; does nothing if no spot qualifies. */
-    private void trySpawnMob(Random rnd, float playerWorldX, float playerWorldZ) {
+    private void trySpawnMob(Random rnd, float playerWorldX, float playerWorldZ, Difficulty difficulty) {
         int radius = (int) MOB_SPAWN_RADIUS;
         for (int attempt = 0; attempt < 6; attempt++) {
             int x = (int) Math.floor(playerWorldX) + rnd.nextInt(radius * 2) - radius;
@@ -1546,7 +1566,8 @@ public class World implements BlockAccessor {
             BlockType surface = getBlock(x, y, z);
             if (surface != BlockType.GRASS && surface != BlockType.SNOW) continue;
             if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
-            Mob.Type type = pickSurfaceMobType(rnd, getBiome(x, z));
+            Mob.Type type = pickSurfaceMobType(rnd, getBiome(x, z), difficulty);
+            if (type.hostile && !difficulty.allowsHostileMobs()) continue;
             mobs.add(new Mob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
             return;
         }
@@ -1560,6 +1581,14 @@ public class World implements BlockAccessor {
      * harder to come by.
      */
     static Mob.Type pickSurfaceMobType(Random rnd, TerrainGenerator.Biome biome) {
+        return pickSurfaceMobType(rnd, biome, Difficulty.NORMAL);
+    }
+
+    static Mob.Type pickSurfaceMobType(Random rnd, TerrainGenerator.Biome biome, Difficulty difficulty) {
+        if (difficulty != null && !difficulty.allowsHostileMobs()) {
+            Mob.Type[] passives = {Mob.Type.PIG, Mob.Type.COW, Mob.Type.SHEEP};
+            return passives[rnd.nextInt(passives.length)];
+        }
         float roll = rnd.nextFloat();
         boolean woods = biome == TerrainGenerator.Biome.FOREST || biome == TerrainGenerator.Biome.TAIGA
                 || biome == TerrainGenerator.Biome.CHERRY_GROVE || biome == TerrainGenerator.Biome.FLOWER_MEADOW;

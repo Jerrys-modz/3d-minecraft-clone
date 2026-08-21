@@ -156,6 +156,7 @@ public class Hud {
     private static final float SETTINGS_TAB_GAP = 0.015f;
     private static final float SETTINGS_TAB_ROWS_GAP = 0.035f; // breathing room between the tabs and the first row
     private static final float SETTINGS_PAD = 0.035f;
+    private static final float SETTINGS_DONE_H = 0.07f;
     private static final float SETTINGS_CENTER_Y = 0.12f;
     // The panel is sized for the tallest tab (Controls: the keybind list) so the
     // tab strip stays in the same place when switching between tabs.
@@ -907,12 +908,13 @@ public class Hud {
 
     /**
      * Draws the pause/settings menu: a semi-transparent panel with a title, a
-     * tab strip (Graphics / Gameplay / Controls) under it, and the rows of the
-     * active tab - setting rows for the first two tabs, the keybind list for
+     * tab strip (Video / Gameplay / Sound / Controls) under it, and the rows of
+     * the active tab - setting rows for the first two tabs, the keybind list for
      * Controls. The panel is always sized for the tallest tab so the tabs stay
      * put when switching. {@code selectedIndex} is a row index within the
      * active tab; {@code capturingAction} >= 0 means that keybind row is
-     * waiting for a key press.
+     * waiting for a key press. A Done button at the bottom returns to the
+     * pause Game Menu (in-world) or the title screen.
      */
     public void renderSettingsMenu(Settings settings, int selectedTab, int selectedIndex, int capturingAction, float aspectRatio, boolean inWorld) {
         glDisable(GL_DEPTH_TEST);
@@ -921,7 +923,7 @@ public class Hud {
         float size = SETTINGS_SIZE;
         float panelW = settingsPanelWidth();
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
-                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H + SETTINGS_DONE_H;
         float left = -panelW / 2f;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
 
@@ -949,7 +951,7 @@ public class Hud {
         }
 
         // Title, centered near the top of the panel.
-        drawCenteredText("Settings", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
+        drawCenteredText("Options", 0f, top - SETTINGS_PAD - 0.04f, 0.042f, WHITE);
 
         Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
         Vector4f idleValue = new Vector4f(0.7f, 0.7f, 0.7f, 1f);
@@ -1034,7 +1036,7 @@ public class Hud {
             lineShader.setUniform("model", hudTransform);
             for (int local = 0; local < rows; local++) {
                 int row = settingsRowForTab(selectedTab, local, inWorld);
-                if (Settings.isToggle(row)) continue;
+                if (Settings.isToggle(row) || Settings.isCycle(row)) continue;
                 float trackY = settingsRowTop(selectedTab, local) - SETTINGS_ROW_H / 2f;
                 float trackH = 0.012f;
                 float frac = settings.fraction(row);
@@ -1074,14 +1076,99 @@ public class Hud {
             lineShader.unbind();
         }
 
+        // Done: returns to the Game Menu (in-world) or the title screen.
+        float doneY = SETTINGS_CENTER_Y - panelH / 2f + SETTINGS_PAD + 0.01f;
+        drawCenteredText("Done", 0f, doneY, 0.032f, WHITE);
+
         drawCenteredText(selectedTab == Settings.TAB_CONTROLS || selectedTab == Settings.TAB_CONTROLLER
-                        ? "Click/Enter: rebind    Tab: next section    Esc: close"
-                        : "Click/Enter: toggle or adjust    Tab: next section    Esc: close",
+                        ? "Click/Enter: rebind    Tab: next section    Esc: back"
+                        : "Click/Enter: toggle or adjust    Tab: next section    Esc: back",
                 0f, SETTINGS_CENTER_Y - panelH / 2f - 0.045f, 0.026f, idleValue);
 
         glEnable(GL_DEPTH_TEST);
     }
 
+
+    /** Pause menu (Game Menu) button indices. */
+    public static final int PAUSE_BACK = 0;
+    public static final int PAUSE_OPTIONS = 1;
+    public static final int PAUSE_QUIT = 2;
+    public static final int PAUSE_COUNT = 3;
+
+    private static final String[] PAUSE_ITEMS = {
+            "Back to Game",
+            "Options...",
+            "Save and Quit to Title"
+    };
+
+    /**
+     * The in-game pause overlay (Minecraft's Game Menu): Back to Game, Options,
+     * and Save and Quit to Title. Shown when Esc is pressed in a world, before
+     * opening Options.
+     */
+    public void renderPauseMenu(int selectedIndex, float aspectRatio) {
+        glDisable(GL_DEPTH_TEST);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+        Vector4f idle = new Vector4f(0.88f, 0.88f, 0.88f, 1f);
+        Vector4f highlight = new Vector4f(1f, 0.85f, 0.4f, 1f);
+
+        float panelW = 1.05f;
+        float panelH = 0.62f;
+        float left = -panelW / 2f;
+        if (guiTextures != null) {
+            guiVerts.clear();
+            guiInds.clear();
+            renderGuiPanel(left, -0.18f, left + panelW, 0.44f);
+            flushGuiQuads();
+        } else {
+            float[] panel = {
+                    left, -0.18f, 0, left + panelW, -0.18f, 0,
+                    left + panelW, 0.44f, 0,
+                    left, -0.18f, 0, left + panelW, 0.44f, 0,
+                    left, 0.44f, 0,
+            };
+            settingsPanel.upload(panel);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.55f));
+            settingsPanel.render();
+            lineShader.unbind();
+        }
+
+        drawCenteredText("Game Menu", 0f, 0.32f, 0.055f, WHITE);
+        for (int i = 0; i < PAUSE_ITEMS.length; i++) {
+            boolean selected = i == selectedIndex;
+            float y = 0.16f - i * 0.12f;
+            drawCenteredText(PAUSE_ITEMS[i], 0f, y, 0.038f, selected ? highlight : idle);
+            if (selected) {
+                float w = text.measure(PAUSE_ITEMS[i], 0.038f);
+                drawCenteredText(">", -w / 2f - 0.06f, y, 0.038f, highlight);
+            }
+        }
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    /** The pause-menu button under the mouse, or -1. */
+    public int pauseMenuItemAt(float logicalX, float logicalY) {
+        for (int i = 0; i < PAUSE_ITEMS.length; i++) {
+            float y = 0.16f - i * 0.12f;
+            if (Math.abs(logicalY - y) <= 0.05f && Math.abs(logicalX) <= 0.5f) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** True if the mouse is over the Options Done button. */
+    public boolean settingsDoneAt(float logicalX, float logicalY) {
+        float panelW = settingsPanelWidth();
+        float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H + SETTINGS_DONE_H;
+        float doneY = SETTINGS_CENTER_Y - panelH / 2f + SETTINGS_PAD + 0.01f;
+        return Math.abs(logicalY - doneY) <= 0.035f && Math.abs(logicalX) <= panelW / 2f;
+    }
 
     /** Main menu button indices. */
     public static final int MENU_PLAY = 0;
@@ -1311,7 +1398,7 @@ public class Hud {
     /** Logical center-y of the tab strip. */
     private float settingsTabCenterY() {
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
-                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H + SETTINGS_DONE_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H / 2f;
     }
@@ -1333,7 +1420,7 @@ public class Hud {
     /** Top edge (logical y) of row {@code i} on the given tab. */
     private float settingsRowTop(int tab, int i) {
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + SETTINGS_TAB_H + SETTINGS_TAB_ROWS_GAP
-                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H;
+                + SETTINGS_MAX_ROWS * SETTINGS_ROW_H + SETTINGS_DONE_H;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - SETTINGS_TAB_H - SETTINGS_TAB_ROWS_GAP - i * SETTINGS_ROW_H;
     }
@@ -1400,7 +1487,8 @@ public class Hud {
     public float settingsTrackAt(float logicalX, float logicalY, int tab, boolean inWorld) {
         int row = settingsRowAt(logicalX, logicalY, tab, inWorld);
         if (row < 0 || tab == Settings.TAB_CONTROLS || tab == Settings.TAB_CONTROLLER
-                || Settings.isToggle(settingsRowForTab(tab, row, inWorld))) return -1f;
+                || Settings.isToggle(settingsRowForTab(tab, row, inWorld))
+                || Settings.isCycle(settingsRowForTab(tab, row, inWorld))) return -1f;
         float[] cx = settingsControlX();
         if (logicalX < cx[0] - 0.012f || logicalX > cx[1] + 0.012f) return -1f;
         return settingsSliderAt(logicalX, row, tab);

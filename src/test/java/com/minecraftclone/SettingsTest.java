@@ -348,12 +348,54 @@ class SettingsTest {
     @Test
     void titleScreenGameplayTabHidesGameMode() {
         assertTrue(Settings.isWorldSetting(Settings.GAME_MODE));
+        assertTrue(Settings.isWorldSetting(Settings.DIFFICULTY));
         assertEquals(Settings.GAME_MODE, Settings.rowInTab(Settings.TAB_GAMEPLAY, 0, true));
+        assertEquals(Settings.DIFFICULTY, Settings.rowInTab(Settings.TAB_GAMEPLAY, 1, true));
         assertEquals(Settings.SENSITIVITY, Settings.rowInTab(Settings.TAB_GAMEPLAY, 0, false));
-        assertEquals(Settings.tabRowCount(Settings.TAB_GAMEPLAY, true) - 1,
+        assertEquals(Settings.tabRowCount(Settings.TAB_GAMEPLAY, true) - 2,
                 Settings.tabRowCount(Settings.TAB_GAMEPLAY, false));
         for (int local = 0; local < Settings.tabRowCount(Settings.TAB_GAMEPLAY, false); local++) {
             assertFalse(Settings.isWorldSetting(Settings.rowInTab(Settings.TAB_GAMEPLAY, local, false)));
         }
+    }
+
+    @Test
+    void difficultyDefaultsToNormalAndIsNotPersistedGlobally() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Settings s = new Settings();
+            assertEquals(Difficulty.NORMAL, s.getDifficulty());
+            s.setDifficulty(Difficulty.HARD);
+            s.save(file);
+            String body = Files.readString(file);
+            assertFalse(body.contains("difficulty="), "difficulty belongs on the world, not settings.txt");
+
+            Settings loaded = Settings.load(file);
+            assertEquals(Difficulty.NORMAL, loaded.getDifficulty());
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void difficultyCyclesWrapAround() {
+        Settings s = new Settings();
+        assertTrue(Settings.isCycle(Settings.DIFFICULTY));
+        assertTrue(Settings.isCycle(Settings.GAME_MODE));
+        s.adjust(Settings.DIFFICULTY, +1);
+        assertEquals(Difficulty.HARD, s.getDifficulty());
+        s.adjust(Settings.DIFFICULTY, +1);
+        assertEquals(Difficulty.PEACEFUL, s.getDifficulty());
+        s.adjust(Settings.DIFFICULTY, -1);
+        assertEquals(Difficulty.HARD, s.getDifficulty());
+    }
+
+    @Test
+    void tabLabelsMatchMinecraftOptions() {
+        assertEquals("Video", Settings.tabLabel(Settings.TAB_GRAPHICS));
+        assertEquals("Gameplay", Settings.tabLabel(Settings.TAB_GAMEPLAY));
+        assertEquals("Sound", Settings.tabLabel(Settings.TAB_AUDIO));
+        assertEquals("Controls", Settings.tabLabel(Settings.TAB_CONTROLS));
+        assertEquals("Controller", Settings.tabLabel(Settings.TAB_CONTROLLER));
     }
 }

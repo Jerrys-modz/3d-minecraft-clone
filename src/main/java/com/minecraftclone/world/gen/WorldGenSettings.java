@@ -1,5 +1,6 @@
 package com.minecraftclone.world.gen;
 
+import com.minecraftclone.Difficulty;
 import com.minecraftclone.GameMode;
 
 import java.util.Random;
@@ -7,11 +8,11 @@ import java.util.Random;
 /**
  * Settings for a new world's terrain generation, edited from the main menu's
  * world-generation page (Minecraft-style "More World Options"): a seed, the
- * game mode, the world type, whether structures (trees, cacti, ...) generate,
- * the sea/water level, and the terrain size. Each world stores its own copy in
- * {@code world.txt} ({@code worldgen_*} lines). Create New World always starts
- * from a fresh {@link WorldGenSettings} with a newly rolled seed — the last
- * world's seed is never reused.
+ * game mode, the difficulty, the world type, whether structures (trees, cacti, ...)
+ * generate, the sea/water level, and the terrain size. Each world stores its
+ * own copy in {@code world.txt} ({@code worldgen_*} lines). Create New World
+ * always starts from a fresh {@link WorldGenSettings} with a newly rolled seed
+ * — the last world's seed is never reused.
  */
 public class WorldGenSettings {
 
@@ -20,12 +21,13 @@ public class WorldGenSettings {
     public static final int ROW_NAME = 0;
     public static final int ROW_SEED = 1;
     public static final int ROW_GAME_MODE = 2;
-    public static final int ROW_WORLD_TYPE = 3;
-    public static final int ROW_STRUCTURES = 4;
-    public static final int ROW_SEA_LEVEL = 5;
-    public static final int ROW_TERRAIN_SIZE = 6;
-    public static final int ROW_WEEKS_PER_MONTH = 7;
-    public static final int ROW_COUNT = 8;
+    public static final int ROW_DIFFICULTY = 3;
+    public static final int ROW_WORLD_TYPE = 4;
+    public static final int ROW_STRUCTURES = 5;
+    public static final int ROW_SEA_LEVEL = 6;
+    public static final int ROW_TERRAIN_SIZE = 7;
+    public static final int ROW_WEEKS_PER_MONTH = 8;
+    public static final int ROW_COUNT = 9;
 
     private static final int[] SEA_LEVELS = {34, 42, 50};
     private static final float[] TERRAIN_SIZES = {1f, 1.7f};
@@ -37,6 +39,7 @@ public class WorldGenSettings {
     private String name = "New World";
     private String seed = ""; // empty means a fresh random seed
     private int gameMode = 0; // GameMode ordinal; Survival by default
+    private int difficulty = Difficulty.NORMAL.ordinal();
     private int worldType = 0; // WorldType ordinal
     private boolean structures = true;
     private int seaLevelIndex = 1; // Normal
@@ -98,6 +101,15 @@ public class WorldGenSettings {
         this.gameMode = mode == null ? 0 : mode.ordinal();
     }
 
+    public Difficulty getDifficulty() {
+        Difficulty[] values = Difficulty.values();
+        return values[Math.max(0, Math.min(values.length - 1, difficulty))];
+    }
+
+    public void setDifficulty(Difficulty value) {
+        this.difficulty = value == null ? Difficulty.NORMAL.ordinal() : value.ordinal();
+    }
+
     public WorldType getWorldType() {
         return WorldType.values()[worldType];
     }
@@ -130,6 +142,7 @@ public class WorldGenSettings {
             case ROW_NAME -> "World name";
             case ROW_SEED -> "Seed";
             case ROW_GAME_MODE -> "Game mode";
+            case ROW_DIFFICULTY -> "Difficulty";
             case ROW_WORLD_TYPE -> "World type";
             case ROW_STRUCTURES -> "Structures";
             case ROW_SEA_LEVEL -> "Sea level";
@@ -147,6 +160,7 @@ public class WorldGenSettings {
                 String n = getGameMode().name();
                 yield n.charAt(0) + n.substring(1).toLowerCase();
             }
+            case ROW_DIFFICULTY -> getDifficulty().displayName();
             case ROW_WORLD_TYPE -> {
                 String n = WorldType.values()[worldType].name();
                 yield n.charAt(0) + n.substring(1).toLowerCase();
@@ -163,6 +177,7 @@ public class WorldGenSettings {
     public void adjust(int row, int direction) {
         switch (row) {
             case ROW_GAME_MODE -> gameMode = Math.floorMod(gameMode + Integer.signum(direction), GameMode.values().length);
+            case ROW_DIFFICULTY -> difficulty = Math.floorMod(difficulty + Integer.signum(direction), Difficulty.values().length);
             case ROW_WORLD_TYPE -> worldType = Math.floorMod(worldType + Integer.signum(direction), WorldType.values().length);
             case ROW_STRUCTURES -> structures = !structures;
             case ROW_SEA_LEVEL -> seaLevelIndex = Math.floorMod(seaLevelIndex + Integer.signum(direction), SEA_LEVELS.length);
@@ -177,6 +192,7 @@ public class WorldGenSettings {
         lines.add("worldgen_name=" + name);
         lines.add("worldgen_seed=" + seed);
         lines.add("worldgen_game_mode=" + gameMode);
+        lines.add("worldgen_difficulty=" + difficulty);
         lines.add("worldgen_world_type=" + worldType);
         lines.add("worldgen_structures=" + (structures ? 1 : 0));
         lines.add("worldgen_sea_level=" + seaLevelIndex);
@@ -190,6 +206,7 @@ public class WorldGenSettings {
             case "worldgen_name" -> name = value.trim();
             case "worldgen_seed" -> seed = value.trim();
             case "worldgen_game_mode" -> gameMode = parseClamped(value, GameMode.values().length - 1);
+            case "worldgen_difficulty" -> difficulty = parseClamped(value, Difficulty.values().length - 1);
             case "worldgen_world_type" -> worldType = parseClamped(value, WorldType.values().length - 1);
             case "worldgen_structures" -> structures = value.equals("1") || value.equalsIgnoreCase("true");
             case "worldgen_sea_level" -> seaLevelIndex = parseClamped(value, SEA_LEVELS.length - 1);

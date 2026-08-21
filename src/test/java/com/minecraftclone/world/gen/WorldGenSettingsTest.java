@@ -1,5 +1,6 @@
 package com.minecraftclone.world.gen;
 
+import com.minecraftclone.Difficulty;
 import com.minecraftclone.GameMode;
 import org.junit.jupiter.api.Test;
 
@@ -64,16 +65,32 @@ class WorldGenSettingsTest {
     }
 
     @Test
+    void difficultyDefaultsToNormalAndCycles() {
+        WorldGenSettings g = new WorldGenSettings();
+        assertEquals(Difficulty.NORMAL, g.getDifficulty());
+        assertEquals("Normal", g.valueText(WorldGenSettings.ROW_DIFFICULTY));
+        g.adjust(WorldGenSettings.ROW_DIFFICULTY, +1);
+        assertEquals(Difficulty.HARD, g.getDifficulty());
+        g.adjust(WorldGenSettings.ROW_DIFFICULTY, +1);
+        assertEquals(Difficulty.PEACEFUL, g.getDifficulty());
+        g.setDifficulty(Difficulty.EASY);
+        assertEquals(Difficulty.EASY, g.getDifficulty());
+        assertEquals("Easy", g.valueText(WorldGenSettings.ROW_DIFFICULTY));
+    }
+
+    @Test
     void gameModeAndSeedRoundTripThroughWorldTxtLines() {
         WorldGenSettings original = new WorldGenSettings();
         original.setName("My World");
         original.rollFreshSeed();
         original.setGameMode(GameMode.CREATIVE);
+        original.setDifficulty(Difficulty.HARD);
         original.adjust(WorldGenSettings.ROW_WORLD_TYPE, +1);
 
         List<String> lines = new ArrayList<>();
         original.saveLines(lines);
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("worldgen_game_mode=" + GameMode.CREATIVE.ordinal())));
+        assertTrue(lines.stream().anyMatch(l -> l.startsWith("worldgen_difficulty=" + Difficulty.HARD.ordinal())));
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("worldgen_seed=" + original.getSeedText())));
 
         WorldGenSettings loaded = new WorldGenSettings();
@@ -84,6 +101,7 @@ class WorldGenSettingsTest {
         assertEquals("My World", loaded.getName());
         assertEquals(original.getSeedText(), loaded.getSeedText());
         assertEquals(GameMode.CREATIVE, loaded.getGameMode());
+        assertEquals(Difficulty.HARD, loaded.getDifficulty());
         assertEquals(WorldGenSettings.WorldType.SUPERFLAT, loaded.getWorldType());
     }
 
@@ -93,5 +111,12 @@ class WorldGenSettingsTest {
         g.loadEntry("worldgen_seed", "99");
         assertEquals(GameMode.SURVIVAL, g.getGameMode());
         assertEquals(99L, g.resolveSeed());
+    }
+
+    @Test
+    void missingDifficultyKeyStaysNormal() {
+        WorldGenSettings g = new WorldGenSettings();
+        g.loadEntry("worldgen_seed", "99");
+        assertEquals(Difficulty.NORMAL, g.getDifficulty());
     }
 }

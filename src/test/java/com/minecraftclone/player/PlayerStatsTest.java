@@ -1,5 +1,6 @@
 package com.minecraftclone.player;
 
+import com.minecraftclone.Difficulty;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -125,5 +126,31 @@ class PlayerStatsTest {
         assertEquals(0f, forceFull.frameDamageAccumulator(), 0.001f);
         forceFull.damage(10f);
         assertEquals(PlayerStats.MAX_HEALTH - 10f, forceFull.getHealth(), 0.001f, "multiplier reset to 1 (full damage)");
+    }
+
+    @Test
+    void peacefulDoesNotDrainHungerAndRegenerates() {
+        PlayerStats stats = new PlayerStats();
+        stats.damage(40f);
+        float health = stats.getHealth();
+        stats.update(5f, false, false, false, false, 0f, 0f, Difficulty.PEACEFUL);
+        assertEquals(PlayerStats.MAX_HUNGER, stats.getHunger(), 0.001f, "Peaceful never drains hunger");
+        assertTrue(stats.getHealth() > health, "Peaceful regenerates: " + stats.getHealth());
+    }
+
+    @Test
+    void easyStarvationStopsAtHalfHealth() {
+        PlayerStats stats = new PlayerStats();
+        stats.update(3000f, false, false, false, false, 0f, 0f, Difficulty.EASY);
+        assertEquals(0f, stats.getHunger(), 0.001f);
+        assertEquals(50f, stats.getHealth(), 0.5f, "Easy starvation floor is half health");
+        assertTrue(!stats.isDead());
+    }
+
+    @Test
+    void hardStarvationCanKill() {
+        PlayerStats stats = new PlayerStats();
+        stats.update(2000f, false, false, false, false, 0f, 0f, Difficulty.HARD);
+        assertTrue(stats.isDead(), "Hard starvation can kill");
     }
 }

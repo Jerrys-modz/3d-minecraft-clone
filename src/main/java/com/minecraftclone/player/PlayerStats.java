@@ -1,5 +1,7 @@
 package com.minecraftclone.player;
 
+import com.minecraftclone.Difficulty;
+
 /**
  * Health, hunger, thirst and stamina: the core survival loop. Damage comes
  * from falling too far, standing in lava, staying submerged too long, letting
@@ -7,6 +9,10 @@ package com.minecraftclone.player;
  * both hunger and thirst are sufficient. Sprinting costs both stamina
  * (immediate, regenerates fast) and a little extra hunger (permanent until you
  * eat). Fill a clay canteen at a water source and drink it to restore thirst.
+ * <p>
+ * Hunger drain, starvation, and regen rate follow the world's
+ * {@link Difficulty}: Peaceful doesn't drain hunger and regenerates quickly;
+ * Easy/Normal stop starvation short of death; Hard can starve you out.
  */
 public class PlayerStats {
 
@@ -145,7 +151,17 @@ public class PlayerStats {
      * @param fallImpactSpeed the speed (blocks/sec) the player just landed at this frame, or 0 if not landing.
      */
     public void update(float dt, boolean inLava, boolean inFire, boolean submerged, boolean sprintingAndMoving, float fallImpactSpeed, float coldness) {
+        update(dt, inLava, inFire, submerged, sprintingAndMoving, fallImpactSpeed, coldness, Difficulty.NORMAL);
+    }
+
+    /**
+     * Advances all four stats (health, hunger, thirst, stamina) by one frame
+     * under {@code difficulty}.
+     */
+    public void update(float dt, boolean inLava, boolean inFire, boolean submerged, boolean sprintingAndMoving,
+                       float fallImpactSpeed, float coldness, Difficulty difficulty) {
         if (dead) return;
+        if (difficulty == null) difficulty = Difficulty.NORMAL;
         this.coldness = coldness;
         if (sprintingAndMoving) {
             stamina = Math.max(0f, stamina - STAMINA_SPRINT_DRAIN_PER_SECOND * dt);
@@ -157,9 +173,10 @@ public class PlayerStats {
             staminaExhausted = false;
         }
 
-        float hungerDrain = HUNGER_DRAIN_PER_SECOND + (sprintingAndMoving ? HUNGER_SPRINT_EXTRA_DRAIN_PER_SECOND : 0f);
+        float drainMul = difficulty.hungerDrainMultiplier();
+        float hungerDrain = (HUNGER_DRAIN_PER_SECOND + (sprintingAndMoving ? HUNGER_SPRINT_EXTRA_DRAIN_PER_SECOND : 0f)) * drainMul;
         hunger = Math.max(0f, hunger - hungerDrain * dt);
-        thirst = Math.max(0f, thirst - THIRST_DRAIN_PER_SECOND * dt);
+        thirst = Math.max(0f, thirst - THIRST_DRAIN_PER_SECOND * drainMul * dt);
 
         // Track whether anything hurt the player this tick, so regen (below) doesn't
         // silently cancel out damage taken in the same update - e.g. standing in lava
@@ -203,25 +220,34 @@ public class PlayerStats {
             // Freezing out in a storm: the cold burns through hunger first, then
             // health once you've run out of food. Shelter or a warm fire reduces
             // the exposure (see Player). tookDamage stays clear while food lasts
-            // so the regen below keeps working.
-            hunger = Math.max(0f, hunger - COLD_HUNGER_DRAIN_PER_SECOND * coldness * dt);
-            if (hunger <= 0f) {
+            // so the regen below keeps working. Peaceful skips the hunger burn.
+            hunger = Math.max(0f, hunger - COLD_HUNGER_DRAIN_PER_SECOND * coldness * drainMul * dt);
+            if (hunger <= 0f && drainMul > 0f) {
                 damage(COLD_DAMAGE_PER_SECOND * coldness * dt);
                 tookDamage = true;
             }
         }
 
-        if (hunger <= 0f) {
-            damage(STARVE_DAMAGE_PER_SECOND * dt);
-            tookDamage = true;
+        float starveFloor = difficulty.starvationHealthFloor();
+        if (hunger <= 0f && drainMul > 0f && health > starveFloor) {
+            float applied = Math.min(STARVE_DAMAGE_PER_SECOND * dt, health - starveFloor);
+            if (applied > 0f) {
+                damage(applied);
+                tookDamage = true;
+            }
         }
-        if (thirst <= 0f) {
-            damage(DEHYDRATE_DAMAGE_PER_SECOND * dt);
-            tookDamage = true;
+        if (thirst <= 0f && drainMul > 0f && health > starveFloor) {
+            float applied = Math.min(DEHYDRATE_DAMAGE_PER_SECOND * dt, health - starveFloor);
+            if (applied > 0f) {
+                damage(applied);
+                tookDamage = true;
+            }
         }
-        // Regenerate health only when both hunger and thirst are sufficient and nothing else hurt you.
-        if (!tookDamage && hunger >= REGEN_HUNGER_THRESHOLD && thirst >= REGEN_THIRST_THRESHOLD && health < MAX_HEALTH) {
-            health = Math.min(MAX_HEALTH, health + REGEN_PER_SECOND * dt);
+        // Peaceful always regenerates; other difficulties only when well-fed
+        // and nothing else hurt you this tick.
+        if (!dead && health < MAX_HEALTH && (difficulty == Difficulty.PEACEFUL
+                || (!tookDamage && hunger >= REGEN_HUNGER_THRESHOLD && thirst >= REGEN_THIRST_THRESHOLD))) {
+            health = Math.min(MAX_HEALTH, health + REGEN_PER_SECOND * difficulty.healthRegenMultiplier() * dt);
         }
     }
 

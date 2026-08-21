@@ -1,6 +1,7 @@
 package com.minecraftclone.player;
 
 import com.minecraftclone.GameMode;
+import com.minecraftclone.Difficulty;
 import com.minecraftclone.engine.Camera;
 import com.minecraftclone.engine.Input;
 import com.minecraftclone.engine.KeyBindings;
@@ -152,6 +153,23 @@ public class Player {
     }
 
     /**
+     * Clears inventory, stats and flight so Save and Quit (or loading another
+     * world in the same session) starts empty, matching a process restart.
+     */
+    public void resetSession() {
+        inventory.clear();
+        inventory.clearArmor();
+        durability.reset();
+        stats.reset();
+        flying = false;
+        sleeping = false;
+        velocity.set(0, 0, 0);
+        gameMode = GameMode.SURVIVAL;
+        sprintLatched = false;
+        bobPhase = 0f;
+    }
+
+    /**
      * Teleports the player to the given absolute position, zeroing all velocity.
      * Unlike spawn/respawn this doesn't probe the world for a surface - the
      * caller (dimension teleporting) has already picked a safe landing spot.
@@ -269,11 +287,16 @@ public class Player {
     }
 
     /**
-     * @param coldFactor 0..1 how cold the current weather is (snow/blizzard); the
+     * @param coldFactor  0..1 how cold the current weather is (snow/blizzard); the
      *                    player's shelter and nearby fires cut it down to the
      *                    effective coldness that drains hunger/freezes (see PlayerStats).
+     * @param difficulty  the loaded world's difficulty (hunger drain, regen).
      */
     public void update(float dt, Input input, World world, float coldFactor) {
+        update(dt, input, world, coldFactor, Difficulty.NORMAL);
+    }
+
+    public void update(float dt, Input input, World world, float coldFactor, Difficulty difficulty) {
         updateLook(input);
         // Skip movement while sleeping - player is in bed, time is being skipped
         if (sleeping) {
@@ -346,7 +369,7 @@ public class Player {
             }
             if (fireNearby(world)) coldness *= 0.15f;
             coldness *= Armor.coldMultiplier(inventory.totalArmorWarmth());
-            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness);
+            stats.update(dt, inLava, inFire, submerged, sprintingAndMoving, lastFallImpactSpeed, coldness, difficulty);
         }
         lastFallImpactSpeed = 0f;
     }

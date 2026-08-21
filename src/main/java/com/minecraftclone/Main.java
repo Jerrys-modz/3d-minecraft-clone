@@ -165,11 +165,13 @@ public class Main {
      * null (main menu) - {@link #applySettings} tolerates that. {@code tab}
      * selects the active section (Graphics / Gameplay / Controls); navigation
      * wraps within the active tab's rows, and Tab (or clicking a tab) switches.
-     * Game mode is a per-world setting: the title-screen page hides it
-     * ({@code inWorld == false}), and changing it in-game writes this world's
+     * Game mode and difficulty are per-world: the title-screen page hides them
+     * ({@code inWorld == false}), and changing them in-game writes this world's
      * {@code world.txt}.
+     *
+     * @return true if the Done button was clicked (caller should close Options)
      */
-    private void handleSettingsMenuInput(Input input, Settings settings, Path settingsFile, World[] worlds,
+    private boolean handleSettingsMenuInput(Input input, Settings settings, Path settingsFile, World[] worlds,
                                          Player player, Window window, Hud hud, AudioEngine audio,
                                          int[] menuSelection, int[] sliderDragRow, int[] bindingAction,
                                          int[] settingsTab, WorldGenSettings worldGen, Path worldDir,
@@ -186,7 +188,7 @@ public class Main {
             menuSelection[0] = 0;
             sliderDragRow[0] = -1;
             bindingAction[0] = -1;
-            return;
+            return false;
         }
 
         if (bindingAction[0] >= 0) {
@@ -206,7 +208,7 @@ public class Main {
                         settings.getGamepadBinds().set(bindingAction[0], pressed);
                         settings.save(settingsFile);
                         bindingAction[0] = -1;
-                        return;
+                        return false;
                     }
                 }
             } else {
@@ -269,7 +271,13 @@ public class Main {
                 bindingAction[0] = -1;
                 audio.play(SoundEvent.UI_CLICK);
             }
-            return;
+            return false;
+        }
+        if (hud.settingsDoneAt(sLx, sLy) && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+            bindingAction[0] = -1;
+            sliderDragRow[0] = -1;
+            audio.play(SoundEvent.UI_CLICK);
+            return true;
         }
         int hoverRow = hud.settingsRowAt(sLx, sLy, tab, inWorld);
         if (hoverRow >= 0) {
@@ -285,7 +293,7 @@ public class Main {
                     audio.play(SoundEvent.UI_CLICK);
                 } else {
                     int row = Settings.rowInTab(tab, clicked, inWorld);
-                    if (Settings.isToggle(row)) {
+                    if (Settings.isToggle(row) || Settings.isCycle(row)) {
                         adjustSettingsRow(settings, settingsFile, worlds, player, window, audio, row, +1,
                                 worldGen, worldDir);
                     } else {
@@ -310,6 +318,7 @@ public class Main {
         if (!input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
             sliderDragRow[0] = -1;
         }
+        return false;
     }
 
     /** Steps/toggles a single settings row and pushes the change everywhere it applies. */
@@ -323,23 +332,27 @@ public class Main {
 
     /**
      * Pushes settings into the live game, writes global {@code settings.txt}, and if
-     * game mode changed while a world is loaded, writes that world's {@code world.txt}.
+     * game mode or difficulty changed while a world is loaded, writes that world's
+     * {@code world.txt}.
      */
     private void applyAndSaveSettings(Settings settings, Path settingsFile, World[] worlds, Player player,
                                       Window window, AudioEngine audio, WorldGenSettings worldGen,
                                       Path worldDir, int changedRow) {
         applySettings(settings, worlds, player, window, audio);
         settings.save(settingsFile);
-        if (changedRow == Settings.GAME_MODE && worldGen != null && worldDir != null) {
+        if ((changedRow == Settings.GAME_MODE || changedRow == Settings.DIFFICULTY)
+                && worldGen != null && worldDir != null) {
             worldGen.setGameMode(settings.getGameMode());
+            worldGen.setDifficulty(settings.getDifficulty());
             saveWorldGenSettings(worldDir, worldGen);
         }
     }
 
-    /** Copies this world's game mode onto Settings/Player so it isn't the leftover global default. */
+    /** Copies this world's game mode and difficulty onto Settings/Player. */
     private void applyWorldGameMode(Settings settings, WorldGenSettings genSettings, World[] worlds,
                                     Player player, Window window, AudioEngine audio) {
         settings.setGameMode(genSettings.getGameMode());
+        settings.setDifficulty(genSettings.getDifficulty());
         applySettings(settings, worlds, player, window, audio);
     }
 
@@ -625,6 +638,7 @@ public class Main {
         boolean[] showDebug = {false};
         boolean[] forecastOpen = {false};
         boolean[] menuOpen = {false};
+        boolean[] inGameOptions = {false}; // true while Options is open from the pause Game Menu
         int[] menuSelection = {0};
         int[] settingsTab = {Settings.TAB_GRAPHICS}; // active settings tab
         int[] sliderDragRow = {-1};
@@ -680,7 +694,7 @@ public class Main {
         System.out.println("          Right-click place (or eat, if selected item is food),");
         System.out.println("          E inventory (click/drag items), 1-9/scroll select,");
         System.out.println("          right-click a furnace/crafting table for its GUI,");
-        System.out.println("          F3 debug, Esc settings.");
+        System.out.println("          F3 debug, Esc pause menu.");
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -724,6 +738,8 @@ public class Main {
             menuOpen[0] = true;
         }
         if (System.getenv("MCCLONE_AUTOTEST_SETTINGS_TAB") != null) {
+            menuOpen[0] = true;
+            inGameOptions[0] = true;
             settingsTab[0] = Math.max(0, Math.min(Settings.TAB_COUNT - 1,
                     Integer.parseInt(System.getenv("MCCLONE_AUTOTEST_SETTINGS_TAB"))));
         }
@@ -771,7 +787,8 @@ public class Main {
             float[] spawn = findSpawn(world);
             player.spawn(world, spawn[0], spawn[1]);
             for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
-            world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12);
+            world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12,
+                    settings.getDifficulty());
             System.out.println("World seed: " + seed);
             started[0] = true;
             mainMenuOpen[0] = false;
@@ -1141,13 +1158,16 @@ public class Main {
             // nothing connected, so this is safe to call unconditionally every frame.
             input.updateGamepad(dt, settings.getKeyBinds(), settings.getGamepadBinds());
             timer.updateFps(dt);
-            dayNightCycle.update(dt);
-            // The calendar advances with the day/night cycle, and its season
-            // feeds the cycle's daylight length back - so days grow and shrink
-            // through the year (long summer days, short winter days).
-            calendar.update(dayNightCycle.getDayIndex());
-            dayNightCycle.setDaylightFraction(calendar.daylightFraction());
-            if (world != null) {
+            boolean worldPaused = started[0] && menuOpen[0];
+            if (!worldPaused) {
+                dayNightCycle.update(dt);
+                // The calendar advances with the day/night cycle, and its season
+                // feeds the cycle's daylight length back - so days grow and shrink
+                // through the year (long summer days, short winter days).
+                calendar.update(dayNightCycle.getDayIndex());
+                dayNightCycle.setDaylightFraction(calendar.daylightFraction());
+            }
+            if (world != null && !worldPaused) {
                 TerrainGenerator.Biome playerBiome = world.getBiome(
                         (int) Math.floor(player.getPosition().x), (int) Math.floor(player.getPosition().z));
                 climate.update(dt, playerBiome);
@@ -1206,12 +1226,12 @@ public class Main {
             // Main menu / world select / world-gen page input (before a world starts).
             if (!started[0]) {
                 if (mainSettingsOpen[0]) {
-                    // Settings page opened from the main menu: same controls as the
-                    // in-game Esc menu, but Esc returns to the main menu.
-                    handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
+                    // Options page opened from the main menu: same controls as the
+                    // in-game Options screen, but Esc / Done returns to the main menu.
+                    boolean done = handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
                             menuSelection, sliderDragRow, bindingAction, settingsTab,
                             null, null, false);
-                    if (input.isKeyJustPressed(GLFW_KEY_ESCAPE) && bindingAction[0] < 0) {
+                    if ((done || input.isKeyJustPressed(GLFW_KEY_ESCAPE)) && bindingAction[0] < 0) {
                         mainSettingsOpen[0] = false;
                         sliderDragRow[0] = -1;
                         mainMenuSelection[0] = Hud.MENU_SETTINGS;
@@ -1290,7 +1310,8 @@ public class Main {
                                 float[] spawn = findSpawn(world);
                                 player.spawn(world, spawn[0], spawn[1]);
                                 for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
-                                world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12);
+                                world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12,
+                    settings.getDifficulty());
                                 System.out.println("World: " + genSettings.getName() + " seed: " + seed);
                                 started[0] = true;
                                 mainMenuOpen[0] = false;
@@ -1358,7 +1379,8 @@ public class Main {
                             float[] spawn = findSpawn(world);
                             player.spawn(world, spawn[0], spawn[1]);
                             for (int i = 0; i < 80; i++) world.update(player.getPosition().x, player.getPosition().z);
-                            world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12);
+                            world.spawnInitialMobs(new Random(), player.getPosition().x, player.getPosition().z, 12,
+                    settings.getDifficulty());
                             System.out.println("World: " + genSettings.getName() + " seed: " + seed);
                             started[0] = true;
                             mainMenuOpen[0] = false;
@@ -1429,8 +1451,14 @@ public class Main {
                         closeCreative(inventoryController, creativeOpen, audio,
                                 creativeSearch, creativeSearchFocused, creativeScroll);
                     }
+                } else if (inGameOptions[0]) {
+                    inGameOptions[0] = false;
+                    menuSelection[0] = Hud.PAUSE_OPTIONS;
+                    sliderDragRow[0] = -1;
                 } else {
                     menuOpen[0] = !menuOpen[0];
+                    inGameOptions[0] = false;
+                    menuSelection[0] = 0;
                 }
                 window.setCursorCaptured(!mapOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
                 input.resetMouseDelta();
@@ -1606,9 +1634,68 @@ public class Main {
                     inventoryController.endDrag(hoveredSlot[0]);
                 }
             } else if (menuOpen[0]) {
-                handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
-                        menuSelection, sliderDragRow, bindingAction, settingsTab,
-                        genSettings, currentWorldDir[0], true);
+                if (inGameOptions[0]) {
+                    boolean done = handleSettingsMenuInput(input, settings, settingsFile, worlds, player, window, hud, audio,
+                            menuSelection, sliderDragRow, bindingAction, settingsTab,
+                            genSettings, currentWorldDir[0], true);
+                    if (done) {
+                        inGameOptions[0] = false;
+                        menuSelection[0] = Hud.PAUSE_OPTIONS;
+                    }
+                } else {
+                    if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                        menuSelection[0] = Math.floorMod(menuSelection[0] - 1, Hud.PAUSE_COUNT);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                        menuSelection[0] = Math.floorMod(menuSelection[0] + 1, Hud.PAUSE_COUNT);
+                    }
+                    boolean clickedPause = false;
+                    float pLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                    float pLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                    int hoverPause = hud.pauseMenuItemAt(pLx, pLy);
+                    if (hoverPause >= 0) {
+                        menuSelection[0] = hoverPause;
+                        clickedPause = input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT);
+                    }
+                    if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE) || clickedPause) {
+                        audio.play(SoundEvent.UI_CLICK);
+                        if (menuSelection[0] == Hud.PAUSE_BACK) {
+                            menuOpen[0] = false;
+                            window.setCursorCaptured(true);
+                            input.resetMouseDelta();
+                        } else if (menuSelection[0] == Hud.PAUSE_OPTIONS) {
+                            inGameOptions[0] = true;
+                            settingsTab[0] = Settings.TAB_GRAPHICS;
+                            menuSelection[0] = 0;
+                            sliderDragRow[0] = -1;
+                            bindingAction[0] = -1;
+                        } else if (menuSelection[0] == Hud.PAUSE_QUIT) {
+                            saveOpenWorld(worlds, currentWorldDir[0]);
+                            if (currentWorldDir[0] != null) {
+                                saveWorldGenSettings(currentWorldDir[0], genSettings);
+                            }
+                            destroyOpenWorld(worlds);
+                            player.resetSession();
+                            worlds = null;
+                            world = null;
+                            mapRenderer[0] = null;
+                            currentWorldDir[0] = null;
+                            started[0] = false;
+                            mainMenuOpen[0] = true;
+                            menuOpen[0] = false;
+                            inGameOptions[0] = false;
+                            inventoryOpen[0] = false;
+                            creativeOpen[0] = false;
+                            mapOpen[0] = false;
+                            forecastOpen[0] = false;
+                            worldNames = listWorlds(saveRoot);
+                            window.setCursorCaptured(false);
+                            input.resetMouseDelta();
+                            hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1);
+                            hud.renderFullMap(null, -1);
+                        }
+                    }
+                }
             }
 
             if (input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.DEBUG))) {
@@ -1638,7 +1725,7 @@ public class Main {
                 if (input.isKeyJustPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_R)) mapRenderer[0].resetView();
             }
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
+            if (started[0] && world != null && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
                 // Cold exposure factor, driven by the LOCAL temperature at the
                 // player's position (which already folds in the biome, season,
                 // night, weather, altitude and underground depth - so a deep cave
@@ -1653,7 +1740,7 @@ public class Main {
                 TerrainGenerator.Biome pBiome = world.getBiome((int) Math.floor(px), (int) Math.floor(pz));
                 float localTemp = climate.temperatureFor(pBiome, playerY, world.getTerrainHeight((int) Math.floor(px), (int) Math.floor(pz)));
                 float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
-                player.update(dt, input, world, coldFactor);
+                player.update(dt, input, world, coldFactor, settings.getDifficulty());
 
                 // Dimension portals: walking into a NETHER_PORTAL or END_PORTAL block
                 // teleports the player to the linked dimension (with a short cooldown
@@ -1738,6 +1825,7 @@ public class Main {
 
             // Keep streaming/remeshing even with the menu open, so toggling a
             // rendering setting (e.g. see-through leaves) takes effect live.
+            if (started[0] && world != null) {
             world.update(player.getPosition().x, player.getPosition().z);
 
             // Paint every generated chunk in render distance onto the map as
@@ -1791,7 +1879,9 @@ public class Main {
                 player.respawn(world, 0.5f, 0.5f);
             }
 
-            // Item-entity physics + pickup.
+            // Item-entity physics + pickup. Frozen while the pause menu is open,
+            // same as Minecraft's Game Menu.
+            if (!menuOpen[0]) {
             if (world.updateItems(dt, player.getPosition(), player.getInventory())) {
                 audio.play(SoundEvent.ITEM_PICKUP);
             }
@@ -1815,10 +1905,12 @@ public class Main {
             // couldn't land a hit either way, so don't have them chase/attack a player
             // they can never actually hurt; they just wander like passives instead.
             boolean playerTargetable = !settings.getGameMode().isInvulnerable();
-            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot, playerTargetable);
+            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot,
+                    playerTargetable, settings.getDifficulty());
             if (mobDamage > 0f) {
                 player.takeDamage(mobDamage);
                 audio.play(SoundEvent.HURT);
+            }
             }
             // Every damage source for this frame (environmental hazards inside
             // player.update(), lightning and mob hits via takeDamage() above/below it)
@@ -2115,7 +2207,8 @@ public class Main {
                 }
             }
 
-            }
+            } // started && world != null (chunk streaming + gameplay after Save and Quit)
+            } // in-world (started) branch
 
             // --- Render ---
             Matrix4f projection = player.getCamera().getProjectionMatrix(settings.getFov(), window.getAspectRatio(), NEAR_PLANE, FAR_PLANE);
@@ -2378,6 +2471,9 @@ public class Main {
                 hud.drawTextLeft(String.format(Locale.ROOT, "Chunks: %d visible / %d loaded (render distance %d)",
                                 world.getVisibleChunkCount(), world.getLoadedChunkCount(), world.getRenderDistance()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                hud.drawTextLeft("Game mode: " + settings.getGameMode()
+                                + "   Difficulty: " + settings.getDifficulty(),
+                        -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 hud.drawTextLeft(String.format(Locale.ROOT, "Entities: %d mobs, %d items", world.getMobs().size(), world.getItems().size()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 Runtime rt = Runtime.getRuntime();
@@ -2415,8 +2511,10 @@ public class Main {
                             -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 }
             }
-            if (menuOpen[0]) {
+            if (menuOpen[0] && inGameOptions[0]) {
                 hud.renderSettingsMenu(settings, settingsTab[0], menuSelection[0], bindingAction[0], window.getAspectRatio(), true);
+            } else if (menuOpen[0]) {
+                hud.renderPauseMenu(menuSelection[0], window.getAspectRatio());
             }
             if (!started[0]) {
                 if (mainSettingsOpen[0]) {
@@ -2499,6 +2597,28 @@ public class Main {
         window.close();
     }
 
+
+    /** Flushes chunk edits and map data for every loaded dimension. */
+    private static void saveOpenWorld(World[] worlds, Path worldDir) {
+        if (worlds == null) return;
+        for (World w : worlds) {
+            w.saveAllModified();
+        }
+        if (worldDir != null) {
+            for (DimensionType dim : DimensionType.values()) {
+                worlds[dim.ordinal()].getMapData().saveTo(
+                        worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
+            }
+        }
+    }
+
+    /** Releases GL resources for every loaded dimension. */
+    private static void destroyOpenWorld(World[] worlds) {
+        if (worlds == null) return;
+        for (World w : worlds) {
+            w.destroy();
+        }
+    }
 
     /** Names of the saved worlds (folders directly under {@code saveRoot}), sorted. */
     private static List<String> listWorlds(Path saveRoot) {
