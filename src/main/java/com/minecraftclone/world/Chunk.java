@@ -606,18 +606,11 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         // shorter - puddle height instead of full, a visibly banded, gappy
         // waterfall.
         if (below == BlockType.AIR || below.cross || below.isFluid()) return 1f;
-        // The one cell this doesn't cover: the very bottom of a fall, where it
-        // lands on solid ground. Its own below is solid, so the checks above
-        // graded it down like a resting puddle even though it's still being
-        // actively fed from directly above - the falling column's box always
-        // starts at this cell's own ceiling (y+1), so anything less than full
-        // height here left a visible sliver gap right at the point of impact,
-        // and with corner-averaging pulling its other corners toward the
-        // puddle it had started spreading into, that sliver read as a short,
-        // disconnected panel rather than water reaching the ground. A cell
-        // with fluid directly above it must be full height to meet it with no
-        // gap, regardless of what's below.
-        if (world.getBlock(wx, wy + 1, wz).isFluid()) return 1f;
+        // Resting on solid ground: grade by distance, even if more fluid is
+        // stacked above (a waterfall landing). Forcing those cells to full
+        // height made every downhill step a full cube next to a shallow
+        // puddle — high, low, high. The column above meets the pool via a
+        // drop skirt instead (see emitFluidDropSkirt).
         int maxLevel = type.isWater() ? FluidSim.WATER_FLOW_DISTANCE : FluidSim.LAVA_FLOW_DISTANCE;
         float t = Math.min(world.getFluidLevel(wx, wy, wz), maxLevel) / (float) maxLevel;
         return FLOW_TOP_NEAR - t * (FLOW_TOP_NEAR - FLOW_TOP_FAR);
@@ -719,16 +712,12 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     }
 
     /**
-     * Whether a fluid cell should emit its top face.
-     * <p>
-     * A waterfall landing (fluid above, solid/air below) always needs a cap —
-     * skipping it left a 1×1 hole in the pool that showed the grass the fall
-     * had just hit. Mid-column cells stay open unless a corner actually dips.
-     * Surface cells with dipped corners also emit; a full-height surface still
-     * emits when the caller sees air above ({@code isFaceVisible}).
+     * Whether a fluid cell should emit its top face. Full-height cells under
+     * more fluid are the interior of a column (no extra slab in the shaft).
+     * Everything else with a dipped surface needs a top so the pool isn't a hole.
      */
     static boolean shouldEmitFluidTop(boolean fluidAbove, boolean fluidBelow, float minCorner, float cellY) {
-        if (fluidAbove && !fluidBelow) return true;
+        if (fluidAbove && minCorner >= cellY + 0.999f) return false;
         return minCorner < cellY + 0.999f;
     }
 
@@ -789,6 +778,61 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.WEST, uvs, yNW, ySW);
         emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.SOUTH, uvs, ySW, ySE);
         emitFluidSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, Face.NORTH, uvs, yNW, yNE);
+        emitFluidDropSkirt(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs, selfTop);
+    }
+
+    /**
+     * When a full-height falling column sits on a shallow pool, extend the
+     * column's walls down to that pool's surface. Otherwise the column ends
+     * at this cell's floor and the landing (now a normal puddle so downhill
+     * water can slope) would show a gap to the dirt.
+     */
+    private void emitFluidDropSkirt(BlockAccessor world, FloatArray vertices, IntArray indices,
+                                    int[] vertexCounter, int wx, int wy, int wz, BlockType block,
+                                    float blockLight, float flow, float[][] uvs, float selfTop) {
+        if (selfTop < 0.999f) return;
+        BlockType below = world.getBlock(wx, wy - 1, wz);
+        if (!sameFluidFamily(below, block)) return;
+        float belowSelf = fluidTop(world, wx, wy - 1, wz, below);
+        if (belowSelf >= 0.999f) return;
+        float yNW = (wy - 1) + fluidCornerTop(world, wx,     wy - 1, wz,     below, belowSelf);
+        float yNE = (wy - 1) + fluidCornerTop(world, wx + 1, wy - 1, wz,     below, belowSelf);
+        float ySE = (wy - 1) + fluidCornerTop(world, wx + 1, wy - 1, wz + 1, below, belowSelf);
+        float ySW = (wy - 1) + fluidCornerTop(world, wx,     wy - 1, wz + 1, below, belowSelf);
+        float yTop = wy;
+        emitDropSkirtSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs,
+                Face.EAST,  ySE, yNE, yTop);
+        emitDropSkirtSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs,
+                Face.WEST,  yNW, ySW, yTop);
+        emitDropSkirtSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs,
+                Face.SOUTH, ySW, ySE, yTop);
+        emitDropSkirtSide(world, vertices, indices, vertexCounter, wx, wy, wz, block, blockLight, flow, uvs,
+                Face.NORTH, yNE, yNW, yTop);
+    }
+
+    private void emitDropSkirtSide(BlockAccessor world, FloatArray vertices, IntArray indices,
+                                   int[] vertexCounter, int wx, int wy, int wz, BlockType block,
+                                   float blockLight, float flow, float[][] uvs,
+                                   Face face, float yA, float yB, float yTop) {
+        int nx = wx + (face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0);
+        int nz = wz + (face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0);
+        BlockType neighbor = world.getBlock(nx, wy - 1, nz);
+        if (neighbor.solid && !neighbor.isFluid() && !neighbor.cross && !neighbor.slab
+                && !neighbor.isStair() && !neighbor.isFence() && !neighbor.isDoor()
+                && !neighbor.isTrapdoor() && !neighbor.isTranslucent()) {
+            return;
+        }
+        float x0 = wx, x1 = wx + 1, z0 = wz, z1 = wz + 1;
+        float[][] positions = switch (face) {
+            case EAST  -> new float[][]{{x1, yA, z1}, {x1, yB, z0}, {x1, yTop, z0}, {x1, yTop, z1}};
+            case WEST  -> new float[][]{{x0, yA, z0}, {x0, yB, z1}, {x0, yTop, z1}, {x0, yTop, z0}};
+            case SOUTH -> new float[][]{{x0, yA, z1}, {x1, yB, z1}, {x1, yTop, z1}, {x0, yTop, z1}};
+            case NORTH -> new float[][]{{x1, yA, z0}, {x0, yB, z0}, {x0, yTop, z0}, {x1, yTop, z0}};
+            default -> throw new IllegalArgumentException("Fluid side must be horizontal");
+        };
+        float[][] sideUvs = fluidSideUvs(uvs, wy - 1f, yA, yB, yTop, yTop);
+        float light = face == Face.NORTH || face == Face.SOUTH ? LIGHT_NORTH_SOUTH : LIGHT_EAST_WEST;
+        emitQuad(vertices, indices, vertexCounter, positions, sideUvs, light, blockLight, flow, 0f, 1f);
     }
 
     /**
@@ -872,16 +916,24 @@ public class Chunk implements ChunkStorage.PersistableChunk {
      * {@code yTop0}/{@code yTop1} are the two top-edge vertices in winding order.
      */
     static float[][] fluidSideUvs(float[][] uvs, float wy, float yTop0, float yTop1) {
+        return fluidSideUvs(uvs, wy, wy, wy, yTop0, yTop1);
+    }
+
+    /** Like {@link #fluidSideUvs(float[][], float, float, float)} but with independent bottom and top heights. */
+    static float[][] fluidSideUvs(float[][] uvs, float yBase, float yB0, float yB1, float yT0, float yT1) {
         float vBottom = uvs[0][1];
         float vFull = uvs[2][1];
-        float v0 = vBottom + (vFull - vBottom) * Math.max(0f, Math.min(1f, yTop0 - wy));
-        float v1 = vBottom + (vFull - vBottom) * Math.max(0f, Math.min(1f, yTop1 - wy));
+        float span = vFull - vBottom;
         return new float[][]{
-                {uvs[0][0], vBottom},
-                {uvs[1][0], vBottom},
-                {uvs[2][0], v0},
-                {uvs[3][0], v1}
+                {uvs[0][0], vBottom + span * clamp01(yB0 - yBase)},
+                {uvs[1][0], vBottom + span * clamp01(yB1 - yBase)},
+                {uvs[2][0], vBottom + span * clamp01(yT0 - yBase)},
+                {uvs[3][0], vBottom + span * clamp01(yT1 - yBase)}
         };
+    }
+
+    private static float clamp01(float t) {
+        return Math.max(0f, Math.min(1f, t));
     }
 
     private void emitFace(BlockAccessor world, FloatArray vertices, IntArray indices, int[] vertexCounter,

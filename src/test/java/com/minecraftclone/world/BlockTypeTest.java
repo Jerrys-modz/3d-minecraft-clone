@@ -259,9 +259,9 @@ class BlockTypeTest {
 
     @Test
     void waterfallLandingAlwaysGetsATopFace() {
-        // Fluid above + solid below (the block a fall hits): always cap it,
-        // otherwise the pool has a hole down to dirt.
-        assertTrue(Chunk.shouldEmitFluidTop(true, false, 11f, 10f));
+        // A puddle the fall just landed on (corners below full height) still
+        // needs a top, otherwise the pool holes through to dirt.
+        assertTrue(Chunk.shouldEmitFluidTop(true, false, 10.5f, 10f));
         // Mid-column (fluid both above and below) at full height: no extra slab
         // floating in the shaft.
         assertFalse(Chunk.shouldEmitFluidTop(true, true, 11f, 10f));
@@ -269,5 +269,8 @@ class BlockTypeTest {
         assertTrue(Chunk.shouldEmitFluidTop(true, true, 10.4f, 10f));
         // Surface puddle (nothing above) with lowered corners.
         assertTrue(Chunk.shouldEmitFluidTop(false, false, 10.4f, 10f));
+        // Full-height landing is no longer a special case — it would stick up
+        // out of the pool (high-low-high on a slope).
+        assertFalse(Chunk.shouldEmitFluidTop(true, false, 11f, 10f));
     }
 }
