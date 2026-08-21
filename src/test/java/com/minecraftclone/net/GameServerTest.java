@@ -376,4 +376,30 @@ class GameServerTest {
                     awaitPacketMatching(a, Packets.ItemRemove.class, p -> ((Packets.ItemRemove) p).id() == addA.id()));
         }
     }
+
+    @Test
+    void playerStatePersistsAcrossReconnect() throws Exception {
+        String snapshot = String.join("\n", java.util.List.of(
+                "pos_x=123.5", "pos_y=70", "pos_z=-45.25", "yaw=45", "pitch=10",
+                "dim=NETHER", "selected=3", "flying=true",
+                "health=15", "hunger=80", "thirst=60", "stamina=90",
+                "slot.0=" + BlockType.STONE.name() + ",12"));
+
+        // Session 1: Alice pushes a snapshot, then disconnects.
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            a.sendPlayerSync(snapshot);
+        }
+
+        // Session 2: the same name rejoins and gets their state back.
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            Packets.PlayerRestore restore = assertInstanceOf(Packets.PlayerRestore.class,
+                    awaitPacketMatching(a, Packets.PlayerRestore.class, p -> true));
+            assertTrue(restore.data().contains("pos_x=123.5"));
+            assertTrue(restore.data().contains("dim=NETHER"));
+        }
+    }
 }

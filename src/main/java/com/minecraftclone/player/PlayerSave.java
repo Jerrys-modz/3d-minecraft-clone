@@ -120,6 +120,32 @@ public final class PlayerSave {
     }
 
     public void save(Path worldDir) {
+        List<String> lines = toLines();
+        try {
+            Files.createDirectories(worldDir);
+            Files.write(worldDir.resolve(FILE_NAME), lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            System.err.println("Could not save player to " + worldDir + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Encodes this snapshot as the {@code key=value} lines normally written to
+     * {@code player.txt} - shared between disk saves and the multiplayer
+     * player-sync packet so both carry exactly the same state.
+     */
+    public List<String> toLines() {
+        return buildLines();
+    }
+
+    /** Rebuilds a snapshot from {@link #toLines()} output, or null if it has no position. */
+    public static PlayerSave fromLines(List<String> lines) {
+        PlayerSave s = new PlayerSave();
+        if (!s.readLines(lines)) return null;
+        return s;
+    }
+
+    private List<String> buildLines() {
         List<String> lines = new ArrayList<>();
         lines.add("pos_x=" + fmt(x));
         lines.add("pos_y=" + fmt(y));
@@ -149,12 +175,7 @@ public final class PlayerSave {
         for (var e : durability.entrySet()) {
             lines.add("dur." + e.getKey().name() + "=" + e.getValue());
         }
-        try {
-            Files.createDirectories(worldDir);
-            Files.write(worldDir.resolve(FILE_NAME), lines, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            System.err.println("Could not save player to " + worldDir + ": " + e.getMessage());
-        }
+        return lines;
     }
 
     /**
@@ -164,49 +185,56 @@ public final class PlayerSave {
     public static PlayerSave load(Path worldDir) {
         Path file = worldDir.resolve(FILE_NAME);
         if (!Files.isRegularFile(file)) return null;
-        PlayerSave s = new PlayerSave();
-        boolean hasPos = false;
+        List<String> lines;
         try {
-            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-                int eq = line.indexOf('=');
-                if (eq <= 0) continue;
-                String key = line.substring(0, eq).trim();
-                String val = line.substring(eq + 1).trim();
-                switch (key) {
-                    case "pos_x" -> { s.x = parseFloat(val, 0f); hasPos = true; }
-                    case "pos_y" -> s.y = parseFloat(val, 0f);
-                    case "pos_z" -> s.z = parseFloat(val, 0f);
-                    case "yaw" -> s.yaw = parseFloat(val, -90f);
-                    case "pitch" -> s.pitch = parseFloat(val, 0f);
-                    case "dim" -> s.dimension = parseDim(val);
-                    case "selected" -> s.selectedSlot = parseInt(val, 0);
-                    case "flying" -> s.flying = Boolean.parseBoolean(val);
-                    case "spawn_set" -> s.spawnSet = Boolean.parseBoolean(val);
-                    case "spawn_x" -> s.spawnX = parseInt(val, 0);
-                    case "spawn_y" -> s.spawnY = parseInt(val, 0);
-                    case "spawn_z" -> s.spawnZ = parseInt(val, 0);
-                    case "health" -> s.health = parseFloat(val, PlayerStats.MAX_HEALTH);
-                    case "hunger" -> s.hunger = parseFloat(val, PlayerStats.MAX_HUNGER);
-                    case "thirst" -> s.thirst = parseFloat(val, PlayerStats.MAX_THIRST);
-                    case "stamina" -> s.stamina = parseFloat(val, PlayerStats.MAX_STAMINA);
-                    default -> {
-                        if (key.startsWith("slot.")) {
-                            int i = parseInt(key.substring(5), -1);
-                            if (i >= 0 && i < Inventory.SIZE) s.slots[i] = decodeStack(val);
-                        } else if (key.startsWith("armor.")) {
-                            int i = parseInt(key.substring(6), -1);
-                            if (i >= 0 && i < Inventory.ARMOR_SLOT_COUNT) s.armor[i] = parseBlock(val);
-                        } else if (key.startsWith("dur.")) {
-                            BlockType t = parseBlock(key.substring(4));
-                            if (t != null) s.durability.put(t, parseInt(val, 0));
-                        }
-                    }
-                }
-            }
+            lines = Files.readAllLines(file, StandardCharsets.UTF_8);
         } catch (IOException e) {
             return null;
         }
-        return hasPos ? s : null;
+        PlayerSave s = new PlayerSave();
+        return s.readLines(lines) ? s : null;
+    }
+
+    /** Parses {@code key=value} lines into this snapshot; returns false when no position was present. */
+    private boolean readLines(List<String> lines) {
+        boolean hasPos = false;
+        for (String line : lines) {
+            int eq = line.indexOf('=');
+            if (eq <= 0) continue;
+            String key = line.substring(0, eq).trim();
+            String val = line.substring(eq + 1).trim();
+            switch (key) {
+                case "pos_x" -> { x = parseFloat(val, 0f); hasPos = true; }
+                case "pos_y" -> y = parseFloat(val, 0f);
+                case "pos_z" -> z = parseFloat(val, 0f);
+                case "yaw" -> yaw = parseFloat(val, -90f);
+                case "pitch" -> pitch = parseFloat(val, 0f);
+                case "dim" -> dimension = parseDim(val);
+                case "selected" -> selectedSlot = parseInt(val, 0);
+                case "flying" -> flying = Boolean.parseBoolean(val);
+                case "spawn_set" -> spawnSet = Boolean.parseBoolean(val);
+                case "spawn_x" -> spawnX = parseInt(val, 0);
+                case "spawn_y" -> spawnY = parseInt(val, 0);
+                case "spawn_z" -> spawnZ = parseInt(val, 0);
+                case "health" -> health = parseFloat(val, PlayerStats.MAX_HEALTH);
+                case "hunger" -> hunger = parseFloat(val, PlayerStats.MAX_HUNGER);
+                case "thirst" -> thirst = parseFloat(val, PlayerStats.MAX_THIRST);
+                case "stamina" -> stamina = parseFloat(val, PlayerStats.MAX_STAMINA);
+                default -> {
+                    if (key.startsWith("slot.")) {
+                        int i = parseInt(key.substring(5), -1);
+                        if (i >= 0 && i < Inventory.SIZE) slots[i] = decodeStack(val);
+                    } else if (key.startsWith("armor.")) {
+                        int i = parseInt(key.substring(6), -1);
+                        if (i >= 0 && i < Inventory.ARMOR_SLOT_COUNT) armor[i] = parseBlock(val);
+                    } else if (key.startsWith("dur.")) {
+                        BlockType t = parseBlock(key.substring(4));
+                        if (t != null) durability.put(t, parseInt(val, 0));
+                    }
+                }
+            }
+        }
+        return hasPos;
     }
 
     static String encodeStack(ItemStack stack) {

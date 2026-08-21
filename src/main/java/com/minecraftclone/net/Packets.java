@@ -66,6 +66,8 @@ public final class Packets {
     public static final byte OP_ITEM_PICKUP = 31;   // C->S: walk-over intent - server validates and answers GIVE
     public static final byte OP_ITEM_GIVE = 32;     // S->C: targeted - the pickup was granted, add it to your inventory
     public static final byte OP_ITEM_SPAWN = 33;    // C->S: I broke a block / died - spawn these drops server-side
+    public static final byte OP_PLAYER_SYNC = 34;   // C->S: snapshot of my position/inventory/stats (PlayerSave lines)
+    public static final byte OP_PLAYER_RESTORE = 35; // S->C: a saved snapshot for you, from a previous session
 
     // ---------------------------------------------------------------
     // Shared encode/decode helpers
@@ -79,6 +81,9 @@ public final class Packets {
      * furnace under 40; anything bigger is corrupt or hostile).
      */
     static final int MAX_CONTAINER_PAYLOAD = 8192;
+
+    /** Cap for a serialized player snapshot (36 slots of text is a few KB at most). */
+    static final int MAX_PLAYER_SYNC_CHARS = 16384;
 
     /**
      * Writes a packet to {@code out}: a 4-byte length prefix followed by the
@@ -182,6 +187,20 @@ public final class Packets {
 
     /** A client's local drop (block break / death loot) that should become server-authoritative. */
     public record ItemSpawn(byte dimension, float x, float y, float z, short blockId, int count) {
+    }
+
+    /**
+     * The sender's full player snapshot (position, look, dimension, stats,
+     * inventory, armor, durability, bed spawn) encoded as {@link
+     * com.minecraftclone.player.PlayerSave} {@code key=value} lines. Sent
+     * periodically by the client; the server keeps the latest per player and
+     * mirrors it back as a PlayerRestore on their next join.
+     */
+    public record PlayerSync(String data) {
+    }
+
+    /** A previously-saved snapshot for this player - apply it instead of spawning fresh. */
+    public record PlayerRestore(String data) {
     }
 
     public record Respawn() {
@@ -376,6 +395,27 @@ public final class Packets {
         out.writeFloat(spawn.z());
         out.writeShort(spawn.blockId());
         out.writeByte(spawn.count());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodePlayerSync(String data) throws IOException {
+        if (data.length() > MAX_PLAYER_SYNC_CHARS) {
+            throw new IOException("Player sync payload too large: " + data.length());
+        }
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_PLAYER_SYNC);
+        out.writeUTF(data);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodePlayerRestore(String data) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_PLAYER_RESTORE);
+        out.writeUTF(data);
         out.close();
         return buf.toByteArray();
     }
@@ -686,6 +726,8 @@ public final class Packets {
             case OP_ITEM_GIVE -> new ItemGive(in.readInt(), in.readShort(), in.readUnsignedByte());
             case OP_ITEM_SPAWN -> new ItemSpawn(in.readByte(), in.readFloat(), in.readFloat(),
                     in.readFloat(), in.readShort(), in.readUnsignedByte());
+            case OP_PLAYER_SYNC -> new PlayerSync(in.readUTF());
+            case OP_PLAYER_RESTORE -> new PlayerRestore(in.readUTF());
             case OP_RESPAWN -> new Respawn();
             case OP_READY -> new Ready();
             case OP_WELCOME -> new Welcome(in.readInt(), in.readLong(), in.readInt(), in.readBoolean(),

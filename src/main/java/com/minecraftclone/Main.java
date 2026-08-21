@@ -706,6 +706,46 @@ public class Main {
         }
     }
 
+    /**
+     * Serializes the local player (position, look, dimension, stats, inventory,
+     * armor, durability) with the same {@link PlayerSave} format disk saves
+     * use, and hands it to the server. The server keeps the latest per player
+     * and mirrors it back on the next join.
+     */
+    private void sendPlayerSnapshot(World[] worlds, Player player) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected() || worlds == null) return;
+        World w = worlds[currentDim[0].ordinal()];
+        if (w == null) return;
+        PlayerSave snapshot = PlayerSave.capture(player, currentDim[0], selectedSlot[0]);
+        try {
+            client.sendPlayerSync(String.join("\n", snapshot.toLines()));
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /**
+     * Applies a server-sent snapshot from a previous session: switches to the
+     * saved dimension and teleports + restores inventory/stats via
+     * {@link PlayerSave#applyTo}.
+     */
+    private void applyRestoredPlayerState(String data, World[] worlds, Player player) {
+        PlayerSave save = PlayerSave.fromLines(List.of(data.split("\n")));
+        if (save == null) return;
+        DimensionType dim = save.dimension();
+        World target;
+        if (dim.ordinal() >= 0 && dim.ordinal() < worlds.length && worlds[dim.ordinal()] != null) {
+            target = worlds[dim.ordinal()];
+            currentDim[0] = dim;
+        } else {
+            target = worlds[DimensionType.OVERWORLD.ordinal()];
+            currentDim[0] = DimensionType.OVERWORLD;
+        }
+        if (target == null) return;
+        save.applyTo(player);
+    }
+
     /** Sends a chat message typed by the local player. */
     private void sendChat(String text) {
         NetClient client = netClient;
@@ -733,6 +773,16 @@ public class Main {
      * {dimension, x, y, z}, or dimension -1 when none is open (or single player).
      */
     private final int[] openContainerCell = {-1, 0, 0, 0};
+
+    /**
+     * A snapshot from the server (this player's previous session) waiting to
+     * be applied once the mirror worlds are wired up.
+     */
+    private String pendingPlayerRestore;
+    /** Seconds since the last periodic player-snapshot push to the server. */
+    private float netPlayerSyncTimer;
+    /** The active hotbar slot (shared with helpers like snapshot capture). */
+    private final int[] selectedSlot = {0};
 
     /**
      * Mirrors run()'s local dimension-worlds array once per frame so helpers
@@ -1055,6 +1105,9 @@ public class Main {
                     player.getInventory().add(type, give.count());
                     audio.play(SoundEvent.ITEM_PICKUP);
                 }
+            } else if (packet instanceof Packets.PlayerRestore restore) {
+                // Applied after this drain, once the mirror worlds are wired up.
+                pendingPlayerRestore = restore.data();
             } else if (packet instanceof Packets.PlayerDamage dmg) {
                 if (world != null && player != null) {
                     player.getStats().damage(dmg.amount());
@@ -1417,7 +1470,6 @@ public class Main {
         // Ensure the renderer/player/window/audio all match the loaded settings.
         applySettings(settings, worlds, player, window, audio);
 
-        int[] selectedSlot = {0};
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
         Calendar calendar = new Calendar(); // in-game calendar: days, seasons, years
@@ -2025,12 +2077,25 @@ public class Main {
                         worlds = returnMirrorWorlds;
                         currentDim[0] = DimensionType.OVERWORLD;
                     }
+                    // A saved snapshot from a previous session (sent right after
+                    // WELCOME): apply it once the dimension worlds exist.
+                    if (pendingPlayerRestore != null && worlds != null && started[0]) {
+                        applyRestoredPlayerState(pendingPlayerRestore, worlds, player);
+                        pendingPlayerRestore = null;
+                    }
                     // Send the local player's pose to the server at ~20 Hz.
                     if (started[0] && netMoveTimer[0] >= 0.05f) {
                         netMoveTimer[0] = 0f;
                         sendPlayerMove(netClient, player);
                     } else {
                         netMoveTimer[0] += dt;
+                    }
+                    // Push a full snapshot (position/inventory/stats) every few
+                    // seconds so the server can restore us after a reconnect.
+                    netPlayerSyncTimer += dt;
+                    if (started[0] && netPlayerSyncTimer >= 5f) {
+                        netPlayerSyncTimer = 0f;
+                        sendPlayerSnapshot(worlds, player);
                     }
                 }
             }

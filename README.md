@@ -201,10 +201,11 @@ The server is authoritative for the world. It uses a fresh random seed each laun
 - **Chat** - press **T**, type, Enter to send; the line appears above the hotbar and everyone sees it.
 - **Containers** - chests (including doubles and 2x2 quads), barrels and furnaces are server-backed: opening one requests the authoritative contents, and closing the GUI pushes what you left inside to everyone else. Furnaces also smelt on the server, so progress continues while nobody is watching. Two players editing the same container at once is last-close-wins.
 - **Item drops** - broken blocks and mob loot exist once, on the server, so two players can't both loot the same drop: whoever walks over it first gets it (the server validates you're actually near it). Tinkers'-tool drops keep their payload on the client that dropped them instead.
+- **Player persistence** - your position, dimension, inventory, armor, stats and bed spawn are snapshotted to the server every few seconds (same format as single-player saves, stored per player name under `players/`), so a disconnect or server restart puts you back where you left off instead of at spawn with empty pockets.
 
-Deliberately **not shared yet** (each player keeps their own):
+Deliberately **not shared yet**:
 
-- **Inventory, health/hunger** - these stay client-side per player for now (a mob's hits damage only the player it was chasing, via server-relayed packets). Dying still respawns you at the overworld spawn - but through the server, so your dimension + position come back consistent for everyone.
+- **Health/hunger during play** - your stats are yours while connected (a mob's hits damage only the player it was chasing, via server-relayed packets); they persist via the snapshots above. Dying still respawns you at the overworld spawn - but through the server, so your dimension + position come back consistent for everyone.
 
 A disconnect (server closed, connection lost) returns you to the main menu with a message; Host & Play's embedded server shuts down when you leave.
 

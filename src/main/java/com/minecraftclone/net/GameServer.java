@@ -103,6 +103,7 @@ public class GameServer implements AutoCloseable {
     private final World[] worlds;
     private final WorldGenSettings settings;
     private final long seed;
+    private final Path playersDir;
     private final float spawnX;
     private final float spawnZ;
 
@@ -135,6 +136,7 @@ public class GameServer implements AutoCloseable {
     public GameServer(int port, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
         this.settings = settings;
         this.seed = seed;
+        this.playersDir = saveDir.resolve("players");
         this.worlds = new World[DimensionType.values().length];
         for (DimensionType dim : DimensionType.values()) {
             World w = new World(seed, settings, null, saveDir, dim, true);
@@ -435,6 +437,8 @@ public class GameServer implements AutoCloseable {
                     handleItemSpawn(client, spawn);
                 } else if (packet instanceof Packets.ItemPickup pickup) {
                     handleItemPickup(client, pickup);
+                } else if (packet instanceof Packets.PlayerSync sync) {
+                    handlePlayerSync(client, sync);
                 }
             } catch (IOException e) {
                 disconnect(client);
@@ -459,7 +463,7 @@ public class GameServer implements AutoCloseable {
         // The id must exist before the fallback name is built from it.
         client.id = nextId++;
         String name = join.name().trim();
-        if (name.isEmpty()) name = "Player-" + client.id;
+        if (!isSafePlayerName(name)) name = "Player-" + client.id;
         client.name = name;
         client.joined = true;
         pending.remove(client);
@@ -513,7 +517,54 @@ public class GameServer implements AutoCloseable {
             }
         }
 
+        // If this player has a snapshot from a previous session, hand it back
+        // so they reappear where they left off (position, inventory, stats).
+        Path saved = playerFile(name);
+        if (saved != null && java.nio.file.Files.isRegularFile(saved)) {
+            try {
+                String data = String.join("\n", java.nio.file.Files.readAllLines(saved));
+                send(client, Packets.encodePlayerRestore(data));
+                System.out.println("Restored saved player state for " + name);
+            } catch (IOException e) {
+                System.err.println("Could not read player file for " + name + ": " + e.getMessage());
+            }
+        }
         System.out.println(name + " joined (" + getPlayerCount() + " online)");
+    }
+
+    /** Player names must be filename-safe: letters, digits, underscore and dash only. */
+    private static boolean isSafePlayerName(String name) {
+        if (name.isEmpty() || name.length() > 16) return false;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) return false;
+        }
+        return true;
+    }
+
+    /**
+     * The file holding {@code name}'s last-known player snapshot, or null when
+     * the name isn't filename-safe (it would never have been written).
+     */
+    private Path playerFile(String name) {
+        return isSafePlayerName(name) ? playersDir.resolve(name.toLowerCase(java.util.Locale.ROOT) + ".txt") : null;
+    }
+
+    /**
+     * A client published its latest snapshot (position, inventory, stats...).
+     * Kept in the server's save dir under the player's name, so it survives
+     * server restarts and is handed back on their next join.
+     */
+    private void handlePlayerSync(Client client, Packets.PlayerSync sync) throws IOException {
+        if (!client.joined || !isSafePlayerName(client.name)) return;
+        if (sync.data().length() > Packets.MAX_PLAYER_SYNC_CHARS) return;
+        try {
+            java.nio.file.Files.createDirectories(playersDir);
+            java.nio.file.Files.write(playerFile(client.name),
+                    sync.data().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            System.err.println("Could not save player state for " + client.name + ": " + e.getMessage());
+        }
     }
 
     private void handleMove(Client client, Packets.Move move) {
