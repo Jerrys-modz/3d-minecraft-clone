@@ -51,6 +51,31 @@ public final class JoinedStorage implements StorageContainer {
     }
 
     @Override
+    public ItemStack stackOf(int slot) {
+        int f = first.size();
+        if (slot < 0 || slot >= size()) return ItemStack.EMPTY;
+        return slot < f ? first.stackOf(slot) : second.stackOf(slot - f);
+    }
+
+    @Override
+    public boolean acceptsStack(int slot, ItemStack stack) {
+        int f = first.size();
+        if (slot < 0 || slot >= size()) return false;
+        return slot < f ? first.acceptsStack(slot, stack) : second.acceptsStack(slot - f, stack);
+    }
+
+    @Override
+    public void setStack(int slot, ItemStack stack) {
+        int f = first.size();
+        if (slot < 0 || slot >= size()) return;
+        if (slot < f) {
+            first.setStack(slot, stack);
+        } else {
+            second.setStack(slot - f, stack);
+        }
+    }
+
+    @Override
     public void setSlot(int slot, BlockType type, int count) {
         int f = first.size();
         if (slot < 0 || slot >= size()) return;
@@ -66,6 +91,12 @@ public final class JoinedStorage implements StorageContainer {
         int leftover = first.add(type, amount);
         if (leftover > 0) leftover = second.add(type, leftover);
         return leftover;
+    }
+
+    @Override
+    public ItemStack addStack(ItemStack stack) {
+        ItemStack leftover = first.addStack(stack);
+        return leftover.isEmpty() ? ItemStack.EMPTY : second.addStack(leftover);
     }
 
     @Override

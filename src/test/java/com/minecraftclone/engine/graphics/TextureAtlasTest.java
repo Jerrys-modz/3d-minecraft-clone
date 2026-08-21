@@ -179,6 +179,21 @@ class TextureAtlasTest {
         assertTrue(stage9 < px, "destroy overlay stays a crack, not a solid cube");
     }
 
+    @Test
+    void earlyCrackPathsRemainPresentInLaterPreThickeningStages() {
+        BufferedImage image = atlas();
+        BufferedImage stage0 = tile(image, TextureAtlas.DESTROY_STAGE_TILE);
+        BufferedImage stage4 = tile(image, TextureAtlas.DESTROY_STAGE_TILE + 4);
+        for (int y = 0; y < TextureAtlas.TILE_PX; y++) {
+            for (int x = 0; x < TextureAtlas.TILE_PX; x++) {
+                if (((stage0.getRGB(x, y) >>> 24) & 0xFF) != 0) {
+                    assertEquals(stage0.getRGB(x, y), stage4.getRGB(x, y),
+                            "existing crack pixel changed at " + x + "," + y);
+                }
+            }
+        }
+    }
+
     private static int countOpaque(BufferedImage tile) {
         int n = 0, px = TextureAtlas.TILE_PX;
         for (int y = 0; y < px; y++) {

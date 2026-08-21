@@ -167,6 +167,19 @@ public class Player {
         gameMode = GameMode.SURVIVAL;
         sprintLatched = false;
         bobPhase = 0f;
+        spaceHeat.clear();
+        onGround = false;
+        movingOnGround = false;
+        swimmingAndMoving = false;
+        lastFallImpactSpeed = 0f;
+        wTapDetector.reset();
+        justJumped = false;
+        justLanded = false;
+        wasOnGround = true;
+        landingArmed = false;
+        submerged = false;
+        inWater = false;
+        swimming = false;
     }
 
     /**

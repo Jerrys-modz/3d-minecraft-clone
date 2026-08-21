@@ -1,11 +1,16 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.player.ItemStack;
+import com.minecraftclone.world.Mining.ToolKind;
+import com.minecraftclone.world.tinkers.TinkersItem;
+import com.minecraftclone.world.tinkers.ToolPartType;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,6 +96,41 @@ class ChestTest {
                 assertTrue(loaded.isEmpty(i), "slot " + i + " stays empty");
             }
         }
+    }
+
+    @Test
+    void serializationRoundTripPreservesTinkersPayload() throws Exception {
+        Chest chest = new Chest();
+        chest.setStack(4, ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT)));
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        chest.writeTo(new DataOutputStream(bytes));
+        Chest loaded = new Chest();
+        loaded.readFrom(new DataInputStream(new ByteArrayInputStream(bytes.toByteArray())));
+
+        assertTrue(loaded.stackOf(4).isTinkersPart());
+        assertEquals(ToolPartType.PICK_HEAD, loaded.stackOf(4).tinkersPart().shape);
+        assertEquals(BlockType.IRON_INGOT, loaded.stackOf(4).tinkersPart().material);
+    }
+
+    @Test
+    void serializationRoundTripPreservesTinkersToolWear() throws Exception {
+        TinkersItem.Tool tool = new TinkersItem.Tool(ToolKind.PICKAXE, List.of(
+                new TinkersItem.ToolLayer(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT),
+                new TinkersItem.ToolLayer(ToolPartType.TOOL_ROD, BlockType.PLANKS)));
+        tool.use();
+        Chest chest = new Chest();
+        chest.setStack(7, ItemStack.tinkersTool(tool));
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        chest.writeTo(new DataOutputStream(bytes));
+        Chest loaded = new Chest();
+        loaded.readFrom(new DataInputStream(new ByteArrayInputStream(bytes.toByteArray())));
+
+        assertTrue(loaded.stackOf(7).isTinkersTool());
+        assertEquals(tool.remaining(), loaded.stackOf(7).tinkersTool().remaining());
+        assertEquals(tool.layers, loaded.stackOf(7).tinkersTool().layers);
     }
 
     @Test

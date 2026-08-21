@@ -44,7 +44,7 @@ public final class SmelteryDefinition implements MultiBlockDefinition {
 
     @Override
     public boolean isRelevantBlock(BlockType type) {
-        return isShellBlock(type); // Any seared block change triggers a rescan
+        return isShellBlock(type) || isInteriorBlock(type);
     }
 
     @Override

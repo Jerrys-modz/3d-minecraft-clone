@@ -1,11 +1,18 @@
 package com.minecraftclone.world;
 
 import com.minecraftclone.player.JoinedStorage;
+import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.player.StorageContainer;
+import com.minecraftclone.world.Mining.ToolKind;
+import com.minecraftclone.world.tinkers.TinkersItem;
+import com.minecraftclone.world.tinkers.TinkersRegistry;
+import com.minecraftclone.world.tinkers.ToolPartType;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A placed chest: a {@link StorageContainer} with {@link #SLOT_COUNT} (3x9)
@@ -49,8 +56,7 @@ public class Chest implements BlockEntity, StorageContainer {
             {-1, 0}, {1, 0}, {0, -1}, {0, 1}
     };
 
-    private final BlockType[] types = new BlockType[SLOT_COUNT];
-    private final int[] counts = new int[SLOT_COUNT];
+    private final ItemStack[] stacks = new ItemStack[SLOT_COUNT];
 
     /**
      * The unique neighbour this chest forms a double with, or null if it
@@ -144,49 +150,76 @@ public class Chest implements BlockEntity, StorageContainer {
     @Override
     public BlockType typeOf(int slot) {
         if (slot < 0 || slot >= SLOT_COUNT) return null;
-        return types[slot];
+        return stackOf(slot).type();
     }
 
     @Override
     public int countOf(int slot) {
         if (slot < 0 || slot >= SLOT_COUNT) return 0;
-        return counts[slot];
+        return stackOf(slot).count();
+    }
+
+    @Override
+    public ItemStack stackOf(int slot) {
+        if (slot < 0 || slot >= SLOT_COUNT) return ItemStack.EMPTY;
+        ItemStack stack = stacks[slot];
+        return stack == null ? ItemStack.EMPTY : stack;
+    }
+
+    @Override
+    public boolean acceptsStack(int slot, ItemStack stack) {
+        return slot >= 0 && slot < SLOT_COUNT;
+    }
+
+    @Override
+    public void setStack(int slot, ItemStack stack) {
+        if (slot < 0 || slot >= SLOT_COUNT) return;
+        stacks[slot] = stack == null || stack.isEmpty() ? null : stack;
     }
 
     @Override
     public void setSlot(int slot, BlockType type, int count) {
         if (slot < 0 || slot >= SLOT_COUNT) return;
-        if (type == null || count <= 0) {
-            types[slot] = null;
-            counts[slot] = 0;
-        } else {
-            types[slot] = type;
-            counts[slot] = count;
-        }
+        setStack(slot, ItemStack.of(type, count));
     }
 
     @Override
     public int add(BlockType type, int amount) {
         if (type == null || amount <= 0) return amount;
-        int max = StorageContainer.maxStack(type);
-        int remaining = amount;
+        return addStack(ItemStack.of(type, amount)).count();
+    }
+
+    @Override
+    public ItemStack addStack(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return ItemStack.EMPTY;
+        if (stack.isTinkers()) {
+            for (int i = 0; i < SLOT_COUNT; i++) {
+                if (stacks[i] == null) {
+                    stacks[i] = stack;
+                    return ItemStack.EMPTY;
+                }
+            }
+            return stack;
+        }
+
+        int max = StorageContainer.maxStack(stack.type());
+        int remaining = stack.count();
         for (int i = 0; i < SLOT_COUNT && remaining > 0; i++) {
-            if (types[i] == type && counts[i] < max) {
-                int space = max - counts[i];
-                int take = Math.min(space, remaining);
-                counts[i] += take;
+            ItemStack held = stacks[i];
+            if (held != null && !held.isTinkers() && held.type() == stack.type() && held.count() < max) {
+                int take = Math.min(max - held.count(), remaining);
+                stacks[i] = held.withCount(held.count() + take);
                 remaining -= take;
             }
         }
         for (int i = 0; i < SLOT_COUNT && remaining > 0; i++) {
-            if (types[i] == null) {
+            if (stacks[i] == null) {
                 int take = Math.min(max, remaining);
-                types[i] = type;
-                counts[i] = take;
+                stacks[i] = ItemStack.of(stack.type(), take);
                 remaining -= take;
             }
         }
-        return remaining;
+        return remaining <= 0 ? ItemStack.EMPTY : stack.withCount(remaining);
     }
 
     @Override
@@ -194,7 +227,8 @@ public class Chest implements BlockEntity, StorageContainer {
         if (type == null) return 0;
         int total = 0;
         for (int i = 0; i < SLOT_COUNT; i++) {
-            if (types[i] == type) total += counts[i];
+            ItemStack stack = stacks[i];
+            if (stack != null && stack.type() == type) total += stack.count();
         }
         return total;
     }
@@ -203,16 +237,20 @@ public class Chest implements BlockEntity, StorageContainer {
      * Format version byte written at the start of the chest payload.
      * 0 = legacy byte-ID format (IDs 0-255 only).
      * 1 = short-ID format (IDs 0-32767, added when IDs exceeded 255).
+     * 2 = complete ItemStack format, including Tinkers payloads.
      */
-    private static final byte PAYLOAD_VERSION = 1;
+    private static final byte PAYLOAD_VERSION = 2;
+    private static final int STACK_EMPTY = 0;
+    private static final int STACK_VANILLA = 1;
+    private static final int STACK_TINKERS_PART = 2;
+    private static final int STACK_TINKERS_TOOL = 3;
 
     /** Writes the chest's slots to {@code out} (see {@link ChunkStorage}). */
     @Override
     public void writeTo(DataOutput out) throws IOException {
         out.writeByte(PAYLOAD_VERSION);
         for (int i = 0; i < SLOT_COUNT; i++) {
-            out.writeShort(types[i] == null ? 0 : types[i].id);
-            out.writeByte(counts[i]);
+            writeStack(out, stackOf(i));
         }
     }
 
@@ -220,40 +258,95 @@ public class Chest implements BlockEntity, StorageContainer {
     @Override
     public void readFrom(DataInput in) throws IOException {
         byte maybeVersion = in.readByte();
-        boolean newFormat = (maybeVersion == PAYLOAD_VERSION);
-        if (newFormat) {
+        if (maybeVersion == PAYLOAD_VERSION) {
+            for (int i = 0; i < SLOT_COUNT; i++) {
+                stacks[i] = emptyToNull(readStack(in));
+            }
+        } else if (maybeVersion == 1) {
             for (int i = 0; i < SLOT_COUNT; i++) {
                 int id = in.readUnsignedShort();
                 int count = in.readUnsignedByte();
-                if (id == 0 || count <= 0) {
-                    types[i] = null;
-                    counts[i] = 0;
-                } else {
-                    types[i] = BlockType.byId(id);
-                    counts[i] = count;
-                }
+                stacks[i] = id == 0 || count <= 0 ? null : ItemStack.of(BlockType.byId(id), count);
             }
         } else {
             // Legacy format: maybeVersion was actually the first slot's byte ID.
             int legacyCount = in.readUnsignedByte();
-            if (legacyCount <= 0) {
-                types[0] = null;
-                counts[0] = 0;
-            } else {
-                types[0] = BlockType.byId(maybeVersion & 0xFF);
-                counts[0] = legacyCount;
-            }
+            stacks[0] = legacyCount <= 0 ? null
+                    : ItemStack.of(BlockType.byId(maybeVersion & 0xFF), legacyCount);
             for (int i = 1; i < SLOT_COUNT; i++) {
                 int id = in.readUnsignedByte();
                 int count = in.readUnsignedByte();
-                if (id == 0 || count <= 0) {
-                    types[i] = null;
-                    counts[i] = 0;
-                } else {
-                    types[i] = BlockType.byId(id);
-                    counts[i] = count;
-                }
+                stacks[i] = id == 0 || count <= 0 ? null : ItemStack.of(BlockType.byId(id), count);
             }
         }
+    }
+
+    private static ItemStack emptyToNull(ItemStack stack) {
+        return stack == null || stack.isEmpty() ? null : stack;
+    }
+
+    private static void writeStack(DataOutput out, ItemStack stack) throws IOException {
+        if (stack == null || stack.isEmpty()) {
+            out.writeByte(STACK_EMPTY);
+        } else if (stack.isTinkersPart()) {
+            TinkersItem.Part part = stack.tinkersPart();
+            out.writeByte(STACK_TINKERS_PART);
+            out.writeByte(part.shape.ordinal());
+            out.writeShort(part.material.id);
+        } else if (stack.isTinkersTool()) {
+            TinkersItem.Tool tool = stack.tinkersTool();
+            out.writeByte(STACK_TINKERS_TOOL);
+            out.writeByte(tool.kind.ordinal());
+            out.writeByte(tool.layers.size());
+            for (TinkersItem.ToolLayer layer : tool.layers) {
+                out.writeByte(layer.shape().ordinal());
+                out.writeShort(layer.material().id);
+            }
+            out.writeInt(tool.remaining());
+        } else {
+            out.writeByte(STACK_VANILLA);
+            out.writeShort(stack.type().id);
+            out.writeByte(stack.count());
+        }
+    }
+
+    private static ItemStack readStack(DataInput in) throws IOException {
+        int kind = in.readUnsignedByte();
+        if (kind == STACK_EMPTY) return ItemStack.EMPTY;
+        if (kind == STACK_VANILLA) {
+            return ItemStack.of(BlockType.byId(in.readUnsignedShort()), in.readUnsignedByte());
+        }
+        if (kind == STACK_TINKERS_PART) {
+            int shape = in.readUnsignedByte();
+            int materialId = in.readUnsignedShort();
+            BlockType material = BlockType.byId(materialId);
+            ToolPartType[] shapes = ToolPartType.values();
+            return shape < shapes.length && materialId != 0 && TinkersRegistry.isMaterial(material)
+                    ? ItemStack.tinkersPart(new TinkersItem.Part(shapes[shape], material))
+                    : ItemStack.EMPTY;
+        }
+        if (kind == STACK_TINKERS_TOOL) {
+            int toolKind = in.readUnsignedByte();
+            int layerCount = in.readUnsignedByte();
+            List<TinkersItem.ToolLayer> layers = new ArrayList<>(layerCount);
+            ToolPartType[] shapes = ToolPartType.values();
+            boolean valid = true;
+            for (int i = 0; i < layerCount; i++) {
+                int shape = in.readUnsignedByte();
+                int materialId = in.readUnsignedShort();
+                BlockType material = BlockType.byId(materialId);
+                if (shape >= shapes.length || materialId == 0 || !TinkersRegistry.isMaterial(material)) {
+                    valid = false;
+                } else {
+                    layers.add(new TinkersItem.ToolLayer(shapes[shape], material));
+                }
+            }
+            int remaining = in.readInt();
+            ToolKind[] kinds = ToolKind.values();
+            return valid && toolKind < kinds.length
+                    ? ItemStack.tinkersTool(new TinkersItem.Tool(kinds[toolKind], layers, remaining))
+                    : ItemStack.EMPTY;
+        }
+        throw new IOException("Unknown chest stack kind: " + kind);
     }
 }

@@ -29,4 +29,9 @@ public class DoubleTapDetector {
         gap = 0f;
         return doubleTap;
     }
+
+    /** Forgets any pending first tap, such as when switching worlds. */
+    public void reset() {
+        gap = Float.MAX_VALUE;
+    }
 }

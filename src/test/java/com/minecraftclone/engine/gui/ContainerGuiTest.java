@@ -203,6 +203,14 @@ class ContainerGuiTest {
     }
 
     @Test
+    void nonGridContainersReportNoGridDimensionsOrOutput() {
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST,
+                new Inventory(), new CraftingGrid(), new Chest());
+        assertEquals(0, gui.gridWidth());
+        assertEquals(-1, gui.outputSlotId());
+    }
+
+    @Test
     void chestScreenUsesLidSoundsInsteadOfTheUiBeep() {
         Inventory inv = new Inventory();
         ContainerGui chest = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), new Chest());

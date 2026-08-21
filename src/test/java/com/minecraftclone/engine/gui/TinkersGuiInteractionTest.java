@@ -384,4 +384,29 @@ class TinkersGuiInteractionTest {
         // 36 player + 5 inputs + 1 output = 42
         assertEquals(Inventory.SIZE + ToolStationGui.INPUT_SLOTS + 1, tsGui.slotCount());
     }
+
+    @Test
+    void chestClicksAndQuickMovesPreserveTinkersPayload() {
+        com.minecraftclone.world.Chest chest = new com.minecraftclone.world.Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inventory,
+                new com.minecraftclone.player.CraftingGrid(), chest);
+        InventoryController ctrl = new InventoryController(gui);
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.DIAMOND));
+        inventory.setStack(0, part);
+
+        ctrl.click(0, false, false);
+        ctrl.click(ContainerGui.CONTAINER_START, false, false);
+        assertTrue(chest.stackOf(0).isTinkersPart());
+        assertEquals(BlockType.DIAMOND, chest.stackOf(0).tinkersPart().material);
+
+        ctrl.click(ContainerGui.CONTAINER_START, false, true);
+        assertTrue(chest.stackOf(0).isEmpty());
+        assertTrue(inventory.stackOf(0).isTinkersPart());
+
+        ctrl.click(0, false, true);
+        assertTrue(inventory.stackOf(0).isEmpty());
+        assertTrue(chest.stackOf(0).isTinkersPart());
+        assertEquals(ToolPartType.PICK_HEAD, chest.stackOf(0).tinkersPart().shape);
+    }
 }

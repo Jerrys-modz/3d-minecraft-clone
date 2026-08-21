@@ -65,6 +65,18 @@ class TinkersEntityPersistenceTest {
         assertTrue(loaded.gui().materialSlot().isEmpty());
     }
 
+    @Test
+    void partBuilderEmptyLoadClearsExistingMaterial() throws Exception {
+        PartBuilderEntity empty = new PartBuilderEntity();
+        byte[] bytes = write(empty);
+
+        PartBuilderEntity loaded = new PartBuilderEntity();
+        loaded.gui().setMaterial(ItemStack.of(BlockType.IRON_INGOT, 3));
+        read(loaded, bytes);
+
+        assertTrue(loaded.gui().materialSlot().isEmpty());
+    }
+
     // -----------------------------------------------------------------------
     // ToolStationEntity
     // -----------------------------------------------------------------------
@@ -123,6 +135,19 @@ class TinkersEntityPersistenceTest {
         for (int i = 0; i < ToolStationGui.INPUT_SLOTS; i++) {
             assertTrue(loaded.gui().slot(i).isEmpty(), "Slot " + i + " should be empty");
         }
+    }
+
+    @Test
+    void toolStationStopsAtUnknownTrailingSlotKind() throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(bytes);
+        out.writeByte(1); // format version
+        out.writeByte(ToolStationGui.INPUT_SLOTS + 2);
+        for (int i = 0; i < ToolStationGui.INPUT_SLOTS; i++) out.writeByte(0);
+        out.writeByte(99); // unknown first trailing slot; no safely-skippable payload follows
+
+        ToolStationEntity loaded = new ToolStationEntity();
+        assertDoesNotThrow(() -> read(loaded, bytes.toByteArray()));
     }
 
     // -----------------------------------------------------------------------

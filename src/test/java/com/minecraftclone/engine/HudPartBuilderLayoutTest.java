@@ -88,8 +88,8 @@ class HudPartBuilderLayoutTest {
         float half = SLOT / 2f;
         for (int id = 0; id < gui.slotCount(); id++) {
             float[] c = centerOf(gui, id);
-            assertTrue(c[0] - half > -1.05f && c[0] + half < 1.05f, "x out of range slot " + id);
-            assertTrue(c[1] - half > -1.05f && c[1] + half < 1.05f, "y out of range slot " + id);
+            assertTrue(c[0] - half >= -1f - EPS && c[0] + half <= 1f + EPS, "x out of range slot " + id);
+            assertTrue(c[1] - half >= -1f - EPS && c[1] + half <= 1f + EPS, "y out of range slot " + id);
         }
     }
 

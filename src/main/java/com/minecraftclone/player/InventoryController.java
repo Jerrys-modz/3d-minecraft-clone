@@ -106,8 +106,8 @@ public class InventoryController {
     }
 
     /** Writes a full stack to a slot, preserving Tinkers payloads for player slots. */
-    private void setStack(int slotId, ItemStack stack) {
-        gui.setStack(slotId, stack);
+    private boolean setStack(int slotId, ItemStack stack) {
+        return gui.setStack(slotId, stack);
     }
 
     /** Writes a whole stack to a slot; grid cells ignore {@code count} and just record the type. */
@@ -215,7 +215,7 @@ public class InventoryController {
             // Place into the empty slot: one item (right) or the whole stack (left);
             // a grid cell only ever accepts a single item.
             int place = isGrid ? 1 : (right ? 1 : cursor.count());
-            setStack(slotId, cursor.withCount(place));
+            if (!setStack(slotId, cursor.withCount(place))) return;
             cursor = cursor.withCount(cursor.count() - place);
             if (cursor.isEmpty()) clearCursor();
         } else if (isSameType(slot, cursor)) {
@@ -232,7 +232,7 @@ public class InventoryController {
             // (right-click means "one item at a time", never a swap - so the
             // crafting grid can't be scrambled by a mis-click either).
             if (right) return;
-            setStack(slotId, cursor.withCount(isGrid ? 1 : cursor.count()));
+            if (!setStack(slotId, cursor.withCount(isGrid ? 1 : cursor.count()))) return;
             cursor = isGrid ? slot.withCount(1) : slot;    // preserves TinkersItem payload
         }
     }
@@ -393,7 +393,7 @@ public class InventoryController {
                     return; // Wrong armor type for this slot, skip.
                 }
             }
-            setStack(slotId, cursor.withCount(1));          // preserves TinkersItem payload
+            if (!setStack(slotId, cursor.withCount(1))) return;
             cursor = cursor.withCount(curCount - 1);
         } else if (st == curType && !cursor.isTinkers() && (gui.isPlayerSlot(slotId) || gui.isContainerSlot(slotId))) {
             int max = Inventory.maxStack(st);
@@ -437,8 +437,10 @@ public class InventoryController {
         if (gui.isTsInputSlot(slotId)) {
             ItemStack part = gui.toolStationGui().slot(slotId - ContainerGui.TS_SLOT_0);
             if (!part.isEmpty()) {
-                inventory.addStack(part);
-                gui.toolStationGui().setSlot(slotId - ContainerGui.TS_SLOT_0, ItemStack.EMPTY);
+                ItemStack leftover = inventory.addStack(part);
+                if (leftover.isEmpty()) {
+                    gui.toolStationGui().setSlot(slotId - ContainerGui.TS_SLOT_0, ItemStack.EMPTY);
+                }
             }
             return;
         }
@@ -466,11 +468,9 @@ public class InventoryController {
         }
         if (gui.isContainerSlot(slotId)) {
             int cs = slotId - ContainerGui.CONTAINER_START;
-            BlockType t = gui.container().typeOf(cs);
-            int count = gui.container().countOf(cs);
-            if (t == null) return;
-            int leftover = inventory.add(t, count);
-            gui.container().setSlot(cs, leftover > 0 ? t : null, leftover);
+            ItemStack stack = gui.container().stackOf(cs);
+            if (stack.isEmpty()) return;
+            gui.container().setStack(cs, inventory.addStack(stack));
             return;
         }
 
@@ -539,12 +539,13 @@ public class InventoryController {
             }
         } else if (gui.kind() == ContainerGui.Kind.CHEST) {
             // A chest accepts anything; fill its stacks first, then empty slots.
-            int moved = count - gui.container().add(t, count);
-            count -= moved;
-            if (count == 0) {
+            ItemStack leftover = gui.container().addStack(inventory.stackOf(slotId));
+            count = leftover.count();
+            if (leftover.isEmpty()) {
                 inventory.setSlot(slotId, null, 0);
                 return;
             }
+            inventory.setStack(slotId, leftover);
         } else if (gui.kind() == ContainerGui.Kind.CRAFTING_TABLE ||
                    gui.kind() == ContainerGui.Kind.ADVANCED_CRAFTING_TABLE ||
                    (gui.kind() == ContainerGui.Kind.INVENTORY && slotId >= Inventory.HOTBAR_SIZE)) {
@@ -563,9 +564,23 @@ public class InventoryController {
             return;
         }
 
-        // Anything left hops between hotbar and main inventory.
+        // Unique Tinkers stacks hop between inventory sections without being
+        // collapsed to their sentinel BlockType.
         int from = slotId < Inventory.HOTBAR_SIZE ? Inventory.HOTBAR_SIZE : 0;
         int to = slotId < Inventory.HOTBAR_SIZE ? Inventory.SIZE : Inventory.HOTBAR_SIZE;
+        ItemStack sourceStack = inventory.stackOf(slotId);
+        if (sourceStack.isTinkers()) {
+            for (int i = from; i < to; i++) {
+                if (inventory.isEmpty(i)) {
+                    inventory.setStack(i, sourceStack);
+                    inventory.setStack(slotId, ItemStack.EMPTY);
+                    break;
+                }
+            }
+            return;
+        }
+
+        // Anything else left hops between hotbar and main inventory.
         int max = Inventory.maxStack(t);
         int remaining = count;
         for (int i = from; i < to && remaining > 0; i++) {
@@ -731,11 +746,11 @@ public class InventoryController {
     public void returnCursorToInventory() {
         if (hasCursorItem()) {
             if (cursor.isTinkers()) {
-                inventory.addStack(cursor);
+                cursor = inventory.addStack(cursor);
             } else {
                 inventory.add(cursor.type(), cursor.count());
+                clearCursor();
             }
-            clearCursor();
         }
     }
 

@@ -2,6 +2,8 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.tinkers.TinkersItem;
+import com.minecraftclone.world.tinkers.ToolPartType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -167,6 +169,21 @@ class InventoryControllerTest {
         assertEquals(1, inv.getCount(BlockType.DIRT));
         assertFalse(c.hasCursorItem());
         assertTrue(grid.isEmpty());
+    }
+
+    @Test
+    void closingKeepsTinkersCursorWhenInventoryIsFull() {
+        Inventory inv = new Inventory();
+        for (int i = 0; i < Inventory.SIZE; i++) inv.setSlot(i, BlockType.STONE, 64);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        inv.setStack(0, ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT)));
+        c.click(0, false, false);
+        inv.setSlot(0, BlockType.STONE, 64);
+
+        c.returnCursorToInventory();
+
+        assertTrue(c.cursor().isTinkersPart(), "unaccepted part must remain on the cursor");
     }
 
     @Test

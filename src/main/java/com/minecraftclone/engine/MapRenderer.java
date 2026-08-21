@@ -176,17 +176,14 @@ public class MapRenderer {
 
     // Cached full-screen map
     private BufferedImage cachedFullMapImage;
+    private BufferedImage cachedFullTerrainImage;
     private int lastFullMapWidth = -1;
     private int lastFullMapHeight = -1;
-    private int lastFullMapQx = Integer.MAX_VALUE;
-    private int lastFullMapQz = Integer.MAX_VALUE;
-    private int lastFullMapYaw = Integer.MAX_VALUE;
+    private float lastFullViewX = Float.NaN;
+    private float lastFullViewZ = Float.NaN;
     private float lastFullMapScale = Float.NaN;
-    private float lastFullPanX = Float.NaN;
-    private float lastFullPanZ = Float.NaN;
-    private int lastFullMouseX = Integer.MIN_VALUE;
-    private int lastFullMouseY = Integer.MIN_VALUE;
     private int lastFullMapRevision = Integer.MIN_VALUE;
+    private int fullTerrainVersion = 0;
     /** Incremented each time the full-map image is redrawn so Hud can re-upload the GPU texture. */
     private int fullMapVersion = 0;
 
@@ -321,40 +318,50 @@ public class MapRenderer {
                                        float playerWorldX, float playerWorldZ,
                                        float playerYaw,
                                        int mouseX, int mouseY) {
-        int qx = Math.round(playerWorldX * 2f);
-        int qz = Math.round(playerWorldZ * 2f);
-        int qYaw = Math.round(playerYaw);
         int rev = mapData.getRevision();
+        float viewX = playerWorldX + panWorldX;
+        float viewZ = playerWorldZ + panWorldZ;
 
-        if (cachedFullMapImage != null
+        boolean terrainCached = cachedFullTerrainImage != null
                 && lastFullMapWidth == width
                 && lastFullMapHeight == height
-                && lastFullMapQx == qx
-                && lastFullMapQz == qz
-                && lastFullMapYaw == qYaw
+                && lastFullViewX == viewX
+                && lastFullViewZ == viewZ
                 && lastFullMapScale == mapScale
-                && lastFullPanX == panWorldX
-                && lastFullPanZ == panWorldZ
-                && lastFullMouseX == mouseX
-                && lastFullMouseY == mouseY
-                && lastFullMapRevision == rev) {
-            return cachedFullMapImage;
-        }
-
-        lastFullMapWidth = width;
-        lastFullMapHeight = height;
-        lastFullMapQx = qx;
-        lastFullMapQz = qz;
-        lastFullMapYaw = qYaw;
-        lastFullMapScale = mapScale;
-        lastFullPanX = panWorldX;
-        lastFullPanZ = panWorldZ;
-        lastFullMouseX = mouseX;
-        lastFullMouseY = mouseY;
-        lastFullMapRevision = rev;
+                && lastFullMapRevision == rev;
 
         int legendW = Math.min(220, Math.max(160, width / 6));
         int mapW    = Math.max(1, width - legendW);
+        float scale = mapScale;
+        float halfW = mapW / 2f;
+        float halfH = height / 2f;
+
+        if (!terrainCached) {
+            if (cachedFullTerrainImage == null
+                    || cachedFullTerrainImage.getWidth() != width
+                    || cachedFullTerrainImage.getHeight() != height) {
+                cachedFullTerrainImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            }
+            int[] pixels = new int[width * height];
+            Arrays.fill(pixels, UNEXPLORED);
+            for (int sy = 0; sy < height; sy++) {
+                int wz = (int) Math.floor(viewZ + (sy - halfH) / scale);
+                int row = sy * width;
+                for (int sx = 0; sx < mapW; sx++) {
+                    int wx = (int) Math.floor(viewX + (sx - halfW) / scale);
+                    pixels[row + sx] = colorAt(wx, wz);
+                }
+            }
+            cachedFullTerrainImage.setRGB(0, 0, width, height, pixels, 0, width);
+
+            lastFullMapWidth = width;
+            lastFullMapHeight = height;
+            lastFullViewX = viewX;
+            lastFullViewZ = viewZ;
+            lastFullMapScale = mapScale;
+            lastFullMapRevision = rev;
+            fullTerrainVersion++;
+        }
 
         BufferedImage img = cachedFullMapImage;
         if (img == null || img.getWidth() != width || img.getHeight() != height) {
@@ -362,25 +369,8 @@ public class MapRenderer {
             cachedFullMapImage = img;
         }
 
-        float viewX = playerWorldX + panWorldX;
-        float viewZ = playerWorldZ + panWorldZ;
-        float scale = mapScale;
-
-        int[] pixels = new int[width * height];
-        Arrays.fill(pixels, UNEXPLORED);
-        float halfW = mapW / 2f;
-        float halfH = height / 2f;
-        for (int sy = 0; sy < height; sy++) {
-            int wz = (int) Math.floor(viewZ + (sy - halfH) / scale);
-            int row = sy * width;
-            for (int sx = 0; sx < mapW; sx++) {
-                int wx = (int) Math.floor(viewX + (sx - halfW) / scale);
-                pixels[row + sx] = colorAt(wx, wz);
-            }
-        }
-        img.setRGB(0, 0, width, height, pixels, 0, width);
-
         Graphics2D g = img.createGraphics();
+        g.drawImage(cachedFullTerrainImage, 0, 0, null);
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
@@ -516,6 +506,11 @@ public class MapRenderer {
     /** Returns the version counter that increments each time the full-map image is redrawn. */
     public int getFullMapVersion() {
         return fullMapVersion;
+    }
+
+    /** Returns how many times the expensive full-map terrain raster was rebuilt. */
+    int getFullTerrainVersion() {
+        return fullTerrainVersion;
     }
 
     // ── Zoom / Pan / Reset ────────────────────────────────────────────────────

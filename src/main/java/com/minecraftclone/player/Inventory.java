@@ -91,8 +91,14 @@ public class Inventory implements StorageContainer {
     }
 
     /** Sets {@code slot} to {@code stack}; pass {@link ItemStack#EMPTY} or {@code null} to clear. */
+    @Override
     public void setStack(int slot, ItemStack stack) {
         slots[slot] = (stack == null || stack.isEmpty()) ? null : stack;
+    }
+
+    @Override
+    public boolean acceptsStack(int slot, ItemStack stack) {
+        return slot >= 0 && slot < SIZE;
     }
 
     @Override
@@ -150,6 +156,7 @@ public class Inventory implements StorageContainer {
      * @param stack the stack to place (must not be empty)
      * @return {@link ItemStack#EMPTY} on success, {@code stack} if the inventory is full
      */
+    @Override
     public ItemStack addStack(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return ItemStack.EMPTY;
         // Vanilla items: delegate to the existing merge+fill logic.

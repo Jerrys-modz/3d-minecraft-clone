@@ -138,6 +138,19 @@ class MapRendererTest {
         assertEquals(MapRenderer.DEFAULT_SCALE, renderer.getMapScale(), 0.01f);
     }
 
+    @Test
+    void movingTheFullMapCursorReusesTheTerrainRaster() {
+        MapRenderer renderer = new MapRenderer(new MapData());
+        renderer.renderFullMap(400, 240, 0f, 0f, 0f, 10, 10);
+        int terrainVersion = renderer.getFullTerrainVersion();
+
+        renderer.renderFullMap(400, 240, 0f, 0f, 0f, 200, 120);
+
+        assertEquals(terrainVersion, renderer.getFullTerrainVersion(),
+                "cursor-only movement must redraw overlays without rasterizing terrain");
+        assertEquals(2, renderer.getFullMapVersion(), "the cursor overlay is still redrawn");
+    }
+
     private static BlockAccessor oreColumn(int oreX, int oreZ, BlockType ore) {
         return (x, y, z) -> {
             if (y == 22 && x == oreX && z == oreZ) return ore;

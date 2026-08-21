@@ -263,6 +263,9 @@ public final class Farming {
     // Growth tick — Minecraft-style random tick system
     // -----------------------------------------------------------------------
 
+    /** Hard cap keeps crop simulation cost independent of the render distance. */
+    static final int MAX_RANDOM_PICKS_PER_FRAME = 4096;
+
     /**
      * Called each frame from the main game loop. Advances crops in all loaded
      * chunks using the same random-tick algorithm as vanilla Minecraft:
@@ -276,9 +279,8 @@ public final class Farming {
      *   <li>If a crop's farmland base was removed, revert the crop to air.</li>
      * </ol>
      *
-     * <p>Range: all loaded chunks — typically the full render-distance radius
-     * (default 6 chunks = 96 blocks in each direction), far larger than the
-     * previous 8-block hardcoded radius.
+     * <p>Work is capped per frame, so increasing render distance cannot make
+     * hydration checks or crop simulation grow without bound.
      *
      * @param world the world to query and mutate
      * @param dt    frame delta-time in seconds
@@ -294,7 +296,9 @@ public final class Farming {
 
         int sectionsPerColumn = Chunk.HEIGHT / SECTION_HEIGHT;
 
+        int remainingPickBudget = MAX_RANDOM_PICKS_PER_FRAME;
         for (Chunk chunk : world.getLoadedChunks()) {
+            if (remainingPickBudget <= 0) break;
             int originX = chunk.getOriginX();
             int originZ = chunk.getOriginZ();
 
@@ -306,6 +310,8 @@ public final class Farming {
                 // Fractional tick: give all sections one extra pick with probability = fracTick.
                 picks += RANDOM_TICK_SPEED * sectionsPerColumn;
             }
+            picks = Math.min(picks, remainingPickBudget);
+            remainingPickBudget -= picks;
 
             for (int p = 0; p < picks; p++) {
                 // Pick a random block within the entire chunk column (all sections combined).

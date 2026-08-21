@@ -96,6 +96,14 @@ public sealed interface TinkersItem permits TinkersItem.Part, TinkersItem.Tool {
             this.remaining     = this.maxDurability;
         }
 
+        /** Restores a persisted tool while clamping its remaining durability. */
+        public Tool(ToolKind kind, List<ToolLayer> layers, int remaining) {
+            this.kind          = kind;
+            this.layers        = List.copyOf(layers);
+            this.maxDurability = computeDurability(layers);
+            this.remaining     = Math.max(0, Math.min(this.maxDurability, remaining));
+        }
+
         private static int computeDurability(List<ToolLayer> layers) {
             if (layers.isEmpty()) return 1;
             // Head layer governs base durability; rod adds 10 % if present.

@@ -2184,6 +2184,17 @@ public class Main {
                         }
                         handRenderer.triggerSwing();
                         showMessage(messages, "Canteen filled!", new Vector4f(0.3f, 0.6f, 1f, 1f), 1.5f);
+                    } else if (noMob && heldItem == BlockType.CLAY_CANTEEN_FULL
+                            && !mode.isCreative()
+                            && player.getStats().getThirst() < PlayerStats.MAX_THIRST) {
+                        // Interactable blocks and farming actions above take priority;
+                        // otherwise a full canteen is usable even while aiming at a block.
+                        player.getStats().drink(40f);
+                        player.getInventory().remove(BlockType.CLAY_CANTEEN_FULL, 1);
+                        player.getInventory().add(BlockType.CLAY_CANTEEN, 1);
+                        handRenderer.triggerSwing();
+                        audio.play(SoundEvent.EAT);
+                        showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
                     } else if (noMob && mode.canPlace() && heldItem == BlockType.SUGAR_CANE) {
                         // Sugar cane can only be placed on dirt/grass/sand adjacent to water
                         // (or on top of another sugar cane whose base is adjacent to water).

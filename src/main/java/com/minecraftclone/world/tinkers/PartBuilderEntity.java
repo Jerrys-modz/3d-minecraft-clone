@@ -87,6 +87,7 @@ public final class PartBuilderEntity implements BlockEntity {
         // Material slot
         int matId  = in.readUnsignedShort();
         int count  = in.readUnsignedByte();
+        gui.setMaterial(ItemStack.EMPTY);
         if (matId > 0 && count > 0) {
             BlockType mat = BlockType.byId(matId);
             // byId() returns AIR for id==0; guard against AIR and any non-material type.

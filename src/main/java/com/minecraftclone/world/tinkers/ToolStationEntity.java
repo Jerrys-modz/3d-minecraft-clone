@@ -116,9 +116,11 @@ public final class ToolStationEntity implements BlockEntity {
             if (kind == KIND_PART) {
                 in.readUnsignedByte();   // shape ordinal
                 in.readUnsignedShort();  // material id
+            } else if (kind != KIND_EMPTY) {
+                // Unknown trailing kinds may have payloads of unknown length,
+                // so continuing would misalign every slot after this one.
+                return;
             }
-            // Unknown kind: same problem as above, but these are trailing slots we
-            // can't skip safely, so abort (gui already holds whatever we loaded so far).
         }
     }
 }

@@ -203,6 +203,7 @@ public class ContainerGui {
 
     /** Columns in the current crafting grid (2 inventory / 3 table / 5 advanced). */
     public int gridWidth() {
+        if (!hasGrid()) return 0;
         return switch (gridSize()) {
             case 9 -> 3;
             case 25 -> 5;
@@ -212,6 +213,7 @@ public class ContainerGui {
 
     /** Slot id of the crafting result for the open grid (40 on 2x2, 45 on 3x3). */
     public int outputSlotId() {
+        if (!hasGrid()) return -1;
         return GRID_START + gridSize();
     }
 
@@ -373,10 +375,7 @@ public class ContainerGui {
             return t == null ? ItemStack.EMPTY : ItemStack.of(t, 1);
         }
         if (isContainerSlot(slotId)) {
-            int cs = slotId - CONTAINER_START;
-            BlockType t = container.typeOf(cs);
-            int cnt = container.countOf(cs);
-            return (t == null || cnt <= 0) ? ItemStack.EMPTY : ItemStack.of(t, cnt);
+            return container.stackOf(slotId - CONTAINER_START);
         }
         if (isPbMaterialSlot(slotId)) return partBuilderGui.materialSlot();
         if (isPbOutputSlot(slotId))   return partBuilderGui.currentOutput();
@@ -392,18 +391,36 @@ public class ContainerGui {
      *
      * @param stack the stack to write; pass {@link ItemStack#EMPTY} to clear
      */
-    public void setStack(int slotId, ItemStack stack) {
+    public boolean setStack(int slotId, ItemStack stack) {
         if (stack == null) stack = ItemStack.EMPTY;
         if (isPlayerSlot(slotId)) {
             inventory.setStack(slotId, stack);
+            return true;
+        } else if (isGridSlot(slotId)) {
+            if (stack.isTinkers()) return false;
+            grid().set(slotId - GRID_START, stack.isEmpty() ? null : stack.type());
+            return true;
+        } else if (isArmorSlot(slotId)) {
+            if (stack.isTinkers() || (!stack.isEmpty() && stack.count() != 1)) return false;
+            inventory.setArmor(slotId - ARMOR_START, stack.isEmpty() ? null : stack.type());
+            return true;
+        } else if (isContainerSlot(slotId)) {
+            int containerSlot = slotId - CONTAINER_START;
+            if (!container.acceptsStack(containerSlot, stack)) return false;
+            container.setStack(containerSlot, stack);
+            return true;
         } else if (isPbMaterialSlot(slotId)) {
+            if (!stack.isEmpty() && (stack.isTinkers()
+                    || !com.minecraftclone.world.tinkers.TinkersRegistry.isMaterial(stack.type()))) return false;
             partBuilderGui.setMaterial(stack);
+            return true;
         } else if (isTsInputSlot(slotId)) {
-            toolStationGui.setSlot(slotId - TS_SLOT_0, stack);
-        } else {
-            // Non-player slots (grid, armor, container) only support vanilla types.
-            setSlot(slotId, stack.isEmpty() ? null : stack.type(), stack.count());
+            int inputSlot = slotId - TS_SLOT_0;
+            if (!toolStationGui.accepts(inputSlot, stack)) return false;
+            toolStationGui.setSlot(inputSlot, stack);
+            return true;
         }
+        return false;
     }
 
     /** Writes a whole stack to a slot; grid cells ignore {@code count} and just record the type. */

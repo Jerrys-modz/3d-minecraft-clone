@@ -1641,9 +1641,11 @@ public class TextureAtlas {
     private void paintDestroyStage(BufferedImage img, int index, int stage) {
         int ox = tileX(index);
         int oy = tileY(index);
-        java.util.Random rnd = new java.util.Random(4242);
         int cracks = 4 + stage * 3;
         for (int c = 0; c < cracks; c++) {
+            // Give each crack its own stage-independent stream. Increasing a
+            // prior crack's length must not shift the start/path of later ones.
+            java.util.Random rnd = new java.util.Random(4242L + c);
             int x = 1 + rnd.nextInt(TILE_PX - 2);
             int y = 1 + rnd.nextInt(TILE_PX - 2);
             int len = 3 + rnd.nextInt(5) + stage / 3;
