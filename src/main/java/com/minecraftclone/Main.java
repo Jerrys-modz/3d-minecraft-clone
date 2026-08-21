@@ -487,7 +487,8 @@ public class Main {
         boolean targetingOverlay = overlay != BlockType.AIR;
         BlockType targetType = targetingOverlay ? overlay : world.getBlock(bx, by, bz);
         if (targetType == BlockType.AIR || targetType == BlockType.BEDROCK) return;
-        if (!Mining.canBreakItem(targetType, heldStack)) return; // e.g. an ore the hammer can't mine
+        // Creative breaks anything but bedrock; survival still needs the right tool.
+        if (!Mining.canRemove(targetType, heldStack, mode.isCreative())) return;
 
         world.getMapData().discoverOre(bx, by, bz, targetType);
 
@@ -2639,9 +2640,16 @@ public class Main {
                                 -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                     }
                     ItemStack heldStack = player.getInventory().stackOf(selectedSlot[0]);
-                    String breakInfo = Mining.canBreakItem(looking, heldStack)
-                            ? String.format(Locale.ROOT, "  Break time: %.2fs", Mining.breakTimeItem(looking, heldStack))
-                            : "  Cannot break with current tool";
+                    String breakInfo;
+                    if (settings.getGameMode().isCreative()) {
+                        breakInfo = looking == BlockType.BEDROCK
+                                ? "  Unbreakable"
+                                : "  Instant break (creative)";
+                    } else {
+                        breakInfo = Mining.canBreakItem(looking, heldStack)
+                                ? String.format(Locale.ROOT, "  Break time: %.2fs", Mining.breakTimeItem(looking, heldStack))
+                                : "  Cannot break with current tool";
+                    }
                     hud.drawTextLeft(breakInfo, -0.95f, y - (line++) * step, textSize, WHITE, aspect);
                 } else {
                     hud.drawTextLeft("Looking at: nothing in range",

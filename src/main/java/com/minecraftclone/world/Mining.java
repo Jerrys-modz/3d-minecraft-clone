@@ -447,6 +447,16 @@ public final class Mining {
     }
 
     /**
+     * Whether the player can actually remove {@code block} right now.
+     * Creative ignores tool-tier gates (bare hands break iron ore); bedrock
+     * and air are never removable. Survival still needs the right tool.
+     */
+    public static boolean canRemove(BlockType block, ItemStack held, boolean creative) {
+        if (block == null || block == BlockType.AIR || block == BlockType.BEDROCK) return false;
+        return creative || canBreakItem(block, held);
+    }
+
+    /**
      * One-line harvest status for the look-at overlay: {@code "Can mine"},
      * {@code "Need Iron Pickaxe"}, {@code "Unbreakable"}, or {@code "Can't mine"}.
      * {@code null} if there's nothing to show (air / missing block).

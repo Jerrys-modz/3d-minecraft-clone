@@ -92,6 +92,22 @@ class MiningTest {
     }
 
     @Test
+    void creativeRemovesOresWithoutTheRightTool() {
+        ItemStack empty = ItemStack.EMPTY;
+        assertTrue(Mining.canRemove(BlockType.IRON_ORE, empty, true),
+                "creative punches out ores that survival would refuse");
+        assertTrue(Mining.canRemove(BlockType.DIAMOND_ORE, empty, true));
+        assertTrue(Mining.canRemove(BlockType.STONE, empty, true));
+        assertTrue(Mining.canRemove(BlockType.DIRT, empty, true));
+        assertFalse(Mining.canRemove(BlockType.IRON_ORE, empty, false),
+                "survival still needs a pick for iron ore");
+        assertFalse(Mining.canRemove(BlockType.BEDROCK, empty, true),
+                "bedrock stays unbreakable even in creative");
+        assertFalse(Mining.canRemove(BlockType.AIR, empty, true));
+        assertTrue(Mining.canRemove(BlockType.IRON_ORE, ItemStack.of(BlockType.STONE_PICKAXE, 1), false));
+    }
+
+    @Test
     void newToolsAreRegisteredAtEveryTier() {
         BlockType[] kinds = {
                 BlockType.WOOD_SHOVEL, BlockType.STONE_SHOVEL, BlockType.IRON_SHOVEL, BlockType.DIAMOND_SHOVEL,
