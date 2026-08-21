@@ -874,6 +874,7 @@ public class Main {
                 w.setRenderDistance(settings.getRenderDistance());
                 w.setLeavesTransparent(settings.isLeavesTransparent());
             }
+            player.resetSession();
             applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
             world = placePlayer(worlds, currentDim, autoDir, player, selectedSlot, settings, false);
             mapRenderer[0] = new MapRenderer(world.getMapData());
@@ -1390,6 +1391,7 @@ public class Main {
                                     w.setRenderDistance(settings.getRenderDistance());
                                     w.setLeavesTransparent(settings.isLeavesTransparent());
                                 }
+                                player.resetSession();
                                 applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
                                 world = placePlayer(worlds, currentDim, worldDir, player, selectedSlot, settings, false);
                                 mapRenderer[0] = new MapRenderer(world.getMapData());
@@ -1452,6 +1454,7 @@ public class Main {
                                 w.setRenderDistance(settings.getRenderDistance());
                                 w.setLeavesTransparent(settings.isLeavesTransparent());
                             }
+                            player.resetSession();
                             applyWorldGameMode(settings, genSettings, worlds, player, window, audio);
                             world = placePlayer(worlds, currentDim, worldDir, player, selectedSlot, settings, true);
                             mapRenderer[0] = new MapRenderer(world.getMapData());

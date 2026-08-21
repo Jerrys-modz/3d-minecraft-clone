@@ -3198,11 +3198,12 @@ public class Hud {
     public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion,
                               float aspectRatio, MiniMapLayout layout, boolean editing) {
         if (miniMapImage == null) {
-            // Clear cache when no image provided
+            // Drop the cached texture only. Destroying miniMapMesh here used to
+            // crash the next world: Save and Quit cleared the map, then Create
+            // New World uploaded into a deleted VAO.
             if (cachedMiniMapTextureId >= 0) {
                 glDeleteTextures(cachedMiniMapTextureId);
                 cachedMiniMapTextureId = -1;
-                miniMapMesh.destroy();
             }
             cachedMiniMapImage = null;
             cachedMiniMapVersion = -1;
@@ -3327,7 +3328,6 @@ public class Hud {
             if (cachedFullMapTextureId >= 0) {
                 glDeleteTextures(cachedFullMapTextureId);
                 cachedFullMapTextureId = -1;
-                fullMapMesh.destroy();
             }
             cachedFullMapImage = null;
             cachedFullMapVersion = -1;
