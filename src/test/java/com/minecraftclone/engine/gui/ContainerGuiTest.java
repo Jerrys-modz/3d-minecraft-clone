@@ -317,6 +317,7 @@ class ContainerGuiTest {
         ContainerGui gui = ContainerGui.forPartBuilder(inv, new com.minecraftclone.world.tinkers.PartBuilderGui());
         assertFalse(gui.hasGrid());
         assertEquals(0, gui.gridWidth());
+        assertEquals(0, gui.gridSize());
         assertEquals(-1, gui.outputSlotId());
     }
 
@@ -326,6 +327,7 @@ class ContainerGuiTest {
         ContainerGui gui = ContainerGui.forToolStation(inv, new com.minecraftclone.world.tinkers.ToolStationGui());
         assertFalse(gui.hasGrid());
         assertEquals(0, gui.gridWidth());
+        assertEquals(0, gui.gridSize());
         assertEquals(-1, gui.outputSlotId());
     }
 }

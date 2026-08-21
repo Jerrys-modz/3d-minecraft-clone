@@ -2352,6 +2352,7 @@ public class Hud {
                 pbGui != null ? pbGui.selectedShape() : null;
         for (int id = 0; id < gui.slotCount(); id++) {
             float[] c = slotCenter(gui, id);
+            if (c == null) continue;
             if (gui.isPbShapeSlot(id)) {
                 int idx = id - ContainerGui.PB_SHAPE_SLOT_0;
                 com.minecraftclone.world.tinkers.ToolPartType shape =
@@ -2375,7 +2376,9 @@ public class Hud {
         Crafting.Recipe recipe = gui.currentRecipe();
         if (recipe != null) {
             float[] c = slotCenter(gui, gui.outputSlotId());
-            addSlotIcon(c[0], c[1], iconHalf, ItemStack.of(recipe.output(), recipe.outputAmount()), itemTextures, atlas, durability);
+            if (c != null) {
+                addSlotIcon(c[0], c[1], iconHalf, ItemStack.of(recipe.output(), recipe.outputAmount()), itemTextures, atlas, durability);
+            }
         }
         flushBlockBatch(atlas);
         text.render(hudTransform, WHITE);

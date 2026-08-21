@@ -198,6 +198,7 @@ public class ContainerGui {
 
     /** Returns the crafting grid size (4 for 2x2, 9 for 3x3), determined from the grid's snapshot. */
     public int gridSize() {
+        if (!hasGrid()) return 0;
         return grid().snapshot().length;
     }
 

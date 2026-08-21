@@ -67,6 +67,11 @@ public class Chunk implements ChunkStorage.PersistableChunk {
     // taller is eventually built there, which is always safe (never causes a
     // real block above it to be skipped).
     private int highestNonAirY = -1;
+    // True once {@link #rebuildLightSourceIndex} has run. Distinguishes "never
+    // scanned" from "scanned and the chunk is all air" (highestNonAirY stays
+    // -1 in both cases). Without this, ensureHeightBound would rescan an
+    // all-air chunk on every remesh.
+    private boolean heightBoundChecked = false;
 
     // rebuildMesh's scratch vertex/index buffers, kept as reused instance
     // state instead of freshly allocated on every call. A chunk that's
@@ -151,7 +156,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
      * scan 0 layers and upload an empty mesh for a full chunk of terrain.
      */
     void ensureHeightBound() {
-        if (highestNonAirY >= 0) return;
+        if (heightBoundChecked || highestNonAirY >= 0) return;
         rebuildLightSourceIndex();
     }
 
@@ -303,6 +308,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         // recompute proper levels for any flow cells that happened to be saved.
         java.util.Arrays.fill(fluidLevels, (byte) 0);
         dirty = true;
+        heightBoundChecked = false;
         rebuildLightSourceIndex();
         rebuildFluidIndex();
     }
@@ -353,6 +359,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                 }
             }
         }
+        heightBoundChecked = true;
     }
 
     /** Full rescan of flowing-fluid blocks - only needed after a wholesale block replacement (disk load). */

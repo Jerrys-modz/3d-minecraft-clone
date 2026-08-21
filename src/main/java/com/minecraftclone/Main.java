@@ -390,11 +390,11 @@ public class Main {
 
     /**
      * Breaks one block cell (whatever it is: a door, an overlay decoration, or a
-     * solid block), dropping its loot and wearing the tool in survival. Shared by
-     * the normal break and the hammer's 3x3 area mine.
+     * solid block) and drops its loot. Shared by the normal break and the
+     * hammer's 3x3 area mine. Tool wear is applied by the caller once per swing.
      */
-    private void breakBlockAt(World world, Player player, GameMode mode, ItemStack heldStack, int heldSlot,
-                              Random loot, List<Hud.Message> messages, AudioEngine audio, int bx, int by, int bz) {
+    private void breakBlockAt(World world, Player player, GameMode mode, ItemStack heldStack,
+                              Random loot, AudioEngine audio, int bx, int by, int bz) {
         BlockType overlay = world.getOverlay(bx, by, bz);
         boolean targetingOverlay = overlay != BlockType.AIR;
         BlockType targetType = targetingOverlay ? overlay : world.getBlock(bx, by, bz);
@@ -523,9 +523,6 @@ public class Main {
                     world.spawnItem(bx, by, bz, BlockType.SEEDS, 1, loot);
                 }
             }
-
-            // Wear down the tool that did the breaking; once its uses run out, it's gone.
-            wearHeldTool(player, heldSlot, heldStack, messages, audio);
         }
     }
 
@@ -2062,11 +2059,14 @@ public class Main {
                             // eight horizontal neighbours, all in one swing.
                             for (int dx = -1; dx <= 1; dx++) {
                                 for (int dz = -1; dz <= 1; dz++) {
-                                    breakBlockAt(world, player, mode, heldStack, selectedSlot[0], loot, messages, audio, bx + dx, by, bz + dz);
+                                    breakBlockAt(world, player, mode, heldStack, loot, audio, bx + dx, by, bz + dz);
                                 }
                             }
                         } else {
-                            breakBlockAt(world, player, mode, heldStack, selectedSlot[0], loot, messages, audio, bx, by, bz);
+                            breakBlockAt(world, player, mode, heldStack, loot, audio, bx, by, bz);
+                        }
+                        if (!mode.isCreative()) {
+                            wearHeldTool(player, selectedSlot[0], heldStack, messages, audio);
                         }
                     }
                 }

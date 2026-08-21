@@ -41,9 +41,10 @@ public final class ItemStack {
     // Factories
     // -----------------------------------------------------------------------
 
-    /** Vanilla item stack.  Returns {@link #EMPTY} for null type or non-positive count. */
+    /** Vanilla item stack.  Returns {@link #EMPTY} for null type, non-positive count, or Tinkers sentinels (those need {@link #tinkersPart} / {@link #tinkersTool}). */
     public static ItemStack of(BlockType type, int count) {
         if (type == null || count <= 0) return EMPTY;
+        if (type == BlockType.TINKERS_PART || type == BlockType.TINKERS_TOOL) return EMPTY;
         return new ItemStack(type, null, count);
     }
 
@@ -89,10 +90,11 @@ public final class ItemStack {
     // Derived views
     // -----------------------------------------------------------------------
 
-    /** Copy with a different count; returns {@link #EMPTY} if {@code newCount <= 0}. */
+    /** Copy with a different count; returns {@link #EMPTY} if {@code newCount <= 0}. Tinkers stacks stay at count 1. */
     public ItemStack withCount(int newCount) {
         if (isEmpty()) return EMPTY;
         if (newCount <= 0) return EMPTY;
+        if (isTinkers()) return this;
         if (newCount == count) return this;
         return new ItemStack(type, tinkersItem, newCount);
     }

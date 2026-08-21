@@ -166,8 +166,11 @@ public final class Crafting {
         shapeless2x2(BlockType.BONE_MEAL, 3, BlockType.BONES);
         shapeless3x3(BlockType.BONE_MEAL, 3, BlockType.BONES);
 
-        // Clay canteen: 4 clay balls in a 2x2
+        // Clay canteen: 4 clay balls in a 2x2 (inventory grid). Crafting-table
+        // recipe uses a distinct 3x3 vessel shape so it does not collide with
+        // the seared-brick bootstrap (YY. / YY. / ...).
         shaped2x2("YY", "YY", BlockType.CLAY_CANTEEN, 1);  // 4 clay balls -> 1 canteen
+        shaped3x3("Y.Y", "YYY", "Y.Y", BlockType.CLAY_CANTEEN, 1); // 7 clay balls -> 1 canteen
 
         // Bread: 3 wheat in a row (crafting-table recipe; a 2x2 grid cannot hold 3 in a row)
         shaped3x3("HHH", "...", "...", BlockType.BREAD, 1);
@@ -186,8 +189,10 @@ public final class Crafting {
         // Smeltery Controller: 8 iron ingots in a ring around the centre (empty inside)
         shaped3x3("III", "I.I", "III", BlockType.SMELTERY_CONTROLLER, 1);
 
-        // Seared Glass: seared brick + glass (2×1)
+        // Seared Glass: seared brick + glass (2×1). Duplicate for 3x3 so it
+        // works at a crafting table (same translation/mirroring as other 2x2 copies).
         shaped2x2("ZG", "..", BlockType.SEARED_GLASS, 2);          // seared brick + glass → 2 seared glass
+        shaped3x3("ZG.", "...", "...", BlockType.SEARED_GLASS, 2);
 
         // Seared Tank: seared brick frame with glass inside (holds liquid)
         shaped3x3("ZGZ", "G.G", "ZGZ", BlockType.SEARED_TANK, 1); // frame + glass interior

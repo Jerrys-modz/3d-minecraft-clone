@@ -791,9 +791,10 @@ public class InventoryController {
             inventory.add(type, Inventory.maxStack(type));
             return;
         }
-        if (hasCursorItem() && cursor.type() != type) {
+        if (hasCursorItem() && (cursor.isTinkers() || cursor.type() != type)) {
             if (cursor.isTinkers()) {
-                inventory.addStack(cursor);
+                // Keep the unique item on the cursor when the bag is full.
+                if (!inventory.addStack(cursor).isEmpty()) return;
             } else {
                 inventory.add(cursor.type(), cursor.count());
             }

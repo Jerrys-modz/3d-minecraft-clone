@@ -396,6 +396,60 @@ class InventoryControllerTest {
     }
 
     @Test
+    void pickCreativeKeepsTinkersCursorWhenInventoryIsFull() {
+        Inventory inv = new Inventory();
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT));
+        inv.setStack(0, part);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(0, false, false);
+        for (int i = 0; i < Inventory.SIZE; i++) inv.setSlot(i, BlockType.DIRT, 1);
+        c.pickCreativeItem(BlockType.STONE, false);
+        assertTrue(c.cursor().isTinkers(), "unique Tinkers item must stay on the cursor when the bag is full");
+        assertEquals(ToolPartType.PICK_HEAD, c.cursor().tinkersPart().shape);
+    }
+
+    @Test
+    void pickCreativeReturnsTinkersCursorWhenThereIsRoom() {
+        Inventory inv = new Inventory();
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.AXE_HEAD, BlockType.IRON_INGOT));
+        inv.setStack(0, part);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(0, false, false);
+        c.pickCreativeItem(BlockType.STONE, false);
+        assertEquals(BlockType.STONE, c.cursorType());
+        assertEquals(64, c.cursorCount());
+        boolean found = false;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inv.stackOf(i).isTinkers()) found = true;
+        }
+        assertTrue(found, "the Tinkers part should be returned to the bag");
+    }
+
+    @Test
+    void pickCreativeDoesNotOverwriteADifferentTinkersToolOfTheSameSentinel() {
+        Inventory inv = new Inventory();
+        ItemStack tool = ItemStack.tinkersTool(new TinkersItem.Tool(
+                com.minecraftclone.world.Mining.ToolKind.PICKAXE,
+                java.util.List.of(
+                        new TinkersItem.ToolLayer(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT),
+                        new TinkersItem.ToolLayer(ToolPartType.TOOL_ROD, BlockType.PLANKS))));
+        inv.setStack(0, tool);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(0, false, false);
+        c.pickCreativeItem(BlockType.TINKERS_TOOL, false);
+        // Sentinel type matches, but payloads differ — the held tool must be
+        // returned (bag has room) rather than silently overwritten.
+        assertTrue(c.cursor().isEmpty() || c.cursorType() == BlockType.TINKERS_TOOL);
+        boolean found = false;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inv.stackOf(i).isTinkersTool()) found = true;
+        }
+        assertTrue(found, "the assembled tool must be returned to the bag, not discarded");
+    }
+
+    @Test
     void returnCursorKeepsTinkersItemWhenInventoryIsFull() {
         Inventory inv = new Inventory();
         ItemStack part = ItemStack.tinkersPart(

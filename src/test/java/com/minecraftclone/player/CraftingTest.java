@@ -276,17 +276,44 @@ class CraftingTest {
     }
 
     @Test
-    void searedBrickCraftsFrom4ClayBallsIn3x3() {
-        // Pattern: "YY. / YY. / ..." (4 clay balls in 3x3) -> 2 seared bricks
-        // This pattern is distinct from the 2x2 clay canteen recipe
+    void clayCanteenCraftsFromVesselShapeIn3x3() {
+        // Distinct from seared-brick's 4-clay 2x2-in-3x3: Y.Y / YYY / Y.Y
+        BlockType[] grid = new BlockType[9];
+        grid[0] = BlockType.CLAY_BALL;
+        grid[2] = BlockType.CLAY_BALL;
+        grid[3] = BlockType.CLAY_BALL;
+        grid[4] = BlockType.CLAY_BALL;
+        grid[5] = BlockType.CLAY_BALL;
+        grid[6] = BlockType.CLAY_BALL;
+        grid[8] = BlockType.CLAY_BALL;
+        Crafting.Recipe r = Crafting.match3x3(grid);
+        assertNotNull(r, "Clay canteen 3x3 vessel recipe should match");
+        assertEquals(BlockType.CLAY_CANTEEN, r.output());
+        assertEquals(1, r.outputAmount());
+    }
+
+    @Test
+    void fourClayBallsIn3x3StillCraftSearedBrickNotCanteen() {
+        // The 2x2-in-3x3 4-clay pattern must stay seared brick, not the canteen.
         BlockType[] grid = new BlockType[9];
         grid[0] = BlockType.CLAY_BALL;
         grid[1] = BlockType.CLAY_BALL;
         grid[3] = BlockType.CLAY_BALL;
         grid[4] = BlockType.CLAY_BALL;
         Crafting.Recipe r = Crafting.match3x3(grid);
-        assertNotNull(r, "Seared brick recipe should match in 3x3 grid");
+        assertNotNull(r);
         assertEquals(BlockType.SEARED_BRICK, r.output());
+        assertEquals(2, r.outputAmount());
+    }
+
+    @Test
+    void searedGlassCraftsFromBrickAndGlassIn3x3() {
+        BlockType[] grid = new BlockType[9];
+        grid[0] = BlockType.SEARED_BRICK;
+        grid[1] = BlockType.GLASS;
+        Crafting.Recipe r = Crafting.match3x3(grid);
+        assertNotNull(r, "Seared glass recipe should match in 3x3 grid");
+        assertEquals(BlockType.SEARED_GLASS, r.output());
         assertEquals(2, r.outputAmount());
     }
 
