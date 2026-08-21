@@ -39,6 +39,8 @@ public class TextureAtlas {
 
     /** Tile index of the alpha-cutout leaves texture used when the "see-through leaves" setting is on. */
     public static final int LEAVES_CUTOUT_TILE = 24;
+    /** Pink blossom cutout — cherry leaves must not share the green oak holes. */
+    public static final int CHERRY_LEAVES_CUTOUT_TILE = 77;
     /** Tile index of the full-cube lamp texture. */
     public static final int LAMP_TILE = 25;
     /** Tile index of the furnace's front/side face. */
@@ -293,6 +295,7 @@ public class TextureAtlas {
 
         // --- Furniture / fixtures ---
         paintLeavesCutout(image, LEAVES_CUTOUT_TILE, rnd);
+        paintLeavesCutout(image, CHERRY_LEAVES_CUTOUT_TILE, rnd, 0xF2AEBF, 0xC97E97);
         paintLamp(image, LAMP_TILE);
         paintFurnace(image, FURNACE_TILE);
         paintFurnaceLit(image, FURNACE_LIT_TILE);
@@ -1863,12 +1866,16 @@ public class TextureAtlas {
 
     /** A "fast leaves" tile: same palette as the solid leaves tile but with small square holes carved out. */
     private void paintLeavesCutout(BufferedImage img, int index, Random rnd) {
+        paintLeavesCutout(img, index, rnd, 0x3E8E35, 0x2F701F);
+    }
+
+    private void paintLeavesCutout(BufferedImage img, int index, Random rnd, int light, int dark) {
         int ox = tileX(index);
         int oy = tileY(index);
         for (int cy = 0; cy < TILE_PX; cy += 2) {
             for (int cx = 0; cx < TILE_PX; cx += 2) {
                 boolean hole = rnd.nextFloat() < 0.32f;
-                int base = rnd.nextFloat() < 0.55f ? 0x3E8E35 : 0x2F701F;
+                int base = rnd.nextFloat() < 0.55f ? light : dark;
                 for (int y = 0; y < 2; y++) {
                     for (int x = 0; x < 2; x++) {
                         int px = ox + cx + x, py = oy + cy + y;

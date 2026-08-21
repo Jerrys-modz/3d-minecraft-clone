@@ -199,6 +199,41 @@ class TextureAtlasTest {
         return r + g + b < 160;
     }
 
+    @Test
+    void cherryCutoutStaysPinkWhenSeeThrough() {
+        BufferedImage atlas = atlas();
+        BufferedImage oak = tile(atlas, TextureAtlas.LEAVES_CUTOUT_TILE);
+        BufferedImage cherry = tile(atlas, TextureAtlas.CHERRY_LEAVES_CUTOUT_TILE);
+        int oakGreen = 0, cherryPink = 0, cherryGreen = 0, cherryOpaque = 0, cherryHoles = 0;
+        int px = TextureAtlas.TILE_PX;
+        for (int y = 0; y < px; y++) {
+            for (int x = 0; x < px; x++) {
+                int aOak = (oak.getRGB(x, y) >>> 24) & 0xFF;
+                if (aOak > 128) {
+                    int rgb = oak.getRGB(x, y) & 0xFFFFFF;
+                    int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF;
+                    if (g > r + 20) oakGreen++;
+                }
+                int argb = cherry.getRGB(x, y);
+                int a = (argb >>> 24) & 0xFF;
+                if (a < 16) {
+                    cherryHoles++;
+                    continue;
+                }
+                cherryOpaque++;
+                int rgb = argb & 0xFFFFFF;
+                int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+                if (r > g + 20 && r > b) cherryPink++;
+                if (g > r + 20) cherryGreen++;
+            }
+        }
+        assertTrue(oakGreen > 20, "oak cutout should stay green");
+        assertTrue(cherryHoles > 10, "cherry cutout needs holes");
+        assertTrue(cherryOpaque > 20, "cherry cutout should still look leafy");
+        assertTrue(cherryPink > cherryOpaque / 2, "cherry cutout must stay pink, not oak green");
+        assertEquals(0, cherryGreen, "cherry cutout must not reuse the oak palette");
+    }
+
     private static long signature(BufferedImage t) {
         long sumR = 0, sumG = 0, sumB = 0;
         int px = TextureAtlas.TILE_PX;

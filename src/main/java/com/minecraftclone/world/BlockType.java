@@ -1082,6 +1082,11 @@ public enum BlockType {
         return this == TRAPDOOR || this == TRAPDOOR_OPEN;
     }
 
+    /** True for oak or cherry leaf cubes. */
+    public boolean isLeaves() {
+        return this == LEAVES || this == CHERRY_LEAVES;
+    }
+
     /** True for a stepped stair block (stone or planks). */
     public boolean isStair() {
         return stair;

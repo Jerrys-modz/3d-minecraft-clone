@@ -38,6 +38,14 @@ class BlockTypeTest {
     }
 
     @Test
+    void oakAndCherryAreBothLeaves() {
+        assertTrue(BlockType.LEAVES.isLeaves());
+        assertTrue(BlockType.CHERRY_LEAVES.isLeaves());
+        assertFalse(BlockType.WOOD_LOG.isLeaves());
+        assertFalse(BlockType.TALL_GRASS.isLeaves());
+    }
+
+    @Test
     void chestIsDirectionalWithDistinctLidFrontAndSides() {
         assertTrue(BlockType.CHEST.isDirectional());
         assertTrue(BlockType.CHEST.frontTile != BlockType.CHEST.sideTile);
