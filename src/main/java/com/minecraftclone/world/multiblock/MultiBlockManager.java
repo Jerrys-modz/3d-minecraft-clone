@@ -2,6 +2,7 @@ package com.minecraftclone.world.multiblock;
 
 import com.minecraftclone.world.BlockEntity;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Chunk;
 import com.minecraftclone.world.World;
 
 import java.util.ArrayList;
@@ -149,9 +150,11 @@ public final class MultiBlockManager {
 
     /**
      * Called by {@code World} when a chunk at {@code (chunkX, chunkZ)} is
-     * unloaded.  Removes all formed multi-block instances whose bounding
-     * boxes intersect the unloaded chunk, clearing them from both the
-     * {@code byController} and {@code byPosition} maps.
+     * unloaded.  Removes every formed multi-block instance whose <em>controller</em>
+     * lies in the unloaded chunk, clearing it from both the
+     * {@code byController} and {@code byPosition} maps. Instances that only
+     * overlap the chunk with their shell stay formed, so the controller entity
+     * is saved and the structure re-forms on reload.
      *
      * <p>This ensures that when chunks reload, the multiblock can form fresh
      * instances without stale entity references or inconsistent state.
@@ -161,11 +164,10 @@ public final class MultiBlockManager {
      * @param chunkZ chunk Z coordinate
      */
     public void onChunkUnload(World world, int chunkX, int chunkZ) {
-        // Chunk world-block bounds (16 blocks per chunk)
-        int minX = chunkX * 16;
-        int maxX = minX + 15;
-        int minZ = chunkZ * 16;
-        int maxZ = minZ + 15;
+        int minX = chunkX * Chunk.SIZE;
+        int maxX = minX + Chunk.SIZE - 1;
+        int minZ = chunkZ * Chunk.SIZE;
+        int maxZ = minZ + Chunk.SIZE - 1;
 
         // Only drop instances whose controller lives in this chunk. Overlapping
         // a shell chunk must not deform the structure or delete the controller

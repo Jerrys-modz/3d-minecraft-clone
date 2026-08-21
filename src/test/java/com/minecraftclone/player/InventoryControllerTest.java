@@ -2,6 +2,9 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.Chest;
+import com.minecraftclone.world.tinkers.TinkersItem;
+import com.minecraftclone.world.tinkers.ToolPartType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -390,5 +393,56 @@ class InventoryControllerTest {
         assertEquals(BlockType.PLANKS, grid.get(2), "grid cell 2 should have plank");
         assertEquals(BlockType.PLANKS, grid.get(3), "grid cell 3 should have plank");
         assertFalse(c.hasCursorItem(), "cursor should be empty after placing all 4 items");
+    }
+
+    @Test
+    void returnCursorKeepsTinkersItemWhenInventoryIsFull() {
+        Inventory inv = new Inventory();
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT));
+        inv.setStack(0, part);
+        for (int i = 1; i < Inventory.SIZE; i++) inv.setSlot(i, BlockType.DIRT, 1);
+        InventoryController c = new InventoryController(inv, new CraftingGrid());
+        c.click(0, false, false);
+        inv.setSlot(0, BlockType.DIRT, 1);
+        c.returnCursorToInventory();
+        assertTrue(c.cursor().isTinkers(), "unique Tinkers item must stay on the cursor when the bag is full");
+        assertTrue(inv.isEmpty(0) || inv.typeOf(0) == BlockType.DIRT);
+        boolean found = false;
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            if (inv.stackOf(i).isTinkers()) found = true;
+        }
+        assertFalse(found, "the part must not be forced into a full bag");
+    }
+
+    @Test
+    void clickDoesNotDepositTinkersIntoAChest() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+        inv.setStack(0, ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.AXE_HEAD, BlockType.IRON_INGOT)));
+        c.click(0, false, false);
+        c.click(ContainerGui.CONTAINER_START, false, false);
+        assertTrue(c.hasCursorItem(), "cursor must keep the Tinkers part");
+        assertTrue(c.cursor().isTinkers());
+        assertTrue(chest.isEmpty(0), "chest must not receive a payload-stripped sentinel");
+    }
+
+    @Test
+    void shiftClickHopsTinkersBetweenHotbarAndMainInsteadOfChest() {
+        Inventory inv = new Inventory();
+        Chest chest = new Chest();
+        ContainerGui gui = new ContainerGui(ContainerGui.Kind.CHEST, inv, new CraftingGrid(), chest);
+        InventoryController c = new InventoryController(gui);
+        ItemStack part = ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.TOOL_ROD, BlockType.PLANKS));
+        inv.setStack(0, part);
+        c.click(0, false, true);
+        assertTrue(chest.isEmpty(0), "Tinkers parts cannot be shift-clicked into a chest");
+        assertTrue(inv.stackOf(Inventory.HOTBAR_SIZE).isTinkersPart(),
+                "the part should hop from hotbar to the first main-inventory slot");
+        assertTrue(inv.isEmpty(0));
     }
 }

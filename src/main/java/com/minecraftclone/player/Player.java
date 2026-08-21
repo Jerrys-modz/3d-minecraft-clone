@@ -161,9 +161,17 @@ public class Player {
         inventory.clearArmor();
         durability.reset();
         stats.reset();
+        spaceHeat.clear();
         flying = false;
         sleeping = false;
         velocity.set(0, 0, 0);
+        lastFallImpactSpeed = 0f;
+        onGround = false;
+        wasOnGround = true;
+        landingArmed = false;
+        submerged = false;
+        inWater = false;
+        swimming = false;
         gameMode = GameMode.SURVIVAL;
         sprintLatched = false;
         bobPhase = 0f;
@@ -290,12 +298,17 @@ public class Player {
      * @param coldFactor  0..1 how cold the current weather is (snow/blizzard); the
      *                    player's shelter and nearby fires cut it down to the
      *                    effective coldness that drains hunger/freezes (see PlayerStats).
-     * @param difficulty  the loaded world's difficulty (hunger drain, regen).
      */
     public void update(float dt, Input input, World world, float coldFactor) {
         update(dt, input, world, coldFactor, Difficulty.NORMAL);
     }
 
+    /**
+     * @param coldFactor  0..1 how cold the current weather is (snow/blizzard); the
+     *                    player's shelter and nearby fires cut it down to the
+     *                    effective coldness that drains hunger/freezes (see PlayerStats).
+     * @param difficulty  the loaded world's difficulty (hunger drain, regen).
+     */
     public void update(float dt, Input input, World world, float coldFactor, Difficulty difficulty) {
         updateLook(input);
         // Skip movement while sleeping - player is in bed, time is being skipped

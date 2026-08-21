@@ -614,18 +614,27 @@ public class World implements BlockAccessor {
     private void tryFormMultiblocksInChunk(Chunk chunk) {
         int originX = chunk.getOriginX();
         int originZ = chunk.getOriginZ();
-        for (int ly = 0; ly < Chunk.HEIGHT; ly++) {
-            for (int lx = 0; lx < Chunk.SIZE; lx++) {
-                for (int lz = 0; lz < Chunk.SIZE; lz++) {
-                    if (chunk.getLocal(lx, ly, lz) == BlockType.SMELTERY_CONTROLLER) {
-                        multiBlockManager.tryFormAt(this, originX + lx, ly, originZ + lz);
-                    }
-                }
-            }
+        short[] raw = chunk.getRawBlocks();
+        short controllerId = BlockType.SMELTERY_CONTROLLER.id;
+        for (int i = 0; i < raw.length; i++) {
+            if (raw[i] != controllerId) continue;
+            int lx = i % Chunk.SIZE;
+            int tmp = i / Chunk.SIZE;
+            int lz = tmp % Chunk.SIZE;
+            int ly = tmp / Chunk.SIZE;
+            multiBlockManager.tryFormAt(this, originX + lx, ly, originZ + lz);
         }
+        int pad = 8; // SmelteryDefinition.scanRadius() == maxInterior + 1
+        int minX = originX - pad;
+        int maxX = originX + Chunk.SIZE + pad;
+        int minZ = originZ - pad;
+        int maxZ = originZ + Chunk.SIZE + pad;
         for (Map.Entry<Long, BlockEntity> e : blockEntities.entrySet()) {
-            if (e.getValue().blockType() == BlockType.SMELTERY_CONTROLLER) {
-                multiBlockManager.tryFormAt(this, keyX(e.getKey()), keyY(e.getKey()), keyZ(e.getKey()));
+            if (e.getValue().blockType() != BlockType.SMELTERY_CONTROLLER) continue;
+            int x = keyX(e.getKey());
+            int z = keyZ(e.getKey());
+            if (x >= minX && x < maxX && z >= minZ && z < maxZ) {
+                multiBlockManager.tryFormAt(this, x, keyY(e.getKey()), z);
             }
         }
     }

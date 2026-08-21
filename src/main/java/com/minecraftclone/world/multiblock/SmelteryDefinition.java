@@ -44,7 +44,9 @@ public final class SmelteryDefinition implements MultiBlockDefinition {
 
     @Override
     public boolean isRelevantBlock(BlockType type) {
-        return isShellBlock(type); // Any seared block change triggers a rescan
+        // A seared block change closes the shell; an interior change (mining the
+        // inside out, removing lava) completes the hollow. Both must trigger a rescan.
+        return isShellBlock(type) || isInteriorBlock(type);
     }
 
     @Override

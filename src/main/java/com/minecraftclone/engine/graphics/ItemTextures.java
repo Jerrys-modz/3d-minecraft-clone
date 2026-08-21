@@ -311,10 +311,9 @@ public class ItemTextures {
 
             // ----------------------------------------------------------------
             // Phase 0.5: Tinkers' Construct sentinels.
-            // The per-item colour/shape data lives in the TinkersItem payload
-            // inside ItemStack; the sentinel alone is only rendered as a grey
-            // placeholder.  A full bindTinkersItem(TinkersItem) path will be
-            // added when the Part Builder / Tool Station GUIs go live.
+            // Grey placeholders are used only when no TinkersItem payload is
+            // available. Prefer {@link #bindTinkersItem(TinkersItem)} for
+            // Part Builder / Tool Station items that carry a payload.
             // ----------------------------------------------------------------
             case TINKERS_PART -> paintPlaceholder(0x808080);
             case TINKERS_TOOL -> paintPlaceholder(0x404040);

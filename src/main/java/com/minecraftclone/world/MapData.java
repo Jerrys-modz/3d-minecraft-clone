@@ -50,10 +50,12 @@ public class MapData {
     }
 
     /**
-     * Mark a chunk as explored, (re)sample its surface, and — on first visit —
-     * discover any ore veins it contains. Surface is refreshed even for chunks
-     * that were already explored so older saves and terraforming pick up terrain
-     * colours without requiring a new world.
+     * Mark a chunk as explored, sample its surface when none exists yet, and —
+     * on first visit — discover any ore veins it contains. The surface is
+     * sampled once per chunk: chunks from a v1 save (explored, but with no
+     * surface) are sampled on their next visit, so an older world picks up
+     * terrain colours. Later edits to an already-sampled chunk are not
+     * repainted.
      */
     public void exploreChunk(int chunkX, int chunkZ, BlockAccessor world) {
         if (looksUnloaded(world, chunkX, chunkZ)) {

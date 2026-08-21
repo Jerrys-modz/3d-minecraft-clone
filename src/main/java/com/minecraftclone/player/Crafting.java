@@ -86,7 +86,6 @@ public final class Crafting {
         CHARS.put('H', BlockType.WHEAT);        // H = wHeat
         // Phase 0.5: Tinkers' Construct ingredient shortcuts
         CHARS.put('Z', BlockType.SEARED_BRICK);       // Z = seared/sintered (kiln)
-        CHARS.put('M', BlockType.GOLD_INGOT);         // M = Metal/gold (G is taken by Glass)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -176,14 +175,8 @@ public final class Crafting {
         // ---------------------------------------------------------------
         // Phase 0.5: Tinkers' Construct crafting station recipes
         // ---------------------------------------------------------------
-        // Character key additions (for this section):
-        //   'Z' = SEARED_BRICK  (Z for seared/sintered, mnemonic: "Zapped in a kiln")
-        //   'R' = WOOD_TOOL_ROD (R for Rod)
-        //   'Q' = IRON_PICK_HEAD
-        //   'A' = IRON_AXE_HEAD
-        //   'X' = IRON_SWORD_BLADE
-        //   'J' = IRON_SHOVEL_HEAD
-        // These are added to CHARS below the static block; see bottom of static block.
+        // Character key used in this section:
+        //   'Z' = SEARED_BRICK (mnemonic: "Zapped in a kiln")
 
         // Seared Brick: fire clay balls in-world (Furnace: clay ball → seared brick).
         // Also allow crafting 2 seared bricks from 4 clay balls as an early-game bootstrap.

@@ -310,4 +310,22 @@ class ContainerGuiTest {
         assertTrue(ne.isEmpty(0) && sw.isEmpty(0) && se.isEmpty(0));
         assertTrue(inv.isEmpty(2));
     }
+
+    @Test
+    void partBuilderHasNoCraftingGrid() {
+        Inventory inv = new Inventory();
+        ContainerGui gui = ContainerGui.forPartBuilder(inv, new com.minecraftclone.world.tinkers.PartBuilderGui());
+        assertFalse(gui.hasGrid());
+        assertEquals(0, gui.gridWidth());
+        assertEquals(-1, gui.outputSlotId());
+    }
+
+    @Test
+    void toolStationHasNoCraftingGrid() {
+        Inventory inv = new Inventory();
+        ContainerGui gui = ContainerGui.forToolStation(inv, new com.minecraftclone.world.tinkers.ToolStationGui());
+        assertFalse(gui.hasGrid());
+        assertEquals(0, gui.gridWidth());
+        assertEquals(-1, gui.outputSlotId());
+    }
 }

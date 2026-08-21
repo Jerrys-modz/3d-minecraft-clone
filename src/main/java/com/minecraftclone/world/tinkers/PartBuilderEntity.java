@@ -84,7 +84,9 @@ public final class PartBuilderEntity implements BlockEntity {
             gui.setSelectedShape(null);
         }
 
-        // Material slot
+        // Material slot — clear first so an empty/invalid save cannot keep a
+        // leftover stack from a reused entity.
+        gui.setMaterial(ItemStack.EMPTY);
         int matId  = in.readUnsignedShort();
         int count  = in.readUnsignedByte();
         if (matId > 0 && count > 0) {

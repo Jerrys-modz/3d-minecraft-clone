@@ -98,7 +98,7 @@ public sealed interface TinkersItem permits TinkersItem.Part, TinkersItem.Tool {
 
         private static int computeDurability(List<ToolLayer> layers) {
             if (layers.isEmpty()) return 1;
-            // Head layer governs base durability; rod adds 10 % if present.
+            // Head layer governs base durability; rod adds baseDurability/1000 if present.
             TinkersMaterialStats head = TinkersRegistry.statsFor(layers.get(0).material());
             int base = head != null ? head.baseDurability() : 1;
             float rodMod = 1.0f;

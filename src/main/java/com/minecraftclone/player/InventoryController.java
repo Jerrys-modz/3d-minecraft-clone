@@ -214,6 +214,7 @@ public class InventoryController {
         } else if (slot.isEmpty()) {
             // Place into the empty slot: one item (right) or the whole stack (left);
             // a grid cell only ever accepts a single item.
+            if (cursor.isTinkers() && !gui.isPlayerSlot(slotId)) return;
             int place = isGrid ? 1 : (right ? 1 : cursor.count());
             setStack(slotId, cursor.withCount(place));
             cursor = cursor.withCount(cursor.count() - place);
@@ -232,6 +233,7 @@ public class InventoryController {
             // (right-click means "one item at a time", never a swap - so the
             // crafting grid can't be scrambled by a mis-click either).
             if (right) return;
+            if (cursor.isTinkers() && !gui.isPlayerSlot(slotId)) return;
             setStack(slotId, cursor.withCount(isGrid ? 1 : cursor.count()));
             cursor = isGrid ? slot.withCount(1) : slot;    // preserves TinkersItem payload
         }
@@ -382,6 +384,7 @@ public class InventoryController {
     /** Places one cursor item into {@code slotId} (or merges it onto a same-type stack). */
     private void depositOne(int slotId) {
         if (cursor.isEmpty()) return;
+        if (cursor.isTinkers() && !gui.isPlayerSlot(slotId)) return;
         BlockType curType = cursor.type();
         int curCount = cursor.count();
         BlockType st = slotType(slotId);
@@ -437,8 +440,10 @@ public class InventoryController {
         if (gui.isTsInputSlot(slotId)) {
             ItemStack part = gui.toolStationGui().slot(slotId - ContainerGui.TS_SLOT_0);
             if (!part.isEmpty()) {
-                inventory.addStack(part);
-                gui.toolStationGui().setSlot(slotId - ContainerGui.TS_SLOT_0, ItemStack.EMPTY);
+                ItemStack leftover = inventory.addStack(part);
+                if (leftover.isEmpty()) {
+                    gui.toolStationGui().setSlot(slotId - ContainerGui.TS_SLOT_0, ItemStack.EMPTY);
+                }
             }
             return;
         }
@@ -520,6 +525,18 @@ public class InventoryController {
             return;
         }
 
+        ItemStack src = inventory.stackOf(slotId);
+        if (src.isTinkers()) {
+            // Unique Tinkers items cannot go through BlockType-only destinations
+            // (chest, furnace, grid). Hop between hotbar and main via addStack.
+            inventory.setStack(slotId, ItemStack.EMPTY);
+            int from = slotId < Inventory.HOTBAR_SIZE ? Inventory.HOTBAR_SIZE : 0;
+            int to = slotId < Inventory.HOTBAR_SIZE ? Inventory.SIZE : Inventory.HOTBAR_SIZE;
+            ItemStack leftover = addStackInRange(src, from, to);
+            if (!leftover.isEmpty()) inventory.setStack(slotId, leftover);
+            return;
+        }
+
         // Prefer the open container: ore/fuel into a furnace, anything into a
         // chest, items into empty crafting-grid cells.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
@@ -585,6 +602,17 @@ public class InventoryController {
         if (remaining != original) {
             inventory.setSlot(slotId, remaining == 0 ? null : t, remaining);
         }
+    }
+
+    /** Places a unique Tinkers stack into the first empty slot in {@code [from, to)}. */
+    private ItemStack addStackInRange(ItemStack stack, int from, int to) {
+        for (int i = from; i < to; i++) {
+            if (inventory.isEmpty(i)) {
+                inventory.setStack(i, stack);
+                return ItemStack.EMPTY;
+            }
+        }
+        return stack;
     }
 
     /** Moves up to {@code count} of {@code t} into a furnace slot, topping up a same-type stack; returns items moved. */
@@ -731,7 +759,8 @@ public class InventoryController {
     public void returnCursorToInventory() {
         if (hasCursorItem()) {
             if (cursor.isTinkers()) {
-                inventory.addStack(cursor);
+                cursor = inventory.addStack(cursor);
+                return;
             } else {
                 inventory.add(cursor.type(), cursor.count());
             }

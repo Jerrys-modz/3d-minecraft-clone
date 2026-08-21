@@ -176,6 +176,7 @@ public class MapRenderer {
 
     // Cached full-screen map
     private BufferedImage cachedFullMapImage;
+    private BufferedImage cachedTerrainImage;
     private int lastFullMapWidth = -1;
     private int lastFullMapHeight = -1;
     private int lastFullMapQx = Integer.MAX_VALUE;
@@ -326,18 +327,20 @@ public class MapRenderer {
         int qYaw = Math.round(playerYaw);
         int rev = mapData.getRevision();
 
-        if (cachedFullMapImage != null
+        boolean terrainValid = cachedTerrainImage != null
                 && lastFullMapWidth == width
                 && lastFullMapHeight == height
                 && lastFullMapQx == qx
                 && lastFullMapQz == qz
-                && lastFullMapYaw == qYaw
                 && lastFullMapScale == mapScale
                 && lastFullPanX == panWorldX
                 && lastFullPanZ == panWorldZ
-                && lastFullMouseX == mouseX
+                && lastFullMapRevision == rev;
+        boolean overlaySame = lastFullMouseX == mouseX
                 && lastFullMouseY == mouseY
-                && lastFullMapRevision == rev) {
+                && lastFullMapYaw == qYaw;
+
+        if (terrainValid && overlaySame && cachedFullMapImage != null) {
             return cachedFullMapImage;
         }
 
@@ -356,29 +359,42 @@ public class MapRenderer {
         int legendW = Math.min(220, Math.max(160, width / 6));
         int mapW    = Math.max(1, width - legendW);
 
+        float viewX = playerWorldX + panWorldX;
+        float viewZ = playerWorldZ + panWorldZ;
+        float scale = mapScale;
+
+        if (!terrainValid) {
+            if (cachedTerrainImage == null
+                    || cachedTerrainImage.getWidth() != width
+                    || cachedTerrainImage.getHeight() != height) {
+                cachedTerrainImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            }
+            int[] pixels = new int[width * height];
+            Arrays.fill(pixels, UNEXPLORED);
+            float halfW = mapW / 2f;
+            float halfH = height / 2f;
+            for (int sy = 0; sy < height; sy++) {
+                int wz = (int) Math.floor(viewZ + (sy - halfH) / scale);
+                int row = sy * width;
+                for (int sx = 0; sx < mapW; sx++) {
+                    int wx = (int) Math.floor(viewX + (sx - halfW) / scale);
+                    pixels[row + sx] = colorAt(wx, wz);
+                }
+            }
+            cachedTerrainImage.setRGB(0, 0, width, height, pixels, 0, width);
+        }
+
         BufferedImage img = cachedFullMapImage;
         if (img == null || img.getWidth() != width || img.getHeight() != height) {
             img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
             cachedFullMapImage = img;
         }
+        Graphics2D blit = img.createGraphics();
+        blit.drawImage(cachedTerrainImage, 0, 0, null);
+        blit.dispose();
 
-        float viewX = playerWorldX + panWorldX;
-        float viewZ = playerWorldZ + panWorldZ;
-        float scale = mapScale;
-
-        int[] pixels = new int[width * height];
-        Arrays.fill(pixels, UNEXPLORED);
         float halfW = mapW / 2f;
         float halfH = height / 2f;
-        for (int sy = 0; sy < height; sy++) {
-            int wz = (int) Math.floor(viewZ + (sy - halfH) / scale);
-            int row = sy * width;
-            for (int sx = 0; sx < mapW; sx++) {
-                int wx = (int) Math.floor(viewX + (sx - halfW) / scale);
-                pixels[row + sx] = colorAt(wx, wz);
-            }
-        }
-        img.setRGB(0, 0, width, height, pixels, 0, width);
 
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

@@ -11,15 +11,16 @@ import java.util.Random;
  *
  * <p>Crops (wheat, potato, carrot) grow through multiple stages when planted
  * on {@link BlockType#FARMLAND}. Growth is driven by a Minecraft-faithful
- * <em>random tick</em> system: every loaded chunk column is divided into
+ * <em>random tick</em> system: each nearby chunk column is divided into
  * 16-block-tall sections, and each section receives {@value #RANDOM_TICK_SPEED}
  * random block picks per simulated game-tick (20 TPS). When a picked block is
- * a crop that still has a next stage, it advances. This matches vanilla
- * Minecraft's behaviour and means crops grow anywhere within the loaded world
- * (typically ~6-chunk radius = ~96 blocks), not just near the player.
+ * a crop that still has a next stage, it advances. Ticks are limited to chunks
+ * within {@value #SIMULATION_CHUNK_RADIUS} of the player so hydration scans
+ * cannot scale with render distance.
  *
- * <p>Sugar cane does not grow automatically yet - it is placeable as a
- * decoration block. Future work: add upward growth logic here.
+ * <p>Sugar cane grows upward on random ticks while its column base sits on
+ * dirt/grass/sand adjacent to water, up to {@value #SUGAR_CANE_MAX_HEIGHT}
+ * blocks. It breaks and drops itself when that support is removed.
  *
  * <p>Farming interactions (hoe-on-dirt, seeds-on-farmland, bone-meal, canteen-at-water)
  * are wired in {@code Main}; this class answers "what grows where", "can I till
@@ -32,6 +33,12 @@ public final class Farming {
      * Vanilla Minecraft default is 3. Higher values make crops grow faster.
      */
     static final int RANDOM_TICK_SPEED = 3;
+
+    /**
+     * Loaded chunks further than this Chebyshev distance from the player are
+     * skipped. Bounds farming cost independently of render distance.
+     */
+    static final int SIMULATION_CHUNK_RADIUS = 4;
 
     /**
      * Height of a chunk section in blocks. Matches Minecraft's 16-block sections.
@@ -151,9 +158,7 @@ public final class Farming {
             for (int dx = -4; dx <= 4; dx++) {
                 for (int dy = 0; dy <= 1; dy++) {
                     BlockType b = get.get(wx + dx, wy + dy, wz + dz);
-                    if (b != null && b.isFluid() && !b.equals(BlockType.LAVA)
-                            && !b.equals(BlockType.LAVA_SOURCE)
-                            && !b.equals(BlockType.LAVA_FLOW)) {
+                    if (b != null && b.isWater()) {
                         return true;
                     }
                 }
@@ -192,8 +197,7 @@ public final class Farming {
         int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
         for (int[] d : dirs) {
             BlockType b = world.getBlock(wx + d[0], wy, wz + d[1]);
-            if (b != null && b.isFluid()
-                    && b != BlockType.LAVA && b != BlockType.LAVA_SOURCE && b != BlockType.LAVA_FLOW) {
+            if (b != null && b.isWater()) {
                 return true;
             }
         }
@@ -276,15 +280,17 @@ public final class Farming {
      *   <li>If a crop's farmland base was removed, revert the crop to air.</li>
      * </ol>
      *
-     * <p>Range: all loaded chunks — typically the full render-distance radius
-     * (default 6 chunks = 96 blocks in each direction), far larger than the
-     * previous 8-block hardcoded radius.
+     * <p>Range: chunks within {@value #SIMULATION_CHUNK_RADIUS} of the player,
+     * independent of render distance so hydration scans cannot scale with the
+     * view radius.
      *
-     * @param world the world to query and mutate
-     * @param dt    frame delta-time in seconds
-     * @param rnd   shared random (not freshly seeded — deliberate noise)
+     * @param world   the world to query and mutate
+     * @param dt      frame delta-time in seconds
+     * @param rnd     shared random (not freshly seeded — deliberate noise)
+     * @param playerX player world X (used to bound the simulation radius)
+     * @param playerZ player world Z
      */
-    public static void tickCrops(World world, float dt, Random rnd) {
+    public static void tickCrops(World world, float dt, Random rnd, float playerX, float playerZ) {
         // Convert wall-clock dt to simulated game-ticks (20 TPS = 0.05s per tick).
         // At typical 60 fps, dt ≈ 0.0167 → ~0.33 ticks. We handle the fractional
         // part probabilistically so the long-run rate is always correct.
@@ -293,10 +299,18 @@ public final class Farming {
         float fracTick = ticksF - wholeTicks;
 
         int sectionsPerColumn = Chunk.HEIGHT / SECTION_HEIGHT;
+        int playerChunkX = Math.floorDiv((int) Math.floor(playerX), Chunk.SIZE);
+        int playerChunkZ = Math.floorDiv((int) Math.floor(playerZ), Chunk.SIZE);
 
         for (Chunk chunk : world.getLoadedChunks()) {
             int originX = chunk.getOriginX();
             int originZ = chunk.getOriginZ();
+            int chunkX = Math.floorDiv(originX, Chunk.SIZE);
+            int chunkZ = Math.floorDiv(originZ, Chunk.SIZE);
+            if (Math.abs(chunkX - playerChunkX) > SIMULATION_CHUNK_RADIUS
+                    || Math.abs(chunkZ - playerChunkZ) > SIMULATION_CHUNK_RADIUS) {
+                continue;
+            }
 
             // Number of random picks this frame for this chunk column.
             // Each section gets RANDOM_TICK_SPEED picks per whole tick, plus a
@@ -370,15 +384,15 @@ public final class Farming {
     }
 
     /**
-     * @deprecated Use {@link #tickCrops(World, float, Random)} instead.
+     * @deprecated Use {@link #tickCrops(World, float, Random, float, float)} instead.
      *             This player-radius variant is kept only to avoid breaking any
      *             direct call sites during the transition; it now delegates to
-     *             the chunk-based implementation and ignores the position args.
+     *             the chunk-based implementation.
      */
     @Deprecated
     public static void tickCropsNear(World world, int px, int py, int pz,
                                      float dt, Random rnd) {
-        tickCrops(world, dt, rnd);
+        tickCrops(world, dt, rnd, px, pz);
     }
 
     // -----------------------------------------------------------------------

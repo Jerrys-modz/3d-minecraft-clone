@@ -55,9 +55,12 @@ class HudToolStationLayoutTest {
         assertEquals(Hud.invGridLeftX(), Hud.tsSlotX(0), EPS);
         assertEquals(Hud.invGridLeftX() + 8 * (Hud.tsSlotX(1) - Hud.tsSlotX(0)), Hud.tsOutX(), EPS);
         assertEquals(Hud.tsSlotY(), Hud.tsOutY(), EPS);
+        float[] head = Hud.toolStationSlotCenter(ContainerGui.TS_SLOT_0);
+        assertEquals(Hud.tsSlotY(), head[1], EPS);
         for (int i = 1; i < ToolStationGui.INPUT_SLOTS; i++) {
             assertTrue(Hud.tsSlotX(i) > Hud.tsSlotX(i - 1));
-            assertEquals(Hud.tsSlotY(), Hud.tsSlotY(), EPS);
+            float[] c = Hud.toolStationSlotCenter(ContainerGui.TS_SLOT_0 + i);
+            assertEquals(Hud.tsSlotY(), c[1], EPS);
         }
     }
 
@@ -75,8 +78,8 @@ class HudToolStationLayoutTest {
         float half = SLOT / 2f;
         for (int id = 0; id < gui.slotCount(); id++) {
             float[] c = centerOf(gui, id);
-            assertTrue(c[0] - half > -1.05f && c[0] + half < 1.05f, "x out of range slot " + id);
-            assertTrue(c[1] - half > -1.05f && c[1] + half < 1.05f, "y out of range slot " + id);
+            assertTrue(c[0] - half >= -1f - EPS && c[0] + half <= 1f + EPS, "x out of range slot " + id);
+            assertTrue(c[1] - half >= -1f - EPS && c[1] + half <= 1f + EPS, "y out of range slot " + id);
         }
     }
 

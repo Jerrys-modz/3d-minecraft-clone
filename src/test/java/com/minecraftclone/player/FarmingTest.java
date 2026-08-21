@@ -142,4 +142,23 @@ class FarmingTest {
         }
         assertTrue(anyNeighbour, "bone meal on tall grass should sprout neighbours");
     }
+
+    @Test
+    void isNearWaterAcceptsWaterVariantsAndIgnoresLava() {
+        Cells w = new Cells();
+        w.set(0, 4, 0, BlockType.FARMLAND);
+        assertFalse(Farming.isNearWater(w::get, 0, 4, 0));
+        w.set(2, 4, 0, BlockType.LAVA_SOURCE);
+        assertFalse(Farming.isNearWater(w::get, 0, 4, 0), "lava must not hydrate farmland");
+        w.set(3, 4, 0, BlockType.WATER_SOURCE);
+        assertTrue(Farming.isNearWater(w::get, 0, 4, 0));
+        Cells flow = new Cells();
+        flow.set(1, 5, 0, BlockType.WATER_FLOW);
+        assertTrue(Farming.isNearWater(flow::get, 0, 4, 0), "flowing water one block above hydrates");
+    }
+
+    @Test
+    void harvestDropReturnsSugarCaneItself() {
+        assertEquals(BlockType.SUGAR_CANE, Farming.harvestDrop(BlockType.SUGAR_CANE));
+    }
 }

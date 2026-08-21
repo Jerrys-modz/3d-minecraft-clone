@@ -54,11 +54,15 @@ class HudIsometricCubeTest {
         assertEquals(0.5f, Hud.isometricIconHeight(com.minecraftclone.world.BlockType.PLANKS_SLAB), EPS);
         assertEquals(1f, Hud.isometricIconHeight(com.minecraftclone.world.BlockType.STONE), EPS);
         assertTrue(com.minecraftclone.world.BlockType.STONE_STAIRS.stair);
-        // High tread starts at slab height in front and reaches full-cube height at the back.
-        float slabTopY = Hud.isoPoint(CX, CY, HALF, 0.5f, 0.5f, 0.5f)[1];
-        float stairHighBackY = Hud.isoPoint(CX, CY, HALF, 1f, 1f, 1f)[1];
-        float fullBackY = Hud.isoPoint(CX, CY, HALF, 1f, 1f, 1f)[1];
-        assertEquals(fullBackY, stairHighBackY, EPS);
-        assertTrue(slabTopY < stairHighBackY - EPS);
+        // addIsometricBlock emits a half-height front box (y=0..0.5) and a
+        // full-height back box (y=0.5..1). Assert those extents, not a
+        // tautological isoPoint == isoPoint comparison.
+        float[] slab = Hud.isometricCube(CX, CY, HALF, 0.5f);
+        float[] full = Hud.isometricCube(CX, CY, HALF, 1f);
+        float frontStepTopY = Hud.isoPoint(CX, CY, HALF, 1f, 0.5f, 1f)[1];
+        float backStepTopY  = Hud.isoPoint(CX, CY, HALF, 1f, 1f, 1f)[1];
+        assertEquals(slab[1], frontStepTopY, EPS, "front step reaches half-block height");
+        assertEquals(full[1], backStepTopY, EPS, "back step reaches full-block height");
+        assertTrue(frontStepTopY < backStepTopY - EPS);
     }
 }

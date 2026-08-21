@@ -82,6 +82,7 @@ public final class ToolStationEntity implements BlockEntity {
 
         int slotCount = in.readUnsignedByte();
         int load      = Math.min(slotCount, ToolStationGui.INPUT_SLOTS);
+        gui.clearAll();
 
         ToolPartType[] shapes = ToolPartType.values();
 
@@ -116,9 +117,9 @@ public final class ToolStationEntity implements BlockEntity {
             if (kind == KIND_PART) {
                 in.readUnsignedByte();   // shape ordinal
                 in.readUnsignedShort();  // material id
+            } else if (kind != KIND_EMPTY) {
+                return;
             }
-            // Unknown kind: same problem as above, but these are trailing slots we
-            // can't skip safely, so abort (gui already holds whatever we loaded so far).
         }
     }
 }

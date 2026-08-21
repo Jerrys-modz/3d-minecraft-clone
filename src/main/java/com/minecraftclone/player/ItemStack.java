@@ -91,6 +91,7 @@ public final class ItemStack {
 
     /** Copy with a different count; returns {@link #EMPTY} if {@code newCount <= 0}. */
     public ItemStack withCount(int newCount) {
+        if (isEmpty()) return EMPTY;
         if (newCount <= 0) return EMPTY;
         if (newCount == count) return this;
         return new ItemStack(type, tinkersItem, newCount);

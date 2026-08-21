@@ -302,7 +302,7 @@ public class Settings {
         if (isToggle(row)) return;
         float f = Math.max(0f, Math.min(1f, fraction));
         float v = minValue(row) + (maxValue(row) - minValue(row)) * f;
-        if (row == GAME_MODE || row == DIFFICULTY) v = Math.round(v);
+        if (isCycle(row)) v = Math.round(v);
         ranges[row] = clamp(row, v);
     }
 

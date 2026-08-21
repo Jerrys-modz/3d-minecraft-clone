@@ -65,6 +65,22 @@ class TinkersEntityPersistenceTest {
         assertTrue(loaded.gui().materialSlot().isEmpty());
     }
 
+    @Test
+    void partBuilderEmptySaveClearsPopulatedSlot() throws Exception {
+        PartBuilderEntity populated = new PartBuilderEntity();
+        populated.gui().setMaterial(ItemStack.of(BlockType.IRON_INGOT, 5));
+        populated.gui().setSelectedShape(ToolPartType.AXE_HEAD);
+        assertFalse(populated.gui().materialSlot().isEmpty());
+
+        PartBuilderEntity empty = new PartBuilderEntity();
+        byte[] bytes = write(empty);
+        read(populated, bytes);
+
+        assertTrue(populated.gui().materialSlot().isEmpty(),
+                "loading an empty save must not keep a leftover material stack");
+        assertNull(populated.gui().selectedShape());
+    }
+
     // -----------------------------------------------------------------------
     // ToolStationEntity
     // -----------------------------------------------------------------------
@@ -122,6 +138,26 @@ class TinkersEntityPersistenceTest {
         assertFalse(loaded.gui().canAssemble());
         for (int i = 0; i < ToolStationGui.INPUT_SLOTS; i++) {
             assertTrue(loaded.gui().slot(i).isEmpty(), "Slot " + i + " should be empty");
+        }
+    }
+
+    @Test
+    void toolStationTrailingUnknownKindStopsWithoutCorruptingLoadedSlots() throws Exception {
+        // version=1, slotCount=7 (> INPUT_SLOTS), five empty current slots, then
+        // one empty trailing slot and an unknown kind. The reader must return
+        // rather than treating leftover payload bytes as later kind bytes.
+        byte[] bytes = new byte[] {
+                1, 7,
+                0, 0, 0, 0, 0,   // five current slots: KIND_EMPTY
+                0,               // trailing KIND_EMPTY
+                0x7f, (byte) 0xAA, (byte) 0xBB
+        };
+        ToolStationEntity loaded = new ToolStationEntity();
+        loaded.gui().setSlot(0, ItemStack.tinkersPart(
+                new TinkersItem.Part(ToolPartType.PICK_HEAD, BlockType.IRON_INGOT)));
+        read(loaded, bytes);
+        for (int i = 0; i < ToolStationGui.INPUT_SLOTS; i++) {
+            assertTrue(loaded.gui().slot(i).isEmpty(), "Slot " + i + " should stay empty");
         }
     }
 

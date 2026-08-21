@@ -170,6 +170,7 @@ public class Inventory implements StorageContainer {
     @Override
     public int add(BlockType type, int amount) {
         if (type == null || amount <= 0) return amount;
+        if (type.isTinkersToolPart() || type.isTinkersTool()) return amount;
         int max = maxStack(type);
         int remaining = amount;
         // Top up existing stacks of the same type.

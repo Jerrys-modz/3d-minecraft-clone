@@ -203,6 +203,7 @@ public class ContainerGui {
 
     /** Columns in the current crafting grid (2 inventory / 3 table / 5 advanced). */
     public int gridWidth() {
+        if (!hasGrid()) return 0;
         return switch (gridSize()) {
             case 9 -> 3;
             case 25 -> 5;
@@ -212,6 +213,7 @@ public class ContainerGui {
 
     /** Slot id of the crafting result for the open grid (40 on 2x2, 45 on 3x3). */
     public int outputSlotId() {
+        if (!hasGrid()) return -1;
         return GRID_START + gridSize();
     }
 
@@ -401,7 +403,9 @@ public class ContainerGui {
         } else if (isTsInputSlot(slotId)) {
             toolStationGui.setSlot(slotId - TS_SLOT_0, stack);
         } else {
-            // Non-player slots (grid, armor, container) only support vanilla types.
+            // Grid, armor, and chest/furnace slots store only BlockType + count.
+            // Refuse Tinkers payloads rather than stripping them to a sentinel.
+            if (stack.isTinkers()) return;
             setSlot(slotId, stack.isEmpty() ? null : stack.type(), stack.count());
         }
     }

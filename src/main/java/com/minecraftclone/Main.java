@@ -1891,7 +1891,8 @@ public class Main {
             world.tickBlockEntities(dt);
 
             // Farming: Minecraft-style random tick across all loaded chunks.
-            com.minecraftclone.player.Farming.tickCrops(world, dt, loot);
+            com.minecraftclone.player.Farming.tickCrops(world, dt, loot,
+                    player.getPosition().x, player.getPosition().z);
 
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
@@ -2197,6 +2198,16 @@ public class Main {
                             audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
                                     px + 0.5f, py + 0.5f, pz + 0.5f, 0.8f);
                         }
+                    } else if (noMob && heldItem == BlockType.CLAY_CANTEEN_FULL && !mode.isCreative()
+                            && player.getStats().getThirst() < PlayerStats.MAX_THIRST) {
+                        // Drink while looking at a non-interactive block (the
+                        // hit == null branch above only covers open sky).
+                        player.getStats().drink(40f);
+                        player.getInventory().remove(BlockType.CLAY_CANTEEN_FULL, 1);
+                        player.getInventory().add(BlockType.CLAY_CANTEEN, 1);
+                        handRenderer.triggerSwing();
+                        audio.play(SoundEvent.EAT);
+                        showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         // Don't place if clicking on a bed (sleep instead) or if placement spot is a bed
                         BlockType placeTarget = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
