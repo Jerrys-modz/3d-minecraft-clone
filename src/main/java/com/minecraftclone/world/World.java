@@ -6,7 +6,9 @@ import com.minecraftclone.engine.Shader;
 import com.minecraftclone.engine.Weather;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.Inventory;
+import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.util.AABB;
+import com.minecraftclone.Difficulty;
 import com.minecraftclone.world.gen.EndGenerator;
 import com.minecraftclone.world.gen.NetherGenerator;
 import com.minecraftclone.world.gen.TerrainGenerator;
@@ -55,6 +57,7 @@ public class World implements BlockAccessor {
     private final TextureAtlas atlas;
     private final ChunkStorage storage;
     private final DimensionType dimension;
+    private final MapData mapData = new MapData();
 
     /** Called whenever a chunk is generated or loaded, with its grid coords - lets a client know to request it. */
     private java.util.function.BiConsumer<Integer, Integer> chunkListener;
@@ -96,6 +99,8 @@ public class World implements BlockAccessor {
     // alone exceeds the budget.
     private static final double GENERATE_BUDGET_SECONDS = 0.006;
     private static final double MESH_BUDGET_SECONDS = 0.004;
+    /** Map sampling of newly loaded chunks — same idea as mesh: don't hitch one frame. */
+    private static final double MAP_SAMPLE_BUDGET_SECONDS = 0.004;
     // world.update() (and so updateFluids()) runs once per rendered frame, so
     // recomputing the flood-fill every single call made "one ring per tick"
     // (see FluidSim) mean one ring per *frame*. A fixed *frame-count*
@@ -196,10 +201,18 @@ public class World implements BlockAccessor {
         // Edited chunks for each dimension live in their own subdirectory, so
         // coordinates never collide across dimensions.
         this.storage = new ChunkStorage(saveDir.resolve(dimension.saveFolder()));
+
+        // Register all multi-block definitions.
+        // Add new definitions here as the game grows; order doesn't matter.
+        multiBlockManager.register(com.minecraftclone.world.multiblock.SmelteryDefinition.INSTANCE);
     }
 
     public DimensionType getDimension() {
         return dimension;
+    }
+
+    public MapData getMapData() {
+        return mapData;
     }
 
     /** Packs chunk-grid coordinates into a single key. {@code chunkZ} is masked so negative coordinates stay unique. */
@@ -222,6 +235,56 @@ public class World implements BlockAccessor {
 
     public int getRenderDistance() {
         return renderDistance;
+    }
+
+    /**
+     * Paint every generated chunk within {@link #renderDistance} of the player
+     * onto the map. Nearby chunks first; work is time-budgeted so a 12-chunk
+     * view fills in over a few frames instead of hitching. Terrain only —
+     * ore-mix waypoints wait until the player finds the ore.
+     */
+    public void mapLoadedChunks(int playerChunkX, int playerChunkZ) {
+        double start = System.nanoTime() / 1e9;
+        visitRenderDistanceRing(playerChunkX, playerChunkZ, renderDistance, (cx, cz) -> {
+            if (mapOneChunk(cx, cz, start)) return false;
+            return true;
+        });
+    }
+
+    /**
+     * Walk every chunk in the Chebyshev square of radius {@code rd} around
+     * the player (the same square chunk streaming uses), nearest first.
+     * {@code visitor} returning false stops the walk.
+     *
+     * @return number of chunks visited
+     */
+    static int visitRenderDistanceRing(int playerChunkX, int playerChunkZ, int rd,
+                                       java.util.function.BiPredicate<Integer, Integer> visitor) {
+        if (!visitor.test(playerChunkX, playerChunkZ)) return 1;
+        int visited = 1;
+        for (int r = 1; r <= rd; r++) {
+            for (int i = -r; i < r; i++) {
+                if (!visitor.test(playerChunkX + i, playerChunkZ - r)) return visited + 1;
+                visited++;
+                if (!visitor.test(playerChunkX + r, playerChunkZ + i)) return visited + 1;
+                visited++;
+                if (!visitor.test(playerChunkX - i, playerChunkZ + r)) return visited + 1;
+                visited++;
+                if (!visitor.test(playerChunkX - r, playerChunkZ - i)) return visited + 1;
+                visited++;
+            }
+        }
+        return visited;
+    }
+
+    /** @return true when the map-sample time budget is spent after mapping a chunk. */
+    private boolean mapOneChunk(int chunkX, int chunkZ, double startSeconds) {
+        Chunk c = getChunk(chunkX, chunkZ);
+        if (c == null || !c.isGenerated() || mapData.hasSurface(chunkX, chunkZ)) {
+            return false;
+        }
+        mapData.exploreGeneratedChunk(c);
+        return (System.nanoTime() / 1e9 - startSeconds) >= MAP_SAMPLE_BUDGET_SECONDS;
     }
 
     public boolean isLeavesTransparent() {
@@ -270,13 +333,13 @@ public class World implements BlockAccessor {
     }
 
     /** Returns the chunk's raw block-id array for sending to a client, or null if it isn't loaded. */
-    public byte[] getChunkRawBlocks(int cx, int cz) {
+    public short[] getChunkRawBlocks(int cx, int cz) {
         Chunk chunk = getChunk(cx, cz);
         return chunk == null ? null : chunk.getRawBlocks();
     }
 
     /** Returns the chunk's raw overlay-id array for sending to a client, or null if it isn't loaded. */
-    public byte[] getChunkRawOverlays(int cx, int cz) {
+    public short[] getChunkRawOverlays(int cx, int cz) {
         Chunk chunk = getChunk(cx, cz);
         return chunk == null ? null : chunk.getRawOverlays();
     }
@@ -288,7 +351,7 @@ public class World implements BlockAccessor {
     }
 
     /** Applies server-provided raw chunk data to a loaded chunk (the multiplayer client path). */
-    public void applyRemoteChunkData(int cx, int cz, byte[] blocks, byte[] overlays, byte[] orientations) {
+    public void applyRemoteChunkData(int cx, int cz, short[] blocks, short[] overlays, byte[] orientations) {
         Chunk chunk = getChunk(cx, cz);
         if (chunk == null) return;
         if (blocks != null) chunk.setRawBlocks(blocks);
@@ -384,6 +447,23 @@ public class World implements BlockAccessor {
         if (lz == 0) markNeighborDirty(cx, cz - 1);
         if (lz == Chunk.SIZE - 1) markNeighborDirty(cx, cz + 1);
 
+        // Doubles and quads change a neighbour's texture, including the
+        // diagonal of a 2x2 that can sit across four chunks.
+        if (old == BlockType.CHEST || type == BlockType.CHEST) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dz == 0) continue;
+                    int ncx = worldToChunk(worldX + dx);
+                    int ncz = worldToChunk(worldZ + dz);
+                    if (ncx != cx || ncz != cz) markNeighborDirty(ncx, ncz);
+                }
+            }
+        }
+
+        // Notify the multi-block manager so smeltery (and future) structures can
+        // form or deform when their structural blocks change.
+        multiBlockManager.onBlockChanged(this, worldX, worldY, worldZ);
+
         // Placing/removing a light source (e.g. a torch) can change the baked glow
         // in every chunk within its radius, not just literal boundary columns - the
         // light radius is well under a chunk's width, so the immediate 3x3 chunk
@@ -410,6 +490,51 @@ public class World implements BlockAccessor {
             promoteIfStaticFluid(worldX, worldY - 1, worldZ);
             promoteIfStaticFluid(worldX, worldY, worldZ + 1);
             promoteIfStaticFluid(worldX, worldY, worldZ - 1);
+
+            // Cactus, bamboo, and seaweed lose support when the block below is removed -
+            // break all stacked blocks above to simulate gravity (they fall and break).
+            BlockType above = getBlock(worldX, worldY + 1, worldZ);
+            if (above == BlockType.CACTUS || above == BlockType.BAMBOO || above == BlockType.SEAWEED) {
+                breakStackedPlant(worldX, worldY + 1, worldZ, above);
+            }
+            // Vines hang downward, so breaking a vine breaks all vines below it.
+            if (old == BlockType.VINE) {
+                breakHangingPlant(worldX, worldY - 1, worldZ, BlockType.VINE);
+            }
+        }
+    }
+
+    /** Recursively break stacked plant blocks (cactus/bamboo/seaweed) above the removed block. */
+    private void breakStackedPlant(int x, int y, int z, BlockType plantType) {
+        if (plantType == BlockType.SEAWEED) {
+            BlockType overlay = getOverlay(x, y, z);
+            if (overlay == plantType) {
+                setOverlay(x, y, z, BlockType.AIR);
+                breakStackedPlant(x, y + 1, z, plantType);
+            }
+        } else {
+            BlockType block = getBlock(x, y, z);
+            if (block == plantType) {
+                setBlock(x, y, z, BlockType.AIR);
+                breakStackedPlant(x, y + 1, z, plantType);
+            }
+        }
+    }
+
+    /** Recursively break hanging plant blocks (vines/seaweed) below the removed block. */
+    private void breakHangingPlant(int x, int y, int z, BlockType plantType) {
+        if (plantType == BlockType.SEAWEED) {
+            BlockType overlay = getOverlay(x, y, z);
+            if (overlay == plantType) {
+                setOverlay(x, y, z, BlockType.AIR);
+                breakHangingPlant(x, y - 1, z, plantType);
+            }
+        } else {
+            BlockType block = getBlock(x, y, z);
+            if (block == plantType) {
+                setBlock(x, y, z, BlockType.AIR);
+                breakHangingPlant(x, y - 1, z, plantType);
+            }
         }
     }
 
@@ -474,40 +599,18 @@ public class World implements BlockAccessor {
     /**
      * The storage the player sees when opening the chest at a position: a single
      * 27-slot chest, a 54-slot {@link JoinedStorage} when it has a chest
-     * immediately beside it on the east-west axis (a Minecraft-style double
+     * immediately beside it on any horizontal axis (a Minecraft-style double
      * chest), or a 108-slot container when four chests form a 2x2 square (a
-     * "quad chest"). Each block keeps its own persisted slots - the merge is
-     * just a combined view, ordered so the layout is stable whichever half you
-     * open. Same-y/z requirement keeps stacked or north-south chests single.
+     * "quad chest"). Pairing looks at the placed {@link BlockType#CHEST} block,
+     * not the entity, so a neighbour that has never been opened still joins,
+     * and north-south pairs merge the same way east-west ones do. Each block
+     * keeps its own persisted slots - the merge is just a combined view,
+     * ordered so the layout is stable whichever half you open.
      */
     public com.minecraftclone.player.StorageContainer chestContainerAt(int x, int y, int z) {
-        Chest here = chestAt(x, y, z);
-        if (here == null) return null;
-        // A 2x2 square of chests (all four cells present, at the same y) merges
-        // into one 108-slot container, ordered row-major by world position so
-        // it reads the same no matter which corner you open.
-        for (int ox = -1; ox <= 0; ox++) {
-            for (int oz = -1; oz <= 0; oz++) {
-                int x0 = ox == 0 ? x : x - 1;
-                int z0 = oz == 0 ? z : z - 1;
-                Chest a = chestAt(x0, y, z0);
-                Chest b = chestAt(x0 + 1, y, z0);
-                Chest c = chestAt(x0, y, z0 + 1);
-                Chest d = chestAt(x0 + 1, y, z0 + 1);
-                if (a != null && b != null && c != null && d != null) {
-                    // Make sure the whole 2x2 is present regardless of which
-                    // corner was clicked, and order west-to-east, north-to-south.
-                    return new com.minecraftclone.player.JoinedStorage(
-                            new com.minecraftclone.player.JoinedStorage(a, b),
-                            new com.minecraftclone.player.JoinedStorage(c, d));
-                }
-            }
-        }
-        Chest west = chestAt(x - 1, y, z);
-        Chest east = chestAt(x + 1, y, z);
-        if (west != null) return new com.minecraftclone.player.JoinedStorage(west, here);
-        if (east != null) return new com.minecraftclone.player.JoinedStorage(here, east);
-        return here;
+        return Chest.containerAt(x, y, z,
+                (cx, cy, cz) -> getBlock(cx, cy, cz) == BlockType.CHEST,
+                this::getOrCreateChest);
     }
 
     /** True if the block at this position is currently active - for a furnace, that it's burning (its front glows). */
@@ -526,9 +629,43 @@ public class World implements BlockAccessor {
         return furnace;
     }
 
+    /** Returns the Part Builder entity at a position, creating (and registering) it on first use. */
+    public com.minecraftclone.world.tinkers.PartBuilderEntity getOrCreatePartBuilder(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof com.minecraftclone.world.tinkers.PartBuilderEntity pb) return pb;
+        com.minecraftclone.world.tinkers.PartBuilderEntity pb = new com.minecraftclone.world.tinkers.PartBuilderEntity();
+        blockEntities.put(blockKey(x, y, z), pb);
+        return pb;
+    }
+
+    /** Returns the Tool Station entity at a position, creating (and registering) it on first use. */
+    public com.minecraftclone.world.tinkers.ToolStationEntity getOrCreateToolStation(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof com.minecraftclone.world.tinkers.ToolStationEntity ts) return ts;
+        com.minecraftclone.world.tinkers.ToolStationEntity ts = new com.minecraftclone.world.tinkers.ToolStationEntity();
+        blockEntities.put(blockKey(x, y, z), ts);
+        return ts;
+    }
+
     /** Forgets a block entity - call when its block is mined or removed. */
     public void removeBlockEntity(int x, int y, int z) {
         blockEntities.remove(blockKey(x, y, z));
+    }
+
+    /**
+     * Removes a block entity and immediately dirties the surrounding 3×3 chunks
+     * so that the renderer picks up the visual change (e.g. the lit front tile of
+     * a Smeltery Controller reverting to its unlit tile after the structure deforms).
+     * This mirrors the dirty-on-form logic in {@link #registerMultiBlockEntity}.
+     */
+    public void removeBlockEntityAndRemesh(int x, int y, int z) {
+        blockEntities.remove(blockKey(x, y, z));
+        int cx = worldToChunk(x), cz = worldToChunk(z);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                markNeighborDirty(cx + dx, cz + dz);
+            }
+        }
     }
 
     /**
@@ -581,6 +718,50 @@ public class World implements BlockAccessor {
             out.add(new ChunkStorage.BlockEntitySave(x, y, z, e.getValue()));
         }
         return out;
+    }
+
+    /** Drops in-memory block entities that lived in an unloading chunk (already saved if modified). */
+    private void removeBlockEntitiesInChunk(Chunk c) {
+        int minX = c.getOriginX();
+        int minZ = c.getOriginZ();
+        blockEntities.entrySet().removeIf(e -> {
+            int x = keyX(e.getKey());
+            int z = keyZ(e.getKey());
+            return x >= minX && x < minX + Chunk.SIZE && z >= minZ && z < minZ + Chunk.SIZE;
+        });
+    }
+
+    /**
+     * After a chunk is inserted, try to form any smeltery whose controller is
+     * in this chunk, and retry already-loaded controllers now that a neighbor
+     * may have arrived (PatternValidator aborts when a neighbor isn't generated).
+     */
+    private void tryFormMultiblocksInChunk(Chunk chunk) {
+        int originX = chunk.getOriginX();
+        int originZ = chunk.getOriginZ();
+        short[] raw = chunk.getRawBlocks();
+        short controllerId = BlockType.SMELTERY_CONTROLLER.id;
+        for (int i = 0; i < raw.length; i++) {
+            if (raw[i] != controllerId) continue;
+            int lx = i % Chunk.SIZE;
+            int tmp = i / Chunk.SIZE;
+            int lz = tmp % Chunk.SIZE;
+            int ly = tmp / Chunk.SIZE;
+            multiBlockManager.tryFormAt(this, originX + lx, ly, originZ + lz);
+        }
+        int pad = 8; // SmelteryDefinition.scanRadius() == maxInterior + 1
+        int minX = originX - pad;
+        int maxX = originX + Chunk.SIZE + pad;
+        int minZ = originZ - pad;
+        int maxZ = originZ + Chunk.SIZE + pad;
+        for (Map.Entry<Long, BlockEntity> e : blockEntities.entrySet()) {
+            if (e.getValue().blockType() != BlockType.SMELTERY_CONTROLLER) continue;
+            int x = keyX(e.getKey());
+            int z = keyZ(e.getKey());
+            if (x >= minX && x < maxX && z >= minZ && z < maxZ) {
+                multiBlockManager.tryFormAt(this, x, keyY(e.getKey()), z);
+            }
+        }
     }
 
     /** If the block at this position is static WATER/LAVA, promotes it to the matching tracked source. See setBlock. */
@@ -719,12 +900,23 @@ public class World implements BlockAccessor {
         return generator.seaLevel();
     }
 
+    /**
+     * The natural terrain height at the given world column - the surface the
+     * generator produced, ignoring any blocks the player has placed or removed.
+     * Used as the climate's underground/surface reference so a player-built roof
+     * doesn't fool the temperature model into thinking a cave is at the surface.
+     */
+    public int getTerrainHeight(int worldX, int worldZ) {
+        return generator.terrainHeight(worldX, worldZ);
+    }
+
     /** Sets the per-block facing hint (used by doors) at a world position. */
     public void setBlockOrientation(int worldX, int worldY, int worldZ, byte orientation) {
         int cx = worldToChunk(worldX), cz = worldToChunk(worldZ);
         Chunk chunk = getChunk(cx, cz);
         if (chunk == null) return;
         chunk.setOrientation(Math.floorMod(worldX, Chunk.SIZE), worldY, Math.floorMod(worldZ, Chunk.SIZE), orientation);
+        chunk.markDirty();
     }
 
     /** The per-block facing hint at a world position (0 if unset) - used for stair/fence collision. */
@@ -749,51 +941,21 @@ public class World implements BlockAccessor {
         int pcx = worldToChunk((int) Math.floor(playerWorldX));
         int pcz = worldToChunk((int) Math.floor(playerWorldZ));
 
-        // Load / generate, budgeted by wall-clock time (see GENERATE_BUDGET_SECONDS
-        // above for why this isn't a fixed chunk count anymore).
+        // Load / generate nearest-first so the chunks in front of you exist
+        // before far corners of the view. Budgeted by wall-clock time (see
+        // GENERATE_BUDGET_SECONDS).
         long generateDeadline = System.nanoTime() + (long) (GENERATE_BUDGET_SECONDS * 1e9);
-        int generated = 0;
-        outer:
-        for (int dx = -renderDistance; dx <= renderDistance; dx++) {
-            for (int dz = -renderDistance; dz <= renderDistance; dz++) {
-                if (dx * dx + dz * dz > renderDistance * renderDistance) continue;
-                int cx = pcx + dx, cz = pcz + dz;
-                if (!chunks.containsKey(key(cx, cz))) {
-                    if (generated > 0 && System.nanoTime() >= generateDeadline) break outer;
-                    Chunk chunk = new Chunk(new ChunkPos(cx, cz));
-                    chunks.put(key(cx, cz), chunk);
-                    if (storage.hasSavedChunk(chunk.getPos())) {
-                        // A previously-edited chunk: restore the player's changes
-                        // instead of regenerating pristine terrain, along with any
-                        // block entities that were holding state in it.
-                        for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
-                            if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
-                                blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
-                            }
-                        }
-                        // Lightning fire is transient: any saved mid-burn fire cells
-                        // are cleared on reload rather than persisting forever.
-                        byte[] raw = chunk.getRawBlocks();
-                        boolean hadFire = false;
-                        for (int i = 0; i < raw.length; i++) {
-                            if ((raw[i] & 0xFF) == BlockType.FIRE.id) {
-                                raw[i] = BlockType.AIR.id;
-                                hadFire = true;
-                            }
-                        }
-                        if (hadFire) chunk.setRawBlocks(raw);
-                    } else {
-                        generator.generate(chunk);
-                    }
-                    markNeighborDirty(cx - 1, cz);
-                    markNeighborDirty(cx + 1, cz);
-                    markNeighborDirty(cx, cz - 1);
-                    markNeighborDirty(cx, cz + 1);
-                    notifyChunkLoaded(cx, cz);
-                    generated++;
-                }
-            }
-        }
+        int[] generated = {0};
+        visitRenderDistanceRing(pcx, pcz, renderDistance, (cx, cz) -> {
+            int dx = cx - pcx, dz = cz - pcz;
+            if (dx * dx + dz * dz > renderDistance * renderDistance) return true;
+            if (chunks.containsKey(key(cx, cz))) return true;
+            if (generated[0] > 0 && System.nanoTime() >= generateDeadline) return false;
+            loadOrGenerateChunk(cx, cz);
+            notifyChunkLoaded(cx, cz);
+            generated[0]++;
+            return true;
+        });
 
         // Unload far chunks. Most frames unload nothing, so the removal list
         // is only allocated once something actually needs to go. A headless
@@ -812,6 +974,11 @@ public class World implements BlockAccessor {
                 if (c.isModifiedByPlayer()) {
                     storage.save(c, blockEntitiesInChunk(c));
                 }
+                // Notify multiblock manager so it can drop instances whose
+                // controller lives in this chunk (shell-only unloads leave the
+                // formed instance intact so the controller entity is saved).
+                multiBlockManager.onChunkUnload(this, c.getPos().x(), c.getPos().z());
+                removeBlockEntitiesInChunk(c);
                 c.destroy();
             }
         }
@@ -829,12 +996,17 @@ public class World implements BlockAccessor {
         // Remesh dirty chunks nearest-first, budgeted by wall-clock time (see
         // MESH_BUDGET_SECONDS above) rather than a fixed count per tick. Skipped
         // entirely on a headless server (no GL context, chunks never meshed).
+        // First-time meshes beat neighbor-seam remeshes (otherwise a flying
+        // player keeps re-dirtying nearby chunks and the new ones at the rim
+        // never get a mesh until you punch them).
         if (!headless) {
             List<Chunk> dirty = new ArrayList<>();
             for (Chunk c : chunks.values()) {
-                if (c.isDirty()) dirty.add(c);
+                if (c.needsMesh()) dirty.add(c);
             }
-            dirty.sort((a, b) -> Double.compare(a.getPos().distanceSq(pcx, pcz), b.getPos().distanceSq(pcx, pcz)));
+            dirty.sort((a, b) -> compareMeshQueue(
+                    a.needsFirstMesh(), a.getPos().distanceSq(pcx, pcz),
+                    b.needsFirstMesh(), b.getPos().distanceSq(pcx, pcz)));
             long meshDeadline = System.nanoTime() + (long) (MESH_BUDGET_SECONDS * 1e9);
             for (int i = 0; i < dirty.size(); i++) {
                 if (i > 0 && System.nanoTime() >= meshDeadline) break;
@@ -842,6 +1014,53 @@ public class World implements BlockAccessor {
                 c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
             }
         }
+    }
+
+    /**
+     * First-time meshes jump the queue; otherwise nearest to the player.
+     * A flying player constantly re-dirties nearby chunks, and without this
+     * those remeshes starve new chunks at the rim — they exist (you can
+     * punch them) but never appear until a block update.
+     */
+    static int compareMeshQueue(boolean aFirst, double aDist, boolean bFirst, double bDist) {
+        int byMesh = Boolean.compare(bFirst, aFirst);
+        if (byMesh != 0) return byMesh;
+        return Double.compare(aDist, bDist);
+    }
+
+    /** Generate or load one chunk and stitch it to already-loaded neighbors. */
+    private void loadOrGenerateChunk(int cx, int cz) {
+        Chunk chunk = new Chunk(new ChunkPos(cx, cz));
+        chunks.put(key(cx, cz), chunk);
+        if (storage.hasSavedChunk(chunk.getPos())) {
+            for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
+                if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
+                    blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                    multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
+                }
+            }
+            short[] raw = chunk.getRawBlocks();
+            boolean hadFire = false;
+            for (int i = 0; i < raw.length; i++) {
+                if (raw[i] == BlockType.FIRE.id) {
+                    raw[i] = BlockType.AIR.id;
+                    hadFire = true;
+                }
+            }
+            if (hadFire) chunk.setRawBlocks(raw);
+            // A corrupt/unreadable save would leave an empty hole in the world
+            // forever because we skipped generate. Fall back to terrain.
+            if (!chunk.isGenerated()) {
+                generator.generate(chunk);
+            }
+        } else {
+            generator.generate(chunk);
+        }
+        tryFormMultiblocksInChunk(chunk);
+        markNeighborDirty(cx - 1, cz);
+        markNeighborDirty(cx + 1, cz);
+        markNeighborDirty(cx, cz - 1);
+        markNeighborDirty(cx, cz + 1);
     }
 
     /**
@@ -887,9 +1106,11 @@ public class World implements BlockAccessor {
     }
 
     private void tryAddSnow(int x, int z, Climate climate, boolean blizzard) {
-        if (climate.temperatureFor(getBiome(x, z)) > FREEZING_TEMP) return;
         int y = findSurfaceY(x, z);
         if (y < 0) return;
+        // Altitude-aware surface temperature: high mountain ledges freeze (and
+        // snow) even when their foothills are above freezing.
+        if (climate.temperatureFor(getBiome(x, z), y, y) > FREEZING_TEMP) return;
         BlockType surface = getBlock(x, y, z);
         if (surface.slab) {
             // Cap a bottom-half slab flush with snow by swapping in a snow-capped
@@ -910,9 +1131,10 @@ public class World implements BlockAccessor {
     private void tryMeltSnow(int x, int z, Climate climate) {
         Biome biome = getBiome(x, z);
         if (permanentSnow(biome)) return;
-        if (climate.temperatureFor(biome) <= THAW_TEMP) return;
         int y = findSurfaceY(x, z);
         if (y < 0) return;
+        // Altitude-aware: the top of a high mountain stays frozen past the thaw.
+        if (climate.temperatureFor(biome, y, y) <= THAW_TEMP) return;
         BlockType top = getBlock(x, y, z);
         if (top.isSnowCappedSlab()) {
             setBlock(x, y, z, uncapped(top)); // the snow cap melts, the slab shows again
@@ -925,10 +1147,12 @@ public class World implements BlockAccessor {
 
     /** Freezes exposed water over to ice while it's freezing, thaws it back to water once warm. */
     private void tryUpdateWater(int x, int z, Climate climate) {
-        float temperature = climate.temperatureFor(getBiome(x, z));
+        int y = findSurfaceWaterY(x, z);
+        if (y < 0) return;
+        // Altitude-aware: high mountain lakes freeze earlier and thaw later.
+        float temperature = climate.temperatureFor(getBiome(x, z), y, y);
         if (temperature <= FREEZING_TEMP) {
-            int y = findSurfaceWaterY(x, z);
-            if (y >= 0 && getBlock(x, y + 1, z) == BlockType.AIR) {
+            if (getBlock(x, y + 1, z) == BlockType.AIR) {
                 BlockType water = getBlock(x, y, z);
                 // Only freeze static WATER, not WATER_SOURCE - sources keep flowing
                 // even in winter so their flow field stays intact through freeze/thaw.
@@ -937,19 +1161,23 @@ public class World implements BlockAccessor {
                 }
             }
         } else if (temperature > THAW_TEMP) {
-            int y = findSurfaceY(x, z);
-            if (y >= 0 && getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
+            if (getBlock(x, y, z) == BlockType.ICE && getBlock(x, y + 1, z) == BlockType.AIR) {
                 setBlock(x, y, z, BlockType.WATER); // the surface ice thaws back into water
             }
         }
     }
 
-    /** The top-most exposed static water cell (WATER with only air above), or -1 if the column has none. */
+    /**
+     * The top-most exposed water-surface cell (WATER, or ICE when the lake is
+     * frozen over - both with only air above), or -1 if the column has none.
+     * Returning ice too is what lets the thaw branch actually reach a frozen
+     * surface once it warms up.
+     */
     private int findSurfaceWaterY(int x, int z) {
         for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
             BlockType b = getBlock(x, y, z);
-            if (b == BlockType.WATER) return y;
-            if (b != BlockType.AIR) return -1; // solid (ice, ground, a roof) sits above any water
+            if (b == BlockType.WATER || b == BlockType.ICE) return y;
+            if (b != BlockType.AIR) return -1; // solid (ground, a roof) sits above any water
         }
         return -1;
     }
@@ -1163,8 +1391,18 @@ public class World implements BlockAccessor {
      * skipping those avoids paying for their draw calls (and the GL state changes/vertex
      * shader invocations that go with them) every single frame for geometry that was
      * never going to end up on screen anyway.
+     * <p>
+     * Call {@link #renderOpaque} then entities then {@link #renderTranslucent} so
+     * swimming mobs sit under the water instead of floating on top of it (water
+     * doesn't write depth).
      */
     public void render(Shader shader, Matrix4f projection, Matrix4f view) {
+        renderOpaque(projection, view);
+        renderTranslucent();
+    }
+
+    /** Opaque terrain, including ice (writes depth so water can't show through a frozen sheet). */
+    public void renderOpaque(Matrix4f projection, Matrix4f view) {
         projection.mul(view, viewProjection);
         frustum.set(viewProjection);
 
@@ -1172,13 +1410,18 @@ public class World implements BlockAccessor {
         for (Chunk chunk : chunks.values()) {
             if (isChunkVisible(chunk)) visibleChunks.add(chunk);
         }
-
         for (Chunk chunk : visibleChunks) {
             chunk.render();
         }
-        // See-through geometry (glass/ice) draws after everything opaque and blends
-        // over it; depth writes are off so overlapping translucent faces don't cull
-        // each other.
+    }
+
+    /**
+     * Water, lava, glass. Depth writes off so overlapping translucent faces
+     * blend instead of punching holes. Must run after entities so a swimming
+     * mob is already in the depth buffer and the water surface covers the
+     * submerged part of the body.
+     */
+    public void renderTranslucent() {
         glDepthMask(false);
         for (Chunk chunk : visibleChunks) {
             chunk.renderTranslucent();
@@ -1194,7 +1437,17 @@ public class World implements BlockAccessor {
 
     /** Spawns a dropped item of {@code type} at the given block position (centered, with a small random kick). */
     public void spawnItem(int blockX, int blockY, int blockZ, BlockType type, int count, java.util.Random rnd) {
+        if (type == null || count <= 0) return;
         ItemEntity e = new ItemEntity(type, count, blockX + 0.5f, blockY + 0.5f, blockZ + 0.5f);
+        e.velocity.set((rnd.nextFloat() - 0.5f) * 1.5f, 2.5f + rnd.nextFloat() * 1.5f, (rnd.nextFloat() - 0.5f) * 1.5f);
+        items.add(e);
+    }
+
+    /** Spawns a dropped {@link ItemStack}, preserving any Tinkers' payload. */
+    public void spawnItem(int blockX, int blockY, int blockZ, ItemStack stack, java.util.Random rnd) {
+        if (stack == null || stack.isEmpty()) return;
+        ItemEntity e = new ItemEntity(stack.type(), stack.count(),
+                blockX + 0.5f, blockY + 0.5f, blockZ + 0.5f, stack.tinkersItem());
         e.velocity.set((rnd.nextFloat() - 0.5f) * 1.5f, 2.5f + rnd.nextFloat() * 1.5f, (rnd.nextFloat() - 0.5f) * 1.5f);
         items.add(e);
     }
@@ -1245,13 +1498,21 @@ public class World implements BlockAccessor {
                 float dy = e.position.y - (playerPos.y + 0.9f);
                 float dz = e.position.z - playerPos.z;
                 if (dx * dx + dy * dy + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
-                    int remaining = inventory.add(e.type, e.count);
-                    if (remaining < e.count) {
-                        pickedUp = true;
-                        if (remaining > 0) {
-                            e.count = remaining;
-                        } else {
+                    if (e.tinkersItem != null) {
+                        ItemStack leftover = inventory.addStack(e.asStack());
+                        if (leftover.isEmpty()) {
+                            pickedUp = true;
                             it.remove();
+                        }
+                    } else {
+                        int remaining = inventory.add(e.type, e.count);
+                        if (remaining < e.count) {
+                            pickedUp = true;
+                            if (remaining > 0) {
+                                e.count = remaining;
+                            } else {
+                                it.remove();
+                            }
                         }
                     }
                 }
@@ -1262,6 +1523,14 @@ public class World implements BlockAccessor {
 
     public int getLoadedChunkCount() {
         return chunks.size();
+    }
+
+    /**
+     * Returns an unmodifiable view of all currently loaded chunks.
+     * Used by the farming random-tick system to iterate over simulation-range chunks.
+     */
+    public java.util.Collection<Chunk> getLoadedChunks() {
+        return java.util.Collections.unmodifiableCollection(chunks.values());
     }
 
     /** How many loaded chunks actually passed the frustum test in the most recent {@link #render}. */
@@ -1286,10 +1555,28 @@ public class World implements BlockAccessor {
      * map. Hostile mobs spawn only at night, out of sight, and melt away at dawn;
      * their melee hits and arrows damage the player, whose total damage taken
      * this frame is returned. Call once per frame from the main thread.
+     *
+     * @param targetable whether hostiles are allowed to notice/chase/attack the
+     *                   player this frame - false in creative/spectator (see
+     *                   GameMode#isInvulnerable), where mobs already can't land a
+     *                   hit and so should just ignore the player and wander like
+     *                   passives, rather than uselessly stalking someone they can
+     *                   never actually hurt. Spawning/despawning around the
+     *                   player's position still happens either way.
+     * @param difficulty  world difficulty: Peaceful despawns hostiles and never
+     *                   spawns them; Easy/Hard scale damage and spawn rate.
      */
-    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd) {
+    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd, boolean targetable) {
+        return updateMobs(dt, playerPos, playerBox, night, rnd, targetable, Difficulty.NORMAL);
+    }
+
+    public float updateMobs(float dt, Vector3f playerPos, AABB playerBox, boolean night, Random rnd,
+                            boolean targetable, Difficulty difficulty) {
+        if (difficulty == null) difficulty = Difficulty.NORMAL;
         float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
+        Vector3f targetPos = targetable ? playerPos : null;
         float damage = 0f;
+        float damageMul = difficulty.mobDamageMultiplier();
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
             Mob mob = it.next();
             float dx = mob.position.x - playerPos.x;
@@ -1297,26 +1584,38 @@ public class World implements BlockAccessor {
             // The undead are gone by daylight (they burn/melt at dawn); everything
             // far away or fallen out of the world despawns. Wild animals (wolves,
             // bears) don't have the dawn-despawn flag, so they stay out by day.
-            boolean gone = mob.isHostile() && mob.type.dawnDespawns && !night;
+            // Peaceful despawns every hostile immediately.
+            boolean gone = mob.isHostile() && (
+                    !difficulty.allowsHostileMobs()
+                            || (mob.type.dawnDespawns && !night));
             if (gone || dx * dx + dz * dz > despawnSq || mob.position.y < -64f) {
                 it.remove();
                 continue;
             }
-            mob.update(dt, this, rnd, playerPos);
-            damage += mob.getMeleeRequest();
+            mob.update(dt, this, rnd, targetPos);
+            // Remove dead mobs immediately after update completes, using the same
+            // removal path as combat deaths, so a mob killed by drowning doesn't
+            // continue rendering or attacking on subsequent frames.
+            if (mob.isDead()) {
+                it.remove();
+                continue;
+            }
+            damage += mob.getMeleeRequest() * damageMul;
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, playerPos, rnd);
             }
         }
 
-        if (night && hostileCount() < MAX_HOSTILES && rnd.nextInt(HOSTILE_SPAWN_ODDS) == 0) {
+        if (difficulty.allowsHostileMobs()
+                && night && hostileCount() < difficulty.maxHostiles()
+                && rnd.nextInt(difficulty.hostileSpawnOdds()) == 0) {
             trySpawnHostile(rnd, playerPos.x, playerPos.z);
         }
         if (mobs.size() < MAX_MOBS && rnd.nextInt(MOB_SPAWN_ODDS) == 0) {
-            trySpawnMob(rnd, playerPos.x, playerPos.z);
+            trySpawnMob(rnd, playerPos.x, playerPos.z, difficulty);
         }
 
-        damage += updateArrows(dt, playerBox);
+        damage += updateArrows(dt, playerBox) * damageMul;
         return damage;
     }
 
@@ -1327,7 +1626,7 @@ public class World implements BlockAccessor {
      * like {@code playerPositions}) - melee hits, arrow hits, and fallback
      * damage all routed to the right player. Call once per server tick.
      */
-    public float[] updateMobsMulti(float dt, List<Vector3f> playerPositions, List<AABB> playerBoxes, boolean night, Random rnd) {
+    public float[] updateMobsMulti(float dt, List<Vector3f> playerPositions, List<AABB> playerBoxes, boolean night, Random rnd, Difficulty difficulty) {
         int count = playerPositions.size();
         float[] damage = new float[count];
         float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
@@ -1350,13 +1649,13 @@ public class World implements BlockAccessor {
             }
         }
 
-        if (night && hostileCount() < MAX_HOSTILES && rnd.nextInt(HOSTILE_SPAWN_ODDS) == 0) {
+        if (night && difficulty.allowsHostileMobs() && hostileCount() < MAX_HOSTILES && rnd.nextInt(HOSTILE_SPAWN_ODDS) == 0) {
             int p = rnd.nextInt(count);
             trySpawnHostile(rnd, playerPositions.get(p).x, playerPositions.get(p).z);
         }
         if (mobs.size() < MAX_MOBS && rnd.nextInt(MOB_SPAWN_ODDS) == 0) {
             int p = rnd.nextInt(count);
-            trySpawnMob(rnd, playerPositions.get(p).x, playerPositions.get(p).z);
+            trySpawnMob(rnd, playerPositions.get(p).x, playerPositions.get(p).z, difficulty);
         }
 
         float[] arrowDamage = updateArrowsMulti(dt, playerBoxes);
@@ -1481,8 +1780,20 @@ public class World implements BlockAccessor {
 
     /** Seeds the world with an initial scattering of mobs so it feels alive from the start. */
     public void spawnInitialMobs(Random rnd, float playerWorldX, float playerWorldZ, int count) {
+        spawnInitialMobs(rnd, playerWorldX, playerWorldZ, count, Difficulty.NORMAL);
+    }
+
+    public void spawnInitialMobs(Random rnd, float playerWorldX, float playerWorldZ, int count, Difficulty difficulty) {
+        if (difficulty == null) difficulty = Difficulty.NORMAL;
         for (int i = 0; i < count && mobs.size() < MAX_MOBS; i++) {
-            trySpawnMob(rnd, playerWorldX, playerWorldZ);
+            trySpawnMob(rnd, playerWorldX, playerWorldZ, difficulty);
+        }
+    }
+
+    /** Adds a specific mob at a world position - used by autotest screenshots (e.g. one floating in water). */
+    public void spawnMobAt(Mob.Type type, float x, float y, float z) {
+        if (mobs.size() < MAX_MOBS) {
+            mobs.add(new Mob(type, x, y, z));
         }
     }
 
@@ -1520,7 +1831,7 @@ public class World implements BlockAccessor {
     }
 
     /** Spawns one mob on a random grass/snow surface within range; does nothing if no spot qualifies. */
-    private void trySpawnMob(Random rnd, float playerWorldX, float playerWorldZ) {
+    private void trySpawnMob(Random rnd, float playerWorldX, float playerWorldZ, Difficulty difficulty) {
         int radius = (int) MOB_SPAWN_RADIUS;
         for (int attempt = 0; attempt < 6; attempt++) {
             int x = (int) Math.floor(playerWorldX) + rnd.nextInt(radius * 2) - radius;
@@ -1531,7 +1842,8 @@ public class World implements BlockAccessor {
             BlockType surface = getBlock(x, y, z);
             if (surface != BlockType.GRASS && surface != BlockType.SNOW) continue;
             if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
-            Mob.Type type = pickSurfaceMobType(rnd, getBiome(x, z));
+            Mob.Type type = pickSurfaceMobType(rnd, getBiome(x, z), difficulty);
+            if (type.hostile && !difficulty.allowsHostileMobs()) continue;
             mobs.add(newMob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
             return;
         }
@@ -1560,6 +1872,14 @@ public class World implements BlockAccessor {
      * harder to come by.
      */
     static Mob.Type pickSurfaceMobType(Random rnd, TerrainGenerator.Biome biome) {
+        return pickSurfaceMobType(rnd, biome, Difficulty.NORMAL);
+    }
+
+    static Mob.Type pickSurfaceMobType(Random rnd, TerrainGenerator.Biome biome, Difficulty difficulty) {
+        if (difficulty != null && !difficulty.allowsHostileMobs()) {
+            Mob.Type[] passives = {Mob.Type.PIG, Mob.Type.COW, Mob.Type.SHEEP};
+            return passives[rnd.nextInt(passives.length)];
+        }
         float roll = rnd.nextFloat();
         boolean woods = biome == TerrainGenerator.Biome.FOREST || biome == TerrainGenerator.Biome.TAIGA
                 || biome == TerrainGenerator.Biome.CHERRY_GROVE || biome == TerrainGenerator.Biome.FLOWER_MEADOW;
@@ -1636,5 +1956,56 @@ public class World implements BlockAccessor {
             c.destroy();
         }
         chunks.clear();
+    }
+
+    // =========================================================================
+    // Multi-block system
+    // =========================================================================
+
+    /** The multi-block manager — tracks formed structures and drives formation / deformation. */
+    private final com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager =
+            new com.minecraftclone.world.multiblock.MultiBlockManager();
+
+    /**
+     * Returns the multi-block manager.  Call {@code manager().register(def)} at startup
+     * for each {@link com.minecraftclone.world.multiblock.MultiBlockDefinition}.
+     */
+    public com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager() {
+        return multiBlockManager;
+    }
+
+    /**
+     * Register a {@link com.minecraftclone.world.multiblock.MultiBlockEntity} at the
+     * given controller position.  Called by
+     * {@link com.minecraftclone.world.multiblock.MultiBlockManager} when a structure forms.
+     * The entity is stored in the shared {@code blockEntities} map so it participates in
+     * the existing tick, persistence, and active-light systems without duplication.
+     */
+    public void registerMultiBlockEntity(int x, int y, int z,
+            com.minecraftclone.world.multiblock.MultiBlockEntity entity) {
+        blockEntities.put(blockKey(x, y, z), entity);
+        // Dirty the surrounding chunks so the lit-front tile updates immediately.
+        int cx = worldToChunk(x), cz = worldToChunk(z);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                markNeighborDirty(cx + dx, cz + dz);
+            }
+        }
+    }
+
+    /**
+     * The formed multi-block instance whose controller is at {@code (x, y, z)},
+     * or {@code null} if no structure is formed there.
+     */
+    public com.minecraftclone.world.multiblock.MultiBlockInstance multiBlockAt(int x, int y, int z) {
+        return multiBlockManager.instanceAt(x, y, z);
+    }
+
+    /**
+     * The formed multi-block instance whose bounding box contains {@code (x, y, z)},
+     * or {@code null}.
+     */
+    public com.minecraftclone.world.multiblock.MultiBlockInstance multiBlockContaining(int x, int y, int z) {
+        return multiBlockManager.instanceContaining(x, y, z);
     }
 }

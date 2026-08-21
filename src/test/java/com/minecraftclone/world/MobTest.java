@@ -234,6 +234,23 @@ class MobTest {
     }
 
     @Test
+    void hostileNeverAttacksWithANullTarget() {
+        // World passes null instead of the real player position when the player is
+        // invulnerable (creative/spectator - see World#updateMobs), so a hostile
+        // should never register an attack even standing right on top of where the
+        // player would be (regression: "mobs still target you in creative mode").
+        StubWorld w = flatGround(10);
+        Mob zombie = new Mob(Mob.Type.ZOMBIE, 1f, 1f + Mob.Type.ZOMBIE.height / 2f, 0f);
+        Random rnd = new Random(4);
+        zombie.update(DT, w, rnd, null); // would be adjacent to (1,0.9,0) if targeted
+        assertEquals(0f, zombie.getMeleeRequest(), 0.001f, "no target means no attack request");
+
+        Mob skeleton = new Mob(Mob.Type.SKELETON, 6f, 1f + Mob.Type.SKELETON.height / 2f, 0f);
+        skeleton.update(DT, w, rnd, null); // would be in shoot range of (6,0.9,0) if targeted
+        assertFalse(skeleton.wantsToShoot(), "no target means no shot request either");
+    }
+
+    @Test
     void hostileKeepsChasingAfterBeingHit() {
         StubWorld w = flatGround(20);
         Mob zombie = new Mob(Mob.Type.ZOMBIE, 0f, 1f + Mob.Type.ZOMBIE.height / 2f, 0f);
@@ -246,5 +263,90 @@ class MobTest {
         }
         assertTrue(zombie.position.x > startX + 0.5f,
                 "a hurt hostile keeps coming, not fleeing: dx=" + (zombie.position.x - startX));
+    }
+
+    /** A pool of water at ground level (y=1..4 of water over a solid floor at y=0). */
+    private static StubWorld waterPool(int size) {
+        StubWorld w = new StubWorld();
+        for (int x = -size; x <= size; x++) {
+            for (int z = -size; z <= size; z++) {
+                w.set(x, 0, z, BlockType.STONE);
+                for (int y = 1; y <= 4; y++) {
+                    w.set(x, y, z, BlockType.WATER);
+                }
+            }
+        }
+        return w;
+    }
+
+    @Test
+    void mobSwimsInsteadOfSinkingToTheBottom() {
+        StubWorld w = waterPool(20);
+        // Drop a pig mid-water: it should float near the surface, not rest on
+        // the pool bed (y=1). Its feet should rise well above the bed.
+        Mob pig = new Mob(Mob.Type.PIG, 0f, 2.5f, 0f);
+        Random rnd = new Random(2);
+        for (int i = 0; i < 300; i++) {
+            pig.update(DT, w, rnd);
+        }
+        float feet = pig.position.y - pig.type.height / 2f;
+        assertTrue(feet > 1.5f, "a swimming mob should float up, not rest on the bed: feet=" + feet);
+    }
+
+    @Test
+    void mobDoesNotBounceOutOfTheWaterOnceAtTheSurface() {
+        // Regression: the swim velocity used to be clamped to at least
+        // SWIM_SURFACE_SPEED unconditionally, regardless of depth - since that's
+        // faster than the buoyancy decay ever settles to, it won every frame a
+        // mob was even partly in water, snapping its vertical velocity straight
+        // from the full paddle-up speed to a hard sink and back within a single
+        // frame right at the surface - a visible judder, reported as "mobs walk
+        // on water bouncing". Once floating, per-frame velocity swings should be
+        // smooth (bounded acceleration), not an instant sign-flipping snap.
+        StubWorld w = waterPool(20);
+        Mob pig = new Mob(Mob.Type.PIG, 0f, 2.5f, 0f);
+        Random rnd = new Random(2);
+        for (int i = 0; i < 300; i++) {
+            pig.update(DT, w, rnd); // let it rise and settle at the surface first
+        }
+        float maxJump = 0f;
+        float lastVy = pig.velocity.y;
+        for (int i = 0; i < 300; i++) {
+            pig.update(DT, w, rnd);
+            maxJump = Math.max(maxJump, Math.abs(pig.velocity.y - lastVy));
+            lastVy = pig.velocity.y;
+        }
+        assertTrue(maxJump < 1f,
+                "a floating mob's vertical velocity shouldn't snap between frames: maxJump=" + maxJump);
+    }
+
+    @Test
+    void mobDrownsAfterStayingFullySubmerged() {
+        // A pool with a solid ceiling just under the water surface, so a mob in
+        // it can't swim up to breathe - it stays fully submerged and drowns.
+        StubWorld w = waterPool(20);
+        for (int x = -20; x <= 20; x++) {
+            for (int z = -20; z <= 20; z++) {
+                w.set(x, 3, z, BlockType.STONE); // ceiling just above the water floor
+            }
+        }
+        Mob cow = new Mob(Mob.Type.COW, 0f, 2.0f, 0f);
+        float startHealth = cow.getHealth();
+        Random rnd = new Random(8);
+        for (int i = 0; i < 1200; i++) {
+            cow.update(DT, w, rnd);
+        }
+        assertTrue(cow.isDead(), "a mob fully underwater for a long time should drown");
+        assertTrue(cow.getHealth() < startHealth, "drowning should have dealt damage");
+    }
+
+    @Test
+    void drownedMobTakesDamageWithoutPanicKnockback() {
+        Mob pig = new Mob(Mob.Type.PIG, 0f, 0f, 0f);
+        float x = pig.position.x;
+        pig.drown(3f);
+        assertEquals(pig.getMaxHealth() - 3f, pig.getHealth(), 0.001f);
+        // No knockback from drowning - the mob doesn't jump away.
+        assertEquals(x, pig.position.x, 0.001f);
     }
 }

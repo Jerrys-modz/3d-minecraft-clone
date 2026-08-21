@@ -61,7 +61,11 @@ public class ItemRenderer {
             int[] c = {0};
             addBillboard(v, i, c, e, new float[]{0f, 0f, 1f, 1f});
             itemMesh.upload(v.toArray(), i.toArray());
-            itemTextures.bind(e.type);
+            if (e.tinkersItem != null) {
+                itemTextures.bindTinkersItem(e.tinkersItem);
+            } else {
+                itemTextures.bind(e.type);
+            }
             itemMesh.render();
         }
 

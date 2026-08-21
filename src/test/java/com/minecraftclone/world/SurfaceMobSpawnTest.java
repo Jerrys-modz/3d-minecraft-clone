@@ -1,6 +1,7 @@
 package com.minecraftclone.world;
 
 import com.minecraftclone.world.gen.TerrainGenerator.Biome;
+import com.minecraftclone.Difficulty;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -61,5 +62,20 @@ class SurfaceMobSpawnTest {
     void predatorsDropTheirPelts() {
         assertEquals(BlockType.WOLF_PELT, new Mob(Mob.Type.WOLF, 0, 1, 0).dropType());
         assertEquals(BlockType.BEAR_HIDE, new Mob(Mob.Type.POLAR_BEAR, 0, 1, 0).dropType());
+    }
+
+    @Test
+    void peacefulSurfaceSpawnsAreOnlyPassives() {
+        Set<Mob.Type> types = new HashSet<>();
+        for (int i = 0; i < 400; i++) {
+            long seed = (long) i * 0x9E3779B97F4A7C15L;
+            types.add(World.pickSurfaceMobType(new Random(seed), Biome.FOREST, Difficulty.PEACEFUL));
+            types.add(World.pickSurfaceMobType(new Random(seed), Biome.TUNDRA, Difficulty.PEACEFUL));
+            types.add(World.pickSurfaceMobType(new Random(seed), Biome.PLAINS, Difficulty.PEACEFUL));
+        }
+        for (Mob.Type type : types) {
+            assertTrue(!type.hostile, "Peaceful must not pick hostiles: " + type);
+        }
+        assertTrue(types.contains(Mob.Type.PIG) || types.contains(Mob.Type.COW) || types.contains(Mob.Type.SHEEP));
     }
 }

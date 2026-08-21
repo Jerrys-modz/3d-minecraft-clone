@@ -1,5 +1,6 @@
 package com.minecraftclone;
 
+import com.minecraftclone.engine.GamepadBindings;
 import com.minecraftclone.engine.KeyBindings;
 import com.minecraftclone.world.gen.WorldGenSettings;
 
@@ -18,6 +19,9 @@ import java.util.List;
  * <p>
  * Settings are persisted to a small {@code key=value} text file via
  * {@link #save(Path)} / {@link #load(Path)} and restored on the next launch.
+ * Game mode is not stored here — it lives on each world's {@code world.txt}
+ * and is only shown on the in-game pause menu (and Create New World).
+ * Difficulty is the same: per-world, in-game Options and Create New World only.
  */
 public class Settings {
 
@@ -31,54 +35,96 @@ public class Settings {
     public static final int CLOUD_SPEED = 6;        // 0-2: slow/normal/fast (Graphics)
     public static final int STARS = 7;              // toggle (Graphics)
     public static final int DARK_GUI = 8;           // toggle (Graphics)
-    public static final int GAME_MODE = 9;          // Gameplay
-    public static final int SENSITIVITY = 10;       // Gameplay
-    public static final int INVERT_MOUSE_Y = 11;    // toggle (Gameplay)
-    public static final int VIEW_BOBBING = 12;      // toggle (Gameplay)
-    public static final int SOUND_VOLUME = 13;      // Audio - master, multiplies every category below
-    public static final int MUSIC_VOLUME = 14;      // Audio
-    public static final int AMBIENT_VOLUME = 15;    // Audio
-    public static final int MOBS_VOLUME = 16;       // Audio
-    public static final int MACHINES_VOLUME = 17;   // Audio - blocks, doors, tools, crafting
-    public static final int PLAYER_VOLUME = 18;     // Audio - footsteps, jump/land, eat, hurt, ...
-    public static final int UI_VOLUME = 19;         // Audio
-    public static final int ROW_COUNT = 20;
+    public static final int GAME_MODE = 9;          // Gameplay (in-world only; stored on the world)
+    public static final int DIFFICULTY = 10;        // Gameplay (in-world only; stored on the world)
+    public static final int SENSITIVITY = 11;       // Gameplay
+    public static final int INVERT_MOUSE_Y = 12;    // toggle (Gameplay)
+    public static final int VIEW_BOBBING = 13;      // toggle (Gameplay)
+    public static final int SOUND_VOLUME = 14;      // Audio - master, multiplies every category below
+    public static final int MUSIC_VOLUME = 15;      // Audio
+    public static final int AMBIENT_VOLUME = 16;    // Audio
+    public static final int MOBS_VOLUME = 17;       // Audio
+    public static final int MACHINES_VOLUME = 18;   // Audio - blocks, doors, tools, crafting
+    public static final int PLAYER_VOLUME = 19;     // Audio - footsteps, jump/land, eat, hurt, ...
+    public static final int UI_VOLUME = 20;         // Audio
+    public static final int ROW_COUNT = 21;
 
     // Settings tabs: each owns a contiguous slice of the rows above. The
-    // Controls tab has no Settings rows - it shows the keybind list instead.
+    // Controls and Controller tabs have no Settings rows - they show the
+    // keybind/gamepad-binding lists instead.
     public static final int TAB_GRAPHICS = 0;
     public static final int TAB_GAMEPLAY = 1;
     public static final int TAB_AUDIO = 2;
     public static final int TAB_CONTROLS = 3;
-    public static final int TAB_COUNT = 4;
-    private static final int[] TAB_ROW_START = {LEAVES_TRANSPARENT, GAME_MODE, SOUND_VOLUME, ROW_COUNT};
-    private static final int[] TAB_ROW_END = {GAME_MODE, SOUND_VOLUME, ROW_COUNT, ROW_COUNT};
+    public static final int TAB_CONTROLLER = 4;
+    public static final int TAB_COUNT = 5;
+    private static final int[] TAB_ROW_START = {LEAVES_TRANSPARENT, GAME_MODE, SOUND_VOLUME, ROW_COUNT, ROW_COUNT};
+    private static final int[] TAB_ROW_END = {GAME_MODE, SOUND_VOLUME, ROW_COUNT, ROW_COUNT, ROW_COUNT};
 
     /** Display name of a settings tab, for the tab bar. */
     public static String tabLabel(int tab) {
         return switch (tab) {
-            case TAB_GRAPHICS -> "Graphics";
+            case TAB_GRAPHICS -> "Video";
             case TAB_GAMEPLAY -> "Gameplay";
-            case TAB_AUDIO -> "Audio";
+            case TAB_AUDIO -> "Sound";
             case TAB_CONTROLS -> "Controls";
+            case TAB_CONTROLLER -> "Controller";
             default -> "?";
         };
     }
 
     /** Number of setting rows on {@code tab} (0 for the keybinds-only Controls tab). */
     public static int tabRowCount(int tab) {
-        return TAB_ROW_END[tab] - TAB_ROW_START[tab];
+        return tabRowCount(tab, true);
+    }
+
+    /**
+     * Number of setting rows on {@code tab}. Game mode and difficulty live on the
+     * world, so the title-screen Options page ({@code inWorld == false}) hides
+     * those Gameplay rows; the in-game pause Options still shows them so you can
+     * change the current world's mode and difficulty.
+     */
+    public static int tabRowCount(int tab, boolean inWorld) {
+        return TAB_ROW_END[tab] - tabRowStart(tab, inWorld);
     }
 
     /** The Settings row index shown as local row {@code local} on tab {@code tab}. */
     public static int rowInTab(int tab, int local) {
-        return TAB_ROW_START[tab] + local;
+        return rowInTab(tab, local, true);
+    }
+
+    /** The Settings row index shown as local row {@code local} on tab {@code tab}. */
+    public static int rowInTab(int tab, int local, boolean inWorld) {
+        return tabRowStart(tab, inWorld) + local;
+    }
+
+    /**
+     * First Settings row of {@code tab}. Title-screen Options skip {@link #GAME_MODE}
+     * and {@link #DIFFICULTY} so they aren't treated as global options.
+     */
+    public static int tabRowStart(int tab, boolean inWorld) {
+        int start = TAB_ROW_START[tab];
+        if (!inWorld && tab == TAB_GAMEPLAY) {
+            return SENSITIVITY;
+        }
+        return start;
+    }
+
+    /** True for rows that belong to a loaded world rather than global {@code settings.txt}. */
+    public static boolean isWorldSetting(int row) {
+        return row == GAME_MODE || row == DIFFICULTY;
     }
 
     private final boolean[] toggles = new boolean[ROW_COUNT];
     private final float[] ranges = new float[ROW_COUNT];
     private final KeyBindings keyBinds = new KeyBindings();
+    private final GamepadBindings gamepadBinds = new GamepadBindings();
     private final WorldGenSettings worldGen = new WorldGenSettings();
+
+    /** Mini-map height in logical-Y units. NaN NDC coords mean "default top-right". */
+    private float miniMapSizeY = 0.48f;
+    private float miniMapNdcX = Float.NaN;
+    private float miniMapNdcY = Float.NaN;
 
     public Settings() {
         toggles[VSYNC] = true; // matches the window's default state
@@ -86,6 +132,7 @@ public class Settings {
         ranges[FOV] = 75f;
         ranges[BRIGHTNESS] = 1f;
         ranges[SENSITIVITY] = 0.12f;
+        ranges[DIFFICULTY] = Difficulty.NORMAL.ordinal();
         ranges[CLOUDS] = 2f;     // normal
         ranges[CLOUD_SPEED] = 1f; // normal
         toggles[STARS] = true;
@@ -106,6 +153,14 @@ public class Settings {
                 || row == INVERT_MOUSE_Y || row == VIEW_BOBBING;
     }
 
+    /**
+     * True for discrete options that cycle on click (game mode, difficulty) rather
+     * than sliding — Minecraft Options buttons, not sliders.
+     */
+    public static boolean isCycle(int row) {
+        return row == GAME_MODE || row == DIFFICULTY;
+    }
+
     /** True for every Audio-tab volume slider (master + each category) - they all share the same 0-100% shape. */
     private static boolean isVolumeRow(int row) {
         return row == SOUND_VOLUME || row == MUSIC_VOLUME || row == AMBIENT_VOLUME
@@ -121,6 +176,7 @@ public class Settings {
             case BRIGHTNESS -> "Brightness";
             case SENSITIVITY -> "Mouse sensitivity";
             case GAME_MODE -> "Game mode";
+            case DIFFICULTY -> "Difficulty";
             case CLOUDS -> "Clouds";
             case CLOUD_SPEED -> "Cloud speed";
             case STARS -> "Stars";
@@ -147,6 +203,7 @@ public class Settings {
             case BRIGHTNESS -> 0.05f;
             case SENSITIVITY -> 0.01f;
             case GAME_MODE -> 1f;
+            case DIFFICULTY -> 1f;
             case CLOUDS -> 1f;
             case CLOUD_SPEED -> 1f;
             default -> 0f;
@@ -161,6 +218,7 @@ public class Settings {
             case BRIGHTNESS -> 0.5f;
             case SENSITIVITY -> 0.03f;
             case GAME_MODE -> 0f;
+            case DIFFICULTY -> 0f;
             case CLOUDS -> 0f;
             case CLOUD_SPEED -> 0f;
             default -> 0f;
@@ -175,6 +233,7 @@ public class Settings {
             case BRIGHTNESS -> 1.5f;
             case SENSITIVITY -> 0.4f;
             case GAME_MODE -> GameMode.values().length - 1f;
+            case DIFFICULTY -> Difficulty.values().length - 1f;
             case CLOUDS -> 3f;
             case CLOUD_SPEED -> 2f;
             default -> 0f;
@@ -194,6 +253,9 @@ public class Settings {
         }
         if (row == GAME_MODE) {
             return getGameMode().toString();
+        }
+        if (row == DIFFICULTY) {
+            return getDifficulty().toString();
         }
         if (row == CLOUDS) {
             return switch (getCloudAmount()) {
@@ -223,6 +285,12 @@ public class Settings {
             toggles[row] = !toggles[row];
             return;
         }
+        if (isCycle(row)) {
+            int n = Math.round(maxValue(row) - minValue(row)) + 1;
+            int idx = Math.round(ranges[row]);
+            ranges[row] = Math.floorMod(idx + Integer.signum(direction), n);
+            return;
+        }
         float next = ranges[row] + step(row) * Math.signum(direction);
         ranges[row] = Math.max(minValue(row), Math.min(maxValue(row), next));
     }
@@ -239,7 +307,7 @@ public class Settings {
         if (isToggle(row)) return;
         float f = Math.max(0f, Math.min(1f, fraction));
         float v = minValue(row) + (maxValue(row) - minValue(row)) * f;
-        if (row == GAME_MODE) v = Math.round(v);
+        if (isCycle(row)) v = Math.round(v);
         ranges[row] = clamp(row, v);
     }
 
@@ -260,7 +328,6 @@ public class Settings {
         lines.add("fov=" + Math.round(ranges[FOV]));
         lines.add("brightness=" + ranges[BRIGHTNESS]);
         lines.add("mouse_sensitivity=" + ranges[SENSITIVITY]);
-        lines.add("game_mode=" + getGameMode().ordinal());
         lines.add("clouds=" + getCloudAmount());
         lines.add("cloud_speed=" + getCloudSpeed());
         lines.add("stars=" + (toggles[STARS] ? 1 : 0));
@@ -274,8 +341,15 @@ public class Settings {
         lines.add("machines_volume=" + ranges[MACHINES_VOLUME]);
         lines.add("player_volume=" + ranges[PLAYER_VOLUME]);
         lines.add("ui_volume=" + ranges[UI_VOLUME]);
+        lines.add("mini_map_size=" + miniMapSizeY);
+        if (Float.isFinite(miniMapNdcX) && Float.isFinite(miniMapNdcY)) {
+            lines.add("mini_map_x=" + miniMapNdcX);
+            lines.add("mini_map_y=" + miniMapNdcY);
+        }
         keyBinds.saveLines(lines);
-        worldGen.saveLines(lines);
+        gamepadBinds.saveLines(lines);
+        // World-generation choices (seed, game mode, …) live in each world's
+        // world.txt — they are not global settings, so they are not written here.
         try {
             if (file.getParent() != null) {
                 Files.createDirectories(file.getParent());
@@ -308,7 +382,8 @@ public class Settings {
                         case "fov" -> s.ranges[FOV] = clamp(FOV, Float.parseFloat(value));
                         case "brightness" -> s.ranges[BRIGHTNESS] = clamp(BRIGHTNESS, Float.parseFloat(value));
                         case "mouse_sensitivity" -> s.ranges[SENSITIVITY] = clamp(SENSITIVITY, Float.parseFloat(value));
-                        case "game_mode" -> s.ranges[GAME_MODE] = clamp(GAME_MODE, Float.parseFloat(value));
+                        case "game_mode" -> { /* per-world; ignored in global settings.txt */ }
+                        case "difficulty" -> { /* per-world; ignored in global settings.txt */ }
                         case "clouds" -> s.ranges[CLOUDS] = clamp(CLOUDS, Float.parseFloat(value));
                         case "cloud_speed" -> s.ranges[CLOUD_SPEED] = clamp(CLOUD_SPEED, Float.parseFloat(value));
                         case "stars" -> s.toggles[STARS] = parseBool(value);
@@ -322,8 +397,21 @@ public class Settings {
                         case "machines_volume" -> loadFiniteRange(s, MACHINES_VOLUME, value);
                         case "player_volume" -> loadFiniteRange(s, PLAYER_VOLUME, value);
                         case "ui_volume" -> loadFiniteRange(s, UI_VOLUME, value);
+                        case "mini_map_size" -> {
+                            float v = Float.parseFloat(value);
+                            if (Float.isFinite(v)) s.miniMapSizeY = v;
+                        }
+                        case "mini_map_x" -> {
+                            float v = Float.parseFloat(value);
+                            if (Float.isFinite(v)) s.miniMapNdcX = v;
+                        }
+                        case "mini_map_y" -> {
+                            float v = Float.parseFloat(value);
+                            if (Float.isFinite(v)) s.miniMapNdcY = v;
+                        }
                         default -> {
                             s.keyBinds.loadEntry(key, value);
+                            s.gamepadBinds.loadEntry(key, value);
                             s.worldGen.loadEntry(key, value);
                         }
                     }
@@ -378,6 +466,22 @@ public class Settings {
         int idx = Math.round(ranges[GAME_MODE]);
         GameMode[] modes = GameMode.values();
         return modes[Math.max(0, Math.min(modes.length - 1, idx))];
+    }
+
+    /** Sets the in-memory game mode (persisted on the loaded world's {@code world.txt}, not here). */
+    public void setGameMode(GameMode mode) {
+        ranges[GAME_MODE] = mode == null ? 0 : mode.ordinal();
+    }
+
+    public Difficulty getDifficulty() {
+        int idx = Math.round(ranges[DIFFICULTY]);
+        Difficulty[] values = Difficulty.values();
+        return values[Math.max(0, Math.min(values.length - 1, idx))];
+    }
+
+    /** Sets the in-memory difficulty (persisted on the loaded world's {@code world.txt}, not here). */
+    public void setDifficulty(Difficulty difficulty) {
+        ranges[DIFFICULTY] = difficulty == null ? Difficulty.NORMAL.ordinal() : difficulty.ordinal();
     }
 
     /** 0 = off, 1 = light, 2 = normal, 3 = heavy. */
@@ -447,6 +551,30 @@ public class Settings {
         return ranges[UI_VOLUME];
     }
 
+    public float getMiniMapSizeY() {
+        return miniMapSizeY;
+    }
+
+    public float getMiniMapNdcX() {
+        return miniMapNdcX;
+    }
+
+    public float getMiniMapNdcY() {
+        return miniMapNdcY;
+    }
+
+    public void setMiniMapLayout(float sizeY, float ndcX, float ndcY) {
+        this.miniMapSizeY = sizeY;
+        this.miniMapNdcX = ndcX;
+        this.miniMapNdcY = ndcY;
+    }
+
+    public void resetMiniMapLayout() {
+        this.miniMapSizeY = 0.48f;
+        this.miniMapNdcX = Float.NaN;
+        this.miniMapNdcY = Float.NaN;
+    }
+
     /** World-generation settings for new worlds (see {@link WorldGenSettings}). */
     public WorldGenSettings getWorldGen() {
         return worldGen;
@@ -455,5 +583,10 @@ public class Settings {
     /** Remappable gameplay key bindings (see {@link KeyBindings}). */
     public KeyBindings getKeyBinds() {
         return keyBinds;
+    }
+
+    /** Remappable gamepad button bindings (see {@link GamepadBindings}). */
+    public GamepadBindings getGamepadBinds() {
+        return gamepadBinds;
     }
 }

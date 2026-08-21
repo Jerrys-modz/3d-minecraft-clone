@@ -17,8 +17,8 @@ public class NetherGenerator implements WorldGenerator {
 
     private static final int GROUND_LEVEL = 42;         // baseline surface height
     private static final int LAVA_LEVEL = 34;           // terrain at/below this is flooded with lava
-    private static final int CEILING_START = 110;       // netherrack filler above this
-    private static final int BEDROCK_TOP = 125;         // bedrock sealing the top
+    private static final int CEILING_START = 220;       // netherrack filler above this
+    private static final int BEDROCK_TOP = 250;         // bedrock sealing the top
 
     private final Noise groundNoise;
     private final Noise caveNoise;
@@ -34,6 +34,11 @@ public class NetherGenerator implements WorldGenerator {
 
     @Override
     public int seaLevel() {
+        return LAVA_LEVEL;
+    }
+
+    @Override
+    public int terrainHeight(int wx, int wz) {
         return LAVA_LEVEL;
     }
 

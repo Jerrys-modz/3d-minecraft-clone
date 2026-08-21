@@ -16,6 +16,7 @@ public final class Sounds {
     private final Map<SoundMaterial, short[]> breakSounds = new EnumMap<>(SoundMaterial.class);
     private final Map<SoundMaterial, short[]> placeSounds = new EnumMap<>(SoundMaterial.class);
     private final Map<SoundMaterial, short[]> stepSounds = new EnumMap<>(SoundMaterial.class);
+    private final Map<SoundMaterial, short[]> hitSounds = new EnumMap<>(SoundMaterial.class);
 
     public Sounds() {
         buildFixedSounds();
@@ -23,6 +24,7 @@ public final class Sounds {
             breakSounds.put(m, blockSound(m, BlockAction.BREAK));
             placeSounds.put(m, blockSound(m, BlockAction.PLACE));
             stepSounds.put(m, blockSound(m, BlockAction.STEP));
+            hitSounds.put(m, blockSound(m, BlockAction.HIT));
         }
     }
 
@@ -35,6 +37,7 @@ public final class Sounds {
             case BREAK -> breakSounds.get(material);
             case PLACE -> placeSounds.get(material);
             case STEP -> stepSounds.get(material);
+            case HIT -> hitSounds.get(material);
         };
     }
 
@@ -51,9 +54,22 @@ public final class Sounds {
                 SoundSynth.noise(102, 0.14f, 0.6f, 0f, 0.18f),
                 SoundSynth.tone(130, 80, 0.12f, 0.35f, 0f)));
 
+        // Layered to give a splash its own signature that no other sound in
+        // the game shares: a short, brighter slap where the surface actually
+        // breaks, then a much longer, duller wash/foam tail (long enough
+        // alone that it can't be mistaken for a ~0.065s footstep tap - an
+        // earlier version was too close to one and got reported as "sounds
+        // like walking on sand"), a quick downward "plop" pitch sweep, and -
+        // the piece that was still missing after that fix - a handful of
+        // SoundSynth.bubbles() chirps scattered across the tail. Noise and a
+        // tone sweep alone read as "impact", not specifically "liquid"; the
+        // gurgling bubble cluster is what actually makes something sound wet
+        // rather than just percussive.
         fixed.put(SoundEvent.SPLASH, SoundSynth.mix(
-                SoundSynth.noise(103, 0.28f, 0.55f, 0f, 0.5f),
-                SoundSynth.noise(104, 0.1f, 0.35f, 0f, 0.85f)));
+                SoundSynth.noise(103, 0.09f, 0.6f, 0f, 0.5f),
+                SoundSynth.noise(104, 0.4f, 0.35f, 0f, 0.14f),
+                SoundSynth.tone(650, 140, 0.16f, 0.3f, 0f),
+                SoundSynth.bubbles(105, 0.4f, 7, 0.4f)));
 
         fixed.put(SoundEvent.EAT, SoundSynth.concat(
                 SoundSynth.noise(105, 0.06f, 0.5f, 0f, 0.3f), SoundSynth.silence(0.03f),
@@ -85,6 +101,19 @@ public final class Sounds {
         fixed.put(SoundEvent.DOOR, SoundSynth.mix(
                 SoundSynth.noise(113, 0.18f, 0.5f, 0f, 0.25f),
                 SoundSynth.tone(150, 120, 0.18f, 0.3f, 0f)));
+
+        // A wooden lid: scrape + descending creak, latch click at the start.
+        // Longer and lower than UI_OPEN so opening a chest doesn't read as a menu beep.
+        fixed.put(SoundEvent.CHEST_OPEN, SoundSynth.mix(
+                SoundSynth.noise(114, 0.38f, 0.42f, 0.06f, 0.26f),
+                SoundSynth.tone(260, 130, 0.36f, 0.40f, 0.04f),
+                SoundSynth.concat(SoundSynth.tone(980, 620, 0.05f, 0.38f, 0f), SoundSynth.silence(0.33f))));
+
+        // Lid dropping shut: a shorter, heavier thud with the latch catching.
+        fixed.put(SoundEvent.CHEST_CLOSE, SoundSynth.mix(
+                SoundSynth.noise(115, 0.24f, 0.55f, 0.04f, 0.20f),
+                SoundSynth.tone(170, 80, 0.22f, 0.45f, 0f),
+                SoundSynth.concat(SoundSynth.silence(0.07f), SoundSynth.tone(720, 380, 0.05f, 0.32f, 0f))));
 
         // A simple ascending major arpeggio (C5-E5-G5) - a pleasant "ding" for
         // taking a crafting/smelting result, distinct from the generic UI click.
@@ -142,11 +171,13 @@ public final class Sounds {
         float duration = switch (action) {
             case BREAK -> 0.22f;
             case PLACE -> 0.12f;
+            case HIT -> 0.10f;
             case STEP -> 0.065f;
         };
         float amp = switch (action) {
             case BREAK -> 0.85f;
             case PLACE -> 0.55f;
+            case HIT -> 0.48f;
             case STEP -> 0.3f;
         };
 

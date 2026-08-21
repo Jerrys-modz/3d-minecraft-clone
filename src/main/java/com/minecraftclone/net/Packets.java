@@ -107,7 +107,7 @@ public final class Packets {
     public record Move(float x, float y, float z, float yaw, float pitch, boolean onGround, boolean flying, boolean sprinting) {
     }
 
-    public record PlaceBlock(byte dimension, int x, int y, int z, byte blockId, byte orientation, boolean overlay) {
+    public record PlaceBlock(byte dimension, int x, int y, int z, short blockId, byte orientation, boolean overlay) {
     }
 
     public record BreakBlock(byte dimension, int x, int y, int z, boolean overlay) {
@@ -134,7 +134,7 @@ public final class Packets {
     public record PlayerDamage(float amount) {
     }
 
-    public record PortalUse(byte dimension, byte blockId) {
+    public record PortalUse(byte dimension, short blockId) {
     }
 
     public record Respawn() {
@@ -155,10 +155,10 @@ public final class Packets {
                               boolean onGround, boolean flying, boolean sprinting) {
     }
 
-    public record BlockChange(byte dimension, int x, int y, int z, byte blockId, byte orientation, boolean overlay) {
+    public record BlockChange(byte dimension, int x, int y, int z, short blockId, byte orientation, boolean overlay) {
     }
 
-    public record ChunkData(byte dimension, int cx, int cz, byte[] blocks, byte[] overlays, byte[] orientations) {
+    public record ChunkData(byte dimension, int cx, int cz, short[] blocks, short[] overlays, byte[] orientations) {
     }
 
     public record ChunkAck(byte dimension, int cx, int cz) {
@@ -213,7 +213,7 @@ public final class Packets {
         out.writeInt(place.x());
         out.writeInt(place.y());
         out.writeInt(place.z());
-        out.writeByte(place.blockId());
+        out.writeShort(place.blockId());
         out.writeByte(place.orientation());
         out.writeBoolean(place.overlay());
         out.close();
@@ -253,12 +253,12 @@ public final class Packets {
         return buf.toByteArray();
     }
 
-    public static byte[] encodePortalUse(byte dimension, byte blockId) throws IOException {
+    public static byte[] encodePortalUse(byte dimension, short blockId) throws IOException {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_PORTAL_USE);
         out.writeByte(dimension);
-        out.writeByte(blockId);
+        out.writeShort(blockId);
         out.close();
         return buf.toByteArray();
     }
@@ -371,7 +371,7 @@ public final class Packets {
         out.writeInt(change.x());
         out.writeInt(change.y());
         out.writeInt(change.z());
-        out.writeByte(change.blockId());
+        out.writeShort(change.blockId());
         out.writeByte(change.orientation());
         out.writeBoolean(change.overlay());
         out.close();
@@ -385,10 +385,12 @@ public final class Packets {
         out.writeByte(data.dimension());
         out.writeInt(data.cx());
         out.writeInt(data.cz());
+        // Block and overlay ids are shorts on the wire (2 bytes each, little
+        // work here - DataOutputStream is big-endian like every other field).
         out.writeInt(data.blocks().length);
-        out.write(data.blocks());
+        for (short id : data.blocks()) out.writeShort(id);
         out.writeInt(data.overlays().length);
-        out.write(data.overlays());
+        for (short id : data.overlays()) out.writeShort(id);
         out.writeInt(data.orientations().length);
         out.write(data.orientations());
         out.close();
@@ -510,12 +512,12 @@ public final class Packets {
             case OP_JOIN -> new Join(in.readUTF());
             case OP_MOVE -> new Move(in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(),
                     in.readBoolean(), in.readBoolean(), in.readBoolean());
-            case OP_PLACE_BLOCK -> new PlaceBlock(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readByte(), in.readByte(), in.readBoolean());
+            case OP_PLACE_BLOCK -> new PlaceBlock(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readShort(), in.readByte(), in.readBoolean());
             case OP_BREAK_BLOCK -> new BreakBlock(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readBoolean());
             case OP_CHAT -> new Chat(in.readUTF());
             case OP_CHUNK_REQUEST -> new ChunkRequest(in.readByte(), in.readInt(), in.readInt());
             case OP_MOB_ATTACK -> new MobAttack(in.readInt(), in.readFloat());
-            case OP_PORTAL_USE -> new PortalUse(in.readByte(), in.readByte());
+            case OP_PORTAL_USE -> new PortalUse(in.readByte(), in.readShort());
             case OP_RESPAWN -> new Respawn();
             case OP_READY -> new Ready();
             case OP_WELCOME -> new Welcome(in.readInt(), in.readLong(), in.readInt(), in.readBoolean(),
@@ -526,16 +528,16 @@ public final class Packets {
             case OP_PLAYER_LEFT -> new PlayerLeft(in.readInt());
             case OP_PLAYER_STATE -> new PlayerState(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat(),
                     in.readFloat(), in.readFloat(), in.readBoolean(), in.readBoolean(), in.readBoolean());
-            case OP_BLOCK_CHANGE -> new BlockChange(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readByte(), in.readByte(), in.readBoolean());
+            case OP_BLOCK_CHANGE -> new BlockChange(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readShort(), in.readByte(), in.readBoolean());
             case OP_CHUNK_DATA -> {
                 byte dim = in.readByte();
                 int cx = in.readInt(), cz = in.readInt();
                 int blockLen = in.readInt();
-                byte[] blocks = new byte[blockLen];
-                in.readFully(blocks);
+                short[] blocks = new short[blockLen];
+                for (int i = 0; i < blockLen; i++) blocks[i] = in.readShort();
                 int overlayLen = in.readInt();
-                byte[] overlays = new byte[overlayLen];
-                in.readFully(overlays);
+                short[] overlays = new short[overlayLen];
+                for (int i = 0; i < overlayLen; i++) overlays[i] = in.readShort();
                 int orientLen = in.readInt();
                 byte[] orientations = new byte[orientLen];
                 in.readFully(orientations);

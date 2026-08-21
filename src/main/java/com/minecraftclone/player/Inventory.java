@@ -2,6 +2,7 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Mining;
+import java.util.Arrays;
 
 /**
  * The player's carried items, Minecraft-style: a fixed grid of {@link #SIZE}
@@ -32,8 +33,7 @@ public class Inventory implements StorageContainer {
     /** Default stack limit: 64, like Minecraft. */
     public static final int STACK_MAX = 64;
 
-    private final BlockType[] types = new BlockType[SIZE];
-    private final int[] counts = new int[SIZE];
+    private final ItemStack[] slots = new ItemStack[SIZE];
     /** Equipped armor, one piece per {@code ARMOR_SLOT_*} slot (never stacked). */
     private final BlockType[] armor = new BlockType[ARMOR_SLOT_COUNT];
 
@@ -80,68 +80,114 @@ public class Inventory implements StorageContainer {
         return SIZE;
     }
 
+    /**
+     * Returns the full {@link ItemStack} in {@code slot}, or {@link ItemStack#EMPTY}
+     * if the slot is unoccupied.  Prefer this over {@link #typeOf} when you need to
+     * distinguish Tinkers items from vanilla ones.
+     */
+    public ItemStack stackOf(int slot) {
+        ItemStack s = slots[slot];
+        return s != null ? s : ItemStack.EMPTY;
+    }
+
+    /** Sets {@code slot} to {@code stack}; pass {@link ItemStack#EMPTY} or {@code null} to clear. */
+    public void setStack(int slot, ItemStack stack) {
+        slots[slot] = (stack == null || stack.isEmpty()) ? null : stack;
+    }
+
     @Override
     public BlockType typeOf(int slot) {
-        return types[slot];
+        ItemStack s = slots[slot];
+        return s != null ? s.type() : null;
     }
 
     @Override
     public int countOf(int slot) {
-        return counts[slot];
+        ItemStack s = slots[slot];
+        return s != null ? s.count() : 0;
     }
 
     @Override
     public boolean isEmpty(int slot) {
-        return types[slot] == null;
+        ItemStack s = slots[slot];
+        return s == null || s.isEmpty();
     }
 
     /** True if there are no items at all (used to seed the creative inventory once). */
     public boolean isEmpty() {
         for (int i = 0; i < SIZE; i++) {
-            if (types[i] != null) return false;
+            if (slots[i] != null && !slots[i].isEmpty()) return false;
         }
         return true;
     }
 
-    /** Maximum items a single stack of {@code type} can hold (1 for tools/armor, else {@link #STACK_MAX}). */
+    /**
+     * Maximum items a single stack of {@code type} can hold.
+     * Tools, armor, and Tinkers items (parts and assembled tools) all have a
+     * max stack of 1 because each is a unique item.  Everything else is 64.
+     */
     public static int maxStack(BlockType type) {
+        if (type == null) return 1;
+        if (type.isTinkersToolPart() || type.isTinkersTool()) return 1;
         return (Mining.isTool(type) || Armor.isArmor(type)) ? 1 : STACK_MAX;
     }
 
     @Override
     public void setSlot(int slot, BlockType type, int count) {
-        if (type == null || count <= 0) {
-            types[slot] = null;
-            counts[slot] = 0;
-        } else {
-            types[slot] = type;
-            counts[slot] = count;
-        }
+        slots[slot] = (type == null || count <= 0) ? null : ItemStack.of(type, count);
     }
 
     public void clearSlot(int slot) {
-        types[slot] = null;
-        counts[slot] = 0;
+        slots[slot] = null;
+    }
+
+    /**
+     * Adds a full {@link ItemStack} (including any {@link com.minecraftclone.world.tinkers.TinkersItem}
+     * payload) to the first available inventory slot.  Unlike {@link #add(BlockType, int)}, this
+     * method preserves the Tinkers payload and never merges with an existing stack (Tinkers items
+     * are always count=1 and unique).  Returns the stack unchanged if no space is available.
+     *
+     * @param stack the stack to place (must not be empty)
+     * @return {@link ItemStack#EMPTY} on success, {@code stack} if the inventory is full
+     */
+    public ItemStack addStack(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return ItemStack.EMPTY;
+        // Vanilla items: delegate to the existing merge+fill logic.
+        if (!stack.isTinkers()) {
+            int leftover = add(stack.type(), stack.count());
+            return leftover <= 0 ? ItemStack.EMPTY : stack.withCount(leftover);
+        }
+        // Tinkers items: find the first empty slot (they never merge with other stacks).
+        for (int i = 0; i < SIZE; i++) {
+            if (slots[i] == null) {
+                slots[i] = stack;
+                return ItemStack.EMPTY;
+            }
+        }
+        return stack; // inventory full
     }
 
     @Override
     public int add(BlockType type, int amount) {
         if (type == null || amount <= 0) return amount;
+        if (type.isTinkersToolPart() || type.isTinkersTool()) return amount;
         int max = maxStack(type);
         int remaining = amount;
+        // Top up existing stacks of the same type.
         for (int i = 0; i < SIZE && remaining > 0; i++) {
-            if (types[i] == type && counts[i] < max) {
-                int space = max - counts[i];
+            ItemStack s = slots[i];
+            if (s != null && s.type() == type && s.count() < max) {
+                int space = max - s.count();
                 int take = Math.min(space, remaining);
-                counts[i] += take;
+                slots[i] = s.withCount(s.count() + take);
                 remaining -= take;
             }
         }
+        // Open new slots for what didn't fit.
         for (int i = 0; i < SIZE && remaining > 0; i++) {
-            if (types[i] == null) {
+            if (slots[i] == null) {
                 int take = Math.min(max, remaining);
-                types[i] = type;
-                counts[i] = take;
+                slots[i] = ItemStack.of(type, take);
                 remaining -= take;
             }
         }
@@ -153,7 +199,8 @@ public class Inventory implements StorageContainer {
         if (type == null) return 0;
         int total = 0;
         for (int i = 0; i < SIZE; i++) {
-            if (types[i] == type) total += counts[i];
+            ItemStack s = slots[i];
+            if (s != null && s.type() == type) total += s.count();
         }
         return total;
     }
@@ -164,11 +211,12 @@ public class Inventory implements StorageContainer {
         if (getCount(type) < amount) return false;
         int remaining = amount;
         for (int i = 0; i < SIZE && remaining > 0; i++) {
-            if (types[i] == type) {
-                int take = Math.min(counts[i], remaining);
-                counts[i] -= take;
+            ItemStack s = slots[i];
+            if (s != null && s.type() == type) {
+                int take = Math.min(s.count(), remaining);
+                slots[i] = s.withCount(s.count() - take); // withCount returns EMPTY if 0
+                if (slots[i].isEmpty()) slots[i] = null;
                 remaining -= take;
-                if (counts[i] == 0) types[i] = null;
             }
         }
         return true;
@@ -176,16 +224,13 @@ public class Inventory implements StorageContainer {
 
     /** Empties every slot - the death penalty, applied on respawn. */
     public void clear() {
-        for (int i = 0; i < SIZE; i++) {
-            types[i] = null;
-            counts[i] = 0;
-        }
+        Arrays.fill(slots, null);
     }
 
     /** True if every slot is occupied (no room for a new stack). */
     public boolean isFull() {
         for (int i = 0; i < SIZE; i++) {
-            if (types[i] == null) return false;
+            if (slots[i] == null) return false;
         }
         return true;
     }

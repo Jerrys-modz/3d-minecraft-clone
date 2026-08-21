@@ -69,8 +69,8 @@ public enum BlockType {
     MUSHROOM_RED(55, false, true, 35),
     MUSHROOM_BROWN(56, false, true, 36),
     VINE(57, false, true, 39),
-    CHERRY_LEAVES(58, true, true, 40),
-    PACKED_ICE(59, true, false, 41),
+    CHERRY_LEAVES(58, true, true, 40, 40, 40),
+    PACKED_ICE(59, true, false, 41, 41, 41),
     BAMBOO(60, false, true, 42),
     LILY_PAD(61, false, true, 43),
     PUMPKIN(62, true, false, 44, 44, 44),
@@ -80,7 +80,8 @@ public enum BlockType {
     TRAPDOOR(71, true, false, 47, 47, 47),
     TRAPDOOR_OPEN(72, false, true, 47),
     CRAFTING_TABLE(73, true, false, 48, 48, 48), // workbench: right-click opens the 3x3 crafting GUI
-    CHEST(87, true, false, 50, 50, 50),          // storage: right-click opens a 27-slot container GUI (54 when doubled)
+    ADVANCED_CRAFTING_TABLE(137, true, false, 48, 48, 48), // advanced workbench: right-click opens the 5x5 crafting GUI
+    CHEST(87, true, false, TextureAtlas.CHEST_TOP_TILE, TextureAtlas.CHEST_SIDE_TILE, TextureAtlas.CHEST_BOTTOM_TILE, TextureAtlas.CHEST_TILE, 0, 0), // oak chest: lock faces the player, 27 slots (54 when doubled)
     BARREL(88, true, false, 51, 51, 51),         // storage: cheaper single 27-slot container, never doubles
 
     // Dimension blocks: Nether terrain, End terrain, and the portal blocks that
@@ -141,8 +142,8 @@ public enum BlockType {
     ROTTEN_FLESH(68, 4),
     BONES(69, 0),
     // Wool - sheared from sheep (see World.damageMob). The material fur armor is
-    // made from, and a warm clothing resource in its own right.
-    WOOL(115, 0),
+    // made from, and a warm clothing resource in its own right. Placeable as a block.
+    WOOL(115, true, false, 59, 59, 59),
     // Snow-capped slabs: a bottom-half slab that's been covered by accumulating
     // snow (see World.tryAddSnow). Full-height solid blocks that MESH as a slab
     // under a snow cap, so the snow sits flush rather than floating above the
@@ -205,9 +206,553 @@ public enum BlockType {
     // and solid blocks. One tile (planks) for the whole mesh. Collision is a
     // 1.5-block-tall box (the post is taller than a block), so neither the
     // player nor mobs can jump over a fence (jump height is ~1.4 blocks).
-    WOODEN_FENCE(132, 11, false, true, 1.5f);
+    WOODEN_FENCE(132, 11, false, true, 1.5f),
 
-    public final byte id;
+    // Beds: a 1x2 sleeping surface (like Minecraft). BED is the foot end, BED_HEAD
+    // is the pillow/head end. Both halves are solid, directional, and half-height.
+    // Beds cannot be placed in the Nether or End (they explode in nether like vanilla).
+    BED(133, 60, 61, 60, 62, 62, 0.5f),
+    BED_HEAD(134, 63, 63, 63, 63, 63, 0.5f),
+    BED_OCCUPIED(135, 60, 61, 60, 62, 62, 0.5f),
+    BED_HEAD_OCCUPIED(136, 63, 63, 63, 63, 63, 0.5f),
+
+    // --- GTNH Ores: 20 ore types × 4 stages (ore, crushed, dust, ingot) ---
+    // Early game ores (stone tier) - tiles 80-85
+    COPPER_ORE(138, true, false, 80, 80, 80),
+    CRUSHED_COPPER(139, 0),
+    COPPER_DUST(140, 0),
+    COPPER_INGOT(141, 0),
+
+    TIN_ORE(142, true, false, 81, 81, 81),
+    CRUSHED_TIN(143, 0),
+    TIN_DUST(144, 0),
+    TIN_INGOT(145, 0),
+
+    BAUXITE_ORE(146, true, false, 82, 82, 82),
+    CRUSHED_BAUXITE(147, 0),
+    BAUXITE_DUST(148, 0),
+    ALUMINUM_INGOT(149, 0),
+
+    ZINC_ORE(150, true, false, 83, 83, 83),
+    CRUSHED_ZINC(151, 0),
+    ZINC_DUST(152, 0),
+    ZINC_INGOT(153, 0),
+
+    LEAD_ORE(154, true, false, 84, 84, 84),
+    CRUSHED_LEAD(155, 0),
+    LEAD_DUST(156, 0),
+    LEAD_INGOT(157, 0),
+
+    SILVER_ORE(158, true, false, 85, 85, 85),
+    CRUSHED_SILVER(159, 0),
+    SILVER_DUST(160, 0),
+    SILVER_INGOT(161, 0),
+
+    // Mid-game ores (iron tier) - tiles 86-90
+    NICKEL_ORE(162, true, false, 86, 86, 86),
+    CRUSHED_NICKEL(163, 0),
+    NICKEL_DUST(164, 0),
+    NICKEL_INGOT(165, 0),
+
+    COBALT_ORE(166, true, false, 87, 87, 87),
+    CRUSHED_COBALT(167, 0),
+    COBALT_DUST(168, 0),
+    COBALT_INGOT(169, 0),
+
+    TUNGSTEN_ORE(170, true, false, 88, 88, 88),
+    CRUSHED_TUNGSTEN(171, 0),
+    TUNGSTEN_DUST(172, 0),
+    TUNGSTEN_INGOT(173, 0),
+
+    MOLYBDENUM_ORE(174, true, false, 89, 89, 89),
+    CRUSHED_MOLYBDENUM(175, 0),
+    MOLYBDENUM_DUST(176, 0),
+    MOLYBDENUM_INGOT(177, 0),
+
+    PLATINUM_ORE(178, true, false, 90, 90, 90),
+    CRUSHED_PLATINUM(179, 0),
+    PLATINUM_DUST(180, 0),
+    PLATINUM_INGOT(181, 0),
+
+    // Advanced ores (diamond tier) - tiles 91-95
+    CHROMIUM_ORE(182, true, false, 91, 91, 91),
+    CRUSHED_CHROMIUM(183, 0),
+    CHROMIUM_DUST(184, 0),
+    CHROMIUM_INGOT(185, 0),
+
+    MANGANESE_ORE(186, true, false, 92, 92, 92),
+    CRUSHED_MANGANESE(187, 0),
+    MANGANESE_DUST(188, 0),
+    MANGANESE_INGOT(189, 0),
+
+    VANADIUM_ORE(190, true, false, 93, 93, 93),
+    CRUSHED_VANADIUM(191, 0),
+    VANADIUM_DUST(192, 0),
+    VANADIUM_INGOT(193, 0),
+
+    BERYLLIUM_ORE(194, true, false, 94, 94, 94),
+    CRUSHED_BERYLLIUM(195, 0),
+    BERYLLIUM_DUST(196, 0),
+    BERYLLIUM_INGOT(197, 0),
+
+    TITANIUM_ORE(198, true, false, 95, 95, 95),
+    CRUSHED_TITANIUM(199, 0),
+    TITANIUM_DUST(200, 0),
+    TITANIUM_INGOT(201, 0),
+
+    // Late-game ores (endgame tier) - tiles 96-99
+    URANIUM_ORE(202, true, false, 96, 96, 96),
+    CRUSHED_URANIUM(203, 0),
+    URANIUM_DUST(204, 0),
+    URANIUM_INGOT(205, 0),
+
+    THORIUM_ORE(206, true, false, 97, 97, 97),
+    CRUSHED_THORIUM(207, 0),
+    THORIUM_DUST(208, 0),
+    THORIUM_INGOT(209, 0),
+
+    PLUTONIUM_ORE(210, true, false, 98, 98, 98),
+    CRUSHED_PLUTONIUM(211, 0),
+    PLUTONIUM_DUST(212, 0),
+    PLUTONIUM_INGOT(213, 0),
+
+    IRIDIUM_ORE(214, true, false, 99, 99, 99),
+    CRUSHED_IRIDIUM(215, 0),
+    IRIDIUM_DUST(216, 0),
+    IRIDIUM_INGOT(217, 0),
+
+    // --- Small Ores: Indicator ores mineable at -1 tier (tiles 100-119) ---
+    // Early-game small ores (striped appearance, mineable with stone tools)
+    SMALL_COPPER_ORE(218, true, false, 100, 100, 100),
+    SMALL_TIN_ORE(219, true, false, 101, 101, 101),
+    SMALL_BAUXITE_ORE(220, true, false, 102, 102, 102),
+    SMALL_ZINC_ORE(221, true, false, 103, 103, 103),
+    SMALL_LEAD_ORE(222, true, false, 104, 104, 104),
+    SMALL_SILVER_ORE(223, true, false, 105, 105, 105),
+
+    // Mid-game small ores (mineable with iron tools)
+    SMALL_NICKEL_ORE(224, true, false, 106, 106, 106),
+    SMALL_COBALT_ORE(225, true, false, 107, 107, 107),
+    SMALL_TUNGSTEN_ORE(226, true, false, 108, 108, 108),
+    SMALL_MOLYBDENUM_ORE(227, true, false, 109, 109, 109),
+    SMALL_PLATINUM_ORE(228, true, false, 110, 110, 110),
+
+    // Advanced small ores (mineable with diamond tools)
+    SMALL_CHROMIUM_ORE(229, true, false, 111, 111, 111),
+    SMALL_MANGANESE_ORE(230, true, false, 112, 112, 112),
+    SMALL_VANADIUM_ORE(231, true, false, 113, 113, 113),
+    SMALL_BERYLLIUM_ORE(232, true, false, 114, 114, 114),
+    SMALL_TITANIUM_ORE(233, true, false, 115, 115, 115),
+
+    // Late-game small ores (mineable with diamond tools)
+    SMALL_URANIUM_ORE(234, true, false, 116, 116, 116),
+    SMALL_THORIUM_ORE(235, true, false, 117, 117, 117),
+    SMALL_PLUTONIUM_ORE(236, true, false, 118, 118, 118),
+    SMALL_IRIDIUM_ORE(237, true, false, 119, 119, 119),
+
+    // --- Impure Ore Piles: Secondary drop from small ores (partially processed) ---
+    // Note: Limited to 18 items to fit within byte ID range (238-255).
+    // Early-game impure ores (6 ores)
+    IMPURE_COPPER(238, 0),
+    IMPURE_TIN(239, 0),
+    IMPURE_BAUXITE(240, 0),
+    IMPURE_ZINC(241, 0),
+    IMPURE_LEAD(242, 0),
+    IMPURE_SILVER(243, 0),
+
+    // Mid-game impure ores (5 ores)
+    IMPURE_NICKEL(244, 0),
+    IMPURE_COBALT(245, 0),
+    IMPURE_TUNGSTEN(246, 0),
+    IMPURE_MOLYBDENUM(247, 0),
+    IMPURE_PLATINUM(248, 0),
+
+    // Advanced impure ores (4 ores - skipping VANADIUM)
+    IMPURE_CHROMIUM(249, 0),
+    IMPURE_MANGANESE(250, 0),
+    IMPURE_BERYLLIUM(251, 0),
+    IMPURE_TITANIUM(252, 0),
+
+    // Late-game impure ores (3 ores - skipping THORIUM)
+    IMPURE_URANIUM(253, 0),
+    IMPURE_PLUTONIUM(254, 0),
+    IMPURE_IRIDIUM(255, 0),
+
+    // --- New GTNH Compound Ores (Phase 2): 60 ore types ---
+    // Block IDs 256+, atlas tiles 120-179 for ore blocks, 180-219 for small ores
+    // Ores 1-22 and 24-40 have SMALL_ variants; Ferberite (#23) and Naquadah Enriched (#36) do not.
+
+    MAGNETITE_ORE(256, true, false, 120, 120, 120),
+    CRUSHED_MAGNETITE(257, 0),
+    SMALL_MAGNETITE_ORE(258, true, false, 180, 180, 180),
+
+    HEMATITE_ORE(259, true, false, 121, 121, 121),
+    CRUSHED_HEMATITE(260, 0),
+    SMALL_HEMATITE_ORE(261, true, false, 181, 181, 181),
+
+    BROWN_LIMONITE_ORE(262, true, false, 122, 122, 122),
+    CRUSHED_BROWN_LIMONITE(263, 0),
+    SMALL_BROWN_LIMONITE_ORE(264, true, false, 182, 182, 182),
+
+    YELLOW_LIMONITE_ORE(265, true, false, 123, 123, 123),
+    CRUSHED_YELLOW_LIMONITE(266, 0),
+    SMALL_YELLOW_LIMONITE_ORE(267, true, false, 183, 183, 183),
+
+    BANDED_IRON_ORE(268, true, false, 124, 124, 124),
+    CRUSHED_BANDED_IRON(269, 0),
+    SMALL_BANDED_IRON_ORE(270, true, false, 184, 184, 184),
+
+    VANADIUM_MAGNETITE_ORE(271, true, false, 125, 125, 125),
+    CRUSHED_VANADIUM_MAGNETITE(272, 0),
+    SMALL_VANADIUM_MAGNETITE_ORE(273, true, false, 185, 185, 185),
+
+    CHALCOPYRITE_ORE(274, true, false, 126, 126, 126),
+    CRUSHED_CHALCOPYRITE(275, 0),
+    SMALL_CHALCOPYRITE_ORE(276, true, false, 186, 186, 186),
+
+    TETRAHEDRITE_ORE(277, true, false, 127, 127, 127),
+    CRUSHED_TETRAHEDRITE(278, 0),
+    SMALL_TETRAHEDRITE_ORE(279, true, false, 187, 187, 187),
+
+    MALACHITE_ORE(280, true, false, 128, 128, 128),
+    CRUSHED_MALACHITE(281, 0),
+    SMALL_MALACHITE_ORE(282, true, false, 188, 188, 188),
+
+    GALENA_ORE(283, true, false, 129, 129, 129),
+    CRUSHED_GALENA(284, 0),
+    SMALL_GALENA_ORE(285, true, false, 189, 189, 189),
+
+    SPHALERITE_ORE(286, true, false, 130, 130, 130),
+    CRUSHED_SPHALERITE(287, 0),
+    SMALL_SPHALERITE_ORE(288, true, false, 190, 190, 190),
+
+    GARNIERITE_ORE(289, true, false, 131, 131, 131),
+    CRUSHED_GARNIERITE(290, 0),
+    SMALL_GARNIERITE_ORE(291, true, false, 191, 191, 191),
+
+    PENTLANDITE_ORE(292, true, false, 132, 132, 132),
+    CRUSHED_PENTLANDITE(293, 0),
+    SMALL_PENTLANDITE_ORE(294, true, false, 192, 192, 192),
+
+    COBALTITE_ORE(295, true, false, 133, 133, 133),
+    CRUSHED_COBALTITE(296, 0),
+    SMALL_COBALTITE_ORE(297, true, false, 193, 193, 193),
+
+    PYRITE_ORE(298, true, false, 134, 134, 134),
+    CRUSHED_PYRITE(299, 0),
+    SMALL_PYRITE_ORE(300, true, false, 194, 194, 194),
+
+    ARSENOPYRITE_ORE(301, true, false, 135, 135, 135),
+    CRUSHED_ARSENOPYRITE(302, 0),
+    SMALL_ARSENOPYRITE_ORE(303, true, false, 195, 195, 195),
+
+    SULFUR_ORE(304, true, false, 136, 136, 136),
+    CRUSHED_SULFUR(305, 0),
+    SMALL_SULFUR_ORE(306, true, false, 196, 196, 196),
+
+    CINNABAR_ORE(307, true, false, 137, 137, 137),
+    CRUSHED_CINNABAR(308, 0),
+    SMALL_CINNABAR_ORE(309, true, false, 197, 197, 197),
+
+    CASSITERITE_ORE(310, true, false, 138, 138, 138),
+    CRUSHED_CASSITERITE(311, 0),
+    SMALL_CASSITERITE_ORE(312, true, false, 198, 198, 198),
+
+    SCHEELITE_ORE(313, true, false, 139, 139, 139),
+    CRUSHED_SCHEELITE(314, 0),
+    SMALL_SCHEELITE_ORE(315, true, false, 199, 199, 199),
+
+    WOLFRAMITE_ORE(316, true, false, 140, 140, 140),
+    CRUSHED_WOLFRAMITE(317, 0),
+    SMALL_WOLFRAMITE_ORE(318, true, false, 200, 200, 200),
+
+    MOLYBDENITE_ORE(319, true, false, 141, 141, 141),
+    CRUSHED_MOLYBDENITE(320, 0),
+    SMALL_MOLYBDENITE_ORE(321, true, false, 201, 201, 201),
+
+    CHROMITE_ORE(322, true, false, 143, 143, 143),
+    CRUSHED_CHROMITE(323, 0),
+    SMALL_CHROMITE_ORE(324, true, false, 202, 202, 202),
+
+    ILMENITE_ORE(325, true, false, 144, 144, 144),
+    CRUSHED_ILMENITE(326, 0),
+    SMALL_ILMENITE_ORE(327, true, false, 203, 203, 203),
+
+    RUTILE_ORE(328, true, false, 145, 145, 145),
+    CRUSHED_RUTILE(329, 0),
+    SMALL_RUTILE_ORE(330, true, false, 204, 204, 204),
+
+    URANINITE_ORE(331, true, false, 146, 146, 146),
+    CRUSHED_URANINITE(332, 0),
+    SMALL_URANINITE_ORE(333, true, false, 205, 205, 205),
+
+    PITCHBLENDE_ORE(334, true, false, 147, 147, 147),
+    CRUSHED_PITCHBLENDE(335, 0),
+    SMALL_PITCHBLENDE_ORE(336, true, false, 206, 206, 206),
+
+    MONAZITE_ORE(337, true, false, 148, 148, 148),
+    CRUSHED_MONAZITE(338, 0),
+    SMALL_MONAZITE_ORE(339, true, false, 207, 207, 207),
+
+    BASTNASITE_ORE(340, true, false, 149, 149, 149),
+    CRUSHED_BASTNASITE(341, 0),
+    SMALL_BASTNASITE_ORE(342, true, false, 208, 208, 208),
+
+    VANADINITE_ORE(343, true, false, 150, 150, 150),
+    CRUSHED_VANADINITE(344, 0),
+    SMALL_VANADINITE_ORE(345, true, false, 209, 209, 209),
+
+    PYROLUSITE_ORE(346, true, false, 151, 151, 151),
+    CRUSHED_PYROLUSITE(347, 0),
+    SMALL_PYROLUSITE_ORE(348, true, false, 210, 210, 210),
+
+    GRAPHITE_ORE(349, true, false, 152, 152, 152),
+    CRUSHED_GRAPHITE(350, 0),
+    SMALL_GRAPHITE_ORE(351, true, false, 211, 211, 211),
+
+    LITHIUM_ORE(352, true, false, 153, 153, 153),
+    CRUSHED_LITHIUM(353, 0),
+    SMALL_LITHIUM_ORE(354, true, false, 212, 212, 212),
+
+    NAQUADAH_ORE(355, true, false, 154, 154, 154),
+    CRUSHED_NAQUADAH(356, 0),
+    SMALL_NAQUADAH_ORE(357, true, false, 213, 213, 213),
+
+    NAQUADAH_ENRICHED_ORE(358, true, false, 155, 155, 155),
+    CRUSHED_NAQUADAH_ENRICHED(359, 0),
+
+    TRINIUM_ORE(360, true, false, 156, 156, 156),
+    CRUSHED_TRINIUM(361, 0),
+    SMALL_TRINIUM_ORE(362, true, false, 214, 214, 214),
+
+    NEODYMIUM_ORE(363, true, false, 157, 157, 157),
+    CRUSHED_NEODYMIUM(364, 0),
+    SMALL_NEODYMIUM_ORE(365, true, false, 215, 215, 215),
+
+    CERIUM_ORE(366, true, false, 158, 158, 158),
+    CRUSHED_CERIUM(367, 0),
+    SMALL_CERIUM_ORE(368, true, false, 216, 216, 216),
+
+    OSMIUM_ORE(369, true, false, 159, 159, 159),
+    CRUSHED_OSMIUM(370, 0),
+    SMALL_OSMIUM_ORE(371, true, false, 217, 217, 217),
+
+    PALLADIUM_ORE(372, true, false, 160, 160, 160),
+    CRUSHED_PALLADIUM(373, 0),
+    SMALL_PALLADIUM_ORE(374, true, false, 218, 218, 218),
+
+    CALCITE_ORE(375, true, false, 161, 161, 161),
+    CRUSHED_CALCITE(376, 0),
+
+    OLIVINE_ORE(377, true, false, 162, 162, 162),
+    CRUSHED_OLIVINE(378, 0),
+
+    TALC_ORE(379, true, false, 163, 163, 163),
+    CRUSHED_TALC(380, 0),
+
+    BENTONITE_ORE(381, true, false, 164, 164, 164),
+    CRUSHED_BENTONITE(382, 0),
+
+    SODALITE_ORE(383, true, false, 165, 165, 165),
+    CRUSHED_SODALITE(384, 0),
+
+    LAZURITE_ORE(385, true, false, 166, 166, 166),
+    CRUSHED_LAZURITE(386, 0),
+
+    SALT_ORE(387, true, false, 167, 167, 167),
+    CRUSHED_SALT(388, 0),
+
+    ROCK_SALT_ORE(389, true, false, 168, 168, 168),
+    CRUSHED_ROCK_SALT(390, 0),
+
+    SALTPETER_ORE(391, true, false, 169, 169, 169),
+    CRUSHED_SALTPETER(392, 0),
+
+    BORAX_ORE(393, true, false, 170, 170, 170),
+    CRUSHED_BORAX(394, 0),
+
+    APATITE_ORE(395, true, false, 171, 171, 171),
+    CRUSHED_APATITE(396, 0),
+
+    PHOSPHATE_ORE(397, true, false, 172, 172, 172),
+    CRUSHED_PHOSPHATE(398, 0),
+
+    PYROCHLORE_ORE(399, true, false, 173, 173, 173),
+    CRUSHED_PYROCHLORE(400, 0),
+
+    LEPIDOLITE_ORE(401, true, false, 174, 174, 174),
+    CRUSHED_LEPIDOLITE(402, 0),
+
+    RUBY_ORE(403, true, false, 175, 175, 175),
+    CRUSHED_RUBY(404, 0),
+    SMALL_RUBY_ORE(405, true, false, 219, 219, 219),
+
+    SAPPHIRE_ORE(406, true, false, 176, 176, 176),
+    CRUSHED_SAPPHIRE(407, 0),
+
+    GREEN_SAPPHIRE_ORE(408, true, false, 177, 177, 177),
+    CRUSHED_GREEN_SAPPHIRE(409, 0),
+
+    PYROPE_ORE(410, true, false, 178, 178, 178),
+    CRUSHED_PYROPE(411, 0),
+
+    SPESSARTINE_ORE(412, true, false, 179, 179, 179),
+    CRUSHED_SPESSARTINE(413, 0),
+
+    // Ferberite: ore #23 in the table (atlas tile 142), added after the main sequence
+    FERBERITE_ORE(414, true, false, 142, 142, 142),
+    CRUSHED_FERBERITE(415, 0),
+
+    // Gem items: smelted outputs for the gemstone ore chain (inventory-only, no atlas tile).
+    RUBY(416, 0),          // smelted from ruby ore / crushed ruby
+    SAPPHIRE(417, 0),      // smelted from sapphire ore / crushed sapphire
+    GREEN_SAPPHIRE(418, 0), // smelted from green sapphire ore / crushed green sapphire
+
+    // =========================================================================
+    // Phase 0: Deep Survival Foundation
+    // =========================================================================
+
+    // --- Farming world blocks (atlas tiles 220-231) ---
+    // Farmland: tilled dirt that crops grow on (top = tile 220, sides/bottom = dirt tile 3).
+    // Tile 2 is the grass side (dirt + green fringe) — never use it for farmland sides.
+    FARMLAND(419, true, false, 220, 3, 3),
+
+    // Wheat: 4 growth stages (cross-shaped billboard tiles 221-224).
+    WHEAT_STAGE_1(420, false, true, 221),
+    WHEAT_STAGE_2(421, false, true, 222),
+    WHEAT_STAGE_3(422, false, true, 223),
+    WHEAT_STAGE_4(423, false, true, 224),  // mature, ready to harvest
+
+    // Potato: 3 growth stages (cross tiles 225-227).
+    POTATO_CROP_1(424, false, true, 225),
+    POTATO_CROP_2(425, false, true, 226),
+    POTATO_CROP_3(426, false, true, 227),  // mature
+
+    // Carrot: 3 growth stages (cross tiles 228-230).
+    CARROT_CROP_1(427, false, true, 228),
+    CARROT_CROP_2(428, false, true, 229),
+    CARROT_CROP_3(429, false, true, 230),  // mature
+
+    // Sugar cane: single cross tile (231), grows in stacked columns.
+    SUGAR_CANE(430, false, true, 231),
+
+    // --- Farming inventory items ---
+    SEEDS(431, 0),          // wheat seeds - dropped by breaking tall grass; plant on farmland
+    WHEAT(432, 0),          // harvested wheat - craft 3 in a row into BREAD
+    BREAD(433, 4),          // baked bread: restores 4 hunger
+    POTATO(434, 3),         // raw potato: restores 3 hunger; smelt to POTATO_COOKED
+    POTATO_COOKED(435, 5),  // baked potato: restores 5 hunger
+    CARROT(436, 3),         // carrot: restores 3 hunger
+
+    // --- Thirst system ---
+    CLAY_CANTEEN(437, 0),       // empty clay canteen - right-click a water source to fill
+    CLAY_CANTEEN_FULL(438, 0),  // full canteen - right-click (or use) to restore thirst
+
+    // --- Hoe tools: till DIRT / GRASS into FARMLAND ---
+    WOOD_HOE(439, 0),
+    STONE_HOE(440, 0),
+    IRON_HOE(441, 0),
+    DIAMOND_HOE(442, 0),
+
+    // --- Clay (terrain block + item drop) ---
+    /** Blue-grey clay block; spawns on river/lake beds. Drops CLAY_BALL when broken. */
+    CLAY(443, true, false, 232, 232, 232),
+    /** Item dropped from CLAY blocks; 4 arranged in a 2×2 craft CLAY_CANTEEN. */
+    CLAY_BALL(444, 0),
+
+    // --- Hydrated farmland ---
+    /**
+     * Moist farmland (within 4 blocks of a water source).
+     * Visually darker than dry FARMLAND. Crops only grow on this variant.
+     * Reverts to dry FARMLAND when no water is nearby, and to DIRT if trampled.
+     */
+    FARMLAND_WET(445, true, false, 233, 3, 3),
+
+    // =========================================================================
+    // Phase 0.5 — Tinkers' Construct: Smeltery multi-block + crafting stations
+    // =========================================================================
+
+    // --- Smeltery structural blocks (atlas tiles 234-240) ---
+
+    /**
+     * Primary structural block for the Smeltery.  Dark brownish-black fired
+     * brick with orange mortar highlights.  Tile 234.
+     */
+    SEARED_BRICK(446, true, false, 234, 234, 234),
+
+    /**
+     * Transparent window block for the Smeltery shell; lets players see the
+     * molten metal inside without opening the structure.  Tile 235.
+     */
+    SEARED_GLASS(447, true, true, 235, 235, 235),
+
+    /**
+     * Liquid-storage block for the Smeltery shell; holds extra molten metal
+     * capacity (each tank block adds capacity in the future smelting logic).
+     * Tile 236.
+     */
+    SEARED_TANK(448, true, false, 236, 236, 236),
+
+    /**
+     * Drain block on a Smeltery wall; used (in future) to pour molten metal
+     * into Casting Tables / Casting Basins below.  Tile 237.
+     */
+    SMELTERY_DRAIN(449, true, false, 237, 237, 237),
+
+    /**
+     * Smeltery controller — the "brain" of the multi-block.  Directional
+     * (faces the front wall like a furnace).  Inactive tile 238 (dark void
+     * hole), active tile 239 (glowing orange mouth, lit when formed).
+     * Atlas: top/side/bottom = 238, front = 238, litFront = 239.
+     */
+    SMELTERY_CONTROLLER(450, true, false, 238, 238, 238, 238, 239, 0, 0),
+
+    // --- Tinkers' Construct crafting station blocks (atlas tiles 240-244) ---
+
+    /**
+     * Casting Table — a flat-topped slab where poured metal solidifies into
+     * tool parts using a clay cast.  Tile 240.
+     */
+    CASTING_TABLE(451, true, false, 240, 240, 240),
+
+    /**
+     * Casting Basin — a deeper mould for large tool parts (large plates,
+     * tough rods).  Tile 241.
+     */
+    CASTING_BASIN(452, true, false, 241, 241, 241),
+
+    /**
+     * Part Builder — the workbench for shaping raw material (planks, stone,
+     * metal ingots) into tool parts using a pattern.  Tile 242.
+     */
+    PART_BUILDER(453, true, false, 242, 242, 242),
+
+    /**
+     * Tool Station — where assembled tool parts are combined into a finished
+     * modular Tinkers' tool.  Tile 243.
+     */
+    TOOL_STATION(454, true, false, 243, 243, 243),
+
+    /**
+     * Bone meal — crushed bones used to instantly grow crops and sprout
+     * tall grass / flowers on grass. Crafted shapeless: 1 {@link #BONES} → 3.
+     */
+    BONE_MEAL(455, 0),
+
+    // -----------------------------------------------------------------------
+    // Tinkers' Construct sentinels: two inventory-item slots that carry the
+    // real part/tool data in a TinkersItem payload inside ItemStack.
+    // All materials are supported dynamically via TinkersRegistry — no per-
+    // material enum entries are needed.
+    // -----------------------------------------------------------------------
+
+    /** Sentinel for any Tinkers' tool part; the real data lives in {@code ItemStack.tinkersItem()}. */
+    TINKERS_PART(500, 0),
+
+    /** Sentinel for any assembled Tinkers' modular tool; the real data lives in {@code ItemStack.tinkersItem()}. */
+    TINKERS_TOOL(501, 0);
+
+    public final short id;
     public final boolean solid;
     public final boolean transparent;
     public final boolean cross;
@@ -234,7 +779,12 @@ public enum BlockType {
 
     /** Full-cube block: distinct top/side/bottom textures, collides with the player. */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile) {
-        this(id, solid, transparent, topTile, sideTile, bottomTile, sideTile);
+        // Not sideTile - that accidentally landed in the foodValue slot below,
+        // making isEdible() (foodValue > 0) true for nearly every ordinary
+        // cube block (its own atlas tile index is almost always positive).
+        // Right-clicking one in survival then "ate" it via Player.eat()
+        // instead of placing it: consumed from the hotbar, no block appeared.
+        this(id, solid, transparent, topTile, sideTile, bottomTile, 0);
     }
 
     /** Full-cube block with a food value (not currently used - cubes aren't eaten - but kept symmetric). */
@@ -249,7 +799,7 @@ public enum BlockType {
 
     /** Full-cube block with a distinct front face that also changes while active (a lit furnace mouth). */
     BlockType(int id, boolean solid, boolean transparent, int topTile, int sideTile, int bottomTile, int frontTile, int litFrontTile, int foodValue, int lightLevel) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = solid;
         this.transparent = transparent;
         this.cross = false;
@@ -274,7 +824,7 @@ public enum BlockType {
 
     /** Bottom-half slab: a partial cube, one atlas tile for all faces, colliding only in its lower half. */
     BlockType(int id, boolean solid, boolean transparent, boolean slab, int tile) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = solid;
         this.transparent = transparent;
         this.cross = false;
@@ -294,7 +844,7 @@ public enum BlockType {
 
     /** Stairs or fence: a partial-cube block with custom meshing and custom collision boxes. */
     BlockType(int id, int tile, boolean stair, boolean fence, float collisionHeight) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = true;
         this.transparent = false;
         this.cross = false;
@@ -312,6 +862,26 @@ public enum BlockType {
         this.collisionHeight = collisionHeight;
     }
 
+    /** Half-height directional block (like a bed): distinct front face, half collision height. */
+    BlockType(int id, int topTile, int sideTile, int bottomTile, int frontTile, int litFrontTile, float collisionHeight) {
+        this.id = (short) id;
+        this.solid = true;
+        this.transparent = false;
+        this.cross = false;
+        this.slab = false;
+        this.stair = false;
+        this.fence = false;
+        this.topTile = topTile;
+        this.sideTile = sideTile;
+        this.bottomTile = bottomTile;
+        this.frontTile = frontTile;
+        this.litFrontTile = litFrontTile;
+        this.foodValue = 0;
+        this.isItem = false;
+        this.lightLevel = 0;
+        this.collisionHeight = collisionHeight;
+    }
+
     /** Cross-shaped (billboard-X) world decoration block, e.g. grass/flowers/berry bush: one atlas tile, never collides. */
     BlockType(int id, boolean solid, boolean transparent, int tile) {
         this(id, solid, transparent, tile, 0);
@@ -319,7 +889,7 @@ public enum BlockType {
 
     /** Cross-shaped world decoration that's also a light source, e.g. a torch. */
     BlockType(int id, boolean solid, boolean transparent, int tile, int lightLevel) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = solid;
         this.transparent = transparent;
         this.cross = true;
@@ -339,7 +909,7 @@ public enum BlockType {
 
     /** Inventory-only item (tool, or foraged food like apple/berries): no atlas tile, has its own procedurally generated texture, never placeable as a world block. */
     BlockType(int id, int foodValue) {
-        this.id = (byte) id;
+        this.id = (short) id;
         this.solid = false;
         this.transparent = true;
         this.cross = false;
@@ -357,17 +927,18 @@ public enum BlockType {
         this.collisionHeight = 1.0f;
     }
 
-    // Sparse id lookup over the whole unsigned-byte range (0-255). Block ids are
-    // persisted as raw bytes, so ids above 127 wrap negative as Java bytes but
-    // recover cleanly via the & 0xFF mask here (both when building the table and
-    // when reading one back). ids don't have to be a dense 0..N-1 range (e.g.
+    // Sparse id lookup over the short range (0-4095 used). Block ids are
+    // persisted as raw shorts; ids don't have to be a dense 0..N-1 range (e.g.
     // slabs use 44/45 while other features may take 39-43); unused slots stay null.
     private static final BlockType[] BY_ID;
 
     static {
-        BY_ID = new BlockType[256];
+        BY_ID = new BlockType[4096];
         for (BlockType t : values()) {
-            int idx = t.id & 0xFF;
+            int idx = t.id & 0xFFFF;
+            if (idx >= BY_ID.length) {
+                throw new IllegalStateException("Block id " + t.id + " out of range for " + t);
+            }
             if (BY_ID[idx] != null) {
                 // Fail fast on a duplicate id - a re-used id would silently corrupt save files.
                 throw new IllegalStateException("Duplicate block id " + t.id + ": " + t + " and " + BY_ID[idx]);
@@ -376,8 +947,8 @@ public enum BlockType {
         }
     }
 
-    public static BlockType byId(byte id) {
-        int idx = id & 0xFF;
+    public static BlockType byId(int id) {
+        int idx = id & 0xFFFF;
         BlockType type = idx < BY_ID.length ? BY_ID[idx] : null;
         return type == null ? AIR : type;
     }
@@ -387,9 +958,12 @@ public enum BlockType {
         return solid;
     }
 
-    /** True if this block has a distinct front face that faces its orientation (e.g. a furnace). */
+    /** True if this block has a distinct front face that faces its orientation (e.g. a furnace).
+     *  Also returns true when only the lit/active front tile differs from the side tile —
+     *  this covers blocks like {@code SMELTERY_CONTROLLER} whose inactive front is the same
+     *  as the side tile but whose active (lit) front is distinct and must be oriented. */
     public boolean isDirectional() {
-        return frontTile != sideTile;
+        return frontTile != sideTile || litFrontTile != sideTile;
     }
 
     public boolean isEdible() {
@@ -411,6 +985,15 @@ public enum BlockType {
     /** True for any lava-family block (static, source, or flow). */
     public boolean isLava() {
         return this == LAVA || this == LAVA_SOURCE || this == LAVA_FLOW;
+    }
+
+    /**
+     * True if this block radiates heat on its own - a fire, a torch or lamp, or
+     * lava. A furnace only warms a room while it's actively burning (see
+     * {@link com.minecraftclone.player.Player#hasHeatSource}).
+     */
+    public boolean isHeatSource() {
+        return this == FIRE || this == TORCH || this == LAMP || isLava();
     }
 
     /** True for any fluid (water or lava), including static and flowing variants. */
@@ -449,14 +1032,38 @@ public enum BlockType {
         return isFluidSource() || isFluidFlow();
     }
 
-    /** True if a ray should pass straight through this block (air, static water, or transient flow). */
+    /**
+     * True if a ray should pass straight through this block: open air, or any
+     * fluid (water/lava, static/source/flow alike - they're all rendered the
+     * same translucent, non-solid way, so there's no reason a source block
+     * should raycast any differently than the terrain-fill or flow forms
+     * sitting right next to it).
+     * <p>
+     * Missing WATER_SOURCE here used to be a real bug, not just an
+     * inconsistency: breaking a block next to natural ocean water promotes
+     * the boundary cell from WATER to WATER_SOURCE (see World#promoteIfStaticFluid),
+     * which is extremely common near any player-touched shoreline or
+     * underwater dig. The instant the camera's eye position entered one of
+     * those cells while swimming, Raycaster.cast's "already inside a solid
+     * block" branch fired every frame - water_source wasn't pass-through,
+     * so the game treated the player as embedded in solid ground - aiming
+     * the block-outline highlight at their own eye position. With the
+     * camera essentially inside the outlined cube, its edges radiated out
+     * to the screen corners: a glitchy wireframe-in-the-water look that's
+     * exactly what "x-ray in the ocean" describes.
+     */
     public boolean isPassThrough() {
-        return this == AIR || this == WATER || this == WATER_FLOW || this == LAVA_FLOW;
+        return this == AIR || isFluid();
     }
 
-    /** True if this block is drawn in the see-through translucent render pass (glass, ice). */
+    /** True if this block is drawn in the see-through translucent render pass (glass, ice, seared glass). */
     public boolean isTranslucent() {
-        return this == GLASS || this == ICE;
+        return this == GLASS || this == ICE || this == SEARED_GLASS;
+    }
+
+    /** Regular ice (not packed). Water culls against it so you don't see water walls through a frozen sheet. */
+    public boolean isIce() {
+        return this == ICE;
     }
 
     /**
@@ -467,7 +1074,7 @@ public enum BlockType {
      * there - see {@link Chunk#setOverlay} and {@link BlockAccessor#getOverlay}.
      */
     public boolean isSubmersible() {
-        return this == SEAWEED;
+        return this == SEAWEED || this == LILY_PAD;
     }
 
     /** True for either half of a functional door (closed solid, or open walk-through). */
@@ -480,6 +1087,11 @@ public enum BlockType {
         return this == TRAPDOOR || this == TRAPDOOR_OPEN;
     }
 
+    /** True for oak or cherry leaf cubes. */
+    public boolean isLeaves() {
+        return this == LEAVES || this == CHERRY_LEAVES;
+    }
+
     /** True for a stepped stair block (stone or planks). */
     public boolean isStair() {
         return stair;
@@ -490,9 +1102,79 @@ public enum BlockType {
         return fence;
     }
 
+    /** True for either half of a functional door (closed solid, or open walk-through). */
+    public boolean isBed() {
+        return this == BED || this == BED_HEAD || this == BED_OCCUPIED || this == BED_HEAD_OCCUPIED;
+    }
+
+    /** True if this is the foot end of a bed (as opposed to the head/pillow end). */
+    public boolean isBedFoot() {
+        return this == BED || this == BED_OCCUPIED;
+    }
+
     /** True for any partial-cube block that needs its own meshing (stairs, fences). */
     public boolean isPartialCube() {
         return stair || fence;
+    }
+
+    /** True for any crop world-block (any growth stage of wheat, potato, or carrot, plus sugar cane). */
+    public boolean isCrop() {
+        return this == WHEAT_STAGE_1 || this == WHEAT_STAGE_2 || this == WHEAT_STAGE_3 || this == WHEAT_STAGE_4
+                || this == POTATO_CROP_1 || this == POTATO_CROP_2 || this == POTATO_CROP_3
+                || this == CARROT_CROP_1 || this == CARROT_CROP_2 || this == CARROT_CROP_3
+                || this == SUGAR_CANE;
+    }
+
+    /** True for items that can be planted on FARMLAND (seeds, raw potato, raw carrot). */
+    public boolean isPlantable() {
+        return this == SEEDS || this == POTATO || this == CARROT;
+    }
+
+    /** True for any hoe item (used to till DIRT/GRASS into FARMLAND). */
+    public boolean isHoe() {
+        return this == WOOD_HOE || this == STONE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
+    }
+
+    /** True for bone meal (right-click crops to grow them, or grass to sprout plants). */
+    public boolean isBoneMeal() {
+        return this == BONE_MEAL;
+    }
+
+    /** True for either variant of tilled farmland (dry or hydrated). */
+    public boolean isFarmland() {
+        return this == FARMLAND || this == FARMLAND_WET;
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 0.5 — Tinkers' Construct helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * True for any block that can form the shell of a Smeltery multi-block
+     * (brick, glass, tank, drain, or controller).
+     */
+    public boolean isSearedBlock() {
+        return this == SEARED_BRICK || this == SEARED_GLASS
+            || this == SEARED_TANK  || this == SMELTERY_DRAIN
+            || this == SMELTERY_CONTROLLER;
+    }
+
+    /**
+     * True for the {@link #TINKERS_PART} sentinel — the item is a Tinkers'
+     * tool part whose real data (shape + material) lives in the
+     * {@code TinkersItem.Part} carried by its {@code ItemStack}.
+     */
+    public boolean isTinkersToolPart() {
+        return this == TINKERS_PART;
+    }
+
+    /**
+     * True for the {@link #TINKERS_TOOL} sentinel — the item is an assembled
+     * Tinkers' modular tool whose real data (layers + durability) lives in the
+     * {@code TinkersItem.Tool} carried by its {@code ItemStack}.
+     */
+    public boolean isTinkersTool() {
+        return this == TINKERS_TOOL;
     }
 
     /**

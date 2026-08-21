@@ -263,7 +263,7 @@ public class GameServer implements AutoCloseable {
             boxes.add(new AABB(c.x - 0.3f, c.y, c.z - 0.3f, c.x + 0.3f, c.y + 1.8f, c.z + 0.3f));
         }
         if (players.isEmpty()) return;
-        float[] damage = world.updateMobsMulti(dt, positions, boxes, dayNightCycle.isNight(), rnd);
+        float[] damage = world.updateMobsMulti(dt, positions, boxes, dayNightCycle.isNight(), rnd, settings.getDifficulty());
         for (int i = 0; i < players.size(); i++) {
             if (damage[i] > 0f) {
                 try {
@@ -646,8 +646,8 @@ public class GameServer implements AutoCloseable {
         World world = worlds[dimension >= 0 && dimension < worlds.length ? dimension : client.dimension];
         world.ensureChunk(cx, cz);
         if (world.isChunkModifiedByPlayer(cx, cz)) {
-            byte[] blocks = world.getChunkRawBlocks(cx, cz);
-            byte[] overlays = world.getChunkRawOverlays(cx, cz);
+            short[] blocks = world.getChunkRawBlocks(cx, cz);
+            short[] overlays = world.getChunkRawOverlays(cx, cz);
             byte[] orientations = world.getChunkRawOrientations(cx, cz);
             if (blocks != null) {
                 send(client, Packets.encodeChunkData(new Packets.ChunkData(dimension, cx, cz, blocks, overlays, orientations)));

@@ -1,6 +1,8 @@
 package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.tinkers.TinkersItem;
+import com.minecraftclone.world.tinkers.ToolPartType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -58,5 +60,17 @@ class InventoryTest {
         inv.setSlot(3, BlockType.APPLE, 5);
         inv.clear();
         assertTrue(inv.isEmpty());
+    }
+
+    @Test
+    void addRejectsTinkersSentinelsSoPayloadsCannotBeStripped() {
+        Inventory inv = new Inventory();
+        assertEquals(1, inv.add(BlockType.TINKERS_PART, 1));
+        assertEquals(1, inv.add(BlockType.TINKERS_TOOL, 1));
+        assertTrue(inv.isEmpty());
+        ItemStack part = ItemStack.tinkersPart(new TinkersItem.Part(
+                ToolPartType.PICK_HEAD, BlockType.IRON_INGOT));
+        assertTrue(inv.addStack(part).isEmpty());
+        assertTrue(inv.stackOf(0).isTinkersPart());
     }
 }

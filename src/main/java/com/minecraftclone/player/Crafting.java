@@ -9,19 +9,21 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Minecraft-style crafting: a 3x3 grid where either the shape of the
+ * Minecraft-style crafting for the player's 2x2 inventory grid where either the shape of the
  * ingredients (shaped recipes) or just their combination (shapeless recipes)
  * determines the output.
  * <p>
  * Adding a recipe is a one-liner - see the two registration helpers:
  * <pre>
- *   shaped("III", ".S.", ".S.", BlockType.IRON_PICKAXE, 1);   // 3x3 pattern, '.' = empty
+ *   shaped("PP", "PP", BlockType.PLANKS_SLAB, 3);   // 2x2 pattern, '.' = empty
  *   shapeless(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND); // any arrangement
  * </pre>
  * Shaped recipes match like Minecraft's: the pattern may sit anywhere in the
- * grid, and it's also matched under horizontal mirroring (so an axe works with
- * its handle on either side). Shapeless recipes match on the multiset of
+ * grid, and it's also matched under horizontal mirroring. Shapeless recipes match on the multiset of
  * ingredients, ignoring arrangement.
+ *
+ * Note: This 2x2 grid is limited to simple recipes. Complex recipes requiring more space
+ * would need a 3x3 crafting table (not yet implemented).
  */
 public final class Crafting {
 
@@ -37,7 +39,14 @@ public final class Crafting {
     public record ShapedRecipe(BlockType[] pattern, BlockType output, int outputAmount) implements Recipe {
         @Override
         public boolean matches(BlockType[] grid) {
-            return matchesShaped(grid, pattern);
+            // Determine grid dimensions from array size
+            int gridSize = grid.length;
+            int width = (gridSize == 4) ? 2 : (gridSize == 9) ? 3 : 0;
+            int height = width;
+            if (width == 0) return false;
+            // Pattern must match grid size
+            if (pattern.length != gridSize) return false;
+            return matchesShaped(grid, pattern, width, height);
         }
     }
 
@@ -48,7 +57,9 @@ public final class Crafting {
         }
     }
 
-    private static final List<Recipe> RECIPES = new ArrayList<>();
+    private static final List<Recipe> RECIPES_2x2 = new ArrayList<>();
+    private static final List<Recipe> RECIPES_3x3 = new ArrayList<>();
+    private static final List<Recipe> RECIPES_5x5 = new ArrayList<>();
 
     // Single-character codes used by the shaped() pattern strings. Add a code
     // here (and a new BlockType) to use it in a pattern.
@@ -71,20 +82,48 @@ public final class Crafting {
         CHARS.put('U', BlockType.WOOL);
         CHARS.put('V', BlockType.WOLF_PELT);
         CHARS.put('B', BlockType.BEAR_HIDE);
+        CHARS.put('Y', BlockType.CLAY_BALL);    // Y = claY ball
+        CHARS.put('H', BlockType.WHEAT);        // H = wHeat
+        // Phase 0.5: Tinkers' Construct ingredient shortcuts
+        CHARS.put('Z', BlockType.SEARED_BRICK);       // Z = seared/sintered (kiln)
 
-        // --- Shaped recipes: three 3-character rows ('.' = empty). ---
-        shaped("W..", "...", "...", BlockType.PLANKS, 4);        // log -> planks
-        shaped("P..", "P..", "...", BlockType.STICK, 4);         // 2 planks -> sticks
-        shaped("KKK", "K.K", "KKK", BlockType.FURNACE, 1);       // stone ring -> furnace
-        shaped(".C.", ".S.", "...", BlockType.TORCH, 4);         // coal over stick -> torches
-        shaped(".G.", ".T.", "...", BlockType.LAMP, 1);          // glass over torch -> lamp
-        shaped("KKK", "...", "...", BlockType.STONE_SLAB, 6);    // 3 stone -> slabs
-        shaped("PPP", "...", "...", BlockType.PLANKS_SLAB, 6);   // 3 planks -> slabs
-        shaped("PP.", "PP.", "PP.", BlockType.DOOR, 1);          // 6 planks -> door
-        shaped("PPP", "PPP", "...", BlockType.TRAPDOOR, 2);      // 6 planks -> 2 trapdoors
-        shaped("PP.", "PP.", "...", BlockType.CRAFTING_TABLE, 1); // 4 planks -> crafting table
-        shaped("PPP", "P.P", "PPP", BlockType.CHEST, 1);          // 8 planks ring -> chest
-        shaped("PP.", "PP.", "PP.", BlockType.BARREL, 1);        // 6 planks -> barrel
+        // --- Shaped recipes: two 2-character rows ('.' = empty). ---
+        // Simple 2x2 recipes for the player inventory crafting grid
+        shaped2x2("W.", "..", BlockType.PLANKS, 4);                  // log -> planks
+        shaped2x2("PP", "PP", BlockType.CRAFTING_TABLE, 1);          // 4 planks -> crafting table
+        shaped2x2("P.", "P.", BlockType.STICK, 4);                   // 2 planks vertical -> sticks
+        shaped2x2("C.", "S.", BlockType.TORCH, 4);                   // coal + stick -> torches
+
+        // Register basic 2x2 recipes for 3x3 grids (so they work in crafting tables too)
+        shaped3x3("W..", "...", "...", BlockType.PLANKS, 4);         // log -> planks
+        shaped3x3("P..", "P..", "...", BlockType.STICK, 4);          // 2 planks vertical -> sticks
+        shaped3x3("C..", "S..", "...", BlockType.TORCH, 4);          // coal + stick -> torches
+
+        // 3x3 recipes from crafting table
+        // Stairs: a 6-material "K.. / KK. / KKK" wedge -> 4 stairs.
+        shaped3x3("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);
+        shaped3x3("P..", "PP.", "PPP", BlockType.PLANKS_STAIRS, 4);
+        // Fence: 4 planks + 2 sticks (PSP / PSP / ...) -> 3 fence posts.
+        shaped3x3("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);
+        // Bed: 3 wool on top, 2 planks below -> 1 bed
+        shaped3x3("UUU", "PPP", "...", BlockType.BED, 1);
+
+        // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
+        // itself is made by quenching a lava source with a water source (see
+        // shapeless below), so the Nether is reachable from raw overworld finds.
+        shaped3x3("OOO", "O.O", "OOO", BlockType.NETHER_PORTAL, 1); // obsidian ring -> nether portal
+        shaped3x3("OLO", "L.L", "OLO", BlockType.END_PORTAL, 1);    // obsidian + glowstone ring -> end portal
+
+        // --- Shapeless recipes: any arrangement of the given ingredients. ---
+        // Note: Glass is made in the furnace (smelting sand); obsidian forms in the world (lava + water)
+
+        // --- 3x3 Crafting Table Recipes ---
+        // Slabs: 3 blocks in a row
+        shaped3x3("PPP", "...", "...", BlockType.PLANKS_SLAB, 6);                       // 3 planks -> 6 slabs
+        shaped3x3("KKK", "...", "...", BlockType.STONE_SLAB, 6);                        // 3 stone -> 6 slabs
+
+        // Doors: 2x3 arrangement (2 wide, 3 tall)
+        shaped3x3("PP.", "PP.", "PP.", BlockType.DOOR, 1);                             // 6 planks -> 1 door
 
         // Tools (mirrored matching lets an axe be built either way round).
         tools('P', BlockType.WOOD_PICKAXE, BlockType.WOOD_AXE, BlockType.WOOD_SWORD,
@@ -105,56 +144,171 @@ public final class Crafting {
         armor('V', BlockType.WOLF_HELMET, BlockType.WOLF_CHESTPLATE, BlockType.WOLF_LEGGINGS, BlockType.WOLF_BOOTS);
         armor('B', BlockType.BEAR_HELMET, BlockType.BEAR_CHESTPLATE, BlockType.BEAR_LEGGINGS, BlockType.BEAR_BOOTS);
 
-        // Stairs: a 6-material "K.. / KK. / KKK" wedge -> 4 stairs.
-        shaped("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);
-        shaped("P..", "PP.", "PPP", BlockType.PLANKS_STAIRS, 4);
-        // Fence: 4 planks + 2 sticks (PSP / PSP / ...) -> 3 fence posts.
-        shaped("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);
+        // Stairs (wedge pattern: K.. / KK. / KKK)
+        shaped3x3("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);                       // 6 stone -> 4 stairs
+        shaped3x3("P..", "PP.", "PPP", BlockType.PLANKS_STAIRS, 4);                      // 6 planks -> 4 stairs
 
-        // Dimension portals: an obsidian ring frames a swirling portal. Obsidian
-        // itself is made by quenching a lava source with a water source (see
-        // shapeless below), so the Nether is reachable from raw overworld finds.
-        shaped("OOO", "O.O", "OOO", BlockType.NETHER_PORTAL, 1); // obsidian ring -> nether portal
-        shaped("OLO", "L.L", "OLO", BlockType.END_PORTAL, 1);    // obsidian + glowstone ring -> end portal
+        // Door and trapdoor
+        shaped3x3("PP.", "PP.", "PP.", BlockType.DOOR, 1);                               // 6 planks -> door
+        shaped3x3("PPP", "PPP", "...", BlockType.TRAPDOOR, 2);                           // 6 planks -> 2 trapdoors
 
-        // --- Shapeless recipes: any arrangement of the given ingredients. ---
-        shapeless(BlockType.GLASS, 1, BlockType.SAND, BlockType.SAND);
-        shapeless(BlockType.OBSIDIAN, 1, BlockType.LAVA_SOURCE, BlockType.WATER_SOURCE); // quench lava -> obsidian
+        // Fence
+        shaped3x3("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);                       // 4 planks + 2 sticks -> 3 fence
+
+        // --- Farming recipes ---
+        // Hoes: two material on top, column of two sticks below (vanilla, mirrors for left-hand).
+        shaped3x3("PP.", ".S.", ".S.", BlockType.WOOD_HOE, 1);
+        shaped3x3("KK.", ".S.", ".S.", BlockType.STONE_HOE, 1);
+        shaped3x3("II.", ".S.", ".S.", BlockType.IRON_HOE, 1);
+        shaped3x3("DD.", ".S.", ".S.", BlockType.DIAMOND_HOE, 1);
+
+        // Bone meal: crush one bone into 3 piles (inventory 2x2 or crafting table).
+        shapeless2x2(BlockType.BONE_MEAL, 3, BlockType.BONES);
+        shapeless3x3(BlockType.BONE_MEAL, 3, BlockType.BONES);
+
+        // Clay canteen: 4 clay balls in a 2x2 (inventory grid). Crafting-table
+        // recipe uses a distinct 3x3 vessel shape so it does not collide with
+        // the seared-brick bootstrap (YY. / YY. / ...).
+        shaped2x2("YY", "YY", BlockType.CLAY_CANTEEN, 1);  // 4 clay balls -> 1 canteen
+        shaped3x3("Y.Y", "YYY", "Y.Y", BlockType.CLAY_CANTEEN, 1); // 7 clay balls -> 1 canteen
+
+        // Bread: 3 wheat in a row (crafting-table recipe; a 2x2 grid cannot hold 3 in a row)
+        shaped3x3("HHH", "...", "...", BlockType.BREAD, 1);
+
+        // ---------------------------------------------------------------
+        // Phase 0.5: Tinkers' Construct crafting station recipes
+        // ---------------------------------------------------------------
+        // Character key used in this section:
+        //   'Z' = SEARED_BRICK (mnemonic: "Zapped in a kiln")
+
+        // Seared Brick: fire clay balls in-world (Furnace: clay ball → seared brick).
+        // Also allow crafting 2 seared bricks from 4 clay balls as an early-game bootstrap.
+        // Use a 3x3 pattern to avoid conflict with the clay-canteen 2x2 recipe
+        shaped3x3("YY.", "YY.", "...", BlockType.SEARED_BRICK, 2);         // 4 clay balls → 2 seared bricks
+
+        // Smeltery Controller: 8 iron ingots in a ring around the centre (empty inside)
+        shaped3x3("III", "I.I", "III", BlockType.SMELTERY_CONTROLLER, 1);
+
+        // Seared Glass: seared brick + glass (2×1). Duplicate for 3x3 so it
+        // works at a crafting table (same translation/mirroring as other 2x2 copies).
+        shaped2x2("ZG", "..", BlockType.SEARED_GLASS, 2);          // seared brick + glass → 2 seared glass
+        shaped3x3("ZG.", "...", "...", BlockType.SEARED_GLASS, 2);
+
+        // Seared Tank: seared brick frame with glass inside (holds liquid)
+        shaped3x3("ZGZ", "G.G", "ZGZ", BlockType.SEARED_TANK, 1); // frame + glass interior
+
+        // Smeltery Drain: seared brick with iron at centre (the pour hole)
+        shaped3x3("ZZZ", "ZIZ", "ZZZ", BlockType.SMELTERY_DRAIN, 2);
+
+        // Casting Table: seared brick top + plank legs
+        shaped3x3("ZZZ", ".P.", ".P.", BlockType.CASTING_TABLE, 1);
+
+        // Casting Basin: U-shape of seared bricks (open top)
+        shaped3x3("Z.Z", "Z.Z", "ZZZ", BlockType.CASTING_BASIN, 1);
+
+        // Part Builder: planks workbench topped with seared brick
+        shaped3x3("ZZZ", "PPP", "...", BlockType.PART_BUILDER, 1);
+
+        // Tool Station: iron ingots on top, planks frame body
+        shaped3x3("III", "PZP", "PPP", BlockType.TOOL_STATION, 1);
+
+        // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
+        // the Tool Station — there are no crafting-table recipes for them.
+
+        // --- 5x5 Advanced Crafting Table Recipes ---
+        // These recipes require the full 5x5 grid and produce advanced items
+        // Large storage: 5x5 chest/vault (25 planks -> 1 large chest)
+        shaped5x5("PPPPP", "P...P", "P...P", "P...P", "PPPPP", BlockType.CHEST, 2);   // 20 planks -> 2 chests
+
+        // Advanced beacon/tower: glowstone tower with diamond cap (10 glowstone + 1 diamond)
+        shaped5x5("..G..", ".GGG.", "GGGGG", ".GGG.", "..D..", BlockType.LAMP, 3);    // glowstone tower -> 3 lamps
     }
 
     private Crafting() {
     }
 
-    /** Registers a shaped recipe from three 3-character rows ('.' = empty). */
-    private static void shaped(String r0, String r1, String r2, BlockType output, int amount) {
-        RECIPES.add(new ShapedRecipe(cells(r0, r1, r2), output, amount));
+    /** Registers a shaped 2x2 recipe from two 2-character rows ('.' = empty). */
+    private static void shaped2x2(String r0, String r1, BlockType output, int amount) {
+        RECIPES_2x2.add(new ShapedRecipe(cells2x2(r0, r1), output, amount));
     }
 
-    /** Registers a shapeless recipe that matches any arrangement of {@code ingredients}. */
-    private static void shapeless(BlockType output, int amount, BlockType... ingredients) {
-        RECIPES.add(new ShapelessRecipe(ingredients, output, amount));
+    /** Registers a shaped 3x3 recipe from three 3-character rows ('.' = empty). */
+    private static void shaped3x3(String r0, String r1, String r2, BlockType output, int amount) {
+        RECIPES_3x3.add(new ShapedRecipe(cells3x3(r0, r1, r2), output, amount));
     }
 
-    /** Registers the six tool recipes for one material character (pickaxe/axe/sword/shovel/hammer/broadaxe). */
-    private static void tools(char m, BlockType pickaxe, BlockType axe, BlockType sword,
+    /** Registers a shapeless 2x2 recipe that matches any arrangement of {@code ingredients}. */
+    private static void shapeless2x2(BlockType output, int amount, BlockType... ingredients) {
+        RECIPES_2x2.add(new ShapelessRecipe(ingredients, output, amount));
+    }
+
+    /** Registers a shapeless 3x3 recipe that matches any arrangement of {@code ingredients}. */
+    private static void shapeless3x3(BlockType output, int amount, BlockType... ingredients) {
+        RECIPES_3x3.add(new ShapelessRecipe(ingredients, output, amount));
+    }
+
+    /** Registers a shaped 5x5 recipe from five 5-character rows ('.' = empty). */
+    private static void shaped5x5(String r0, String r1, String r2, String r3, String r4, BlockType output, int amount) {
+        RECIPES_5x5.add(new ShapedRecipe(cells5x5(r0, r1, r2, r3, r4), output, amount));
+    }
+
+    /** Registers a shapeless 5x5 recipe that matches any arrangement of {@code ingredients}. */
+    private static void shapeless5x5(BlockType output, int amount, BlockType... ingredients) {
+        RECIPES_5x5.add(new ShapelessRecipe(ingredients, output, amount));
+    }
+
+    /** Registers 3x3 tool recipes (pickaxe, axe, sword, shovel, hammer, broadaxe) for a material. */
+    private static void tools(char material, BlockType pickaxe, BlockType axe, BlockType sword,
                               BlockType shovel, BlockType hammer, BlockType broadaxe) {
-        shaped("" + m + m + m, ".S.", ".S.", pickaxe, 1);
-        shaped("" + m + m + ".", "" + m + "S.", ".S.", axe, 1);
-        shaped("." + m + ".", "." + m + ".", ".S.", sword, 1);
-        shaped("." + m + ".", ".S.", ".S.", shovel, 1);
-        shaped("" + m + m + ".", "" + m + m + ".", ".S.", hammer, 1);
-        shaped("" + m + m + m, "" + m + "S.", ".S.", broadaxe, 1);
+        // Pickaxe: XXX / XSX / .S. (top 3 same, middle stick in center, stick below)
+        shaped3x3(String.valueOf(material) + String.valueOf(material) + String.valueOf(material),
+                  String.valueOf(material) + "S" + String.valueOf(material),
+                  ".S.", pickaxe, 1);
+        // Axe: XX. / XSX / .S. (left 2 top, stick in middle+center, stick below)
+        shaped3x3(String.valueOf(material) + String.valueOf(material) + ".",
+                  String.valueOf(material) + "S" + String.valueOf(material),
+                  ".S.", axe, 1);
+        // Sword: X / X / S (vertical line, 1 wide)
+        shaped3x3(".X.", ".X.", ".S.", sword, 1);
+        // Shovel: X / S / S (material on top, 2 sticks below)
+        shaped3x3(".X.", ".S.", ".S.", shovel, 1);
+        // Hammer: XX. / XSX / .S. (like pickaxe but wider)
+        shaped3x3(String.valueOf(material) + String.valueOf(material) + ".",
+                  String.valueOf(material) + "S" + String.valueOf(material),
+                  ".S.", hammer, 1);
+        // Broadaxe: .XX / XSX / .S. (right side heavy for axe, stick in middle, stick below)
+        shaped3x3("." + String.valueOf(material) + String.valueOf(material),
+                  String.valueOf(material) + "S" + String.valueOf(material),
+                  ".S.", broadaxe, 1);
     }
 
-    /** Registers the four armor-piece recipes for one material character (helmet/chestplate/leggings/boots). */
-    private static void armor(char m, BlockType helmet, BlockType chestplate, BlockType leggings, BlockType boots) {
-        shaped("" + m + m + m, "" + m + "." + m, "...", helmet, 1);         // 5 material
-        shaped("" + m + "." + m, "" + m + m + m, "" + m + m + m, chestplate, 1); // 8 material
-        shaped("" + m + m + m, "" + m + "." + m, "" + m + "." + m, leggings, 1); // 7 material
-        shaped("" + m + "." + m, "" + m + "." + m, "...", boots, 1);        // 4 material
+    /** Registers 3x3 armor recipes (helmet, chestplate, leggings, boots) for a material. */
+    private static void armor(char material, BlockType helmet, BlockType chestplate,
+                              BlockType leggings, BlockType boots) {
+        String m = String.valueOf(material);
+        // Helmet: XXX / X.X / ... (5 pieces, hollow top)
+        shaped3x3(m + m + m, m + "." + m, "...", helmet, 1);
+        // Chestplate: X.X / XXX / XXX (8 pieces)
+        shaped3x3(m + "." + m, m + m + m, m + m + m, chestplate, 1);
+        // Leggings: XXX / X.X / X.X (7 pieces)
+        shaped3x3(m + m + m, m + "." + m, m + "." + m, leggings, 1);
+        // Boots: X.X / X.X / ... (4 pieces)
+        shaped3x3(m + "." + m, m + "." + m, "...", boots, 1);
     }
 
-    private static BlockType[] cells(String r0, String r1, String r2) {
+
+    private static BlockType[] cells2x2(String r0, String r1) {
+        BlockType[] out = new BlockType[4];
+        String[] rows = {r0, r1};
+        for (int r = 0; r < 2; r++) {
+            for (int c = 0; c < 2; c++) {
+                out[r * 2 + c] = CHARS.get(rows[r].charAt(c));
+            }
+        }
+        return out;
+    }
+
+    private static BlockType[] cells3x3(String r0, String r1, String r2) {
         BlockType[] out = new BlockType[9];
         String[] rows = {r0, r1, r2};
         for (int r = 0; r < 3; r++) {
@@ -165,9 +319,20 @@ public final class Crafting {
         return out;
     }
 
-    /** Finds the recipe matching the given 3x3 grid (row-major, null = empty), or null. */
-    public static Recipe match(BlockType[] grid) {
-        for (Recipe recipe : RECIPES) {
+    private static BlockType[] cells5x5(String r0, String r1, String r2, String r3, String r4) {
+        BlockType[] out = new BlockType[25];
+        String[] rows = {r0, r1, r2, r3, r4};
+        for (int r = 0; r < 5; r++) {
+            for (int c = 0; c < 5; c++) {
+                out[r * 5 + c] = CHARS.get(rows[r].charAt(c));
+            }
+        }
+        return out;
+    }
+
+    /** Finds the recipe matching the given 2x2 grid (row-major, null = empty), or null. */
+    public static Recipe match2x2(BlockType[] grid) {
+        for (Recipe recipe : RECIPES_2x2) {
             if (recipe.matches(grid)) {
                 return recipe;
             }
@@ -175,22 +340,57 @@ public final class Crafting {
         return null;
     }
 
-    /** Shaped match: pattern may be placed anywhere in the grid, and the grid is also mirrored horizontally. */
-    private static boolean matchesShaped(BlockType[] grid, BlockType[] pattern) {
+    /** Finds the recipe matching the given 3x3 grid (row-major, null = empty), or null. */
+    public static Recipe match3x3(BlockType[] grid) {
+        for (Recipe recipe : RECIPES_3x3) {
+            if (recipe.matches(grid)) {
+                return recipe;
+            }
+        }
+        return null;
+    }
+
+    /** Finds the recipe matching the given 5x5 grid (row-major, null = empty), or null. */
+    public static Recipe match5x5(BlockType[] grid) {
+        for (Recipe recipe : RECIPES_5x5) {
+            if (recipe.matches(grid)) {
+                return recipe;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the recipe matching the given 2x2 grid (row-major, null = empty), or null.
+     * Enforces that the grid is exactly 4 cells (2x2).
+     *
+     * @param grid a 4-element array representing a 2x2 crafting grid
+     * @return the matching recipe, or null if no recipe matches
+     * @throws IllegalArgumentException if grid.length != 4
+     */
+    public static Recipe match(BlockType[] grid) {
+        if (grid == null || grid.length != 4) {
+            throw new IllegalArgumentException("Grid must be a 2x2 grid (4 cells), got " + (grid == null ? "null" : grid.length));
+        }
+        return match2x2(grid);
+    }
+
+    /** Shaped match: pattern may sit anywhere in the grid, and the grid is also mirrored horizontally. */
+    private static boolean matchesShaped(BlockType[] grid, BlockType[] pattern, int width, int height) {
         int maxR = 0, maxC = 0;
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                if (pattern[r * 3 + c] != null) {
+        for (int r = 0; r < height; r++) {
+            for (int c = 0; c < width; c++) {
+                if (pattern[r * width + c] != null) {
                     maxR = Math.max(maxR, r);
                     maxC = Math.max(maxC, c);
                 }
             }
         }
         // Mirror the grid (not the pattern) so the pattern's bounding box stays valid.
-        BlockType[] mirroredGrid = mirrorHorizontal(grid);
-        for (int dr = 0; dr + maxR < 3; dr++) {
-            for (int dc = 0; dc + maxC < 3; dc++) {
-                if (fits(grid, pattern, dr, dc) || fits(mirroredGrid, pattern, dr, dc)) {
+        BlockType[] mirroredGrid = mirrorHorizontal(grid, width, height);
+        for (int dr = 0; dr + maxR < height; dr++) {
+            for (int dc = 0; dc + maxC < width; dc++) {
+                if (fits(grid, pattern, dr, dc, width, height) || fits(mirroredGrid, pattern, dr, dc, width, height)) {
                     return true;
                 }
             }
@@ -199,12 +399,12 @@ public final class Crafting {
     }
 
     /** True if the pattern, placed with its top-left at (dr, dc), exactly covers the grid's items. */
-    private static boolean fits(BlockType[] grid, BlockType[] pattern, int dr, int dc) {
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
+    private static boolean fits(BlockType[] grid, BlockType[] pattern, int dr, int dc, int width, int height) {
+        for (int r = 0; r < height; r++) {
+            for (int c = 0; c < width; c++) {
                 int pr = r - dr, pc = c - dc;
-                BlockType pat = (pr >= 0 && pc >= 0) ? pattern[pr * 3 + pc] : null;
-                BlockType cell = grid[r * 3 + c];
+                BlockType pat = (pr >= 0 && pr < height && pc >= 0 && pc < width) ? pattern[pr * width + pc] : null;
+                BlockType cell = grid[r * width + c];
                 if (pat == null ? cell != null : pat != cell) {
                     return false;
                 }
@@ -213,11 +413,11 @@ public final class Crafting {
         return true;
     }
 
-    private static BlockType[] mirrorHorizontal(BlockType[] pattern) {
-        BlockType[] out = new BlockType[9];
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                out[r * 3 + c] = pattern[r * 3 + (2 - c)];
+    private static BlockType[] mirrorHorizontal(BlockType[] pattern, int width, int height) {
+        BlockType[] out = new BlockType[width * height];
+        for (int r = 0; r < height; r++) {
+            for (int c = 0; c < width; c++) {
+                out[r * width + c] = pattern[r * width + (width - 1 - c)];
             }
         }
         return out;

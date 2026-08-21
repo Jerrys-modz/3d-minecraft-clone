@@ -95,7 +95,7 @@ public class NetClient implements AutoCloseable {
         send(Packets.encodeMobAttack(new Packets.MobAttack(mobId, damage)));
     }
 
-    public void sendPortalUse(byte dimension, byte blockId) throws IOException {
+    public void sendPortalUse(byte dimension, short blockId) throws IOException {
         send(Packets.encodePortalUse(dimension, blockId));
     }
 

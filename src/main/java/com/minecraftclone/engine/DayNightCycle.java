@@ -179,4 +179,23 @@ public class DayNightCycle {
     public boolean isNight() {
         return getDaylightFactor() < 0.35f;
     }
+
+    /**
+     * Skips time to morning (just after sunrise). Called when a player sleeps in a bed.
+     * Advances to the next day's sunrise time.
+     */
+    public void skipToMorning() {
+        float sunrise = getSunriseTime();
+        float target = sunrise + 0.02f;
+        // If current time is already past the target in this cycle, the sunrise
+        // is in the next cycle, so increment the day counter.
+        if (time > target) {
+            daysElapsed++;
+        }
+        // Set to just after sunrise (a small offset so it's clearly morning).
+        // The target's daylight factor is above isNight()'s 0.35 threshold
+        // (sunrise + 0.02f yields a factor well above that), ensuring creative
+        // daytime use doesn't move the clock backward when already in morning.
+        setTime(target);
+    }
 }

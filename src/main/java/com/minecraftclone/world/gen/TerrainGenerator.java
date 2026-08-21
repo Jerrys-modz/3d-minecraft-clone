@@ -32,9 +32,9 @@ public class TerrainGenerator implements WorldGenerator {
     private static final int LAVA_LEVEL = 10;      // cave pockets at/below this fill with lava instead of air
     private static final int RIVER_ZONE = 6;       // rivers only form in lowland within this of sea level, so they never become ravines
 
-    private static final int VILLAGE_SPACING = 36;           // ~1 in 36 chunks can be a village origin
-    private static final int VILLAGE_RADIUS = 3;             // chunks away a village origin is still detected
-    private static final int VILLAGE_EXTENT = 14;            // plaza half-width in blocks around the village center
+    private static final int VILLAGE_GRID = 32;              // one candidate origin per 32×32 chunk region
+    private static final int VILLAGE_SEP = 8;                // stay this many chunks from the next cell
+    private static final int VILLAGE_RADIUS = 2;             // chunks away a village origin is still detected
 
     /** The biomes a column can be assigned, from its temperature, moisture and height. */
     public enum Biome {
@@ -77,13 +77,22 @@ public class TerrainGenerator implements WorldGenerator {
         };
     }
 
-    /** True if this chunk coordinate is the origin of a village, deterministically. */
+    /**
+     * True if this chunk is the origin of a village. One candidate per
+     * {@link #VILLAGE_GRID}×{@link #VILLAGE_GRID} region with a random offset,
+     * so villages sit hundreds of blocks apart instead of every few chunks.
+     */
     public static boolean isVillageChunk(long seed, int cx, int cz) {
-        long h = seed ^ (cx * 0x9E3779B97F4A7C15L) ^ (cz * 0xBF58476D1CE4E5B9L);
+        int gx = Math.floorDiv(cx, VILLAGE_GRID);
+        int gz = Math.floorDiv(cz, VILLAGE_GRID);
+        long h = seed ^ (gx * 0x9E3779B97F4A7C15L) ^ (gz * 0xBF58476D1CE4E5B9L);
         h ^= h >>> 33;
         h *= 0xFF51AFD7ED558CCDL;
         h ^= h >>> 33;
-        return (h & 0xFFFF) % VILLAGE_SPACING == 0;
+        int span = Math.max(1, VILLAGE_GRID - VILLAGE_SEP);
+        int ox = gx * VILLAGE_GRID + (int) Math.floorMod(h, span);
+        int oz = gz * VILLAGE_GRID + (int) Math.floorMod(h >>> 16, span);
+        return cx == ox && cz == oz;
     }
 
     /** Biomes villages can appear in (flat, buildable lowlands). */
@@ -99,6 +108,7 @@ public class TerrainGenerator implements WorldGenerator {
     private final Noise caveNoise;
     private final Noise riverNoise;
     private final Noise oreNoise;
+    private final GthnOreGenerator gthnOreGenerator;
     private final long seed;
     private final int seaLevel;
     private final boolean structures;
@@ -120,6 +130,7 @@ public class TerrainGenerator implements WorldGenerator {
         this.caveNoise = new Noise(seed ^ 0xD1B54A32D192ED03L);
         this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
         this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
+        this.gthnOreGenerator = new GthnOreGenerator(seed, seaLevel);
     }
 
     @Override
@@ -385,6 +396,17 @@ public class TerrainGenerator implements WorldGenerator {
                     }
                 }
 
+                // Clay deposits: replace the top 1-2 blocks of riverbed / shallow lake
+                // floor with CLAY, matching vanilla Minecraft's clay generation.
+                // Rivers are very shallow (height == seaLevel-1) and some shallow ocean
+                // spots qualify too.  Depth range: up to 3 blocks below sea level.
+                if (height < seaLevel && height >= seaLevel - 3
+                        && (rivers[x][z] || biome == Biome.SWAMP)
+                        && featureRandom.nextInt(3) != 0) {
+                    chunk.setLocal(x, height, z, BlockType.CLAY);
+                    if (height > 0) chunk.setLocal(x, height - 1, z, BlockType.CLAY);
+                }
+
                 // Fill water up to sea level for low terrain (oceans, rivers, lakes).
                 // Frozen oceans cap the surface with ice; swamps get the odd lily pad.
                 if (height < seaLevel) {
@@ -566,7 +588,9 @@ public class TerrainGenerator implements WorldGenerator {
 
         // Villages: deterministic multi-chunk clusters - each chunk builds the
         // portion of every nearby village that falls inside it.
-        placeVillages(chunk, originX, originZ);
+        if (structures) {
+            placeVillages(chunk, originX, originZ);
+        }
 
         chunk.markGenerated();
         chunk.markDirty();
@@ -673,12 +697,18 @@ public class TerrainGenerator implements WorldGenerator {
     }
 
     /**
-     * Ore veins: independent 3D noise fields per ore type (decorrelated via large
-     * coordinate offsets), each gated to a depth range and rarity threshold -
-     * rarer/deeper ores are checked first so an unlikely overlap resolves in
-     * favor of the rarer one. Falls back to plain stone.
+     * Ore generation: GTNH ores take priority over vanilla ores, providing a rich
+     * stratified ore system with both small indicator ores and large vein clusters.
+     * Falls back to vanilla ores (coal, iron, gold, diamond) and then stone.
      */
     private BlockType oreAt(int wx, int y, int wz) {
+        // Try GTNH ore generation first (more diverse ore types)
+        BlockType gthnOre = gthnOreGenerator.oreAt(wx, y, wz);
+        if (gthnOre != BlockType.STONE) {
+            return gthnOre;
+        }
+
+        // Vanilla ore generation as fallback
         if (y >= 5 && y <= 16 && oreNoise.fbm3(wx * 0.11 + 1000, y * 0.11, wz * 0.11 + 1000, 1, 0.5, 2.0) > 0.786) {
             return BlockType.DIAMOND_ORE;
         }
@@ -928,51 +958,107 @@ public class TerrainGenerator implements WorldGenerator {
         }
     }
 
-    /** Flattens a plaza around the village center, then places houses and a well. */
+    /** Flattens pads under buildings and paths, then places houses and a well. */
     private void buildVillage(Chunk chunk, int originX, int originZ, int centerX, int centerZ) {
         Biome b = biomeAtWorld(centerX, centerZ);
         if (!villageBiome(b)) return;
         int floor = terrainHeight(centerX, centerZ);
         if (floor < seaLevel || floor > seaLevel + 12) return; // not on buildable lowland
+        // Skip slopes: a giant shaved plaza on a hill looks worse than no village.
+        int slope = 0;
+        int[][] probes = {{8, 0}, {-8, 0}, {0, 8}, {0, -8}, {8, 7}, {-8, -7}};
+        for (int[] p : probes) {
+            slope = Math.max(slope, Math.abs(terrainHeight(centerX + p[0], centerZ + p[1]) - floor));
+        }
+        if (slope > 3) return;
 
-        boolean sand = b == Biome.DESERT || b == Biome.SAVANNA;
-        BlockType surfaceBlock = sand ? BlockType.SAND : BlockType.GRASS;
+        boolean desert = b == Biome.DESERT || b == Biome.SAVANNA;
+        BlockType ground = desert ? BlockType.SAND : BlockType.GRASS;
+        BlockType path = desert ? BlockType.SAND : BlockType.GRAVEL;
 
-        // Flatten the plaza and fill any dips.
-        for (int wx = centerX - VILLAGE_EXTENT; wx <= centerX + VILLAGE_EXTENT; wx++) {
-            for (int wz = centerZ - VILLAGE_EXTENT; wz <= centerZ + VILLAGE_EXTENT; wz++) {
+        int[][] houses = {{8, -7}, {-8, -7}, {8, 7}, {-8, 7}, {0, 11}};
+        for (int i = 0; i < houses.length; i++) {
+            int hx = centerX + houses[i][0];
+            int hz = centerZ + houses[i][1];
+            placePath(chunk, originX, originZ, centerX, centerZ, hx, hz, floor, path);
+            BuildingType type = buildingTypeFor(centerX, centerZ, i);
+            int[] size = buildingSize(type);
+            flattenPad(chunk, originX, originZ, hx, hz, size[0] + 1, size[1] + 1, floor, ground);
+            buildVillageHouse(chunk, originX, originZ, hx, hz, floor + 1, desert, type);
+        }
+
+        flattenPad(chunk, originX, originZ, centerX, centerZ, 2, 2, floor, ground);
+        placeWell(chunk, originX, originZ, centerX, floor, centerZ);
+    }
+
+    private static int[] buildingSize(BuildingType t) {
+        return switch (t) {
+            case TALL_HOUSE -> new int[]{3, 2};
+            case BLACKSMITH -> new int[]{2, 1};
+            case TOWER -> new int[]{1, 1};
+            default -> new int[]{3, 2};
+        };
+    }
+
+    /** Clears plants/trees and levels a small pad so a building sits in the grass, not on a shaved square. */
+    private void flattenPad(Chunk chunk, int originX, int originZ, int cx, int cz,
+                            int halfX, int halfZ, int floor, BlockType surface) {
+        for (int wx = cx - halfX; wx <= cx + halfX; wx++) {
+            for (int wz = cz - halfZ; wz <= cz + halfZ; wz++) {
                 int lx = wx - originX, lz = wz - originZ;
                 if (lx < 0 || lx >= Chunk.SIZE || lz < 0 || lz >= Chunk.SIZE) continue;
-                for (int y = floor + 14; y > floor; y--) {
+                for (int y = floor + 1; y <= floor + 12 && y < Chunk.HEIGHT; y++) {
                     if (chunk.getLocal(lx, y, lz) != BlockType.AIR) {
                         chunk.setLocal(lx, y, lz, BlockType.AIR);
                     }
                 }
-                chunk.setLocal(lx, floor, lz, surfaceBlock);
-                for (int y = floor - 1; y >= floor - 3; y--) {
+                chunk.setLocal(lx, floor, lz, surface);
+                for (int y = floor - 1; y >= floor - 3 && y > 0; y--) {
                     if (chunk.getLocal(lx, y, lz) == BlockType.AIR) {
                         chunk.setLocal(lx, y, lz, BlockType.DIRT);
                     }
                 }
             }
         }
+    }
 
-        // A handful of houses around the plaza, each a distinct building type.
-        int[][] houses = {{4, -4}, {-4, -4}, {4, 4}, {-4, 4}, {0, 6}};
-        for (int i = 0; i < houses.length; i++) {
-            buildVillageHouse(chunk, originX, originZ, centerX + houses[i][0], centerZ + houses[i][1],
-                    floor + 1, sand, buildingTypeFor(centerX, centerZ, i));
+    /** Chebyshev dirt/gravel path from the well to a house. */
+    private void placePath(Chunk chunk, int originX, int originZ,
+                           int x0, int z0, int x1, int z1, int floor, BlockType path) {
+        int x = x0, z = z0;
+        while (true) {
+            if (!(x == x0 && z == z0)) {
+                flattenPad(chunk, originX, originZ, x, z, 0, 0, floor, path);
+            }
+            if (x == x1 && z == z1) break;
+            if (x != x1) x += Integer.signum(x1 - x);
+            if (z != z1) z += Integer.signum(z1 - z);
         }
+    }
 
-        // A well at the center.
+    /** A one-block-deep stone well with fence posts and a small plank roof. */
+    private void placeWell(Chunk chunk, int originX, int originZ, int cx, int floor, int cz) {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
-                if (Math.abs(dx) == 1 || Math.abs(dz) == 1) {
-                    setWorldBlock(chunk, originX, originZ, centerX + dx, floor + 1, centerZ + dz, BlockType.STONE);
+                if (dx == 0 && dz == 0) {
+                    setWorldBlock(chunk, originX, originZ, cx, floor, cz, BlockType.AIR);
+                    setWorldBlock(chunk, originX, originZ, cx, floor - 1, cz, BlockType.WATER_SOURCE);
+                    setWorldBlock(chunk, originX, originZ, cx, floor - 2, cz, BlockType.STONE);
+                } else {
+                    setWorldBlock(chunk, originX, originZ, cx + dx, floor, cz + dz, BlockType.STONE);
                 }
             }
         }
-        setWorldBlock(chunk, originX, originZ, centerX, floor + 1, centerZ, BlockType.WATER_SOURCE);
+        int[][] posts = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+        for (int[] p : posts) {
+            setWorldBlock(chunk, originX, originZ, cx + p[0], floor + 1, cz + p[1], BlockType.WOODEN_FENCE);
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                setWorldBlock(chunk, originX, originZ, cx + dx, floor + 2, cz + dz, BlockType.PLANKS_SLAB);
+            }
+        }
+        setWorldBlock(chunk, originX, originZ, cx, floor + 1, cz + 1, BlockType.TORCH);
     }
 
     /** True if the wall cell (dx, dz) of a halfX-by-halfZ footprint is a window. */
@@ -984,17 +1070,19 @@ public class TerrainGenerator implements WorldGenerator {
 
     /** Builds a village building of the given type, all clipped to this chunk. */
     private void buildVillageHouse(Chunk chunk, int originX, int originZ, int wx, int wz, int baseY,
-                                   boolean sand, BuildingType t) {
-        int halfX, halfZ, wallH;
-        switch (t) {
-            case TALL_HOUSE -> { halfX = 3; halfZ = 2; wallH = 3; }
-            case BLACKSMITH -> { halfX = 2; halfZ = 1; wallH = 2; }
-            case TOWER -> { halfX = 1; halfZ = 1; wallH = 4; }
-            default -> { halfX = 3; halfZ = 2; wallH = 2; } // HOUSE
-        }
-        boolean stoneWall = t == BuildingType.BLACKSMITH || t == BuildingType.TOWER;
-        BlockType wall = sand ? BlockType.SAND : (stoneWall ? BlockType.STONE : BlockType.PLANKS);
-        BlockType roof = sand ? BlockType.SAND : BlockType.PLANKS;
+                                   boolean desert, BuildingType t) {
+        int[] size = buildingSize(t);
+        int halfX = size[0], halfZ = size[1];
+        int wallH = switch (t) {
+            case TALL_HOUSE -> 3;
+            case TOWER -> 4;
+            default -> 2;
+        };
+        boolean stoneWall = t == BuildingType.BLACKSMITH || t == BuildingType.TOWER || desert;
+        BlockType wall = stoneWall ? BlockType.STONE : BlockType.PLANKS;
+        BlockType corner = desert ? BlockType.STONE : BlockType.WOOD_LOG;
+        BlockType stair = stoneWall ? BlockType.STONE_STAIRS : BlockType.PLANKS_STAIRS;
+        BlockType fill = stoneWall ? BlockType.STONE : BlockType.PLANKS;
 
         for (int h = 0; h < wallH; h++) {
             for (int dx = -halfX; dx <= halfX; dx++) {
@@ -1005,27 +1093,55 @@ public class TerrainGenerator implements WorldGenerator {
                         setWorldBlock(chunk, originX, originZ, wx + dx, baseY + h, wz + dz, BlockType.GLASS);
                         continue;
                     }
-                    setWorldBlock(chunk, originX, originZ, wx + dx, baseY + h, wz + dz, wall);
+                    boolean isCorner = Math.abs(dx) == halfX && Math.abs(dz) == halfZ;
+                    setWorldBlock(chunk, originX, originZ, wx + dx, baseY + h, wz + dz,
+                            isCorner ? corner : wall);
                 }
             }
         }
 
-        // Door panels filling the front opening.
         if (t != BuildingType.TOWER) {
             setWorldBlock(chunk, originX, originZ, wx, baseY, wz + halfZ, BlockType.DOOR);
             setWorldBlock(chunk, originX, originZ, wx, baseY + 1, wz + halfZ, BlockType.DOOR);
         }
 
-        // Blacksmith forge against the side wall: its front faces into the room (-X).
         if (t == BuildingType.BLACKSMITH) {
             setWorldBlock(chunk, originX, originZ, wx + 1, baseY, wz, BlockType.FURNACE);
             setWorldOrientation(chunk, originX, originZ, wx + 1, baseY, wz, (byte) 3);
         }
 
-        // Flat roof over the whole footprint.
-        for (int dx = -halfX; dx <= halfX; dx++) {
-            for (int dz = -halfZ; dz <= halfZ; dz++) {
-                setWorldBlock(chunk, originX, originZ, wx + dx, baseY + wallH, wz + dz, roof);
+        if (t == BuildingType.TOWER) {
+            for (int dx = -halfX; dx <= halfX; dx++) {
+                for (int dz = -halfZ; dz <= halfZ; dz++) {
+                    setWorldBlock(chunk, originX, originZ, wx + dx, baseY + wallH, wz + dz, BlockType.STONE_SLAB);
+                    if (Math.abs(dx) == halfX || Math.abs(dz) == halfZ) {
+                        setWorldBlock(chunk, originX, originZ, wx + dx, baseY + wallH + 1, wz + dz, BlockType.WOODEN_FENCE);
+                    }
+                }
+            }
+        } else {
+            placeGableRoof(chunk, originX, originZ, wx, wz, baseY + wallH, halfX, halfZ, stair, fill);
+        }
+    }
+
+    /**
+     * Gable roof, ridge along X, slopes north/south. Overhangs one block so the
+     * house isn't a flat lid sitting on a flat pad.
+     */
+    private void placeGableRoof(Chunk chunk, int originX, int originZ,
+                                int wx, int wz, int roofY, int halfX, int halfZ,
+                                BlockType stair, BlockType fill) {
+        for (int layer = 0; layer <= halfZ; layer++) {
+            int span = halfZ - layer + 1;
+            int y = roofY + layer;
+            for (int dx = -halfX - 1; dx <= halfX + 1; dx++) {
+                setWorldBlock(chunk, originX, originZ, wx + dx, y, wz + span, stair);
+                setWorldOrientation(chunk, originX, originZ, wx + dx, y, wz + span, (byte) 0);
+                setWorldBlock(chunk, originX, originZ, wx + dx, y, wz - span, stair);
+                setWorldOrientation(chunk, originX, originZ, wx + dx, y, wz - span, (byte) 1);
+                for (int dz = -span + 1; dz <= span - 1; dz++) {
+                    setWorldBlock(chunk, originX, originZ, wx + dx, y, wz + dz, fill);
+                }
             }
         }
     }
