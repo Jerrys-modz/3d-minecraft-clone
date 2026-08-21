@@ -21,9 +21,9 @@ import java.util.Random;
  * <p>Sugar cane does not grow automatically yet - it is placeable as a
  * decoration block. Future work: add upward growth logic here.
  *
- * <p>Farming interactions (hoe-on-dirt, seeds-on-farmland, canteen-at-water)
- * are wired in {@code Main}; this class only answers "what grows where" and
- * "what does breaking this crop produce?"
+ * <p>Farming interactions (hoe-on-dirt, seeds-on-farmland, bone-meal, canteen-at-water)
+ * are wired in {@code Main}; this class answers "what grows where", "can I till
+ * this", "what does bone meal do", and "what does breaking this crop produce?"
  */
 public final class Farming {
 
@@ -51,6 +51,17 @@ public final class Farming {
     /** True for item types that can be planted on FARMLAND (seeds, raw potato, carrot). */
     public static boolean isPlantable(BlockType type) {
         return type != null && type.isPlantable();
+    }
+
+    /**
+     * True for soil a hoe can till into farmland: dirt, grass, swamp grass,
+     * or mycelium. Farmland itself is already tilled.
+     */
+    public static boolean canTill(BlockType type) {
+        return type == BlockType.DIRT
+                || type == BlockType.GRASS
+                || type == BlockType.SWAMP_GRASS
+                || type == BlockType.MYCELIUM;
     }
 
     /**
@@ -132,10 +143,14 @@ public final class Farming {
      * FARMLAND ↔ FARMLAND_WET state transition.
      */
     public static boolean isNearWater(World world, int wx, int wy, int wz) {
+        return isNearWater(world::getBlock, wx, wy, wz);
+    }
+
+    static boolean isNearWater(BlockGet get, int wx, int wy, int wz) {
         for (int dz = -4; dz <= 4; dz++) {
             for (int dx = -4; dx <= 4; dx++) {
                 for (int dy = 0; dy <= 1; dy++) {
-                    BlockType b = world.getBlock(wx + dx, wy + dy, wz + dz);
+                    BlockType b = get.get(wx + dx, wy + dy, wz + dz);
                     if (b != null && b.isFluid() && !b.equals(BlockType.LAVA)
                             && !b.equals(BlockType.LAVA_SOURCE)
                             && !b.equals(BlockType.LAVA_FLOW)) {
@@ -145,6 +160,24 @@ public final class Farming {
             }
         }
         return false;
+    }
+
+    /**
+     * Till the soil at {@code (wx, wy, wz)} into farmland (wet if water is
+     * nearby). Returns false if the block isn't tillable or a solid block
+     * is sitting on top of it (vanilla: you can't till under a floor).
+     */
+    public static boolean tillAt(World world, int wx, int wy, int wz) {
+        return tillAt(world::getBlock, world::setBlock, wx, wy, wz);
+    }
+
+    static boolean tillAt(BlockGet get, BlockSet set, int wx, int wy, int wz) {
+        if (!canTill(get.get(wx, wy, wz))) return false;
+        BlockType above = get.get(wx, wy + 1, wz);
+        if (above != null && above.solid) return false;
+        boolean wet = isNearWater(get, wx, wy, wz);
+        set.set(wx, wy, wz, wet ? BlockType.FARMLAND_WET : BlockType.FARMLAND);
+        return true;
     }
 
     // -----------------------------------------------------------------------
@@ -346,6 +379,107 @@ public final class Farming {
     public static void tickCropsNear(World world, int px, int py, int pz,
                                      float dt, Random rnd) {
         tickCrops(world, dt, rnd);
+    }
+
+    // -----------------------------------------------------------------------
+    // Bone meal
+    // -----------------------------------------------------------------------
+
+    /**
+     * Apply bone meal at {@code (wx, wy, wz)}. Returns true if something grew
+     * (the caller should consume one bone meal). Crops jump 1–2 stages;
+     * grass / swamp grass / mycelium sprout tall grass and the odd flower
+     * in a small neighbourhood. No-op on fully grown crops, sugar cane, or
+     * anything that isn't soil or a crop.
+     */
+    public static boolean applyBonemeal(World world, int wx, int wy, int wz, Random rnd) {
+        return applyBonemeal(world::getBlock, world::setBlock, wx, wy, wz, rnd);
+    }
+
+    static boolean applyBonemeal(BlockGet get, BlockSet set, int wx, int wy, int wz, Random rnd) {
+        BlockType b = get.get(wx, wy, wz);
+        if (b == null) return false;
+
+        // Clicking a plant on grass still fertilizes the grass underneath.
+        if (b == BlockType.TALL_GRASS || b == BlockType.FLOWER_RED || b == BlockType.FLOWER_YELLOW) {
+            wy = wy - 1;
+            b = get.get(wx, wy, wz);
+            if (b == null) return false;
+        }
+
+        if (b.isFarmland()) {
+            BlockType crop = get.get(wx, wy + 1, wz);
+            return growCrop(get, set, wx, wy + 1, wz, crop, rnd);
+        }
+        if (isCrop(b) && b != BlockType.SUGAR_CANE) {
+            return growCrop(get, set, wx, wy, wz, b, rnd);
+        }
+        if (b == BlockType.GRASS || b == BlockType.SWAMP_GRASS || b == BlockType.MYCELIUM) {
+            return sproutOnGrass(get, set, wx, wy, wz, rnd);
+        }
+        return false;
+    }
+
+    /** Advance {@code crop} by 1 or 2 stages. Returns false if it was already ripe. */
+    static boolean growCrop(BlockGet get, BlockSet set, int wx, int wy, int wz,
+                            BlockType crop, Random rnd) {
+        if (crop == null || !isCrop(crop) || crop == BlockType.SUGAR_CANE) return false;
+        int steps = 1 + rnd.nextInt(2);
+        BlockType cur = crop;
+        boolean grew = false;
+        for (int i = 0; i < steps; i++) {
+            BlockType next = nextStage(cur);
+            if (next == null) break;
+            cur = next;
+            grew = true;
+        }
+        if (grew) set.set(wx, wy, wz, cur);
+        return grew;
+    }
+
+    /**
+     * Scatter tall grass (and the occasional flower) on air above nearby
+     * grass-like blocks. The clicked cell always sprouts if the space above
+     * is empty; neighbours are probabilistic.
+     */
+    static boolean sproutOnGrass(BlockGet get, BlockSet set, int wx, int wy, int wz, Random rnd) {
+        int spawned = 0;
+        for (int dz = -2; dz <= 2; dz++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue; // skip far corners
+                int x = wx + dx;
+                int z = wz + dz;
+                BlockType ground = get.get(x, wy, z);
+                if (ground != BlockType.GRASS && ground != BlockType.SWAMP_GRASS
+                        && ground != BlockType.MYCELIUM) {
+                    continue;
+                }
+                BlockType above = get.get(x, wy + 1, z);
+                if (above != null && above != BlockType.AIR) continue;
+                float chance = (dx == 0 && dz == 0) ? 1f : 0.4f;
+                if (rnd.nextFloat() > chance) continue;
+                set.set(x, wy + 1, z, randomSprout(rnd));
+                spawned++;
+            }
+        }
+        return spawned > 0;
+    }
+
+    static BlockType randomSprout(Random rnd) {
+        float r = rnd.nextFloat();
+        if (r < 0.08f) return BlockType.FLOWER_RED;
+        if (r < 0.16f) return BlockType.FLOWER_YELLOW;
+        return BlockType.TALL_GRASS;
+    }
+
+    @FunctionalInterface
+    interface BlockGet {
+        BlockType get(int x, int y, int z);
+    }
+
+    @FunctionalInterface
+    interface BlockSet {
+        void set(int x, int y, int z, BlockType type);
     }
 
     private Farming() {}

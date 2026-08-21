@@ -1155,8 +1155,9 @@ public class TextureAtlas {
 
     /**
      * Farmland top: dark brown tilled dirt with faint horizontal furrow lines.
-     * The sides and bottom reuse the dirt tile (index 2) directly from the atlas;
-     * only the top face uses this special tile.
+     * The sides and bottom reuse the dirt tile (index 3) directly from the atlas;
+     * only the top face uses this special tile. Index 2 is the grass side
+     * (dirt + green fringe) and must not be used for farmland sides.
      */
     private void paintFarmlandTop(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);

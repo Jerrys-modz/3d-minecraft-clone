@@ -54,4 +54,13 @@ class CreativeCatalogSearchTest {
         assertTrue(CreativeCatalog.matches(BlockType.COPPER_ORE, "Ore"));
         assertFalse(CreativeCatalog.matches(BlockType.STONE, "copper"));
     }
+
+    @Test
+    void boneMealIsInTheCatalog() {
+        BlockType[] shown = CreativeCatalog.itemsFor(0, "bone meal");
+        assertTrue(shown.length >= 1);
+        assertTrue(java.util.Arrays.asList(shown).contains(BlockType.BONE_MEAL));
+        BlockType[] bones = CreativeCatalog.itemsFor(0, "bones");
+        assertTrue(java.util.Arrays.asList(bones).contains(BlockType.BONES));
+    }
 }

@@ -1868,7 +1868,24 @@ public class Main {
 
                 // Breaking: creative breaks instantly; adventure/spectator can't break.
                 // Aiming at a mob means the swing is an attack, not a dig.
-                if (mode.canBreak() && targetedMobRef[0] == null) {
+                // Hoes till dirt/grass instead of mining it — they used to be
+                // registered as shovels, so left-click (especially in creative)
+                // deleted the soil instead of turning it into farmland.
+                boolean hoeOnSoil = heldItem != null && heldItem.isHoe()
+                        && com.minecraftclone.player.Farming.canTill(targetType);
+                if (hoeOnSoil && targetedMobRef[0] == null && mode.canPlace() && hit != null
+                        && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+                    int hx = hit.blockPos.x, hy = hit.blockPos.y, hz = hit.blockPos.z;
+                    if (com.minecraftclone.player.Farming.tillAt(world, hx, hy, hz)) {
+                        handRenderer.triggerSwing();
+                        audio.playBlockSound(SoundMaterial.of(BlockType.DIRT), BlockAction.PLACE,
+                                hx + 0.5f, hy + 0.5f, hz + 0.5f, 1f);
+                        if (!mode.isCreative()) {
+                            wearHeldTool(player, selectedSlot[0], heldStack, messages, audio);
+                        }
+                    }
+                }
+                if (mode.canBreak() && targetedMobRef[0] == null && !hoeOnSoil) {
                     boolean holding = hit != null && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
                     if (mode.isCreative()) {
                         // One block per click (a fresh press), not "instant-break
@@ -1997,21 +2014,25 @@ public class Main {
                             }
                         }
                     } else if (noMob && heldItem != null && heldItem.isHoe()
-                            && (targeted == BlockType.DIRT || targeted == BlockType.GRASS)
+                            && com.minecraftclone.player.Farming.canTill(targeted)
                             && mode.canPlace()) {
-                        // Hoe on DIRT or GRASS → till into FARMLAND (wet if water is within 4 blocks).
+                        // Hoe on dirt/grass/mycelium → till into farmland (wet if water is nearby).
                         int hx = hit.blockPos.x, hy = hit.blockPos.y, hz = hit.blockPos.z;
-                        boolean nearWater = com.minecraftclone.player.Farming.isNearWater(world, hx, hy, hz);
-                        world.setBlock(hx, hy, hz, nearWater ? BlockType.FARMLAND_WET : BlockType.FARMLAND);
-                        handRenderer.triggerSwing();
-                        audio.playBlockSound(SoundMaterial.of(BlockType.DIRT), BlockAction.PLACE,
-                                hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
-                        if (!mode.isCreative() && Mining.isTool(heldItem)) {
-                            if (player.getDurability().use(heldItem)) {
-                                player.getInventory().remove(heldItem, 1);
-                                showMessage(messages, "Your " + heldItem.displayName() + " broke!",
-                                        new Vector4f(1f, 0.4f, 0.2f, 1f), 2.5f);
+                        if (com.minecraftclone.player.Farming.tillAt(world, hx, hy, hz)) {
+                            handRenderer.triggerSwing();
+                            audio.playBlockSound(SoundMaterial.of(BlockType.DIRT), BlockAction.PLACE,
+                                    hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                            if (!mode.isCreative()) {
+                                wearHeldTool(player, selectedSlot[0], heldStack, messages, audio);
                             }
+                        }
+                    } else if (noMob && heldItem != null && heldItem.isBoneMeal() && mode.canPlace()) {
+                        int hx = hit.blockPos.x, hy = hit.blockPos.y, hz = hit.blockPos.z;
+                        if (com.minecraftclone.player.Farming.applyBonemeal(world, hx, hy, hz, loot)) {
+                            if (!mode.isCreative()) player.getInventory().remove(heldItem, 1);
+                            handRenderer.triggerSwing();
+                            audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
+                                    hx + 0.5f, hy + 0.5f, hz + 0.5f, 0.9f);
                         }
                     } else if (noMob && heldItem != null && heldItem.isPlantable()
                             && targeted != null && targeted.isFarmland() && mode.canPlace()) {

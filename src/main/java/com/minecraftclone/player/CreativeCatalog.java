@@ -55,7 +55,7 @@ public final class CreativeCatalog {
             new Tab("Materials", new BlockType[]{
                     BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
                     BlockType.COAL, BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
-                    BlockType.WOOL,
+                    BlockType.WOOL, BlockType.BONES, BlockType.BONE_MEAL,
                     // GTNH Ores - early game
                     BlockType.COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.COPPER_DUST, BlockType.COPPER_INGOT,
                     BlockType.TIN_ORE, BlockType.CRUSHED_TIN, BlockType.TIN_DUST, BlockType.TIN_INGOT,
@@ -189,6 +189,7 @@ public final class CreativeCatalog {
                     // Phase 0: farming food items + canteen
                     BlockType.SEEDS, BlockType.WHEAT, BlockType.BREAD,
                     BlockType.POTATO, BlockType.POTATO_COOKED, BlockType.CARROT,
+                    BlockType.BONE_MEAL,
                     BlockType.CLAY_BALL, BlockType.CLAY_CANTEEN, BlockType.CLAY_CANTEEN_FULL,
             }),
     };

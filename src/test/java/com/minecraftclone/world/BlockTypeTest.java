@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockTypeTest {
@@ -152,6 +153,28 @@ class BlockTypeTest {
         // They reuse their material's tiles.
         assertEquals(BlockType.STONE.topTile, BlockType.STONE_STAIRS.topTile);
         assertEquals(BlockType.PLANKS.topTile, BlockType.PLANKS_STAIRS.topTile);
+    }
+
+    @Test
+    void farmlandSidesAreDirtNotGrassFringe() {
+        // Atlas tile 2 is the grass side (dirt + green fringe). Tile 3 is dirt.
+        assertEquals(BlockType.DIRT.sideTile, BlockType.FARMLAND.sideTile);
+        assertEquals(BlockType.DIRT.bottomTile, BlockType.FARMLAND.bottomTile);
+        assertEquals(BlockType.DIRT.sideTile, BlockType.FARMLAND_WET.sideTile);
+        assertEquals(BlockType.DIRT.bottomTile, BlockType.FARMLAND_WET.bottomTile);
+        assertEquals(3, BlockType.FARMLAND.sideTile);
+        assertNotEquals(BlockType.GRASS.sideTile, BlockType.FARMLAND.sideTile,
+                "farmland must not reuse the grass-fringe side tile");
+        assertNotEquals(BlockType.FARMLAND.topTile, BlockType.FARMLAND.sideTile);
+    }
+
+    @Test
+    void boneMealIsAnInventoryItem() {
+        assertTrue(BlockType.BONE_MEAL.isItem);
+        assertTrue(BlockType.BONE_MEAL.isBoneMeal());
+        assertFalse(BlockType.BONES.isBoneMeal());
+        assertEquals("Bone Meal", BlockType.BONE_MEAL.displayName());
+        assertEquals(455, BlockType.BONE_MEAL.id);
     }
 
     @Test

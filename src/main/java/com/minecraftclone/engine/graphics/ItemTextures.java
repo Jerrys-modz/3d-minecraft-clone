@@ -104,6 +104,7 @@ public class ItemTextures {
             case MUTTON -> paintMeat(0xD87870, 0xB04848);
             case ROTTEN_FLESH -> paintMeat(0x9A8A6A, 0x7A6A50);
             case BONES -> paintBones();
+            case BONE_MEAL -> paintBoneMeal();
             case COAL -> paintCoal();
             case WOOL -> paintWool();
             case WOLF_PELT -> paintPelt(0xA8A8A8, 0x8A8A8A);
@@ -644,6 +645,29 @@ public class ItemTextures {
         img.setRGB(11, 2, 0xFF000000 | 0xE8E0D0);
         img.setRGB(12, 3, 0xFF000000 | 0xE8E0D0);
         img.setRGB(13, 4, 0xFF000000 | 0xE8E0D0);
+        return img;
+    }
+
+    /** A small heap of off-white powder — crushed bone used as fertilizer. */
+    private static BufferedImage paintBoneMeal() {
+        BufferedImage img = blank();
+        // Cone-shaped pile: wide at the bottom, tapering up.
+        int[] halfW = {0, 1, 2, 3, 4, 5, 5, 4, 3, 2};
+        int baseY = 13;
+        for (int i = 0; i < halfW.length; i++) {
+            int y = baseY - i;
+            int hw = halfW[i];
+            for (int dx = -hw; dx <= hw; dx++) {
+                int x = 8 + dx;
+                boolean edge = Math.abs(dx) == hw;
+                int c = edge ? 0xD8D0C0 : ((x + y) % 3 == 0 ? 0xFFF8EC : 0xE8E0D0);
+                img.setRGB(x, y, 0xFF000000 | c);
+            }
+        }
+        // A few brighter specks so it reads as powder, not a lump.
+        img.setRGB(7, 11, 0xFF000000 | 0xFFFFFF);
+        img.setRGB(9, 10, 0xFF000000 | 0xFFFFFF);
+        img.setRGB(8, 8, 0xFF000000 | 0xF4ECD8);
         return img;
     }
 

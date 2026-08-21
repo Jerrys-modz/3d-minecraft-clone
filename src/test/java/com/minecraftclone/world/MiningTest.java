@@ -20,6 +20,19 @@ class MiningTest {
     }
 
     @Test
+    void hoeIsNotAShovelAndDoesNotSpeedDirt() {
+        float hand = Mining.breakTimeSeconds(BlockType.DIRT, null);
+        assertEquals(hand, Mining.breakTimeSeconds(BlockType.DIRT, BlockType.WOOD_HOE), 0.0001f);
+        assertEquals(hand, Mining.breakTimeSeconds(BlockType.DIRT, BlockType.DIAMOND_HOE), 0.0001f);
+        assertEquals(Mining.breakTimeSeconds(BlockType.GRASS, null),
+                Mining.breakTimeSeconds(BlockType.GRASS, BlockType.IRON_HOE), 0.0001f);
+        assertTrue(Mining.isTool(BlockType.WOOD_HOE), "hoes still wear as tools");
+        assertEquals(Mining.ToolKind.NONE, Mining.toolStats(BlockType.DIAMOND_HOE).kind());
+        float shovel = Mining.breakTimeSeconds(BlockType.DIRT, BlockType.DIAMOND_SHOVEL);
+        assertTrue(shovel < hand, "a real shovel is still faster than a hoe");
+    }
+
+    @Test
     void hammerIsEffectiveOnStoneAndFurnace() {
         float hand = Mining.breakTimeSeconds(BlockType.STONE, null);
         float hammer = Mining.breakTimeSeconds(BlockType.STONE, BlockType.DIAMOND_HAMMER);

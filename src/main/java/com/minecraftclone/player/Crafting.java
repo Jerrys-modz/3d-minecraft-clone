@@ -163,6 +163,10 @@ public final class Crafting {
         shaped3x3("II.", ".S.", ".S.", BlockType.IRON_HOE, 1);
         shaped3x3("DD.", ".S.", ".S.", BlockType.DIAMOND_HOE, 1);
 
+        // Bone meal: crush one bone into 3 piles (inventory 2x2 or crafting table).
+        shapeless2x2(BlockType.BONE_MEAL, 3, BlockType.BONES);
+        shapeless3x3(BlockType.BONE_MEAL, 3, BlockType.BONES);
+
         // Clay canteen: 4 clay balls in a 2x2
         shaped2x2("YY", "YY", BlockType.CLAY_CANTEEN, 1);  // 4 clay balls -> 1 canteen
 

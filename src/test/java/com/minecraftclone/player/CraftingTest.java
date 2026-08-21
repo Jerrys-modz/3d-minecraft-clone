@@ -332,6 +332,28 @@ class CraftingTest {
     }
 
     @Test
+    void oneBoneCraftsThreeBoneMeal() {
+        BlockType[] grid2 = new BlockType[4];
+        grid2[0] = BlockType.BONES;
+        Crafting.Recipe r2 = Crafting.match2x2(grid2);
+        assertNotNull(r2, "one bone in the 2x2 inventory grid must craft bone meal");
+        assertEquals(BlockType.BONE_MEAL, r2.output());
+        assertEquals(3, r2.outputAmount());
+
+        BlockType[] grid3 = new BlockType[9];
+        grid3[4] = BlockType.BONES;
+        Crafting.Recipe r3 = Crafting.match3x3(grid3);
+        assertNotNull(r3, "one bone in the 3x3 table must craft bone meal");
+        assertEquals(BlockType.BONE_MEAL, r3.output());
+        assertEquals(3, r3.outputAmount());
+
+        BlockType[] twoBones = new BlockType[4];
+        twoBones[0] = BlockType.BONES;
+        twoBones[1] = BlockType.BONES;
+        assertNull(Crafting.match2x2(twoBones), "two bones is not the 1-bone recipe");
+    }
+
+    @Test
     void breadRequiresThreeWheatInARow() {
         BlockType[] three = new BlockType[9];
         three[0] = BlockType.WHEAT;

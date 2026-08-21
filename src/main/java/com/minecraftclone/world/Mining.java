@@ -67,12 +67,13 @@ public final class Mining {
         TOOLS.put(BlockType.STONE_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_STONE, 132));
         TOOLS.put(BlockType.IRON_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_IRON, 251));
         TOOLS.put(BlockType.DIAMOND_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_DIAMOND, 1562));
-        // Hoes - used via right-click to till dirt into farmland; also listed
-        // here as "tools" so durability tracking and the isTool() check work.
-        TOOLS.put(BlockType.WOOD_HOE,    new ToolStats(ToolKind.SHOVEL, TIER_WOOD,    60));
-        TOOLS.put(BlockType.STONE_HOE,   new ToolStats(ToolKind.SHOVEL, TIER_STONE,  132));
-        TOOLS.put(BlockType.IRON_HOE,    new ToolStats(ToolKind.SHOVEL, TIER_IRON,   251));
-        TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.SHOVEL, TIER_DIAMOND, 1562));
+        // Hoes till dirt on use; they are NOT shovels. Registering them as
+        // SHOVEL used to make left-click delete dirt at shovel speed (a
+        // diamond hoe broke dirt in ~0.03s — it looked like the block vanished).
+        TOOLS.put(BlockType.WOOD_HOE,    new ToolStats(ToolKind.NONE, TIER_WOOD,    60));
+        TOOLS.put(BlockType.STONE_HOE,   new ToolStats(ToolKind.NONE, TIER_STONE,  132));
+        TOOLS.put(BlockType.IRON_HOE,    new ToolStats(ToolKind.NONE, TIER_IRON,   251));
+        TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.NONE, TIER_DIAMOND, 1562));
 
         // Phase 0.5: Tinkers' Construct assembled tools are handled dynamically via
         // TinkersItem.Tool and TinkersRegistry — no static TOOLS entries needed.

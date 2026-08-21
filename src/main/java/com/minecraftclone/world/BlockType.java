@@ -613,8 +613,9 @@ public enum BlockType {
     // =========================================================================
 
     // --- Farming world blocks (atlas tiles 220-231) ---
-    // Farmland: tilled dirt that crops grow on (top = tile 220, sides/bottom = dirt tile 2).
-    FARMLAND(419, true, false, 220, 2, 2),
+    // Farmland: tilled dirt that crops grow on (top = tile 220, sides/bottom = dirt tile 3).
+    // Tile 2 is the grass side (dirt + green fringe) — never use it for farmland sides.
+    FARMLAND(419, true, false, 220, 3, 3),
 
     // Wheat: 4 growth stages (cross-shaped billboard tiles 221-224).
     WHEAT_STAGE_1(420, false, true, 221),
@@ -665,7 +666,7 @@ public enum BlockType {
      * Visually darker than dry FARMLAND. Crops only grow on this variant.
      * Reverts to dry FARMLAND when no water is nearby, and to DIRT if trampled.
      */
-    FARMLAND_WET(445, true, false, 233, 2, 2),
+    FARMLAND_WET(445, true, false, 233, 3, 3),
 
     // =========================================================================
     // Phase 0.5 — Tinkers' Construct: Smeltery multi-block + crafting stations
@@ -731,6 +732,12 @@ public enum BlockType {
      * modular Tinkers' tool.  Tile 243.
      */
     TOOL_STATION(454, true, false, 243, 243, 243),
+
+    /**
+     * Bone meal — crushed bones used to instantly grow crops and sprout
+     * tall grass / flowers on grass. Crafted shapeless: 1 {@link #BONES} → 3.
+     */
+    BONE_MEAL(455, 0),
 
     // -----------------------------------------------------------------------
     // Tinkers' Construct sentinels: two inventory-item slots that carry the
@@ -1116,6 +1123,11 @@ public enum BlockType {
     /** True for any hoe item (used to till DIRT/GRASS into FARMLAND). */
     public boolean isHoe() {
         return this == WOOD_HOE || this == STONE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
+    }
+
+    /** True for bone meal (right-click crops to grow them, or grass to sprout plants). */
+    public boolean isBoneMeal() {
+        return this == BONE_MEAL;
     }
 
     /** True for either variant of tilled farmland (dry or hydrated). */
