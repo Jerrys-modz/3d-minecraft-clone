@@ -78,4 +78,24 @@ class SoundsTest {
         assertTrue(open.length != close.length, "open creak and close slam should not be the same clip");
         assertTrue(open.length != door.length, "chest lid should not reuse the door clip");
     }
+
+    @Test
+    void hitIsAShorterPunchThanTheFinalBreak() {
+        Sounds sounds = new Sounds();
+        short[] stoneHit = sounds.get(SoundMaterial.STONE, BlockAction.HIT);
+        short[] stoneBreak = sounds.get(SoundMaterial.STONE, BlockAction.BREAK);
+        short[] woodHit = sounds.get(SoundMaterial.WOOD, BlockAction.HIT);
+        short[] dirtHit = sounds.get(SoundMaterial.DIRT, BlockAction.HIT);
+        assertTrue(stoneHit.length < stoneBreak.length,
+                "a mining punch should be shorter than the block actually breaking");
+        assertTrue(woodHit.length > 0 && dirtHit.length > 0);
+        assertTrue(stoneHit.length != woodHit.length || energy(stoneHit) != energy(woodHit),
+                "stone and wood punches should not be identical clips");
+    }
+
+    private static long energy(short[] pcm) {
+        long sum = 0;
+        for (short s : pcm) sum += Math.abs(s);
+        return sum;
+    }
 }

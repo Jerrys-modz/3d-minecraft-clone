@@ -55,6 +55,9 @@ public class TextureAtlas {
     public static final int CHEST_SIDE_TILE = 65;
     /** Tile index of the chest's underside. */
     public static final int CHEST_BOTTOM_TILE = 66;
+    /** First of {@link #DESTROY_STAGE_COUNT} accumulating crack overlays (hold-to-break). */
+    public static final int DESTROY_STAGE_TILE = 67;
+    public static final int DESTROY_STAGE_COUNT = 10;
     /** Tile index of the barrel's face. */
     public static final int BARREL_TILE = 51;
     /** Tile index of the lightning-lit fire cross. */
@@ -302,6 +305,9 @@ public class TextureAtlas {
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
         paintFire(image, FIRE_TILE, rnd);
+        for (int s = 0; s < DESTROY_STAGE_COUNT; s++) {
+            paintDestroyStage(image, DESTROY_STAGE_TILE + s, s);
+        }
 
         // --- Phase 0: Farming tiles (220-231) ---
         paintFarmlandTop(image, 220, rnd);       // FARMLAND top (tilled dark dirt)
@@ -1627,6 +1633,44 @@ public class TextureAtlas {
         }
     }
 
+    /**
+     * Destroy-stage crack overlay: transparent with accumulating dark cracks.
+     * Same seed every stage so later frames keep earlier cracks and add more.
+     */
+    private void paintDestroyStage(BufferedImage img, int index, int stage) {
+        int ox = tileX(index);
+        int oy = tileY(index);
+        java.util.Random rnd = new java.util.Random(4242);
+        int cracks = 4 + stage * 3;
+        for (int c = 0; c < cracks; c++) {
+            int x = 1 + rnd.nextInt(TILE_PX - 2);
+            int y = 1 + rnd.nextInt(TILE_PX - 2);
+            int len = 3 + rnd.nextInt(5) + stage / 3;
+            int dx = rnd.nextInt(3) - 1;
+            int dy = rnd.nextInt(3) - 1;
+            if (dx == 0 && dy == 0) dy = 1;
+            int color = (c % 4 == 0) ? 0xFF3A3A3A : 0xFF0A0A0A;
+            for (int i = 0; i < len; i++) {
+                if (x >= 0 && x < TILE_PX && y >= 0 && y < TILE_PX) {
+                    img.setRGB(ox + x, oy + y, color);
+                    if (stage >= 5 && x + 1 < TILE_PX) {
+                        img.setRGB(ox + x + 1, oy + y, color);
+                    }
+                }
+                x += dx;
+                y += dy;
+                if (rnd.nextFloat() < 0.35f) {
+                    int ndx = rnd.nextInt(3) - 1;
+                    int ndy = rnd.nextInt(3) - 1;
+                    if (ndx != 0 || ndy != 0) {
+                        dx = ndx;
+                        dy = ndy;
+                    }
+                }
+            }
+        }
+    }
+
     /** A red bed: a wool top with a darker foot-end panel and pillow area. */
     private void paintBed(BufferedImage img, int index, Random rnd) {
         int ox = tileX(index);
@@ -1835,6 +1879,12 @@ public class TextureAtlas {
     /** Wool: soft, fluffy texture in white. */
     private void paintWool(BufferedImage img, int index, Random rnd) {
         paintTile(img, index, rnd, 0xF5F5F5, 0xE0E0E0, true);
+    }
+
+    /** Atlas tile for destroy-stage {@code stage} (0..{@link #DESTROY_STAGE_COUNT}-1). */
+    public static int destroyStageTile(int stage) {
+        int s = Math.max(0, Math.min(DESTROY_STAGE_COUNT - 1, stage));
+        return DESTROY_STAGE_TILE + s;
     }
 
     public void bind() {

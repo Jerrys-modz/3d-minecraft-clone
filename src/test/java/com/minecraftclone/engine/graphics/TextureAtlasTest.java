@@ -167,6 +167,28 @@ class TextureAtlasTest {
         assertTrue(distinctColors(front) > 6, "front should have grain, frame and lock, not a flat fill");
     }
 
+    @Test
+    void destroyStagesAccumulateCracksOnATransparentTile() {
+        BufferedImage image = atlas();
+        int stage0 = countOpaque(tile(image, TextureAtlas.DESTROY_STAGE_TILE));
+        int stage9 = countOpaque(tile(image, TextureAtlas.DESTROY_STAGE_TILE + 9));
+        int px = TextureAtlas.TILE_PX * TextureAtlas.TILE_PX;
+        assertTrue(stage0 > 6, "first crack stage should already be visible, got " + stage0);
+        assertTrue(stage0 < px / 2, "early stage must not fill the tile");
+        assertTrue(stage9 > stage0 * 2, "later stages add more cracks, not a different pattern");
+        assertTrue(stage9 < px, "destroy overlay stays a crack, not a solid cube");
+    }
+
+    private static int countOpaque(BufferedImage tile) {
+        int n = 0, px = TextureAtlas.TILE_PX;
+        for (int y = 0; y < px; y++) {
+            for (int x = 0; x < px; x++) {
+                if (((tile.getRGB(x, y) >> 24) & 0xFF) > 16) n++;
+            }
+        }
+        return n;
+    }
+
     private static boolean isBrass(int r, int g, int b) {
         return r > 150 && g > 90 && r > g && g > b + 20 && b < 140;
     }

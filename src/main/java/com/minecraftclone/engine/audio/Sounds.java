@@ -16,6 +16,7 @@ public final class Sounds {
     private final Map<SoundMaterial, short[]> breakSounds = new EnumMap<>(SoundMaterial.class);
     private final Map<SoundMaterial, short[]> placeSounds = new EnumMap<>(SoundMaterial.class);
     private final Map<SoundMaterial, short[]> stepSounds = new EnumMap<>(SoundMaterial.class);
+    private final Map<SoundMaterial, short[]> hitSounds = new EnumMap<>(SoundMaterial.class);
 
     public Sounds() {
         buildFixedSounds();
@@ -23,6 +24,7 @@ public final class Sounds {
             breakSounds.put(m, blockSound(m, BlockAction.BREAK));
             placeSounds.put(m, blockSound(m, BlockAction.PLACE));
             stepSounds.put(m, blockSound(m, BlockAction.STEP));
+            hitSounds.put(m, blockSound(m, BlockAction.HIT));
         }
     }
 
@@ -35,6 +37,7 @@ public final class Sounds {
             case BREAK -> breakSounds.get(material);
             case PLACE -> placeSounds.get(material);
             case STEP -> stepSounds.get(material);
+            case HIT -> hitSounds.get(material);
         };
     }
 
@@ -168,11 +171,13 @@ public final class Sounds {
         float duration = switch (action) {
             case BREAK -> 0.22f;
             case PLACE -> 0.12f;
+            case HIT -> 0.10f;
             case STEP -> 0.065f;
         };
         float amp = switch (action) {
             case BREAK -> 0.85f;
             case PLACE -> 0.55f;
+            case HIT -> 0.48f;
             case STEP -> 0.3f;
         };
 

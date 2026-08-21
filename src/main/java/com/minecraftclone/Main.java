@@ -8,6 +8,7 @@ import com.minecraftclone.engine.audio.SoundEvent;
 import com.minecraftclone.engine.audio.SoundMaterial;
 import com.minecraftclone.engine.graphics.FontAtlas;
 import com.minecraftclone.engine.graphics.GuiTextures;
+import com.minecraftclone.engine.graphics.BreakOverlayRenderer;
 import com.minecraftclone.engine.graphics.HandRenderer;
 import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
@@ -585,6 +586,7 @@ public class Main {
         hud.setGuiTextures(guiTextures, false); // theme is applied via applySettings below
         ItemRenderer itemRenderer = new ItemRenderer();
         HandRenderer handRenderer = new HandRenderer();
+        BreakOverlayRenderer breakOverlay = new BreakOverlayRenderer();
         MobRenderer mobRenderer = new MobRenderer();
         WeatherParticles weatherParticles = new WeatherParticles();
         WeatherRenderer weatherRenderer = new WeatherRenderer();
@@ -1876,6 +1878,11 @@ public class Main {
                         breakFraction = (hit != null && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) ? 1f : 0f;
                     } else {
                         breakFraction = mining.update(hit != null ? hit.blockPos : null, targetType, heldStack, holding, dt);
+                        if (mining.pollHit() && hit != null) {
+                            audio.playBlockSound(SoundMaterial.of(targetType), BlockAction.HIT,
+                                    hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                            handRenderer.triggerSwing();
+                        }
                     }
 
                     if (breakFraction >= 1f) {
@@ -2144,6 +2151,12 @@ public class Main {
             chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
             world.render(chunkShader, projection, view);
+            boolean insideTarget = hit != null
+                    && hit.point.distanceSquared(player.getEyePosition()) < 0.0025f;
+            if (hit != null && targetedMobRef[0] == null && breakFraction > 0f && !insideTarget) {
+                float overlayHeight = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z).collisionHeight;
+                breakOverlay.render(chunkShader, atlas, hit.blockPos, overlayHeight, breakFraction);
+            }
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
             chunkShader.unbind();
@@ -2409,6 +2422,7 @@ public class Main {
         guiTextures.destroy();
         itemRenderer.destroy();
         handRenderer.destroy();
+        breakOverlay.destroy();
         mobRenderer.destroy();
         weatherRenderer.destroy();
         chunkShader.destroy();
