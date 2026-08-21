@@ -295,6 +295,9 @@ class BlockTypeTest {
         assertFalse(BlockType.PACKED_ICE.isIce());
         assertFalse(Chunk.fluidFaceVisibleToward(BlockType.ICE, BlockType.WATER, false),
                 "ice fills the cell — a water wall inside it shows through the frozen sheet");
+        assertTrue(BlockType.ICE.isTranslucent());
+        assertTrue(BlockType.ICE.isIce(), "ice is meshed opaque so it writes depth; glass stays see-through");
+        assertFalse(BlockType.GLASS.isIce());
         assertTrue(Chunk.fluidFaceVisibleToward(BlockType.GLASS, BlockType.WATER, false),
                 "glass should still show the pool through a window");
         assertTrue(Chunk.fluidFaceVisibleToward(BlockType.AIR, BlockType.WATER, false));

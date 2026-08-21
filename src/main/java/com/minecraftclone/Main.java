@@ -2332,7 +2332,7 @@ public class Main {
             chunkShader.setUniform("time", animTime[0]);
             chunkShader.setUniform("atlasGrid", (float) TextureAtlas.GRID);
             atlas.bind();
-            world.render(chunkShader, projection, view);
+            world.renderOpaque(projection, view);
             boolean insideTarget = hit != null
                     && hit.point.distanceSquared(player.getEyePosition()) < 0.0025f;
             if (hit != null && targetedMobRef[0] == null && breakFraction > 0f && !insideTarget) {
@@ -2341,6 +2341,10 @@ public class Main {
             }
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
             mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
+            // Water after entities: the surface covers submerged bodies instead
+            // of the whole mob drawing on top of the lake (water doesn't write depth).
+            atlas.bind();
+            world.renderTranslucent();
             chunkShader.unbind();
             }
 

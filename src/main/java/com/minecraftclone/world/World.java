@@ -1260,8 +1260,18 @@ public class World implements BlockAccessor {
      * skipping those avoids paying for their draw calls (and the GL state changes/vertex
      * shader invocations that go with them) every single frame for geometry that was
      * never going to end up on screen anyway.
+     * <p>
+     * Call {@link #renderOpaque} then entities then {@link #renderTranslucent} so
+     * swimming mobs sit under the water instead of floating on top of it (water
+     * doesn't write depth).
      */
     public void render(Shader shader, Matrix4f projection, Matrix4f view) {
+        renderOpaque(projection, view);
+        renderTranslucent();
+    }
+
+    /** Opaque terrain, including ice (writes depth so water can't show through a frozen sheet). */
+    public void renderOpaque(Matrix4f projection, Matrix4f view) {
         projection.mul(view, viewProjection);
         frustum.set(viewProjection);
 
@@ -1269,15 +1279,18 @@ public class World implements BlockAccessor {
         for (Chunk chunk : chunks.values()) {
             if (isChunkVisible(chunk)) visibleChunks.add(chunk);
         }
-
         for (Chunk chunk : visibleChunks) {
             chunk.render();
         }
-        // See-through geometry (water, lava, glass, ice) draws after everything
-        // opaque and blends over it; depth writes are off so overlapping
-        // translucent faces don't cull each other. Fluids used to live in the
-        // opaque pass, which wrote depth and punched sky/cave-shaped holes
-        // through waterfalls whenever a later chunk lost the depth test.
+    }
+
+    /**
+     * Water, lava, glass. Depth writes off so overlapping translucent faces
+     * blend instead of punching holes. Must run after entities so a swimming
+     * mob is already in the depth buffer and the water surface covers the
+     * submerged part of the body.
+     */
+    public void renderTranslucent() {
         glDepthMask(false);
         for (Chunk chunk : visibleChunks) {
             chunk.renderTranslucent();

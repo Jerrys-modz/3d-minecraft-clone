@@ -477,11 +477,14 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                         continue;
                     }
 
-                    // Translucent blocks (glass, ice) go into their own batch, drawn
-                    // after everything opaque so they blend over what's behind them.
-                    FloatArray bv = block.isTranslucent() ? transVertices : vertices;
-                    IntArray bi = block.isTranslucent() ? transIndices : indices;
-                    int[] bc = block.isTranslucent() ? transCounter : vertexCounter;
+                    // Glass stays on the translucent mesh (see-through windows).
+                    // Ice is meshed with opaque terrain so it writes depth —
+                    // otherwise water walls show through it, and culling those
+                    // walls leaves a hole because ice didn't occupy the depth buffer.
+                    boolean seeThrough = block.isTranslucent() && !block.isIce();
+                    FloatArray bv = seeThrough ? transVertices : vertices;
+                    IntArray bi = seeThrough ? transIndices : indices;
+                    int[] bc = seeThrough ? transCounter : vertexCounter;
 
                     // +Y top
                     if (isFaceVisible(world, x, y + 1, z, wx, wy + 1, wz, block)) {
