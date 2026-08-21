@@ -4,14 +4,23 @@ import com.minecraftclone.util.Noise;
 import com.minecraftclone.world.BlockType;
 
 /**
- * GTNH (Greg Tech New Horizons) ore generation system with two ore types:
- * 1. Small Ores - semi-common single blocks scattered throughout, mineable at -1 tier
- * 2. Veins - regular vein clusters every 3 chunks, containing large ore concentrations
+ * GTNH (GregTech: New Horizons) ore generation.
+ *
+ * <p>Veins sit on the GTNH chunk lattice: a chunk is an <em>ore chunk</em> iff
+ * {@code |cx| % 3 == 1} and {@code |cz| % 3 == 1}. Away from the origin that
+ * is an ore chunk, two empty, another ore chunk. Each ore chunk gets
+ * <strong>exactly one</strong> mix (weighted toward early-game), placed as a
+ * dense 9-block-tall cuboid 16–31 blocks wide — the GTNH overworld shape —
+ * rather than a scattered noise blob. Small ores still sprinkle through stone
+ * as prospecting indicators.
  */
 public class GthnOreGenerator {
 
-    /** Vein spacing: ore veins generate every this many chunks. */
-    private static final int VEIN_SPACING = 3;
+    /** Vein spacing in chunks. GTNH: ore chunk, then two non-ore, then another. */
+    public static final int VEIN_SPACING = 3;
+
+    /** GTNH overworld veins are always this many blocks tall. */
+    public static final int VEIN_HEIGHT = 9;
 
     /** Ore vein definitions: depth range, base rarity threshold, and primary ore composition. */
     private static class OreVeinDef {
@@ -113,6 +122,8 @@ public class GthnOreGenerator {
         // Gemstones (Y: 20-60)
         new OreVeinDef(20, 60, 0.68, BlockType.SAPPHIRE_ORE, BlockType.GREEN_SAPPHIRE_ORE, BlockType.SPESSARTINE_ORE),
     };
+
+    private static final int TOTAL_MIX_WEIGHT = computeTotalWeight();
 
     /**
      * GTNH VisualProspecting-style mix identity: the vein's primary ore names
@@ -229,13 +240,23 @@ public class GthnOreGenerator {
 
     private final Noise veinNoise;
     private final Noise smallOreNoise;
-    private final int seaLevel;
+    private final long seed;
 
     public GthnOreGenerator(long seed, int seaLevel) {
-        this.seaLevel = seaLevel;
+        this.seed = seed;
         // Separate noise functions for veins and small ores to avoid correlation
         this.veinNoise = new Noise(seed ^ 0x1A2B3C4D5E6F7A8BL);
         this.smallOreNoise = new Noise(seed ^ 0x8B7A6F5E4D3C2B1AL);
+    }
+
+    /**
+     * GTNH ore-chunk lattice: {@code |chunkX| % 3 == 1} and {@code |chunkZ| % 3 == 1}.
+     * That is an ore chunk, then two empty, then another — except next to 0
+     * where {@code abs} packs (-1, 1) one chunk closer, matching the wiki.
+     */
+    public static boolean isOreChunk(int chunkX, int chunkZ) {
+        return Math.abs(chunkX) % VEIN_SPACING == 1
+                && Math.abs(chunkZ) % VEIN_SPACING == 1;
     }
 
     /**
@@ -276,6 +297,15 @@ public class GthnOreGenerator {
         return info == null ? null : info.name;
     }
 
+    /**
+     * The mix assigned to this ore chunk, or {@code null} if the chunk is not
+     * on the GTNH lattice. Deterministic per seed.
+     */
+    public MixInfo mixForOreChunk(int chunkX, int chunkZ) {
+        if (!isOreChunk(chunkX, chunkZ)) return null;
+        return toInfo(pickMix(mixHash(chunkX, chunkZ)));
+    }
+
     static String oreLabel(BlockType t) {
         String n = t.displayName();
         if (n.endsWith(" Ore")) n = n.substring(0, n.length() - 4);
@@ -292,75 +322,131 @@ public class GthnOreGenerator {
 
     /**
      * Check if a block position should be a GTNH ore (vein or small ore).
-     * Returns BlockType.STONE if no ore should generate at this location.
+     * Returns {@link BlockType#STONE} if no ore should generate at this location.
      */
     public BlockType oreAt(int wx, int y, int wz) {
-        if (y < 5 || y >= 64) return BlockType.STONE;
+        if (y < 1 || y >= 96) return BlockType.STONE;
 
-        // Check for vein ores (rarer, organized in clusters)
-        for (OreVeinDef def : VEIN_DEFS) {
-            if (y >= def.minDepth && y <= def.maxDepth) {
-                if (isInVein(wx, y, wz, def.primaryOre)) {
-                    if (veinNoise.fbm3(wx * 0.10, y * 0.10, wz * 0.10, 1, 0.5, 2.0) > def.threshold) {
-                        return selectVeinOre(wx, y, wz, def);
-                    }
-                }
+        BlockType vein = veinOreAt(wx, y, wz);
+        if (vein != BlockType.STONE) return vein;
+
+        return smallOreAt(wx, y, wz);
+    }
+
+    /**
+     * Walk the 3×3 of neighbouring chunks and place ore if this block falls
+     * inside that neighbour's cuboid. Veins can spill ~1 chunk out of the
+     * ore chunk; they never overlap (centres are 48 blocks apart, max half-width 15).
+     */
+    private BlockType veinOreAt(int wx, int y, int wz) {
+        int cx = Math.floorDiv(wx, 16);
+        int cz = Math.floorDiv(wz, 16);
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int ocx = cx + dx;
+                int ocz = cz + dz;
+                if (!isOreChunk(ocx, ocz)) continue;
+                BlockType ore = oreFromVein(ocx, ocz, wx, y, wz);
+                if (ore != BlockType.STONE) return ore;
             }
         }
-
-        // Check for small ores (more scattered, indicator ores)
-        for (SmallOreDef def : SMALL_ORE_DEFS) {
-            if (y >= def.minDepth && y <= def.maxDepth) {
-                if (smallOreNoise.fbm3(wx * 0.08 + (def.ore.ordinal() * 1000), y * 0.08, wz * 0.08 + (def.ore.ordinal() * 1000), 1, 0.5, 2.0) > def.threshold) {
-                    return def.ore;
-                }
-            }
-        }
-
         return BlockType.STONE;
     }
 
-    /**
-     * Determine if a position is within an ore vein cluster.
-     * Veins spawn at regular intervals (every VEIN_SPACING chunks).
-     */
-    private boolean isInVein(int wx, int y, int wz, BlockType oreType) {
-        // Determine vein center for this region
-        int veinChunkX = Math.floorDiv(wx, 16 * VEIN_SPACING);
-        int veinChunkZ = Math.floorDiv(wz, 16 * VEIN_SPACING);
+    private BlockType oreFromVein(int oreCx, int oreCz, int wx, int y, int wz) {
+        long h = mixHash(oreCx, oreCz);
+        OreVeinDef def = pickMix(h);
+        int bottom = veinBottom(def, h);
+        if (y < bottom || y >= bottom + VEIN_HEIGHT) return BlockType.STONE;
 
-        // Hash to determine if this chunk region contains a vein
-        long hash = ((long) veinChunkX * 73856093L) ^ ((long) veinChunkZ * 19349663L) ^ ((long) oreType.ordinal() * 83492791L);
-        if ((hash & 0xFF) > 128) return false; // 50% chance of vein spawning
+        int size = 16 + (int) ((h >>> 8) & 0xF); // 16–31, GTNH min width 16
+        int centerX = oreCx * 16 + 8;
+        int centerZ = oreCz * 16 + 8;
+        int half = size / 2;
+        if (Math.abs(wx - centerX) > half || Math.abs(wz - centerZ) > half) {
+            return BlockType.STONE;
+        }
 
-        // Vein center position within this region
-        int veinCenterX = veinChunkX * 16 * VEIN_SPACING + 8 * 16 + (int) ((hash >> 8) & 0xF) - 8;
-        int veinCenterZ = veinChunkZ * 16 * VEIN_SPACING + 8 * 16 + (int) ((hash >> 16) & 0xF) - 8;
-        int veinCenterY = 5 + (int) ((hash >> 24) & 0x3F);
+        // A little stone Swiss-cheese so the cuboid isn't a perfect brick.
+        double gap = veinNoise.fbm3(wx * 0.35, y * 0.35, wz * 0.35, 1, 0.5, 2.0);
+        if (gap > 0.72) return BlockType.STONE;
 
-        // Distance to vein center (vein radius ~15 blocks)
-        double dist = Math.sqrt(
-            Math.pow(wx - veinCenterX, 2) +
-            Math.pow(y - veinCenterY, 2) +
-            Math.pow(wz - veinCenterZ, 2)
-        );
+        return selectVeinOre(wx, y, wz, def, y - bottom);
+    }
 
-        return dist <= 15;
+    /** Pin a 9-tall vein inside the mix's depth window. */
+    private static int veinBottom(OreVeinDef def, long h) {
+        int span = def.maxDepth - def.minDepth + 1 - VEIN_HEIGHT;
+        if (span <= 0) return def.minDepth;
+        return def.minDepth + (int) Long.remainderUnsigned(h >>> 16, span + 1);
     }
 
     /**
-     * Select an ore from within the vein: primary ore with scattered secondary ores.
+     * Lower layers are primary-heavy, upper layers secondary — GTNH's
+     * primary / secondary / between stack, compressed into 9 blocks.
      */
-    private BlockType selectVeinOre(int wx, int y, int wz, OreVeinDef def) {
-        double rand = veinNoise.fbm3(wx * 0.15 + 5000, y * 0.15, wz * 0.15 + 5000, 1, 0.5, 2.0);
+    private BlockType selectVeinOre(int wx, int y, int wz, OreVeinDef def, int localY) {
+        if (def.secondaryOres.length == 0) return def.primaryOre;
+        double n = (veinNoise.fbm3(wx * 0.22, y * 0.22, wz * 0.22, 1, 0.5, 2.0) + 1.0) * 0.5;
+        double primaryChance;
+        if (localY <= 3) primaryChance = 0.85;
+        else if (localY <= 6) primaryChance = 0.45;
+        else primaryChance = 0.25;
+        if (n < primaryChance) return def.primaryOre;
+        int idx = (int) (n * 13 * def.secondaryOres.length) % def.secondaryOres.length;
+        if (idx < 0) idx = 0;
+        return def.secondaryOres[idx];
+    }
 
-        if (rand < 0.7) {
-            return def.primaryOre;
-        } else if (def.secondaryOres.length > 0) {
-            // Pick a secondary ore based on noise
-            int idx = (int) ((rand - 0.7) * 10 * def.secondaryOres.length) % def.secondaryOres.length;
-            return def.secondaryOres[idx];
+    private BlockType smallOreAt(int wx, int y, int wz) {
+        if (y < 5 || y >= 80) return BlockType.STONE;
+        double n = smallOreNoise.fbm3(wx * 0.11, y * 0.11, wz * 0.11, 1, 0.5, 2.0);
+        if (n <= 0.80) return BlockType.STONE;
+
+        int valid = 0;
+        for (SmallOreDef def : SMALL_ORE_DEFS) {
+            if (y >= def.minDepth && y <= def.maxDepth) valid++;
         }
-        return def.primaryOre;
+        if (valid == 0) return BlockType.STONE;
+        int pick = Math.floorMod(
+                (wx * 73856093) ^ (y * 19349663) ^ (wz * 83492791) ^ (int) seed, valid);
+        int i = 0;
+        for (SmallOreDef def : SMALL_ORE_DEFS) {
+            if (y < def.minDepth || y > def.maxDepth) continue;
+            if (i++ == pick) return def.ore;
+        }
+        return BlockType.STONE;
+    }
+
+    /** Lower threshold (more common mix) → higher pick weight. Naquadah stays rare. */
+    private static int mixWeight(OreVeinDef def) {
+        return Math.max(1, (int) Math.round((1.0 - def.threshold) * 20.0));
+    }
+
+    private static int computeTotalWeight() {
+        int t = 0;
+        for (OreVeinDef d : VEIN_DEFS) t += mixWeight(d);
+        return t;
+    }
+
+    private static OreVeinDef pickMix(long h) {
+        int r = (int) Long.remainderUnsigned(h, TOTAL_MIX_WEIGHT);
+        for (OreVeinDef d : VEIN_DEFS) {
+            r -= mixWeight(d);
+            if (r < 0) return d;
+        }
+        return VEIN_DEFS[VEIN_DEFS.length - 1];
+    }
+
+    private long mixHash(int oreCx, int oreCz) {
+        long h = seed;
+        h ^= (long) oreCx * 0x9E3779B97F4A7C15L;
+        h ^= (long) oreCz * 0xC2B2AE3D27D4EB4FL;
+        h ^= (h >>> 30);
+        h *= 0xBF58476D1CE4E5B9L;
+        h ^= (h >>> 27);
+        h *= 0x94D049BB133111EBL;
+        h ^= (h >>> 31);
+        return h;
     }
 }
