@@ -3,6 +3,9 @@ package com.minecraftclone.world.gen;
 import com.minecraftclone.util.Noise;
 import com.minecraftclone.world.BlockType;
 
+import java.util.EnumMap;
+import java.util.Map;
+
 /**
  * GTNH (GregTech: New Horizons) ore generation.
  *
@@ -11,8 +14,16 @@ import com.minecraftclone.world.BlockType;
  * is an ore chunk, two empty, another ore chunk. Each ore chunk gets
  * <strong>exactly one</strong> mix (weighted toward early-game), placed as a
  * dense 9-block-tall cuboid 16–31 blocks wide — the GTNH overworld shape —
- * rather than a scattered noise blob. Small ores still sprinkle through stone
- * as prospecting indicators.
+ * rather than a scattered noise blob.
+ *
+ * <p>Small ores are two systems, like GTNH:
+ * <ul>
+ *   <li><b>Global</b> — sparse single blocks of common overworld metals
+ *       (copper, tin, zinc, silver, nickel) anywhere in stone, for early tools.</li>
+ *   <li><b>Indicators</b> — a halo around each vein of that mix's small ores.
+ *       A cluster of small chalcopyrite means a chalcopyrite vein is nearby;
+ *       small naquadah never appears unless that mix actually generated.</li>
+ * </ul>
  */
 public class GthnOreGenerator {
 
@@ -238,15 +249,42 @@ public class GthnOreGenerator {
         new SmallOreDef(5, 25, 0.88, BlockType.SMALL_RUBY_ORE),
     };
 
+    /**
+     * Full-size ore → small-ore block. Built from {@link #SMALL_ORE_DEFS} by
+     * name ({@code SMALL_COPPER_ORE} → {@code COPPER_ORE}) so it stays in sync.
+     */
+    private static final Map<BlockType, BlockType> SMALL_OF = new EnumMap<>(BlockType.class);
+
+    /**
+     * GTNH overworld global small ores we actually ship (no small iron/gold/coal/
+     * diamond/redstone/lapis — vanilla full ores cover those).
+     */
+    static final BlockType[] GLOBAL_SMALL = {
+            BlockType.SMALL_COPPER_ORE,
+            BlockType.SMALL_TIN_ORE,
+            BlockType.SMALL_ZINC_ORE,
+            BlockType.SMALL_SILVER_ORE,
+            BlockType.SMALL_NICKEL_ORE,
+    };
+
+    static {
+        for (SmallOreDef d : SMALL_ORE_DEFS) {
+            String name = d.ore.name();
+            if (!name.startsWith("SMALL_")) continue;
+            try {
+                SMALL_OF.put(BlockType.valueOf(name.substring("SMALL_".length())), d.ore);
+            } catch (IllegalArgumentException ignored) {
+                // SMALL_* with no matching full ore — skip.
+            }
+        }
+    }
+
     private final Noise veinNoise;
-    private final Noise smallOreNoise;
     private final long seed;
 
     public GthnOreGenerator(long seed, int seaLevel) {
         this.seed = seed;
-        // Separate noise functions for veins and small ores to avoid correlation
         this.veinNoise = new Noise(seed ^ 0x1A2B3C4D5E6F7A8BL);
-        this.smallOreNoise = new Noise(seed ^ 0x8B7A6F5E4D3C2B1AL);
     }
 
     /**
@@ -399,23 +437,84 @@ public class GthnOreGenerator {
     }
 
     private BlockType smallOreAt(int wx, int y, int wz) {
-        if (y < 5 || y >= 80) return BlockType.STONE;
-        double n = smallOreNoise.fbm3(wx * 0.11, y * 0.11, wz * 0.11, 1, 0.5, 2.0);
-        if (n <= 0.80) return BlockType.STONE;
+        BlockType indicator = indicatorAt(wx, y, wz);
+        if (indicator != BlockType.STONE) return indicator;
+        return globalSmallAt(wx, y, wz);
+    }
 
-        int valid = 0;
-        for (SmallOreDef def : SMALL_ORE_DEFS) {
-            if (y >= def.minDepth && y <= def.maxDepth) valid++;
-        }
-        if (valid == 0) return BlockType.STONE;
-        int pick = Math.floorMod(
-                (wx * 73856093) ^ (y * 19349663) ^ (wz * 83492791) ^ (int) seed, valid);
-        int i = 0;
-        for (SmallOreDef def : SMALL_ORE_DEFS) {
-            if (y < def.minDepth || y > def.maxDepth) continue;
-            if (i++ == pick) return def.ore;
+    /**
+     * Halo around each ore-chunk vein: sparse single blocks of that mix's
+     * small ores. Radius is the cuboid plus 8, Y is the 9-tall vein ± 8.
+     */
+    private BlockType indicatorAt(int wx, int y, int wz) {
+        int cx = Math.floorDiv(wx, 16);
+        int cz = Math.floorDiv(wz, 16);
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int ocx = cx + dx;
+                int ocz = cz + dz;
+                if (!isOreChunk(ocx, ocz)) continue;
+                long h = mixHash(ocx, ocz);
+                OreVeinDef def = pickMix(h);
+                int bottom = veinBottom(def, h);
+                if (y < bottom - 8 || y > bottom + VEIN_HEIGHT + 8) continue;
+                int size = 16 + (int) ((h >>> 8) & 0xF);
+                int halo = size / 2 + 8;
+                int centerX = ocx * 16 + 8;
+                int centerZ = ocz * 16 + 8;
+                if (Math.abs(wx - centerX) > halo || Math.abs(wz - centerZ) > halo) continue;
+                // Isolated blocks, not a noise blob: ~1/1024 of the halo.
+                if ((posHash(wx, y, wz, 0x51ED) & 0x3FF) != 0) continue;
+                BlockType small = smallForMix(def, wx, y, wz);
+                if (small != BlockType.STONE) return small;
+            }
         }
         return BlockType.STONE;
+    }
+
+    private BlockType smallForMix(OreVeinDef def, int wx, int y, int wz) {
+        BlockType[] opts = new BlockType[1 + def.secondaryOres.length];
+        int n = 0;
+        BlockType primarySmall = SMALL_OF.get(def.primaryOre);
+        if (primarySmall != null) opts[n++] = primarySmall;
+        for (BlockType s : def.secondaryOres) {
+            BlockType sm = SMALL_OF.get(s);
+            if (sm != null) opts[n++] = sm;
+        }
+        if (n == 0) return BlockType.STONE;
+        int pick = Math.floorMod(posHash(wx, y, wz, 0xC0DE), n);
+        return opts[pick];
+    }
+
+    /** Sparse common metals anywhere in stone. Not a prospecting signal. */
+    private BlockType globalSmallAt(int wx, int y, int wz) {
+        if (y < 5 || y > 60) return BlockType.STONE;
+        if ((posHash(wx, y, wz, 0x610B) & 0x3FF) != 0) return BlockType.STONE;
+        int pick = Math.floorMod(posHash(wx, y, wz, 0xA11A), GLOBAL_SMALL.length);
+        return GLOBAL_SMALL[pick];
+    }
+
+    static boolean isGlobalSmall(BlockType type) {
+        for (BlockType g : GLOBAL_SMALL) {
+            if (g == type) return true;
+        }
+        return false;
+    }
+
+    /** Small-ore block for a full-size ore, or {@code null} if this pack has none. */
+    static BlockType smallOf(BlockType fullOre) {
+        return SMALL_OF.get(fullOre);
+    }
+
+    private int posHash(int x, int y, int z, int salt) {
+        long h = seed ^ salt;
+        h ^= (long) x * 0x9E3779B97F4A7C15L;
+        h ^= (long) y * 0xBF58476D1CE4E5B9L;
+        h ^= (long) z * 0x94D049BB133111EBL;
+        h ^= (h >>> 30);
+        h *= 0xBF58476D1CE4E5B9L;
+        h ^= (h >>> 27);
+        return (int) h;
     }
 
     /** Lower threshold (more common mix) → higher pick weight. Naquadah stays rare. */

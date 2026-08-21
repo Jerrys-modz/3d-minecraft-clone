@@ -131,6 +131,124 @@ class GthnOreGeneratorTest {
         assertNotNull(c.mixForOreChunk(1, 1));
     }
 
+    @Test
+    void smallOresAreSparseSinglesNotACarpet() {
+        GthnOreGenerator g = gen();
+        int small = countSmallOres(g, 1, 1);
+        int vein = countVeinOres(g, 1, 1);
+        assertTrue(small > 0, "an ore chunk should have some indicator small ores");
+        assertTrue(small < 120, "small ores must stay sparse singles, got " + small);
+        assertTrue(vein > small * 4, "the vein itself should dwarf the halo");
+    }
+
+    @Test
+    void indicatorSmallOresMatchTheVeinMix() {
+        GthnOreGenerator g = gen();
+        int cx = 1, cz = 1;
+        GthnOreGenerator.MixInfo mix = g.mixForOreChunk(cx, cz);
+        assertNotNull(mix);
+        Set<BlockType> allowed = new HashSet<>();
+        for (BlockType t : mix.composition) {
+            BlockType small = GthnOreGenerator.smallOf(t);
+            if (small != null) allowed.add(small);
+        }
+        for (BlockType global : GthnOreGenerator.GLOBAL_SMALL) allowed.add(global);
+
+        int originX = cx * 16;
+        int originZ = cz * 16;
+        int indicators = 0;
+        for (int x = originX; x < originX + 16; x++) {
+            for (int z = originZ; z < originZ + 16; z++) {
+                for (int y = 1; y < 96; y++) {
+                    BlockType b = g.oreAt(x, y, z);
+                    if (b == BlockType.STONE || !b.name().startsWith("SMALL_")) continue;
+                    assertTrue(allowed.contains(b),
+                            b + " in the halo of " + mix.name + " is not that mix or a global small ore");
+                    indicators++;
+                }
+            }
+        }
+        assertTrue(indicators > 0, "expected indicator small ores around the vein");
+    }
+
+    @Test
+    void rareSmallOresOnlySpawnAsIndicatorsForThatMix() {
+        GthnOreGenerator g = gen();
+        int naquadahSmall = 0;
+        int naquadahNearWrongMix = 0;
+        for (int cx = -10; cx <= 10; cx++) {
+            for (int cz = -10; cz <= 10; cz++) {
+                int originX = cx * 16;
+                int originZ = cz * 16;
+                for (int x = originX; x < originX + 16; x += 2) {
+                    for (int z = originZ; z < originZ + 16; z += 2) {
+                        for (int y = 5; y < 30; y += 2) {
+                            if (g.oreAt(x, y, z) != BlockType.SMALL_NAQUADAH_ORE) continue;
+                            naquadahSmall++;
+                            if (!nearbyMixIs(g, cx, cz, "Naquadah Mix")) {
+                                naquadahNearWrongMix++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assertEquals(0, naquadahNearWrongMix,
+                "small naquadah must only halo a Naquadah Mix vein, leaked " + naquadahNearWrongMix);
+        // Across 21×21 chunks we may or may not roll a naquadah mix; that's fine.
+        assertTrue(naquadahSmall >= 0);
+    }
+
+    @Test
+    void globalSmallOresSprinkleOutsideTheirOwnVein() {
+        GthnOreGenerator g = gen();
+        int copperAwayFromCopperMix = 0;
+        for (int cx = -8; cx <= 8; cx++) {
+            for (int cz = -8; cz <= 8; cz++) {
+                GthnOreGenerator.MixInfo mix = g.mixForOreChunk(cx, cz);
+                boolean copperVein = mix != null && mix.name.equals("Copper Mix");
+                int originX = cx * 16;
+                int originZ = cz * 16;
+                for (int x = originX; x < originX + 16; x += 4) {
+                    for (int z = originZ; z < originZ + 16; z += 4) {
+                        for (int y = 8; y <= 56; y += 4) {
+                            if (g.oreAt(x, y, z) == BlockType.SMALL_COPPER_ORE && !copperVein) {
+                                copperAwayFromCopperMix++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(copperAwayFromCopperMix > 0,
+                "global small copper should appear even when the local mix isn't Copper");
+    }
+
+    private static boolean nearbyMixIs(GthnOreGenerator g, int cx, int cz, String name) {
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                GthnOreGenerator.MixInfo mix = g.mixForOreChunk(cx + dx, cz + dz);
+                if (mix != null && name.equals(mix.name)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static int countSmallOres(GthnOreGenerator g, int cx, int cz) {
+        int n = 0;
+        int originX = cx * 16;
+        int originZ = cz * 16;
+        for (int x = originX; x < originX + 16; x++) {
+            for (int z = originZ; z < originZ + 16; z++) {
+                for (int y = 1; y < 96; y++) {
+                    BlockType b = g.oreAt(x, y, z);
+                    if (b != BlockType.STONE && b.name().startsWith("SMALL_")) n++;
+                }
+            }
+        }
+        return n;
+    }
+
     private static int countVeinOres(GthnOreGenerator g, int cx, int cz) {
         int n = 0;
         int originX = cx * 16;
