@@ -1,6 +1,7 @@
 package com.minecraftclone.net;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.WorldGenSettings;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,14 +110,18 @@ class GameServerTest {
     void blockEditIsBroadcast() throws Exception {
         try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
             a.sendJoin("Alice");
-            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
-            // Place a block; the server echoes the authoritative change back.
-            a.sendPlaceBlock(new Packets.PlaceBlock((byte) 0, 5, 64, 5, BlockType.STONE.id, (byte) 0, false));
+            Packets.Welcome welcome = assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            // Place a block at the join spawn (within server-side reach); the
+            // server echoes the authoritative change back.
+            int px = (int) Math.floor(welcome.spawnX());
+            int py = Math.round(welcome.spawnY());
+            int pz = (int) Math.floor(welcome.spawnZ());
+            a.sendPlaceBlock(new Packets.PlaceBlock((byte) 0, px, py, pz, BlockType.STONE.id, (byte) 0, false));
             Packets.BlockChange change = assertInstanceOf(Packets.BlockChange.class,
                     awaitPacket(a, Packets.BlockChange.class));
-            assertEquals(5, change.x());
-            assertEquals(64, change.y());
-            assertEquals(5, change.z());
+            assertEquals(px, change.x());
+            assertEquals(py, change.y());
+            assertEquals(pz, change.z());
             assertEquals(BlockType.STONE.id, change.blockId());
         }
     }
@@ -152,16 +157,22 @@ class GameServerTest {
     void modifiedChunkReturnsFullData() throws Exception {
         try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
             a.sendJoin("Alice");
-            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
-            // Edit a block in chunk (0,0), then request that chunk - the server
-            // should now send its full raw contents rather than a vanilla ack.
-            a.sendPlaceBlock(new Packets.PlaceBlock((byte) 0, 5, 64, 5, BlockType.STONE.id, (byte) 0, false));
+            Packets.Welcome welcome = assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            // Edit a block right at the join spawn (within server-side reach of
+            // the player's tracked position), then request that chunk - the
+            // server should send its full raw contents rather than an ack.
+            int px = (int) Math.floor(welcome.spawnX());
+            int py = Math.round(welcome.spawnY());
+            int pz = (int) Math.floor(welcome.spawnZ());
+            a.sendPlaceBlock(new Packets.PlaceBlock((byte) 0, px, py, pz, BlockType.STONE.id, (byte) 0, false));
             assertInstanceOf(Packets.BlockChange.class, awaitPacket(a, Packets.BlockChange.class));
-            a.sendChunkRequest((byte) 0, 0, 0);
+            a.sendChunkRequest((byte) 0, World.worldToChunk(px), World.worldToChunk(pz));
             Packets.ChunkData data = assertInstanceOf(Packets.ChunkData.class, awaitPacket(a, Packets.ChunkData.class));
-            assertEquals(0, data.cx());
-            assertEquals(0, data.cz());
-            assertEquals(32768, data.blocks().length);
+            assertEquals(World.worldToChunk(px), data.cx());
+            assertEquals(World.worldToChunk(pz), data.cz());
+            assertEquals(com.minecraftclone.world.Chunk.SIZE
+                    * com.minecraftclone.world.Chunk.HEIGHT * com.minecraftclone.world.Chunk.SIZE,
+                    data.blocks().length);
         }
     }
 
@@ -170,8 +181,9 @@ class GameServerTest {
         try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
             a.sendJoin("Alice");
             assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
-            // The server seeds some mobs at startup and sends them on join; if any
-            // arrive they must be well-formed (valid type ordinal, sane id).
+            // The server seeds mobs at startup and sends them on join; at least
+            // one must arrive for this fixed seed, and every arrival must be
+            // well-formed (valid type ordinal, sane id).
             long deadline = System.currentTimeMillis() + 3000;
             boolean sawSpawn = false;
             while (System.currentTimeMillis() < deadline) {
@@ -182,9 +194,9 @@ class GameServerTest {
                     sawSpawn = true;
                     break;
                 }
+                Thread.sleep(10); // yield instead of busy-spinning against the tick thread
             }
-            // Not asserting sawSpawn strictly - spawns are probabilistic - but if one
-            // arrives it must be valid (asserted above).
+            assertTrue(sawSpawn, "expected at least one seeded MobSpawn after joining");
         }
     }
 

@@ -147,6 +147,13 @@ public class Main {
     private volatile GameServer hostServer;
     /** The last multiplayer connection error to surface to the user, or null. */
     private volatile String netError;
+    /**
+     * Bumped every time a connect attempt is cancelled, so a connection thread
+     * that finishes late can detect it was abandoned and never publish its
+     * client (a stale assignment would silently reconnect the user).
+     */
+    private final java.util.concurrent.atomic.AtomicInteger mpConnectGeneration =
+            new java.util.concurrent.atomic.AtomicInteger();
     /** Remote players seen via the server, keyed by their server-assigned id. */
     private final Map<Integer, RemotePlayer> remotePlayers = new LinkedHashMap<>();
     /** Remote mobs seen via the server, keyed by their server-assigned id. */
@@ -167,7 +174,10 @@ public class Main {
     /** Pushes the current in-memory {@link Settings} into every world/renderer/player/audio. */
     private void applySettings(Settings settings, World[] worlds, Player player, Window window, AudioEngine audio) {
         if (worlds != null) {
+            // In multiplayer only some entries may exist (the mirrors the client
+            // has built so far), so skip nulls instead of assuming a dense array.
             for (World world : worlds) {
+                if (world == null) continue;
                 world.setLeavesTransparent(settings.isLeavesTransparent());
                 world.setRenderDistance(settings.getRenderDistance());
             }
@@ -518,16 +528,23 @@ public class Main {
 
     /** Starts an embedded {@link GameServer} in this process, then connects the local client to it. */
     private void hostAndPlay(int port, Path saveRoot, String playerName) {
+        final int gen = mpConnectGeneration.get();
         Thread t = new Thread(() -> {
             try {
                 WorldGenSettings serverSettings = new WorldGenSettings();
                 long seed = serverSettings.resolveSeed();
                 Path serverSaveDir = saveRoot.resolve("multiplayer_server");
                 GameServer server = new GameServer(port, serverSettings, seed, serverSaveDir);
+                if (gen != mpConnectGeneration.get()) {
+                    // Cancelled while the server was starting: shut it down
+                    // immediately instead of leaving it listening.
+                    server.close();
+                    return;
+                }
                 hostServer = server;
                 server.start();
                 System.out.println("Hosted server on port " + server.getPort() + " (seed " + seed + ")");
-                connectClient("127.0.0.1", server.getPort(), playerName);
+                connectClient("127.0.0.1", server.getPort(), playerName, gen);
             } catch (Exception e) {
                 netError = "Failed to start server: " + e.getMessage();
                 hostServer = null;
@@ -539,22 +556,39 @@ public class Main {
 
     /** Connects the local client to an existing server. */
     private void joinServer(String host, int port, String playerName) {
-        Thread t = new Thread(() -> connectClient(host, port, playerName), "join-server");
+        final int gen = mpConnectGeneration.get();
+        Thread t = new Thread(() -> connectClient(host, port, playerName, gen), "join-server");
         t.setDaemon(true);
         t.start();
     }
 
     /** Connects, sends the join packet, and stashes the client for the main loop to pick up. */
-    private void connectClient(String host, int port, String playerName) {
+    private void connectClient(String host, int port, String playerName, int generation) {
+        NetClient client = null;
         try {
-            NetClient client = new NetClient(host, port);
+            client = new NetClient(host, port);
             client.sendJoin(playerName);
+            if (generation != mpConnectGeneration.get()) {
+                // The user cancelled while this attempt was in flight; never
+                // publish a connection they walked away from.
+                client.close();
+                return;
+            }
             netClient = client;
             netError = null;
         } catch (Exception e) {
-            netError = "Could not connect to " + host + ":" + port + " - " + e.getMessage();
+            if (client != null) client.close();
+            if (generation == mpConnectGeneration.get()) {
+                netError = "Could not connect to " + host + ":" + port + " - " + e.getMessage();
+            }
             netClient = null;
         }
+    }
+
+    /** Cancels any in-flight connect attempt and tears down the session. */
+    private void cancelMultiplayerConnect() {
+        mpConnectGeneration.incrementAndGet();
+        leaveMultiplayer();
     }
 
     /** Sends the local player's current position/look to the server (throttled by the caller). */
@@ -717,12 +751,10 @@ public class Main {
                     // whether a player has edited it; the server replies with full data
                     // or a vanilla ack.
                     w.setChunkListener((cx, cz) -> {
-                        try {
-                            if (netClient != null && netClient.isConnected()) {
-                                netClient.sendChunkRequest(dimId, cx, cz);
-                            }
-                        } catch (IOException e) {
-                            netError = e.getMessage();
+                        // Async: this fires from inside World's generation loop,
+                        // where a blocking socket write would stall streaming.
+                        if (netClient != null && netClient.isConnected()) {
+                            netClient.sendChunkRequestAsync(dimId, cx, cz);
                         }
                     });
                     mirrorWorlds[dim.ordinal()] = w;
@@ -791,7 +823,10 @@ public class Main {
                     currentDim[0] = DimensionType.values()[change.dimension()];
                     player.teleport(change.x(), change.y(), change.z());
                     World target = worlds[currentDim[0].ordinal()];
-                    for (int i = 0; i < 80; i++) target.update(player.getPosition().x, player.getPosition().z);
+                    if (target == null) target = world;
+                    if (target != null) {
+                        for (int i = 0; i < 80; i++) target.update(player.getPosition().x, player.getPosition().z);
+                    }
                     world = target;
                     showMessage(messages, "Welcome to " + currentDim[0].displayName(),
                             new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
@@ -2037,12 +2072,14 @@ public class Main {
                                 multiplayerOpen[0] = false;
                                 mainMenuOpen[0] = true;
                                 mpConnecting[0] = false;
+                                cancelMultiplayerConnect();
                             }
                         }
                         if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                             multiplayerOpen[0] = false;
                             mainMenuOpen[0] = true;
                             mpConnecting[0] = false;
+                            cancelMultiplayerConnect();
                         }
                     }
                 } else {
@@ -3398,12 +3435,17 @@ public class Main {
     private static void saveOpenWorld(World[] worlds, Path worldDir, Player player,
                                       DimensionType dim, int selectedSlot) {
         if (worlds == null) return;
+        // Multiplayer mirrors may leave entries null (a dimension the client
+        // hasn't built yet), so iterate null-safely.
         for (World w : worlds) {
+            if (w == null) continue;
             w.saveAllModified();
         }
         if (worldDir != null) {
             for (DimensionType d : DimensionType.values()) {
-                worlds[d.ordinal()].getMapData().saveTo(
+                World w = worlds[d.ordinal()];
+                if (w == null) continue;
+                w.getMapData().saveTo(
                         worldDir.resolve(d.saveFolder()).resolve("map.dat"));
             }
             if (player != null) {
@@ -3416,6 +3458,7 @@ public class Main {
     private static void destroyOpenWorld(World[] worlds) {
         if (worlds == null) return;
         for (World w : worlds) {
+            if (w == null) continue;
             w.destroy();
         }
     }

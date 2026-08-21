@@ -354,9 +354,13 @@ public class World implements BlockAccessor {
     public void applyRemoteChunkData(int cx, int cz, short[] blocks, short[] overlays, byte[] orientations) {
         Chunk chunk = getChunk(cx, cz);
         if (chunk == null) return;
-        if (blocks != null) chunk.setRawBlocks(blocks);
-        if (overlays != null) chunk.setRawOverlays(overlays);
-        if (orientations != null) chunk.setRawOrientations(orientations);
+        // The arrays come straight off the wire: a length mismatch would throw
+        // IllegalArgumentException deep in mesh prep and crash the client, so
+        // malformed data is dropped instead of applied.
+        int volume = Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE;
+        if (blocks != null && blocks.length == volume) chunk.setRawBlocks(blocks);
+        if (overlays != null && overlays.length == volume) chunk.setRawOverlays(overlays);
+        if (orientations != null && orientations.length == volume) chunk.setRawOrientations(orientations);
         chunk.markGenerated();
     }
 

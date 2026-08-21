@@ -179,10 +179,10 @@ class PacketsTest {
 
     @Test
     void chunkDataRoundTrips() throws Exception {
-        byte[] blocks = new byte[Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE];
-        byte[] overlays = new byte[blocks.length];
+        short[] blocks = new short[Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE];
+        short[] overlays = new short[blocks.length];
         byte[] orientations = new byte[blocks.length];
-        blocks[0] = 3; blocks[100] = 4; blocks[blocks.length - 1] = 9;
+        blocks[0] = 3; blocks[100] = 4; blocks[blocks.length - 1] = 900; // >127: ids are shorts now
         overlays[50] = 7;
         orientations[500] = 2;
         Packets.ChunkData in = new Packets.ChunkData((byte) 0, 4, -2, blocks, overlays, orientations);

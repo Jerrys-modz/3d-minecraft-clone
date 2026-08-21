@@ -262,15 +262,21 @@ public class Mob {
     /**
      * Smooths the client-side pose toward the server-reported target (multiplayer
      * remote mobs). Lerps position and yaw (wrapping around -pi..pi) so ~10 Hz
-     * state packets render as fluid movement instead of teleporting.
+     * state packets render as fluid movement instead of teleporting. Also
+     * advances the animation clock and flags movement, so remote mobs walk with
+     * the same bob/leg-swing as locally simulated ones instead of gliding.
      */
     public void tickRemote(float dt) {
         float t = Math.min(1f, dt * 12f);
+        float prevX = position.x, prevY = position.y, prevZ = position.z;
         position.lerp(target, t);
         float diff = targetYaw - yaw;
         while (diff > Math.PI) diff -= 2f * (float) Math.PI;
         while (diff < -Math.PI) diff += 2f * (float) Math.PI;
         yaw += diff * t;
+        age += dt;
+        float dx = position.x - prevX, dy = position.y - prevY, dz = position.z - prevZ;
+        moving = dx * dx + dy * dy + dz * dz > 1e-8f;
     }
 
     /**

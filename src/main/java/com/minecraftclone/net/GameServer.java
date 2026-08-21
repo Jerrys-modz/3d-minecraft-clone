@@ -53,6 +53,22 @@ public class GameServer implements AutoCloseable {
     private static final float TIME_SYNC_SECONDS = 1f; // server time of day, once a second
     private static final float NETHER_SCALE = 8f; // Overworld <-> Nether coordinate mapping
     private static final int MAX_PLAYERS = 12;
+    /** Sockets accepted but not yet joined (each holds a thread); capped well above MAX_PLAYERS. */
+    private static final int MAX_PENDING_CONNECTIONS = MAX_PLAYERS * 2;
+    /** A silent connection is dropped after this long without any packet. */
+    private static final int JOIN_TIMEOUT_MILLIS = 30_000;
+    /** Max blocks between a player and the cell they edit (a little past REACH_DISTANCE). */
+    private static final float MAX_EDIT_DISTANCE_SQ = 8f * 8f;
+    /** How far from their position a client may request/edit chunks (in chunks). */
+    private static final int MAX_CHUNK_RADIUS = 12;
+    /** Packets handled per tick; the rest wait for the next tick (FIFO, so nobody starves). */
+    private static final int MAX_PACKETS_PER_TICK = 256;
+    /** Queued-packet ceiling; a client pushing past it is treated as misbehaving. */
+    private static final int MAX_QUEUED_PACKETS = 4096;
+    /** Server-side swing cooldown; anything faster than the client's 0.45s is clamped here. */
+    private static final long ATTACK_COOLDOWN_NANOS = (long) (0.4f * 1_000_000_000L);
+    /** Largest mob-hit damage the server accepts (creative one-shots need getMaxHealth). */
+    private static final float MAX_ATTACK_DAMAGE = 100f;
 
     /** One connected client. Written only from the tick thread; read from its own reader thread. */
     private static final class Client {
@@ -65,6 +81,7 @@ public class GameServer implements AutoCloseable {
         volatile byte dimension = 0; // DimensionType ordinal
         volatile boolean joined;
         volatile boolean disconnected;
+        volatile long lastAttackNanos;
 
         Client(Socket socket, DataOutputStream out) {
             this.socket = socket;
@@ -86,8 +103,12 @@ public class GameServer implements AutoCloseable {
 
     private final ConcurrentLinkedQueue<Incoming> inbox = new ConcurrentLinkedQueue<>();
     private final Map<Integer, Client> clients = new ConcurrentHashMap<>();
+    /** Accepted-but-not-yet-joined connections (bounded so idle peers can't pile up threads). */
+    private final java.util.Set<Client> pending = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private volatile int nextId = 1;
     private volatile boolean running;
+    /** Rotates which player's area each dimension streams per tick (bounds generation work). */
+    private int streamRotation;
     private Thread acceptThread;
     private Thread tickThread;
     /** Server-authoritative day/night (drives hostile spawning); GL-free. */
@@ -166,8 +187,18 @@ public class GameServer implements AutoCloseable {
             try {
                 Socket socket = serverSocket.accept();
                 socket.setTcpNoDelay(true);
+                // A peer that connects but never speaks holds a thread forever
+                // without this; once joined, clients talk every tick anyway.
+                socket.setSoTimeout(JOIN_TIMEOUT_MILLIS);
+                if (pending.size() >= MAX_PENDING_CONNECTIONS) {
+                    // Too many half-open connections: refuse immediately rather
+                    // than queueing another thread behind them.
+                    socket.close();
+                    continue;
+                }
                 DataOutputStream out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
                 Client client = new Client(socket, out);
+                pending.add(client);
                 Thread reader = new Thread(() -> readLoop(client), "server-reader-" + socket.getPort());
                 reader.setDaemon(true);
                 reader.start();
@@ -185,10 +216,17 @@ public class GameServer implements AutoCloseable {
                 byte[] frame = Packets.readFrame(in);
                 if (frame == null) break;
                 Object packet = Packets.decode(frame);
+                if (inbox.size() > MAX_QUEUED_PACKETS) {
+                    // This client is producing far faster than the tick can drain;
+                    // drop them instead of letting the queue grow without bound.
+                    System.err.println("Client " + client.name + " flooded the inbox; disconnecting");
+                    disconnect(client);
+                    break;
+                }
                 inbox.add(new Incoming(client, packet));
             }
-        } catch (EOFException | SocketException e) {
-            // peer closed
+        } catch (EOFException | SocketException | java.net.SocketTimeoutException e) {
+            // peer closed, or said nothing for JOIN_TIMEOUT_MILLIS
         } catch (IOException e) {
             if (running) System.err.println("Client read error: " + e.getMessage());
         } finally {
@@ -210,10 +248,20 @@ public class GameServer implements AutoCloseable {
             // Server-authoritative day/night drives hostile mob spawning.
             dayNightCycle.update(dt);
 
-            // Stream chunks around every connected player in their current dimension
-            // (the server keeps every dimension's chunks).
+            // Stream chunks around ONE player per dimension per tick, rotating
+            // through the group. world.update has its own per-call time budget,
+            // so calling it once per player could blow the whole 50ms tick at
+            // MAX_PLAYERS; rotating keeps the cost fixed while every player's
+            // area still streams several times a second (the server never
+            // unloads chunks, so nothing generated is lost).
+            Map<Byte, List<Client>> byDimension = new java.util.HashMap<>();
             for (Client c : clients.values()) {
-                if (c.joined) worldOf(c).update(c.x, c.z);
+                if (c.joined) byDimension.computeIfAbsent(c.dimension, k -> new ArrayList<>()).add(c);
+            }
+            int slot = streamRotation++;
+            for (List<Client> group : byDimension.values()) {
+                Client c = group.get(Math.floorMod(slot, group.size()));
+                worldOf(c).update(c.x, c.z);
             }
 
             // Simulate overworld mobs against every connected player (nearest-player targeting).
@@ -296,7 +344,7 @@ public class GameServer implements AutoCloseable {
             byte[] payload;
             try {
                 payload = Packets.encodeMobState(new Packets.MobState(
-                        m.id, m.position.x, m.position.y, m.position.z, m.yaw, 0f));
+                        m.id, m.position.x, m.position.y, m.position.z, m.yaw, m.getHealth()));
             } catch (IOException e) {
                 continue;
             }
@@ -332,8 +380,11 @@ public class GameServer implements AutoCloseable {
     }
 
     private void processInbox() {
+        // Cap the drain so one chatty client can't monopolize the tick: the
+        // rest of the queue waits for the next tick (FIFO keeps it fair).
+        int budget = MAX_PACKETS_PER_TICK;
         Incoming incoming;
-        while ((incoming = inbox.poll()) != null) {
+        while (budget-- > 0 && (incoming = inbox.poll()) != null) {
             Client client = incoming.client();
             Object packet = incoming.packet();
             if (packet == null) {
@@ -369,16 +420,24 @@ public class GameServer implements AutoCloseable {
     }
 
     private void handleJoin(Client client, Packets.Join join) throws IOException {
+        if (client.joined) {
+            // A second JOIN on the same connection would reassign its id and
+            // orphan the old map entry - refuse it.
+            send(client, Packets.encodeReject("Already joined."));
+            return;
+        }
         if (getPlayerCount() >= MAX_PLAYERS) {
             send(client, Packets.encodeReject("Server is full."));
             disconnect(client);
             return;
         }
-        String name = join.name().trim();
-        if (name.isEmpty()) name = "Player" + client.id;
+        // The id must exist before the fallback name is built from it.
         client.id = nextId++;
+        String name = join.name().trim();
+        if (name.isEmpty()) name = "Player-" + client.id;
         client.name = name;
         client.joined = true;
+        pending.remove(client);
         client.dimension = (byte) DimensionType.OVERWORLD.ordinal();
         clients.put(client.id, client);
 
@@ -386,6 +445,12 @@ public class GameServer implements AutoCloseable {
 
         // Spawn them a little above the surface so they fall in gently.
         float y = world.getSurfaceHeight((int) Math.floor(spawnX), (int) Math.floor(spawnZ)) + 2f;
+        // Seed the tracked position with the spawn point: until the client's
+        // first Move arrives, reach/chunk-radius checks measure against this
+        // rather than an arbitrary origin.
+        client.x = spawnX;
+        client.y = y;
+        client.z = spawnZ;
 
         // Tell the newcomer who they are and about the world.
         Packets.Welcome welcome = new Packets.Welcome(
@@ -424,10 +489,31 @@ public class GameServer implements AutoCloseable {
         client.sprinting = move.sprinting();
     }
 
+    /**
+     * True if the client may touch the given cell: within a Minecraft-ish reach
+     * of their reported position. Without this a client could edit (and force
+     * permanent generation of) chunks anywhere in the world.
+     */
+    private boolean canReach(Client client, int x, int y, int z) {
+        float dx = x + 0.5f - client.x;
+        float dy = y + 0.5f - client.y;
+        float dz = z + 0.5f - client.z;
+        return dx * dx + dy * dy + dz * dz <= MAX_EDIT_DISTANCE_SQ;
+    }
+
+    /** True if the client may ask for this chunk (bounded around their position). */
+    private boolean canRequestChunk(Client client, int cx, int cz) {
+        int pcx = World.worldToChunk((int) Math.floor(client.x));
+        int pcz = World.worldToChunk((int) Math.floor(client.z));
+        int dx = cx - pcx, dz = cz - pcz;
+        return dx * dx + dz * dz <= MAX_CHUNK_RADIUS * MAX_CHUNK_RADIUS;
+    }
+
     private void handlePlace(Client client, Packets.PlaceBlock place) throws IOException {
         if (!client.joined) return;
         BlockType type = place.blockId() < 0 ? null : BlockType.byId(place.blockId());
         if (type == null || type.isItem || place.y() < 0 || place.y() >= Chunk.HEIGHT) return;
+        if (!canReach(client, place.x(), place.y(), place.z())) return;
         World world = worldOf(client);
         world.ensureChunk(World.worldToChunk(place.x()), World.worldToChunk(place.z()));
         if (place.overlay()) {
@@ -444,6 +530,8 @@ public class GameServer implements AutoCloseable {
 
     private void handleBreak(Client client, Packets.BreakBlock brk) throws IOException {
         if (!client.joined) return;
+        if (brk.y() < 0 || brk.y() >= Chunk.HEIGHT) return;
+        if (!canReach(client, brk.x(), brk.y(), brk.z())) return;
         World world = worldOf(client);
         world.ensureChunk(World.worldToChunk(brk.x()), World.worldToChunk(brk.z()));
         if (brk.overlay()) {
@@ -466,13 +554,26 @@ public class GameServer implements AutoCloseable {
     /**
      * A player swung at a mob: apply the damage server-side, drop the loot if it
      * died, and broadcast the removal so every client sees the same result.
+     * The server never trusts the client's numbers: damage is clamped, the
+     * target must be within reach of the attacker's reported position, and a
+     * per-client cooldown throttles spam.
      */
     private void handleMobAttack(Client client, Packets.MobAttack attack) throws IOException {
         if (!client.joined) return;
+        float damage = attack.damage();
+        if (!Float.isFinite(damage) || damage <= 0f) return;
+        damage = Math.min(damage, MAX_ATTACK_DAMAGE);
+        long now = System.nanoTime();
+        if (now - client.lastAttackNanos < ATTACK_COOLDOWN_NANOS) return;
+        client.lastAttackNanos = now;
         World world = worlds[DimensionType.OVERWORLD.ordinal()];
         Mob mob = world.mobById(attack.mobId());
         if (mob == null) return;
-        boolean killed = world.damageMob(mob, attack.damage(), client.x, client.z, rnd);
+        float dx = mob.position.x - client.x;
+        float dy = mob.position.y - client.y;
+        float dz = mob.position.z - client.z;
+        if (dx * dx + dy * dy + dz * dz > MAX_EDIT_DISTANCE_SQ) return;
+        boolean killed = world.damageMob(mob, damage, client.x, client.z, rnd);
         if (killed) {
             knownMobIds.remove(mob.id);
             broadcastAll(Packets.encodeMobRemove(new Packets.MobRemove(
@@ -586,6 +687,7 @@ public class GameServer implements AutoCloseable {
     private void disconnect(Client client) {
         if (client.disconnected) return;
         client.disconnected = true;
+        pending.remove(client);
         boolean wasJoined = client.joined;
         clients.remove(client.id);
         try {
@@ -643,7 +745,15 @@ public class GameServer implements AutoCloseable {
     /** Sends a chunk to a client: full data if a player edited it, otherwise a vanilla ack. */
     private void requestChunk(Client client, byte dimension, int cx, int cz) throws IOException {
         if (client == null || !client.joined) return;
-        World world = worlds[dimension >= 0 && dimension < worlds.length ? dimension : client.dimension];
+        // Reject out-of-range dimensions and far-away requests: ensureChunk on
+        // a keepChunks world never unloads, so unbounded coordinates would let
+        // one client grow the server's memory forever.
+        if (dimension < 0 || dimension >= worlds.length) return;
+        if (!canRequestChunk(client, cx, cz)) {
+            send(client, Packets.encodeChunkAck(dimension, cx, cz));
+            return;
+        }
+        World world = worlds[dimension];
         world.ensureChunk(cx, cz);
         if (world.isChunkModifiedByPlayer(cx, cz)) {
             short[] blocks = world.getChunkRawBlocks(cx, cz);
@@ -660,6 +770,13 @@ public class GameServer implements AutoCloseable {
     @Override
     public void close() {
         running = false;
+        // Close the listening socket FIRST: accept() only wakes on socket
+        // close (it never polls the running flag), so joining the accept
+        // thread before closing would always burn the full timeout.
+        try {
+            serverSocket.close();
+        } catch (IOException ignored) {
+        }
         try {
             if (acceptThread != null) acceptThread.join(1000);
             if (tickThread != null) tickThread.join(1000);
@@ -668,10 +785,6 @@ public class GameServer implements AutoCloseable {
         }
         for (Client c : List.copyOf(clients.values())) {
             disconnect(c);
-        }
-        try {
-            serverSocket.close();
-        } catch (IOException ignored) {
         }
         for (World w : worlds) {
             w.saveAllModified();

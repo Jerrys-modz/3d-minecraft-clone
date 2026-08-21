@@ -15,9 +15,9 @@ import java.util.List;
  * <p>
  * Every packet is framed as {@code int length} followed by {@code length}
  * payload bytes; the first payload byte is the opcode, the rest are the
- * fields. Encoding is allocation-free on the send path (a shared buffer) and
- * each packet type has a static {@code encode} method so the wire format is
- * unit-testable in isolation (see {@code net/PacketsTest}).
+ * fields. Each packet type has a static {@code encode} method building its
+ * payload into a fresh buffer (simple and single-threaded over micro-optimized)
+ * so the wire format is unit-testable in isolation (see {@code net/PacketsTest}).
  * <p>
  * The server is authoritative: clients send <i>intents</i> (join, move, place,
  * break, chat) and the server replies with <i>state</i> (welcome, remote
@@ -504,6 +504,18 @@ public final class Packets {
     // Decoders (return null for unsupported opcodes)
     // ---------------------------------------------------------------
 
+    /** A chunk carries exactly SIZE x HEIGHT x SIZE cells per array. */
+    private static final int CHUNK_ARRAY_LENGTH =
+            com.minecraftclone.world.Chunk.SIZE * com.minecraftclone.world.Chunk.HEIGHT
+                    * com.minecraftclone.world.Chunk.SIZE;
+
+    /** Chunk arrays must be exactly chunk-sized; anything else is a protocol error. */
+    private static void requireChunkArrayLength(int length) throws IOException {
+        if (length != CHUNK_ARRAY_LENGTH) {
+            throw new IOException("Bad chunk array length: " + length);
+        }
+    }
+
     /** Reads the opcode from a payload and decodes the rest into the matching record. */
     public static Object decode(byte[] payload) throws IOException {
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(payload));
@@ -532,13 +544,20 @@ public final class Packets {
             case OP_CHUNK_DATA -> {
                 byte dim = in.readByte();
                 int cx = in.readInt(), cz = in.readInt();
+                // Array lengths come straight off the wire: clamp them to the
+                // exact chunk volume before allocating, so a corrupt/hostile
+                // frame can't trigger a huge allocation or a negative-size
+                // exception here.
                 int blockLen = in.readInt();
+                requireChunkArrayLength(blockLen);
                 short[] blocks = new short[blockLen];
                 for (int i = 0; i < blockLen; i++) blocks[i] = in.readShort();
                 int overlayLen = in.readInt();
+                requireChunkArrayLength(overlayLen);
                 short[] overlays = new short[overlayLen];
                 for (int i = 0; i < overlayLen; i++) overlays[i] = in.readShort();
                 int orientLen = in.readInt();
+                requireChunkArrayLength(orientLen);
                 byte[] orientations = new byte[orientLen];
                 in.readFully(orientations);
                 yield new ChunkData(dim, cx, cz, blocks, overlays, orientations);
