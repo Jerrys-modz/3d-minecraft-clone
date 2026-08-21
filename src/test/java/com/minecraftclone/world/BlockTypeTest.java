@@ -288,4 +288,18 @@ class BlockTypeTest {
         assertFalse(Chunk.isDropThrough(BlockType.GRASS));
         assertTrue(Chunk.isDropThrough(BlockType.WATER_FLOW));
     }
+
+    @Test
+    void waterDoesNotDrawWallsThroughIce() {
+        assertTrue(BlockType.ICE.isIce());
+        assertFalse(BlockType.PACKED_ICE.isIce());
+        assertFalse(Chunk.fluidFaceVisibleToward(BlockType.ICE, BlockType.WATER, false),
+                "ice fills the cell — a water wall inside it shows through the frozen sheet");
+        assertTrue(Chunk.fluidFaceVisibleToward(BlockType.GLASS, BlockType.WATER, false),
+                "glass should still show the pool through a window");
+        assertTrue(Chunk.fluidFaceVisibleToward(BlockType.AIR, BlockType.WATER, false));
+        assertFalse(Chunk.fluidFaceVisibleToward(BlockType.WATER, BlockType.WATER, false));
+        assertFalse(Chunk.fluidFaceVisibleToward(BlockType.STONE, BlockType.WATER, false),
+                "seafloor keeps its own face; water doesn't need a wall into dirt");
+    }
 }

@@ -543,16 +543,7 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         }
 
         if (block.isFluid()) {
-            // Same-family faces are handled by emitFluidSide (height curtains).
-            // Solids keep their own faces (so the seafloor shows through water).
-            // Everything that doesn't fill the cell still gets a water wall,
-            // including the other fluid (water/lava contact) and doors/glass.
-            if (sameFluidFamily(neighbor, block)) return false;
-            return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab
-                    || neighbor.isStair() || neighbor.isFence()
-                    || neighbor.isDoor() || neighbor.isTrapdoor() || neighbor.isBed()
-                    || neighbor.isTranslucent() || neighbor.isFluid()
-                    || (leavesTransparent && neighbor.isLeaves());
+            return fluidFaceVisibleToward(neighbor, block, leavesTransparent);
         }
 
         if (block.isTranslucent()) {
@@ -578,6 +569,23 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         // the leaf block's own faces and the blocks behind it get drawn, so the
         // cutout holes in the leaves texture actually show what's behind.
         return leavesTransparent && neighbor.isLeaves();
+    }
+
+    /**
+     * Whether a fluid cell should emit a face toward {@code neighbor}.
+     * Ice is translucent (so glass-style see-through) but it still fills the
+     * cell — drawing a water wall into it showed the water's side through the
+     * frozen sheet. Glass still gets a water face so you can see the pool
+     * through a window.
+     */
+    static boolean fluidFaceVisibleToward(BlockType neighbor, BlockType block, boolean leavesTransparent) {
+        if (sameFluidFamily(neighbor, block)) return false;
+        if (neighbor.isIce()) return false;
+        return neighbor == BlockType.AIR || neighbor.cross || neighbor.slab
+                || neighbor.isStair() || neighbor.isFence()
+                || neighbor.isDoor() || neighbor.isTrapdoor() || neighbor.isBed()
+                || neighbor.isTranslucent() || neighbor.isFluid()
+                || (leavesTransparent && neighbor.isLeaves());
     }
 
     /**
@@ -859,9 +867,9 @@ public class Chunk implements ChunkStorage.PersistableChunk {
         int nx = wx + (face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0);
         int nz = wz + (face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0);
         BlockType neighbor = world.getBlock(nx, wy - 1, nz);
-        if (neighbor.solid && !neighbor.isFluid() && !neighbor.cross && !neighbor.slab
+        if (neighbor.isIce() || (neighbor.solid && !neighbor.isFluid() && !neighbor.cross && !neighbor.slab
                 && !neighbor.isStair() && !neighbor.isFence() && !neighbor.isDoor()
-                && !neighbor.isTrapdoor() && !neighbor.isTranslucent()) {
+                && !neighbor.isTrapdoor() && !neighbor.isTranslucent())) {
             return;
         }
         float x0 = wx, x1 = wx + 1, z0 = wz, z1 = wz + 1;

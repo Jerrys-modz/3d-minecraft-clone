@@ -1061,6 +1061,11 @@ public enum BlockType {
         return this == GLASS || this == ICE || this == SEARED_GLASS;
     }
 
+    /** Regular ice (not packed). Water culls against it so you don't see water walls through a frozen sheet. */
+    public boolean isIce() {
+        return this == ICE;
+    }
+
     /**
      * True for decoration that grows/sits <em>inside</em> a fluid cell rather
      * than needing to replace it - Minecraft's "waterlogged" plants (seagrass,
