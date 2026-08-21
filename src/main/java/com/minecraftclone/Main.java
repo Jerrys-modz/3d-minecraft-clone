@@ -1478,7 +1478,7 @@ public class Main {
                         creativeOpen[0] = true;
                         creativeScroll[0] = 0f;
                         creativeSearch.setLength(0);
-                        creativeSearchFocused[0] = true;
+                        creativeSearchFocused[0] = false;
                         menuOpen[0] = false;
                         audio.play(SoundEvent.UI_OPEN);
                     } else {
@@ -1505,7 +1505,6 @@ public class Main {
                 boolean shift = input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT);
 
                 String typed = input.consumeTypedChars();
-                if (!typed.isEmpty()) creativeSearchFocused[0] = true;
                 if (creativeSearchFocused[0]) {
                     for (int i = 0; i < typed.length(); i++) {
                         char ch = typed.charAt(i);

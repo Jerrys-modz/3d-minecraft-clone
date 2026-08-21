@@ -158,6 +158,10 @@ public class Hud {
     private static final float SETTINGS_PAD = 0.035f;
     private static final float SETTINGS_DONE_H = 0.07f;
     private static final float SETTINGS_CENTER_Y = 0.12f;
+    /** Create-world panel: wide enough that a full random long seed sits beside "Seed". */
+    private static final float WORLD_GEN_PANEL_W = 1.2f;
+    /** Gap between a world-gen row's label and its value so a long seed never runs into "Seed". */
+    private static final float WORLD_GEN_VALUE_GAP = 0.05f;
     // The panel is sized for the tallest tab (Controls: the keybind list) so the
     // tab strip stays in the same place when switching between tabs.
     private static final int SETTINGS_MAX_ROWS = Math.max(
@@ -1294,7 +1298,7 @@ public class Hud {
 
         int rows = WorldGenSettings.ROW_COUNT + 1; // options + Done
         float size = SETTINGS_SIZE;
-        float panelW = 0.95f;
+        float panelW = WORLD_GEN_PANEL_W;
         float panelH = SETTINGS_PAD * 2f + SETTINGS_TITLE_H + rows * SETTINGS_ROW_H;
         float left = -panelW / 2f;
         float top = SETTINGS_CENTER_Y + panelH / 2f;
@@ -1335,10 +1339,14 @@ public class Hud {
                 boolean activeSeed = i == editingRow;
                 Vector4f color = selected ? highlight : (activeSeed ? highlight : idle);
                 drawTextAt(selected ? ">" : " ", left + 0.04f, baseline, size, selected ? highlight : idle);
-                drawTextAt(WorldGenSettings.label(i), left + SETTINGS_LEFT_PAD, baseline, size, color);
+                String label = WorldGenSettings.label(i);
+                drawTextAt(label, left + SETTINGS_LEFT_PAD, baseline, size, color);
                 String value = activeSeed ? wgs.valueText(i) + "_" : wgs.valueText(i);
-                float valueWidth = text.measure(value, size);
-                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, size,
+                float innerW = panelW - SETTINGS_LEFT_PAD - SETTINGS_RIGHT_PAD;
+                float valueSize = fitWorldGenValueSize(text.measure(label, size), text.measure(value, size),
+                        size, innerW);
+                float valueWidth = text.measure(value, valueSize);
+                drawTextAt(value, left + panelW - SETTINGS_RIGHT_PAD - valueWidth, baseline, valueSize,
                         activeSeed ? highlight : idleValue);
             } else {
                 // Done / back button.
@@ -1433,10 +1441,25 @@ public class Hud {
         return top - SETTINGS_PAD - SETTINGS_TITLE_H - i * SETTINGS_ROW_H;
     }
 
+    /**
+     * Font size for a world-gen value so a long seed never runs into its label.
+     * {@code innerWidth} is the row's content width (panel minus left/right pads).
+     */
+    static float fitWorldGenValueSize(float labelWidth, float valueWidth, float size, float innerWidth) {
+        float max = innerWidth - labelWidth - WORLD_GEN_VALUE_GAP;
+        if (valueWidth <= 0f || max <= 0f || valueWidth <= max) return size;
+        return size * (max / valueWidth);
+    }
+
+    /** Inner content width of the Create New World panel (label + gap + value). */
+    static float worldGenInnerWidth() {
+        return WORLD_GEN_PANEL_W - SETTINGS_LEFT_PAD - SETTINGS_RIGHT_PAD;
+    }
+
     /** The world-gen row (0..ROW_COUNT, with ROW_COUNT being the Done button) under the mouse, or -1. */
     public int worldGenRowAt(float logicalX, float logicalY) {
         int rows = WorldGenSettings.ROW_COUNT + 1;
-        float panelW = 0.95f;
+        float panelW = WORLD_GEN_PANEL_W;
         float left = -panelW / 2f;
         for (int i = 0; i < rows; i++) {
             float rowTop = worldGenRowTop(i);

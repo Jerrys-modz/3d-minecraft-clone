@@ -98,11 +98,15 @@ public class Input {
     /**
      * Snapshot "previous" edge state and clear the per-frame scroll delta.
      * Must run at the very start of the frame, before glfwPollEvents.
+     * Typed characters from a previous frame that no text field consumed are
+     * dropped here so walking keys (WASD, etc.) can't leak into a search box
+     * the next time one opens.
      */
     public void beginFrame() {
         System.arraycopy(keysDown, 0, keysDownPrev, 0, keysDown.length);
         System.arraycopy(mouseDown, 0, mouseDownPrev, 0, mouseDown.length);
         scrollDelta = 0;
+        typedChars.setLength(0);
     }
 
     /** Call once per frame, after polling events, before reading "just pressed" state. */
