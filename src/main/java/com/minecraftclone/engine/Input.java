@@ -368,4 +368,18 @@ public class Input {
         deltaX = 0;
         deltaY = 0;
     }
+
+    /**
+     * Places the OS cursor (and this frame's mouse state) at a window-pixel
+     * position without injecting a look/drag delta.
+     */
+    public void setCursorPos(double x, double y) {
+        mouseX = x;
+        mouseY = y;
+        lastMouseX = x;
+        lastMouseY = y;
+        deltaX = 0;
+        deltaY = 0;
+        glfwSetCursorPos(windowHandle, x, y);
+    }
 }

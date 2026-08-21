@@ -76,22 +76,131 @@ public class Hud {
      * ~24% of the viewport, parked in the top-right with {@link #MINI_MAP_MARGIN}.
      */
     public static final float MINI_MAP_SIZE_Y = 0.48f;
+    public static final float MINI_MAP_SIZE_Y_MIN = 0.22f;
+    public static final float MINI_MAP_SIZE_Y_MAX = 0.90f;
     /** Viewport margin (NDC units) around the mini-map on the top and right. */
     public static final float MINI_MAP_MARGIN = 0.035f;
+    /** Corner-handle hit size in logical-Y units while the HUD is being edited. */
+    public static final float MINI_MAP_HANDLE = 0.05f;
+
+    public static final int MINIMAP_HIT_NONE = 0;
+    public static final int MINIMAP_HIT_BODY = 1;
+    public static final int MINIMAP_HIT_TL = 2;
+    public static final int MINIMAP_HIT_TR = 3;
+    public static final int MINIMAP_HIT_BL = 4;
+    public static final int MINIMAP_HIT_BR = 5;
+
+    /** On-screen mini-map rectangle in HUD logical-square space. */
+    public record MiniMapLayout(float sizeX, float sizeY, float cx, float cy) {
+        public float minX() { return cx - sizeX / 2f; }
+        public float maxX() { return cx + sizeX / 2f; }
+        public float minY() { return cy - sizeY / 2f; }
+        public float maxY() { return cy + sizeY / 2f; }
+    }
 
     /** Logical width that keeps the mini-map square after the 1/aspect HUD scale. */
     static float miniMapSizeX(float aspectRatio) {
-        return MINI_MAP_SIZE_Y * aspectRatio;
+        return miniMapSizeX(aspectRatio, MINI_MAP_SIZE_Y);
+    }
+
+    static float miniMapSizeX(float aspectRatio, float sizeY) {
+        return clampMiniMapSizeY(sizeY) * aspectRatio;
     }
 
     /** Logical center-x: right edge sits {@link #MINI_MAP_MARGIN} in from the viewport. */
     static float miniMapOffsetX(float aspectRatio) {
-        return aspectRatio * (1f - MINI_MAP_MARGIN - MINI_MAP_SIZE_Y / 2f);
+        return miniMapLayout(aspectRatio, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN).cx;
     }
 
     /** Logical center-y: top edge sits {@link #MINI_MAP_MARGIN} down from the top. */
     static float miniMapOffsetY() {
-        return 1f - MINI_MAP_MARGIN - MINI_MAP_SIZE_Y / 2f;
+        return miniMapLayout(1f, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN).cy;
+    }
+
+    static float clampMiniMapSizeY(float sizeY) {
+        return Math.max(MINI_MAP_SIZE_Y_MIN, Math.min(MINI_MAP_SIZE_Y_MAX, sizeY));
+    }
+
+    /**
+     * Resolves a persisted (or default) mini-map layout into logical-square
+     * coordinates. {@code ndcX}/{@code ndcY} of NaN parks it in the top-right.
+     */
+    public static MiniMapLayout miniMapLayout(float aspectRatio, float sizeY, float ndcX, float ndcY) {
+        float sy = clampMiniMapSizeY(sizeY);
+        float half = sy / 2f;
+        float minNdc = -1f + MINI_MAP_MARGIN + half;
+        float maxNdc = 1f - MINI_MAP_MARGIN - half;
+        if (minNdc > maxNdc) {
+            minNdc = maxNdc = 0f;
+        }
+        float nx = Float.isNaN(ndcX) ? (1f - MINI_MAP_MARGIN - half) : ndcX;
+        float ny = Float.isNaN(ndcY) ? (1f - MINI_MAP_MARGIN - half) : ndcY;
+        nx = Math.max(minNdc, Math.min(maxNdc, nx));
+        ny = Math.max(minNdc, Math.min(maxNdc, ny));
+        return new MiniMapLayout(sy * aspectRatio, sy, nx * aspectRatio, ny);
+    }
+
+    /** Hit-test the mini-map body and its four resize corners. */
+    public static int miniMapHit(MiniMapLayout layout, float logicalX, float logicalY) {
+        if (layout == null) return MINIMAP_HIT_NONE;
+        float hsY = MINI_MAP_HANDLE;
+        float hsX = MINI_MAP_HANDLE * (layout.sizeX() / Math.max(1e-6f, layout.sizeY()));
+        if (near(logicalX, layout.minX(), hsX) && near(logicalY, layout.maxY(), hsY)) return MINIMAP_HIT_TL;
+        if (near(logicalX, layout.maxX(), hsX) && near(logicalY, layout.maxY(), hsY)) return MINIMAP_HIT_TR;
+        if (near(logicalX, layout.minX(), hsX) && near(logicalY, layout.minY(), hsY)) return MINIMAP_HIT_BL;
+        if (near(logicalX, layout.maxX(), hsX) && near(logicalY, layout.minY(), hsY)) return MINIMAP_HIT_BR;
+        if (logicalX >= layout.minX() && logicalX <= layout.maxX()
+                && logicalY >= layout.minY() && logicalY <= layout.maxY()) {
+            return MINIMAP_HIT_BODY;
+        }
+        return MINIMAP_HIT_NONE;
+    }
+
+    private static boolean near(float a, float b, float slop) {
+        return Math.abs(a - b) <= slop;
+    }
+
+    /**
+     * New layout after dragging a corner. The opposite corner stays put and
+     * the map stays square on screen.
+     */
+    public static MiniMapLayout resizeMiniMap(int corner, MiniMapLayout cur, float mx, float my, float aspect) {
+        float fixedX;
+        float fixedY;
+        switch (corner) {
+            case MINIMAP_HIT_BR -> { fixedX = cur.minX(); fixedY = cur.maxY(); }
+            case MINIMAP_HIT_BL -> { fixedX = cur.maxX(); fixedY = cur.maxY(); }
+            case MINIMAP_HIT_TR -> { fixedX = cur.minX(); fixedY = cur.minY(); }
+            case MINIMAP_HIT_TL -> { fixedX = cur.maxX(); fixedY = cur.minY(); }
+            default -> { return cur; }
+        }
+        float sizeY = Math.max(Math.abs(mx - fixedX) / aspect, Math.abs(my - fixedY));
+        sizeY = clampMiniMapSizeY(sizeY);
+        float sizeX = sizeY * aspect;
+        float cx = mx >= fixedX ? fixedX + sizeX / 2f : fixedX - sizeX / 2f;
+        float cy = my >= fixedY ? fixedY + sizeY / 2f : fixedY - sizeY / 2f;
+        return miniMapLayout(aspect, sizeY, cx / aspect, cy);
+    }
+
+    /** Scale about the current centre, staying square and on-screen. */
+    public static MiniMapLayout scaleMiniMap(MiniMapLayout cur, float factor, float aspect) {
+        if (cur == null) return null;
+        return miniMapLayout(aspect, cur.sizeY() * factor, cur.cx() / aspect, cur.cy());
+    }
+
+    /** Layout from persisted settings (NaN NDC = default top-right). */
+    public static MiniMapLayout miniMapLayout(Settings settings, float aspect) {
+        if (settings == null) {
+            return miniMapLayout(aspect, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN);
+        }
+        return miniMapLayout(aspect, settings.getMiniMapSizeY(),
+                settings.getMiniMapNdcX(), settings.getMiniMapNdcY());
+    }
+
+    /** Persist a logical-square layout back to NDC centre + size. */
+    public static void writeMiniMapLayout(Settings settings, MiniMapLayout layout, float aspect) {
+        if (settings == null || layout == null) return;
+        settings.setMiniMapLayout(layout.sizeY(), layout.cx() / aspect, layout.cy());
     }
 
     // Inventory screen layout (logical square units).
@@ -1714,11 +1823,15 @@ public class Hud {
     }
 
     private static float[] outlineLines(float cx, float cy, float half) {
+        return outlineRect(cx - half, cy - half, cx + half, cy + half);
+    }
+
+    private static float[] outlineRect(float minX, float minY, float maxX, float maxY) {
         return new float[]{
-                cx - half, cy - half, 0, cx + half, cy - half, 0,
-                cx + half, cy - half, 0, cx + half, cy + half, 0,
-                cx + half, cy + half, 0, cx - half, cy + half, 0,
-                cx - half, cy + half, 0, cx - half, cy - half, 0,
+                minX, minY, 0, maxX, minY, 0,
+                maxX, minY, 0, maxX, maxY, 0,
+                maxX, maxY, 0, minX, maxY, 0,
+                minX, maxY, 0, minX, minY, 0,
         };
     }
 
@@ -3074,14 +3187,16 @@ public class Hud {
     }
 
     /**
-     * Renders a mini-map image in the top-right corner of the screen.
+     * Renders a mini-map image using the given layout.
      * Caches the texture and mesh to avoid recreating them every frame.
      * Pass {@code null} image to clear the cache (e.g., when changing worlds).
      * {@code imageVersion} comes from {@link com.minecraftclone.engine.MapRenderer#getMiniMapVersion()}
      * and increments each time the renderer redraws into its cached image; Hud uses it
      * to detect pixel changes that don't change the image reference.
+     * {@code editing} draws resize handles and a move hint (hold Alt).
      */
-    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion, float aspectRatio) {
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion,
+                              float aspectRatio, MiniMapLayout layout, boolean editing) {
         if (miniMapImage == null) {
             // Clear cache when no image provided
             if (cachedMiniMapTextureId >= 0) {
@@ -3093,11 +3208,14 @@ public class Hud {
             cachedMiniMapVersion = -1;
             return;
         }
+        if (layout == null) {
+            layout = miniMapLayout(aspectRatio, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN);
+        }
 
-        float sizeX = miniMapSizeX(aspectRatio);
-        float sizeY = MINI_MAP_SIZE_Y;
-        float offsetX = miniMapOffsetX(aspectRatio);
-        float offsetY = miniMapOffsetY();
+        float sizeX = layout.sizeX();
+        float sizeY = layout.sizeY();
+        float offsetX = layout.cx();
+        float offsetY = layout.cy();
 
         // Check if image pixels or layout has changed
         boolean imageChanged = cachedMiniMapImage != miniMapImage || cachedMiniMapVersion != imageVersion;
@@ -3121,10 +3239,10 @@ public class Hud {
             cachedMiniMapOffsetX = offsetX;
             cachedMiniMapOffsetY = offsetY;
 
-            float minX = offsetX - sizeX / 2f;
-            float maxX = offsetX + sizeX / 2f;
-            float minY = offsetY - sizeY / 2f;
-            float maxY = offsetY + sizeY / 2f;
+            float minX = layout.minX();
+            float maxX = layout.maxX();
+            float minY = layout.minY();
+            float maxY = layout.maxY();
 
             float[] verts = {
                 minX, minY, 0f, 1f,  // bottom-left: v=1
@@ -3146,7 +3264,56 @@ public class Hud {
         miniMapMesh.render();
         hudShader.unbind();
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        if (editing) {
+            hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+            inventoryHover.upload(outlineRect(layout.minX(), layout.minY(), layout.maxX(), layout.maxY()));
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.95f));
+            glLineWidth(2f);
+            inventoryHover.render();
+            lineShader.unbind();
+
+            float hsY = 0.018f;
+            float hsX = hsY * aspectRatio;
+            float[] quads = handleQuad(layout.minX(), layout.maxY(), hsX, hsY);
+            float[] tr = handleQuad(layout.maxX(), layout.maxY(), hsX, hsY);
+            float[] br = handleQuad(layout.maxX(), layout.minY(), hsX, hsY);
+            float[] bl = handleQuad(layout.minX(), layout.minY(), hsX, hsY);
+            float[] all = new float[quads.length * 4];
+            System.arraycopy(quads, 0, all, 0, quads.length);
+            System.arraycopy(tr, 0, all, quads.length, tr.length);
+            System.arraycopy(br, 0, all, quads.length * 2, br.length);
+            System.arraycopy(bl, 0, all, quads.length * 3, bl.length);
+            inventoryPanel.upload(all);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.95f));
+            inventoryPanel.render();
+            lineShader.unbind();
+
+            drawCenteredText("Drag to move  ·  Corner to resize  ·  Scroll to scale  ·  R to reset",
+                    offsetX, layout.minY() - 0.045f, 0.022f, new Vector4f(1f, 1f, 1f, 0.95f));
+        }
         glEnable(GL_DEPTH_TEST);
+    }
+
+    /** Convenience overload: default top-right layout, no edit chrome. */
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion, float aspectRatio) {
+        renderMiniMap(miniMapImage, imageVersion, aspectRatio,
+                miniMapLayout(aspectRatio, MINI_MAP_SIZE_Y, Float.NaN, Float.NaN), false);
+    }
+
+    private static float[] handleQuad(float cx, float cy, float halfX, float halfY) {
+        return new float[]{
+                cx - halfX, cy - halfY, 0, cx + halfX, cy - halfY, 0, cx + halfX, cy + halfY, 0,
+                cx - halfX, cy - halfY, 0, cx + halfX, cy + halfY, 0, cx - halfX, cy + halfY, 0,
+        };
     }
 
     /**

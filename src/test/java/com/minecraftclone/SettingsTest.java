@@ -398,4 +398,41 @@ class SettingsTest {
         assertEquals("Controls", Settings.tabLabel(Settings.TAB_CONTROLS));
         assertEquals("Controller", Settings.tabLabel(Settings.TAB_CONTROLLER));
     }
+
+    @Test
+    void miniMapLayoutPersistsAndResets() throws IOException {
+        Path file = Files.createTempFile("mc-settings", ".txt");
+        try {
+            Settings s = new Settings();
+            assertEquals(0.48f, s.getMiniMapSizeY(), 1e-6f);
+            assertTrue(Float.isNaN(s.getMiniMapNdcX()), "default parks in the top-right");
+            assertTrue(Float.isNaN(s.getMiniMapNdcY()));
+
+            s.setMiniMapLayout(0.62f, 0.25f, -0.10f);
+            s.save(file);
+            String body = Files.readString(file);
+            assertTrue(body.contains("mini_map_size="));
+            assertTrue(body.contains("mini_map_x="));
+            assertTrue(body.contains("mini_map_y="));
+
+            Settings loaded = Settings.load(file);
+            assertEquals(0.62f, loaded.getMiniMapSizeY(), 1e-5f);
+            assertEquals(0.25f, loaded.getMiniMapNdcX(), 1e-5f);
+            assertEquals(-0.10f, loaded.getMiniMapNdcY(), 1e-5f);
+
+            loaded.resetMiniMapLayout();
+            loaded.save(file);
+            String resetBody = Files.readString(file);
+            assertTrue(resetBody.contains("mini_map_size=0.48"));
+            assertFalse(resetBody.contains("mini_map_x="), "NaN position is the default, not written");
+            assertFalse(resetBody.contains("mini_map_y="));
+
+            Settings reset = Settings.load(file);
+            assertEquals(0.48f, reset.getMiniMapSizeY(), 1e-6f);
+            assertTrue(Float.isNaN(reset.getMiniMapNdcX()));
+            assertTrue(Float.isNaN(reset.getMiniMapNdcY()));
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
 }

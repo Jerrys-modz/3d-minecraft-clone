@@ -121,6 +121,11 @@ public class Settings {
     private final GamepadBindings gamepadBinds = new GamepadBindings();
     private final WorldGenSettings worldGen = new WorldGenSettings();
 
+    /** Mini-map height in logical-Y units. NaN NDC coords mean "default top-right". */
+    private float miniMapSizeY = 0.48f;
+    private float miniMapNdcX = Float.NaN;
+    private float miniMapNdcY = Float.NaN;
+
     public Settings() {
         toggles[VSYNC] = true; // matches the window's default state
         ranges[RENDER_DISTANCE] = 6f;
@@ -336,6 +341,11 @@ public class Settings {
         lines.add("machines_volume=" + ranges[MACHINES_VOLUME]);
         lines.add("player_volume=" + ranges[PLAYER_VOLUME]);
         lines.add("ui_volume=" + ranges[UI_VOLUME]);
+        lines.add("mini_map_size=" + miniMapSizeY);
+        if (Float.isFinite(miniMapNdcX) && Float.isFinite(miniMapNdcY)) {
+            lines.add("mini_map_x=" + miniMapNdcX);
+            lines.add("mini_map_y=" + miniMapNdcY);
+        }
         keyBinds.saveLines(lines);
         gamepadBinds.saveLines(lines);
         // World-generation choices (seed, game mode, …) live in each world's
@@ -387,6 +397,18 @@ public class Settings {
                         case "machines_volume" -> loadFiniteRange(s, MACHINES_VOLUME, value);
                         case "player_volume" -> loadFiniteRange(s, PLAYER_VOLUME, value);
                         case "ui_volume" -> loadFiniteRange(s, UI_VOLUME, value);
+                        case "mini_map_size" -> {
+                            float v = Float.parseFloat(value);
+                            if (Float.isFinite(v)) s.miniMapSizeY = v;
+                        }
+                        case "mini_map_x" -> {
+                            float v = Float.parseFloat(value);
+                            if (Float.isFinite(v)) s.miniMapNdcX = v;
+                        }
+                        case "mini_map_y" -> {
+                            float v = Float.parseFloat(value);
+                            if (Float.isFinite(v)) s.miniMapNdcY = v;
+                        }
                         default -> {
                             s.keyBinds.loadEntry(key, value);
                             s.gamepadBinds.loadEntry(key, value);
@@ -527,6 +549,30 @@ public class Settings {
     /** UI category volume (0..1): menu/inventory/crafting clicks and open/close. */
     public float getUiVolume() {
         return ranges[UI_VOLUME];
+    }
+
+    public float getMiniMapSizeY() {
+        return miniMapSizeY;
+    }
+
+    public float getMiniMapNdcX() {
+        return miniMapNdcX;
+    }
+
+    public float getMiniMapNdcY() {
+        return miniMapNdcY;
+    }
+
+    public void setMiniMapLayout(float sizeY, float ndcX, float ndcY) {
+        this.miniMapSizeY = sizeY;
+        this.miniMapNdcX = ndcX;
+        this.miniMapNdcY = ndcY;
+    }
+
+    public void resetMiniMapLayout() {
+        this.miniMapSizeY = 0.48f;
+        this.miniMapNdcX = Float.NaN;
+        this.miniMapNdcY = Float.NaN;
     }
 
     /** World-generation settings for new worlds (see {@link WorldGenSettings}). */

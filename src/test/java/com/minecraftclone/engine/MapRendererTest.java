@@ -143,6 +143,40 @@ class MapRendererTest {
     }
 
     @Test
+    void compassLettersStayReadableOnSnow() {
+        MapData data = new MapData();
+        BlockAccessor snow = (x, y, z) -> {
+            if (y > 40) return BlockType.AIR;
+            if (y == 40) return BlockType.SNOW;
+            return BlockType.DIRT;
+        };
+        for (int cx = -4; cx <= 4; cx++) {
+            for (int cz = -4; cz <= 4; cz++) {
+                data.exploreChunk(cx, cz, snow);
+            }
+        }
+        MapRenderer renderer = new MapRenderer(data);
+        BufferedImage img = renderer.renderMiniMap(8f, 8f, -90f);
+        int size = MapRenderer.MINI_MAP_SIZE;
+
+        Region n = sample(img, size / 2 - 22, 0, size / 2 + 22, 40);
+        assertTrue(n.dark, "N should sit on a dark pill, not float over snow");
+        assertTrue(n.gold, "N should be gold");
+        assertTrue(n.contrast > 200, "N must contrast with snow, delta=" + n.contrast);
+
+        Region s = sample(img, size / 2 - 22, size - 40, size / 2 + 22, size);
+        assertTrue(s.dark, "S should sit on a dark pill");
+        assertTrue(s.white, "S should be a bright letter");
+        assertTrue(s.contrast > 200, "S must contrast with snow, delta=" + s.contrast);
+
+        Region e = sample(img, size - 40, size / 2 - 22, size, size / 2 + 22);
+        assertTrue(e.dark && e.white && e.contrast > 200, "E should be a bright letter on a dark pill");
+
+        Region w = sample(img, 0, size / 2 - 22, 40, size / 2 + 22);
+        assertTrue(w.dark && w.white && w.contrast > 200, "W should be a bright letter on a dark pill");
+    }
+
+    @Test
     void defaultFullMapZoomIsPixelsPerBlockNotChunks() {
         assertEquals(3.0f, MapRenderer.DEFAULT_SCALE, 0.01f);
         assertTrue(MapRenderer.MIN_SCALE < 1f);
@@ -187,6 +221,27 @@ class MapRendererTest {
         renderer.zoomAt(2f, mapW + 10, height / 2, width, height);
         assertEquals(panBefore, renderer.getPanWorldX(), 0.01f,
                 "zoom over the legend should not recentre");
+    }
+
+    private record Region(boolean dark, boolean gold, boolean white, int contrast) {}
+
+    private static Region sample(BufferedImage img, int x0, int y0, int x1, int y1) {
+        int minLuma = 255 * 3, maxLuma = 0;
+        boolean dark = false, gold = false, white = false;
+        int w = img.getWidth(), h = img.getHeight();
+        for (int y = Math.max(0, y0); y < Math.min(h, y1); y++) {
+            for (int x = Math.max(0, x0); x < Math.min(w, x1); x++) {
+                int rgb = img.getRGB(x, y) & 0xFFFFFF;
+                int r = red(rgb), g = green(rgb), b = blue(rgb);
+                int l = r + g + b;
+                minLuma = Math.min(minLuma, l);
+                maxLuma = Math.max(maxLuma, l);
+                if (l < 90) dark = true;
+                if (r > 200 && g > 180 && b < 90) gold = true;
+                if (r > 230 && g > 230 && b > 230) white = true;
+            }
+        }
+        return new Region(dark, gold, white, maxLuma - minLuma);
     }
 
     private static BlockAccessor oreColumn(int oreX, int oreZ, BlockType ore) {

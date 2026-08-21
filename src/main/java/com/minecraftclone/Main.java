@@ -77,7 +77,8 @@ import static org.lwjgl.opengl.GL11.*;
  * breaks one block per click), Right-click to place the selected block
  * (or eat it, if it's food; or open a furnace/crafting table's GUI when aiming at one),
  * E to open the inventory (click/drag items, craft on the 3x3 grid),
- * 1-9 or scroll wheel to pick a hotbar slot, F3 to toggle the on-screen debug
+ * 1-9 or scroll wheel to pick a hotbar slot, hold Alt to move/resize the mini-map,
+ * F3 to toggle the on-screen debug
  * overlay, Esc to open/close the settings menu (where graphics options like
  * see-through leaves live).
  */
@@ -346,6 +347,93 @@ public class Main {
             worldGen.setDifficulty(settings.getDifficulty());
             saveWorldGenSettings(worldDir, worldGen);
         }
+    }
+
+    private static boolean altDown(Input input) {
+        return input.isKeyDown(GLFW_KEY_LEFT_ALT) || input.isKeyDown(GLFW_KEY_RIGHT_ALT);
+    }
+
+    private static boolean shouldCaptureCursor(Input input, boolean mapOpen, boolean menuOpen,
+                                               boolean inventoryOpen, boolean creativeOpen) {
+        return !mapOpen && !menuOpen && !inventoryOpen && !creativeOpen && !altDown(input);
+    }
+
+    private static float hudMouseX(Input input, Window window) {
+        return ((float) input.getMouseX() / Math.max(1, window.getWidth()) * 2f - 1f) * window.getAspectRatio();
+    }
+
+    private static float hudMouseY(Input input, Window window) {
+        return 1f - (float) input.getMouseY() / Math.max(1, window.getHeight()) * 2f;
+    }
+
+    /**
+     * Hold Alt in gameplay to free the cursor and drag / resize the mini-map.
+     * Returns true while editing so look, mining and hotbar-scroll stay out of the way.
+     */
+    private boolean updateMiniMapEdit(Input input, Window window, Settings settings, Path settingsFile,
+                                      boolean gameplayHud, boolean[] hudEdit, int[] miniMapDrag,
+                                      float[] dragOffX, float[] dragOffY) {
+        float aspect = window.getAspectRatio();
+        if (!gameplayHud || !altDown(input)) {
+            if (hudEdit[0]) {
+                if (miniMapDrag[0] != Hud.MINIMAP_HIT_NONE) {
+                    settings.save(settingsFile);
+                }
+                miniMapDrag[0] = Hud.MINIMAP_HIT_NONE;
+                hudEdit[0] = false;
+                if (gameplayHud) {
+                    window.setCursorCaptured(true);
+                    input.resetMouseDelta();
+                }
+            }
+            return false;
+        }
+        if (!hudEdit[0]) {
+            hudEdit[0] = true;
+            window.setCursorCaptured(false);
+            Hud.MiniMapLayout layout = Hud.miniMapLayout(settings, aspect);
+            float mx = ((layout.cx() / aspect) + 1f) * 0.5f * window.getWidth();
+            float my = (1f - layout.cy()) * 0.5f * window.getHeight();
+            input.setCursorPos(mx, my);
+            input.resetMouseDelta();
+        }
+        float lx = hudMouseX(input, window);
+        float ly = hudMouseY(input, window);
+        Hud.MiniMapLayout layout = Hud.miniMapLayout(settings, aspect);
+        if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+            int hit = Hud.miniMapHit(layout, lx, ly);
+            miniMapDrag[0] = hit;
+            if (hit == Hud.MINIMAP_HIT_BODY) {
+                dragOffX[0] = lx - layout.cx();
+                dragOffY[0] = ly - layout.cy();
+            }
+        }
+        if (miniMapDrag[0] != Hud.MINIMAP_HIT_NONE && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT)) {
+            if (miniMapDrag[0] == Hud.MINIMAP_HIT_BODY) {
+                layout = Hud.miniMapLayout(aspect, layout.sizeY(),
+                        (lx - dragOffX[0]) / aspect, ly - dragOffY[0]);
+            } else {
+                layout = Hud.resizeMiniMap(miniMapDrag[0], layout, lx, ly, aspect);
+            }
+            Hud.writeMiniMapLayout(settings, layout, aspect);
+        } else if (miniMapDrag[0] != Hud.MINIMAP_HIT_NONE) {
+            miniMapDrag[0] = Hud.MINIMAP_HIT_NONE;
+            settings.save(settingsFile);
+        }
+        double scroll = input.getScrollDelta();
+        if (scroll != 0 && miniMapDrag[0] == Hud.MINIMAP_HIT_NONE
+                && Hud.miniMapHit(layout, lx, ly) != Hud.MINIMAP_HIT_NONE) {
+            layout = Hud.scaleMiniMap(layout, (float) Math.pow(1.12, scroll), aspect);
+            Hud.writeMiniMapLayout(settings, layout, aspect);
+            settings.save(settingsFile);
+        }
+        if (input.isKeyJustPressed(GLFW_KEY_R)) {
+            settings.resetMiniMapLayout();
+            settings.save(settingsFile);
+            miniMapDrag[0] = Hud.MINIMAP_HIT_NONE;
+        }
+        input.resetMouseDelta();
+        return true;
     }
 
     /** Copies this world's game mode and difficulty onto Settings/Player. */
@@ -678,6 +766,10 @@ public class Main {
         float[] attackCooldown = {0f}; // time until the next mob hit can land
         MapRenderer[] mapRenderer = {null}; // initialized when world is created
         boolean[] mapOpen = {false};             // true while the full-screen map is visible
+        boolean[] hudEdit = {false};             // true while Alt is held to drag/resize the mini-map
+        int[] miniMapDrag = {Hud.MINIMAP_HIT_NONE};
+        float[] miniMapDragOffX = {0f};
+        float[] miniMapDragOffY = {0f};
         java.nio.file.Path[] currentWorldDir = {null}; // set whenever a world is loaded, for map persistence
         Mob[] targetedMobRef = {null}; // the mob the crosshair is aimed at this frame, if any
         float[] footstepTimer = {0f}; // time until the next footstep sound while walking/sprinting on the ground
@@ -693,7 +785,8 @@ public class Main {
         System.out.println("          Right-click place (or eat, if selected item is food),");
         System.out.println("          E inventory (click/drag items), 1-9/scroll select,");
         System.out.println("          right-click a furnace/crafting table for its GUI,");
-        System.out.println("          F3 debug, Esc pause menu.");
+        System.out.println("          F3 debug, Esc pause menu,");
+        System.out.println("          hold Alt to move/resize the mini-map (drag, corners, scroll, R to reset).");
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1459,7 +1552,7 @@ public class Main {
                     inGameOptions[0] = false;
                     menuSelection[0] = 0;
                 }
-                window.setCursorCaptured(!mapOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
+                window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
                 input.resetMouseDelta();
             }
 
@@ -1487,7 +1580,7 @@ public class Main {
                         menuOpen[0] = false;
                         audio.play(SoundEvent.UI_OPEN);
                     }
-                    window.setCursorCaptured(!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
+                    window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
                     input.resetMouseDelta();
                 }
             }
@@ -1659,7 +1752,7 @@ public class Main {
                         audio.play(SoundEvent.UI_CLICK);
                         if (menuSelection[0] == Hud.PAUSE_BACK) {
                             menuOpen[0] = false;
-                            window.setCursorCaptured(true);
+                            window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
                             input.resetMouseDelta();
                         } else if (menuSelection[0] == Hud.PAUSE_OPTIONS) {
                             inGameOptions[0] = true;
@@ -1706,7 +1799,7 @@ public class Main {
                     && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 mapOpen[0] = !mapOpen[0];
                 if (!mapOpen[0]) hud.renderFullMap(null, -1); // clear GL texture cache on close
-                window.setCursorCaptured(!mapOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]);
+                window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
                 input.resetMouseDelta();
             }
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
@@ -1743,6 +1836,11 @@ public class Main {
                 }
                 if (input.isKeyJustPressed(GLFW_KEY_R)) mapRenderer[0].resetView();
             }
+
+            boolean gameplayHud = started[0] && world != null && !menuOpen[0] && !inventoryOpen[0]
+                    && !creativeOpen[0] && !mapOpen[0];
+            boolean hudEditing = updateMiniMapEdit(input, window, settings, settingsFile, gameplayHud,
+                    hudEdit, miniMapDrag, miniMapDragOffX, miniMapDragOffY);
 
             if (started[0] && world != null && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
                 // Cold exposure factor, driven by the LOCAL temperature at the
@@ -1971,12 +2069,12 @@ public class Main {
                     }
                 }
                 double scroll = input.getScrollDelta();
-                if (scroll != 0) {
+                if (scroll != 0 && !hudEditing) {
                     selectedSlot[0] = Math.floorMod(selectedSlot[0] - (int) Math.signum(scroll), Inventory.HOTBAR_SIZE);
                 }
             }
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0] && !hudEditing) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 // A cell can hold an overlay decoration inside its primary block (e.g.
@@ -2408,8 +2506,9 @@ public class Main {
                     java.awt.image.BufferedImage miniMapImage = mapRenderer[0].renderMiniMap(
                             player.getPosition().x, player.getPosition().z,
                             player.getCamera().getYaw());
+                    float mapAspect = window.getAspectRatio();
                     hud.renderMiniMap(miniMapImage, mapRenderer[0].getMiniMapVersion(),
-                            window.getAspectRatio());
+                            mapAspect, Hud.miniMapLayout(settings, mapAspect), hudEdit[0]);
                 }
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
                 if (!settings.getGameMode().isInvulnerable()) {

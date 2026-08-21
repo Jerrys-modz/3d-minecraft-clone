@@ -280,15 +280,15 @@ public class MapRenderer {
         int centerX = MINI_MAP_SIZE / 2;
         int centerZ = MINI_MAP_SIZE / 2;
 
-        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 10));
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
         FontMetrics fm = g.getFontMetrics();
-        g.setColor(new Color(240, 240, 240));
-        drawCentred(g, fm, "N", centerX, 12);
-        drawCentred(g, fm, "S", centerX, MINI_MAP_SIZE - 4);
-        drawCentred(g, fm, "E", MINI_MAP_SIZE - 6, centerZ + fm.getAscent() / 2);
-        drawCentred(g, fm, "W", 6, centerZ + fm.getAscent() / 2);
+        int inset = 16;
+        drawCompassLabel(g, fm, "N", centerX, inset + fm.getAscent() - 2, new Color(255, 220, 40));
+        drawCompassLabel(g, fm, "S", centerX, MINI_MAP_SIZE - 10, Color.WHITE);
+        drawCompassLabel(g, fm, "E", MINI_MAP_SIZE - inset, centerZ + fm.getAscent() / 2, Color.WHITE);
+        drawCompassLabel(g, fm, "W", inset, centerZ + fm.getAscent() / 2, Color.WHITE);
 
-        drawDirectionArrow(g, centerX, centerZ, playerYaw, 8);
+        drawDirectionArrow(g, centerX, centerZ, playerYaw, 10);
 
         g.setColor(new Color(200, 200, 200));
         g.drawRect(0, 0, MINI_MAP_SIZE - 1, MINI_MAP_SIZE - 1);
@@ -829,8 +829,30 @@ public class MapRenderer {
         g.drawPolygon(xs, ys, 3);
     }
 
-    /** Draw a string horizontally centred on x. */
-    private static void drawCentred(Graphics2D g, FontMetrics fm, String s, int cx, int y) {
-        g.drawString(s, cx - fm.stringWidth(s) / 2, y);
+    /**
+     * High-contrast compass letter: a dark pill, a black outline, then a
+     * bright fill so N/S/E/W stay readable on snow, sand, grass and water.
+     */
+    private static void drawCompassLabel(Graphics2D g, FontMetrics fm, String s, int cx, int y, Color fill) {
+        int textW = fm.stringWidth(s);
+        int x = cx - textW / 2;
+        int padX = 5;
+        int padY = 3;
+        int boxX = x - padX;
+        int boxY = y - fm.getAscent() - padY;
+        int boxW = textW + padX * 2;
+        int boxH = fm.getAscent() + fm.getDescent() + padY * 2;
+        g.setColor(new Color(0, 0, 0, 180));
+        g.fillRoundRect(boxX, boxY, boxW, boxH, 8, 8);
+        g.setColor(new Color(0, 0, 0, 230));
+        for (int ox = -2; ox <= 2; ox++) {
+            for (int oy = -2; oy <= 2; oy++) {
+                if (ox == 0 && oy == 0) continue;
+                if (ox * ox + oy * oy > 8) continue;
+                g.drawString(s, x + ox, y + oy);
+            }
+        }
+        g.setColor(fill);
+        g.drawString(s, x, y);
     }
 }
