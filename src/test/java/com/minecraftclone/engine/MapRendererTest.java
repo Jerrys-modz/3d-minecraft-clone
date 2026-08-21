@@ -74,6 +74,8 @@ class MapRendererTest {
             if (y < 40) return BlockType.DIRT;
             return BlockType.AIR;
         });
+        data.discoverOre(4, 20, 4, BlockType.COPPER_ORE);
+        data.discoverOre(9, 20, 9, BlockType.TIN_ORE);
         List<MapRenderer.MixWaypoint> wps = MapRenderer.clusterMixWaypoints(data);
         assertEquals(1, wps.size(), "copper + tin in one vein should be one Copper Mix");
         assertEquals("Copper Mix", wps.get(0).mixName);
@@ -87,9 +89,23 @@ class MapRendererTest {
         // Chunk (0,0): copper. Chunk (4,0) is 64 blocks east — outside cluster radius.
         data.exploreChunk(0, 0, oreColumn(4, 4, BlockType.COPPER_ORE));
         data.exploreChunk(4, 0, oreColumn(4 * 16 + 4, 4, BlockType.MAGNETITE_ORE));
+        data.discoverOre(4, 22, 4, BlockType.COPPER_ORE);
+        data.discoverOre(4 * 16 + 4, 22, 4, BlockType.MAGNETITE_ORE);
         List<MapRenderer.MixWaypoint> wps = MapRenderer.clusterMixWaypoints(data);
         Set<String> names = wps.stream().map(w -> w.mixName).collect(Collectors.toSet());
         assertEquals(Set.of("Copper Mix", "Magnetite Mix"), names);
+    }
+
+    @Test
+    void undiscoveredOresDoNotGetWaypoints() {
+        MapData data = new MapData();
+        data.exploreChunk(0, 0, oreColumn(4, 4, BlockType.COPPER_ORE));
+        assertTrue(MapRenderer.clusterMixWaypoints(data).isEmpty(),
+                "terrain exploration must not reveal the mix");
+        data.discoverOre(4, 22, 4, BlockType.SMALL_COPPER_ORE);
+        List<MapRenderer.MixWaypoint> wps = MapRenderer.clusterMixWaypoints(data);
+        assertEquals(1, wps.size());
+        assertEquals("Copper Mix", wps.get(0).mixName);
     }
 
     @Test
@@ -104,8 +120,9 @@ class MapRendererTest {
         BufferedImage img = renderer.renderMiniMap(8f, 8f, -90f);
         assertEquals(MapRenderer.MINI_MAP_SIZE, img.getWidth());
         assertEquals(MapRenderer.MINI_MAP_SIZE, img.getHeight());
-        assertEquals(64, MapRenderer.MINI_MAP_SIZE / MapRenderer.MINI_PIXELS_PER_BLOCK,
-                "mini-map should show ~64 blocks (~4 chunks), not 20 gray chunks");
+        int blocksAcross = MapRenderer.MINI_MAP_SIZE / MapRenderer.MINI_PIXELS_PER_BLOCK;
+        assertTrue(blocksAcross >= 64 && blocksAcross <= 96,
+                "mini-map should show ~4–6 chunks around the player, got " + blocksAcross);
 
         int greenPixels = 0;
         int grayish = 0;

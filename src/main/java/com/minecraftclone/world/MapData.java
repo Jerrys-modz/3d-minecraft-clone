@@ -8,7 +8,10 @@ import java.util.*;
  * Persistent map data tracking explored chunks, their top-down surface
  * (block + height per column, for a JourneyMap-style terrain view) and
  * discovered ore vein locations. Chunks paint onto the map as they load
- * within render distance (see {@link World#mapLoadedChunks}).
+ * within render distance (see {@link World#mapLoadedChunks}). Ore-mix
+ * waypoints are GTNH VisualProspecting-style: walking a chunk is not
+ * enough — the player has to look at or mine the ore (or its small-ore
+ * surface signal) before it shows on the map.
  */
 public class MapData {
 
@@ -50,12 +53,12 @@ public class MapData {
     }
 
     /**
-     * Mark a chunk as explored, sample its surface when none exists yet, and —
-     * on first visit — discover any ore veins it contains. The surface is
-     * sampled once per chunk: chunks from a v1 save (explored, but with no
-     * surface) are sampled on their next visit, so an older world picks up
-     * terrain colours. Later edits to an already-sampled chunk are not
-     * repainted.
+     * Mark a chunk as explored and sample its surface when none exists yet.
+     * The surface is sampled once per chunk: chunks from a v1 save (explored,
+     * but with no surface) are sampled on their next visit, so an older world
+     * picks up terrain colours. Later edits to an already-sampled chunk are
+     * not repainted. Ore veins are <em>not</em> scanned here — see
+     * {@link #discoverOre}.
      */
     public void exploreChunk(int chunkX, int chunkZ, BlockAccessor world) {
         if (looksUnloaded(world, chunkX, chunkZ)) {
@@ -63,7 +66,7 @@ public class MapData {
         }
 
         long chunkKey = encodeChunkKey(chunkX, chunkZ);
-        boolean firstVisit = exploredChunks.add(chunkKey);
+        exploredChunks.add(chunkKey);
 
         // v1 saves are already "explored" but have no surface — sample those
         // (and any brand-new chunk) once. Don't resample every call.
@@ -71,69 +74,71 @@ public class MapData {
             sampleSurface(chunkX, chunkZ, world);
             revision++;
         }
-
-        if (!firstVisit) {
-            return; // Veins are scanned once.
-        }
-
-        // Scan the chunk for ore veins (full-size ores only, not small ores).
-        // Group into 4x4 column cells to reduce density; keep at most one vein
-        // per ore type per cell. Depth matches GTNH vein defs (up to Y 80).
-        List<OreVeinRecord> veins = new ArrayList<>();
-        int baseX = chunkX * Chunk.SIZE;
-        int baseZ = chunkZ * Chunk.SIZE;
-
-        for (int cellX = 0; cellX < 4; cellX++) {
-            for (int cellZ = 0; cellZ < 4; cellZ++) {
-                int minX = baseX + cellX * 4;
-                int minZ = baseZ + cellZ * 4;
-                Map<BlockType, OreVeinRecord> cellVeins = new HashMap<>();
-
-                for (int y = 5; y < 96; y++) {
-                    for (int x = minX; x < minX + 4; x++) {
-                        for (int z = minZ; z < minZ + 4; z++) {
-                            BlockType block = world.getBlock(x, y, z);
-                            if (isFullSizeOre(block) && !cellVeins.containsKey(block)) {
-                                cellVeins.put(block, new OreVeinRecord(x, y, z, block));
-                            }
-                        }
-                    }
-                }
-                veins.addAll(cellVeins.values());
-            }
-        }
-
-        if (!veins.isEmpty()) {
-            veinsByChunk.put(chunkKey, veins);
-        }
-        revision++;
     }
 
     /**
      * Sample a chunk that is already generated in memory. Skips the all-air
      * probe (the world would not hand us an ungenerated chunk) and reads
      * blocks from the chunk directly so sky columns don't walk 256 air cells.
+     * Ore veins are not scanned; the player has to find them.
      */
     public void exploreGeneratedChunk(Chunk chunk) {
         if (chunk == null || !chunk.isGenerated()) return;
         int chunkX = chunk.getPos().x();
         int chunkZ = chunk.getPos().z();
         long chunkKey = encodeChunkKey(chunkX, chunkZ);
-        boolean firstVisit = exploredChunks.add(chunkKey);
+        exploredChunks.add(chunkKey);
 
         if (!hasSurface(chunkX, chunkZ)) {
             sampleSurface(chunk);
             revision++;
         }
-        if (!firstVisit) {
-            return;
-        }
+    }
 
-        List<OreVeinRecord> veins = scanVeins(chunk);
-        if (!veins.isEmpty()) {
-            veinsByChunk.put(chunkKey, veins);
+    /**
+     * Record a mix waypoint because the player found this ore — looked at it
+     * or mined it — the way VisualProspecting only shows a mix after you
+     * prospect it. Small ores count as their full-size mix. One of each ore
+     * type per chunk. Returns true when this is a new find.
+     */
+    public boolean discoverOre(int x, int y, int z, BlockType type) {
+        BlockType ore = prospectableOre(type);
+        if (ore == null) return false;
+        int cx = Math.floorDiv(x, Chunk.SIZE);
+        int cz = Math.floorDiv(z, Chunk.SIZE);
+        long key = encodeChunkKey(cx, cz);
+        List<OreVeinRecord> veins = veinsByChunk.get(key);
+        if (veins != null) {
+            for (OreVeinRecord v : veins) {
+                if (v.oreType == ore) return false;
+            }
+        } else {
+            veins = new ArrayList<>();
+            veinsByChunk.put(key, veins);
         }
+        veins.add(new OreVeinRecord(x, y, z, ore));
         revision++;
+        return true;
+    }
+
+    /**
+     * The full-size ore a found block should prospect as, or {@code null} if
+     * it isn't an ore. {@code SMALL_COPPER_ORE} becomes {@code COPPER_ORE} so
+     * a surface small-ore (GTNH's prospecting signal) reveals the mix.
+     */
+    public static BlockType prospectableOre(BlockType type) {
+        if (isFullSizeOre(type)) return type;
+        if (type == null) return null;
+        String n = type.name();
+        if (n.startsWith("SMALL_") && n.endsWith("_ORE")) {
+            try {
+                BlockType full = BlockType.valueOf(n.substring("SMALL_".length()));
+                if (isFullSizeOre(full)) return full;
+            } catch (IllegalArgumentException ignored) {
+                // SMALL_* with no matching full ore.
+            }
+        }
+        return null;
     }
 
     private void sampleSurface(Chunk chunk) {
@@ -156,32 +161,6 @@ public class MapData {
         }
         surfaceBlocks.put(key, blocks);
         surfaceHeights.put(key, heights);
-    }
-
-    private static List<OreVeinRecord> scanVeins(Chunk chunk) {
-        List<OreVeinRecord> veins = new ArrayList<>();
-        int baseX = chunk.getOriginX();
-        int baseZ = chunk.getOriginZ();
-        for (int cellX = 0; cellX < 4; cellX++) {
-            for (int cellZ = 0; cellZ < 4; cellZ++) {
-                int minLx = cellX * 4;
-                int minLz = cellZ * 4;
-                Map<BlockType, OreVeinRecord> cellVeins = new HashMap<>();
-                for (int y = 5; y < 96; y++) {
-                    for (int lx = minLx; lx < minLx + 4; lx++) {
-                        for (int lz = minLz; lz < minLz + 4; lz++) {
-                            BlockType block = chunk.getLocal(lx, y, lz);
-                            if (isFullSizeOre(block) && !cellVeins.containsKey(block)) {
-                                cellVeins.put(block, new OreVeinRecord(
-                                        baseX + lx, y, baseZ + lz, block));
-                            }
-                        }
-                    }
-                }
-                veins.addAll(cellVeins.values());
-            }
-        }
-        return veins;
     }
 
     /**

@@ -86,6 +86,43 @@ class MapDataTest {
     }
 
     @Test
+    void exploringAChunkDoesNotRevealOres() {
+        MapData data = new MapData();
+        data.exploreChunk(0, 0, (x, y, z) -> {
+            if (y == 20 && x == 4 && z == 4) return BlockType.COPPER_ORE;
+            if (y == 40) return BlockType.GRASS;
+            if (y < 40) return BlockType.DIRT;
+            return BlockType.AIR;
+        });
+        assertTrue(data.isChunkExplored(0, 0));
+        assertTrue(data.hasSurface(0, 0));
+        assertTrue(data.getVeinsInChunk(0, 0).isEmpty(),
+                "walking a chunk must not dump GTNH mix waypoints onto the map");
+    }
+
+    @Test
+    void lookingAtOreDiscoversTheMix() {
+        MapData data = new MapData();
+        assertTrue(data.discoverOre(4, 20, 4, BlockType.COPPER_ORE));
+        assertEquals(1, data.getVeinsInChunk(0, 0).size());
+        assertEquals(BlockType.COPPER_ORE, data.getVeinsInChunk(0, 0).get(0).oreType);
+        assertFalse(data.discoverOre(5, 21, 5, BlockType.COPPER_ORE),
+                "same ore type in the same chunk is already prospected");
+        assertTrue(data.discoverOre(8, 18, 8, BlockType.TIN_ORE),
+                "a mix secondary is its own record so clustering can name the mix");
+    }
+
+    @Test
+    void smallOreIsAProspectingSignalForTheMix() {
+        assertEquals(BlockType.COPPER_ORE, MapData.prospectableOre(BlockType.SMALL_COPPER_ORE));
+        assertEquals(BlockType.COPPER_ORE, MapData.prospectableOre(BlockType.COPPER_ORE));
+        assertNull(MapData.prospectableOre(BlockType.STONE));
+        MapData data = new MapData();
+        assertTrue(data.discoverOre(3, 50, 3, BlockType.SMALL_TIN_ORE));
+        assertEquals(BlockType.TIN_ORE, data.getVeinsInChunk(0, 0).get(0).oreType);
+    }
+
+    @Test
     void fullSizeOresAreRecordedAsVeins() {
         MapData data = new MapData();
         data.exploreChunk(0, 0, (x, y, z) -> {
@@ -95,6 +132,8 @@ class MapDataTest {
             if (y < 40) return BlockType.DIRT;
             return BlockType.AIR;
         });
+        assertTrue(data.getVeinsInChunk(0, 0).isEmpty());
+        data.discoverOre(4, 20, 4, BlockType.COPPER_ORE);
         assertEquals(1, data.getVeinsInChunk(0, 0).size());
         assertEquals(BlockType.COPPER_ORE, data.getVeinsInChunk(0, 0).get(0).oreType);
         assertTrue(MapData.isFullSizeOre(BlockType.COPPER_ORE));
@@ -111,6 +150,7 @@ class MapDataTest {
             if (y < 44) return BlockType.SAND;
             return BlockType.AIR;
         });
+        data.discoverOre(20, 18, -30, BlockType.MAGNETITE_ORE);
         Path file = tmp.resolve("map.dat");
         data.saveTo(file);
         assertTrue(Files.exists(file));
@@ -170,6 +210,9 @@ class MapDataTest {
         assertEquals(BlockType.GRASS, data.getSurfaceBlock(2 * 16 + 3, -1 * 16 + 5));
         assertEquals(BlockType.GRASS, data.getSurfaceBlock(2 * 16 + 4, -1 * 16 + 4),
                 "tall grass on grass should still show grass");
+        assertTrue(data.getVeinsInChunk(2, -1).isEmpty(),
+                "generated-chunk mapping is terrain only");
+        data.discoverOre(2 * 16 + 4, 22, -1 * 16 + 4, BlockType.COPPER_ORE);
         assertEquals(1, data.getVeinsInChunk(2, -1).size());
         assertEquals(BlockType.COPPER_ORE, data.getVeinsInChunk(2, -1).get(0).oreType);
     }

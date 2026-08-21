@@ -401,6 +401,8 @@ public class Main {
         if (targetType == BlockType.AIR || targetType == BlockType.BEDROCK) return;
         if (!Mining.canBreakItem(targetType, heldStack)) return; // e.g. an ore the hammer can't mine
 
+        world.getMapData().discoverOre(bx, by, bz, targetType);
+
         audio.playBlockSound(SoundMaterial.of(targetType), BlockAction.BREAK, bx + 0.5f, by + 0.5f, bz + 0.5f, 1f);
 
         if (Door.isDoor(targetType)) {
@@ -776,7 +778,7 @@ public class Main {
                     autoDir.resolve(dim.saveFolder()).resolve("map.dat"));
             }
             mapRenderer[0] = new MapRenderer(world.getMapData());
-            hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
+            hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
             startCalendar(dayNightCycle, calendar, genSettings);
             for (World w : worlds) {
                 w.setRenderDistance(settings.getRenderDistance());
@@ -1299,7 +1301,7 @@ public class Main {
                                         worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
                                 }
                                 mapRenderer[0] = new MapRenderer(world.getMapData());
-                                hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
+                                hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
                                 startCalendar(dayNightCycle, calendar, genSettings);
                                 for (World w : worlds) {
                                     w.setRenderDistance(settings.getRenderDistance());
@@ -1368,7 +1370,7 @@ public class Main {
                                     worldDir.resolve(dim.saveFolder()).resolve("map.dat"));
                             }
                             mapRenderer[0] = new MapRenderer(world.getMapData());
-                            hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1); // Clear mini-map cache
+                            hud.renderMiniMap(null, -1, 1); // Clear mini-map cache
                             startCalendar(dayNightCycle, calendar, genSettings);
                             for (World w : worlds) {
                                 w.setRenderDistance(settings.getRenderDistance());
@@ -1690,7 +1692,7 @@ public class Main {
                             worldNames = listWorlds(saveRoot);
                             window.setCursorCaptured(false);
                             input.resetMouseDelta();
-                            hud.renderMiniMap(null, -1, 0, 0, 0, 0, 1);
+                            hud.renderMiniMap(null, -1, 1);
                             hud.renderFullMap(null, -1);
                         }
                     }
@@ -2366,6 +2368,7 @@ public class Main {
                     BlockType primary = world.getBlock(lookPos.x, lookPos.y, lookPos.z);
                     BlockType looking = overlay != BlockType.AIR ? overlay : primary;
                     if (looking != BlockType.AIR) {
+                        world.getMapData().discoverOre(lookPos.x, lookPos.y, lookPos.z, looking);
                         GameMode lookMode = settings.getGameMode();
                         String hint = Mining.harvestHint(
                                 looking,
@@ -2381,7 +2384,7 @@ public class Main {
                             player.getPosition().x, player.getPosition().z,
                             player.getCamera().getYaw());
                     hud.renderMiniMap(miniMapImage, mapRenderer[0].getMiniMapVersion(),
-                            0.28f, 0.28f, 0.84f, 0.84f, window.getAspectRatio());
+                            window.getAspectRatio());
                 }
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
                 if (!settings.getGameMode().isInvulnerable()) {

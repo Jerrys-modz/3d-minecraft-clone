@@ -197,7 +197,8 @@ public class World implements BlockAccessor {
     /**
      * Paint every generated chunk within {@link #renderDistance} of the player
      * onto the map. Nearby chunks first; work is time-budgeted so a 12-chunk
-     * view fills in over a few frames instead of hitching.
+     * view fills in over a few frames instead of hitching. Terrain only —
+     * ore-mix waypoints wait until the player finds the ore.
      */
     public void mapLoadedChunks(int playerChunkX, int playerChunkZ) {
         double start = System.nanoTime() / 1e9;

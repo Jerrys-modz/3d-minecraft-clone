@@ -14,12 +14,13 @@ import java.util.List;
 /**
  * JourneyMap-style top-down terrain renderer: block-resolution surface colours
  * with height shading, a zoomed-in mini-map, and GTNH VisualProspecting mix
- * waypoints (coloured diamonds + hover popups) on the full map.
+ * waypoints (coloured diamonds + hover popups) on the full map — only for
+ * ores the player has actually found.
  */
 public class MapRenderer {
 
-    public static final int MINI_MAP_SIZE = 192;
-    /** Mini-map zoom: pixels per block (3px × 192 → ~64 blocks across). */
+    public static final int MINI_MAP_SIZE = 256;
+    /** Mini-map zoom: pixels per block (3px × 256 → ~85 blocks across). */
     public static final int MINI_PIXELS_PER_BLOCK = 3;
     public static final float DEFAULT_SCALE = 3.0f;
     public static final float MIN_SCALE = 0.5f;

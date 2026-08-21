@@ -71,6 +71,29 @@ public class Hud {
     /** Bottom Y of the look-at overlay title (top of the logical square). */
     public static final float LOOK_AT_TITLE_Y = 0.90f;
 
+    /**
+     * Mini-map on-screen height as a fraction of the logical square (−1..1).
+     * ~24% of the viewport, parked in the top-right with {@link #MINI_MAP_MARGIN}.
+     */
+    public static final float MINI_MAP_SIZE_Y = 0.48f;
+    /** Viewport margin (NDC units) around the mini-map on the top and right. */
+    public static final float MINI_MAP_MARGIN = 0.035f;
+
+    /** Logical width that keeps the mini-map square after the 1/aspect HUD scale. */
+    static float miniMapSizeX(float aspectRatio) {
+        return MINI_MAP_SIZE_Y * aspectRatio;
+    }
+
+    /** Logical center-x: right edge sits {@link #MINI_MAP_MARGIN} in from the viewport. */
+    static float miniMapOffsetX(float aspectRatio) {
+        return aspectRatio * (1f - MINI_MAP_MARGIN - MINI_MAP_SIZE_Y / 2f);
+    }
+
+    /** Logical center-y: top edge sits {@link #MINI_MAP_MARGIN} down from the top. */
+    static float miniMapOffsetY() {
+        return 1f - MINI_MAP_MARGIN - MINI_MAP_SIZE_Y / 2f;
+    }
+
     // Inventory screen layout (logical square units).
     private static final float INV_SLOT = 0.082f;
     private static final float INV_GAP = 0.012f;
@@ -3040,7 +3063,7 @@ public class Hud {
             renderTooltip(tooltipLines(tip, durability), cursorLx, cursorLy, aspectRatio);
         }
 
-        drawCenteredText("Creative    Type to search    Click: add    Shift-click: hotbar    Scroll: more    X: delete",
+        drawCenteredText("Creative    Click search    Click: add    Shift-click: hotbar    Scroll: more    X: delete",
                 0f, centerY - HOTBAR_SLOT_SIZE / 2f - 0.05f, 0.020f, new Vector4f(0.7f, 0.7f, 0.7f, 1f));
 
         glEnable(GL_CULL_FACE);
@@ -3055,7 +3078,7 @@ public class Hud {
      * and increments each time the renderer redraws into its cached image; Hud uses it
      * to detect pixel changes that don't change the image reference.
      */
-    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion, float sizeX, float sizeY, float offsetX, float offsetY, float aspectRatio) {
+    public void renderMiniMap(java.awt.image.BufferedImage miniMapImage, int imageVersion, float aspectRatio) {
         if (miniMapImage == null) {
             // Clear cache when no image provided
             if (cachedMiniMapTextureId >= 0) {
@@ -3067,6 +3090,11 @@ public class Hud {
             cachedMiniMapVersion = -1;
             return;
         }
+
+        float sizeX = miniMapSizeX(aspectRatio);
+        float sizeY = MINI_MAP_SIZE_Y;
+        float offsetX = miniMapOffsetX(aspectRatio);
+        float offsetY = miniMapOffsetY();
 
         // Check if image pixels or layout has changed
         boolean imageChanged = cachedMiniMapImage != miniMapImage || cachedMiniMapVersion != imageVersion;
