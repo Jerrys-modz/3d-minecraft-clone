@@ -1019,6 +1019,14 @@ public class Chunk implements ChunkStorage.PersistableChunk {
                     ? TextureAtlas.CHERRY_LEAVES_CUTOUT_TILE
                     : TextureAtlas.LEAVES_CUTOUT_TILE;
         }
+        Chest.Appearance chestLook = null;
+        if (block == BlockType.CHEST) {
+            chestLook = Chest.appearance(wx, wy, wz, world);
+            int nx = face == Face.EAST ? 1 : face == Face.WEST ? -1 : 0;
+            int ny = face == Face.TOP ? 1 : face == Face.BOTTOM ? -1 : 0;
+            int nz = face == Face.SOUTH ? 1 : face == Face.NORTH ? -1 : 0;
+            tile = Chest.faceTile(chestLook, nx, ny, nz);
+        }
         float[] uv = atlas.getUV(tile);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
         float light = switch (face) {
@@ -1033,6 +1041,9 @@ public class Chunk implements ChunkStorage.PersistableChunk {
 
         float[][] positions;
         float[][] uvs = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}};
+        if (chestLook != null && face == Face.TOP) {
+            uvs = Chest.lidUvs(u0, v0, u1, v1, chestLook.facing());
+        }
 
         switch (face) {
             case TOP -> positions = new float[][]{{x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}};

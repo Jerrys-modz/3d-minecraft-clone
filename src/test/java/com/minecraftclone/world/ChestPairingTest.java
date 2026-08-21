@@ -1,5 +1,6 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.player.JoinedStorage;
 import com.minecraftclone.player.StorageContainer;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -130,6 +132,97 @@ class ChestPairingTest {
             assertEquals(108, opened.size(), "corner " + c[0] + "," + c[1]);
         }
         assertEquals(4, ents.size());
+    }
+
+    @Test
+    void eastWestDoubleUsesLeftAndRightHalvesFacingSouth() {
+        Chest.Occupied occ = cells(p(0, 0, 0), p(1, 0, 0));
+        Chest.Appearance west = Chest.appearance(0, 0, 0, occ, null);
+        Chest.Appearance east = Chest.appearance(1, 0, 0, occ, null);
+        assertEquals(Chest.Kind.DOUBLE, west.kind());
+        assertEquals(Chest.Kind.DOUBLE, east.kind());
+        assertEquals(0, west.facing(), "east-west pair defaults to facing south");
+        assertTrue(west.left());
+        assertFalse(east.left());
+        assertEquals(TextureAtlas.CHEST_DOUBLE_FRONT_L, Chest.faceTile(west, 0, 0, 1));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_FRONT_R, Chest.faceTile(east, 0, 0, 1));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_BACK_R, Chest.faceTile(west, 0, 0, -1),
+                "from behind, the west half is on the viewer's right");
+        assertEquals(TextureAtlas.CHEST_DOUBLE_BACK_L, Chest.faceTile(east, 0, 0, -1));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_TOP_L, Chest.faceTile(west, 0, 1, 0));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_TOP_R, Chest.faceTile(east, 0, 1, 0));
+        assertEquals(TextureAtlas.CHEST_SIDE_TILE, Chest.faceTile(west, -1, 0, 0));
+    }
+
+    @Test
+    void northSouthDoubleFacingEastPutsLeftOnTheSouth() {
+        BlockAccessor eastFacing = facingAll((byte) 2);
+        Chest.Occupied occ = cells(p(0, 0, 0), p(0, 0, 1));
+        Chest.Appearance north = Chest.appearance(0, 0, 0, occ, eastFacing);
+        Chest.Appearance south = Chest.appearance(0, 0, 1, occ, eastFacing);
+        assertEquals(2, north.facing());
+        assertTrue(south.left(), "looking west at an east-facing pair, south is on the left");
+        assertFalse(north.left());
+        assertEquals(TextureAtlas.CHEST_DOUBLE_FRONT_L, Chest.faceTile(south, 1, 0, 0));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_FRONT_R, Chest.faceTile(north, 1, 0, 0));
+    }
+
+    @Test
+    void twoByTwoQuadFacesSouthWithLatchOnSouthRow() {
+        Chest.Occupied occ = cells(p(0, 0, 0), p(1, 0, 0), p(0, 0, 1), p(1, 0, 1));
+        Chest.Appearance nw = Chest.appearance(0, 0, 0, occ, null);
+        Chest.Appearance ne = Chest.appearance(1, 0, 0, occ, null);
+        Chest.Appearance sw = Chest.appearance(0, 0, 1, occ, null);
+        Chest.Appearance se = Chest.appearance(1, 0, 1, occ, null);
+        assertEquals(Chest.Kind.QUAD, nw.kind());
+        assertEquals(0, nw.facing());
+        assertTrue(nw.left());
+        assertFalse(nw.southRow());
+        assertTrue(sw.southRow());
+        assertTrue(sw.left());
+        assertFalse(se.left());
+        assertEquals(TextureAtlas.CHEST_DOUBLE_TOP_PLAIN_L, Chest.faceTile(nw, 0, 1, 0));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_TOP_PLAIN_R, Chest.faceTile(ne, 0, 1, 0));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_TOP_L, Chest.faceTile(sw, 0, 1, 0));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_TOP_R, Chest.faceTile(se, 0, 1, 0));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_FRONT_L, Chest.faceTile(sw, 0, 0, 1));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_FRONT_R, Chest.faceTile(se, 0, 0, 1));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_BACK_R, Chest.faceTile(nw, 0, 0, -1));
+        assertEquals(TextureAtlas.CHEST_DOUBLE_BACK_L, Chest.faceTile(ne, 0, 0, -1));
+    }
+
+    @Test
+    void isolatedChestKeepsTheSingleTiles() {
+        Chest.Occupied occ = cells(p(0, 0, 0));
+        Chest.Appearance a = Chest.appearance(0, 0, 0, occ, null);
+        assertEquals(Chest.Kind.SINGLE, a.kind());
+        assertEquals(TextureAtlas.CHEST_TILE, Chest.faceTile(a, 0, 0, 1));
+        assertEquals(TextureAtlas.CHEST_TOP_TILE, Chest.faceTile(a, 0, 1, 0));
+        assertEquals(TextureAtlas.CHEST_SIDE_TILE, Chest.faceTile(a, 1, 0, 0));
+    }
+
+    @Test
+    void lidUvsPutTheLatchOnTheFacingEdge() {
+        float[][] south = Chest.lidUvs(0, 0, 1, 1, (byte) 0);
+        assertEquals(1f, south[0][1], "south-west vertex sits on the latch edge");
+        assertEquals(1f, south[1][1], "south-east vertex sits on the latch edge");
+        float[][] east = Chest.lidUvs(0, 0, 1, 1, (byte) 2);
+        assertEquals(1f, east[1][1], "south-east vertex is on the east latch");
+        assertEquals(1f, east[2][1], "north-east vertex is on the east latch");
+    }
+
+    private static BlockAccessor facingAll(byte orientation) {
+        return new BlockAccessor() {
+            @Override
+            public BlockType getBlock(int worldX, int worldY, int worldZ) {
+                return BlockType.AIR;
+            }
+
+            @Override
+            public byte getBlockOrientation(int worldX, int worldY, int worldZ) {
+                return orientation;
+            }
+        };
     }
 
     private static int[] p(int x, int y, int z) {

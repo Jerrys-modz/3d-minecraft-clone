@@ -168,6 +168,56 @@ class TextureAtlasTest {
     }
 
     @Test
+    void doubleChestHalvesMeetWithoutAnInnerRimAndShareALock() {
+        BufferedImage image = atlas();
+        BufferedImage frontL = tile(image, TextureAtlas.CHEST_DOUBLE_FRONT_L);
+        BufferedImage frontR = tile(image, TextureAtlas.CHEST_DOUBLE_FRONT_R);
+        BufferedImage topL = tile(image, TextureAtlas.CHEST_DOUBLE_TOP_L);
+        BufferedImage topR = tile(image, TextureAtlas.CHEST_DOUBLE_TOP_R);
+        BufferedImage plainL = tile(image, TextureAtlas.CHEST_DOUBLE_TOP_PLAIN_L);
+        int rim = 0x2C1A0C;
+        int px = TextureAtlas.TILE_PX;
+
+        assertEquals(rim, frontL.getRGB(0, 8) & 0xFFFFFF, "outer left keeps the frame");
+        assertEquals(rim, frontR.getRGB(px - 1, 8) & 0xFFFFFF, "outer right keeps the frame");
+        assertTrue((frontL.getRGB(px - 1, 8) & 0xFFFFFF) != rim,
+                "join on the left half is not a rim");
+        assertTrue((frontR.getRGB(0, 8) & 0xFFFFFF) != rim,
+                "join on the right half is not a rim");
+
+        int brassJoinL = 0, brassJoinR = 0, brassOuterL = 0, brassOuterR = 0;
+        for (int y = 4; y <= 9; y++) {
+            for (int x = 0; x < px; x++) {
+                int rgb = frontL.getRGB(x, y) & 0xFFFFFF;
+                int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+                if (isBrass(r, g, b)) {
+                    if (x >= 12) brassJoinL++;
+                    else if (x <= 4) brassOuterL++;
+                }
+                rgb = frontR.getRGB(x, y) & 0xFFFFFF;
+                r = (rgb >> 16) & 0xFF;
+                g = (rgb >> 8) & 0xFF;
+                b = rgb & 0xFF;
+                if (isBrass(r, g, b)) {
+                    if (x <= 3) brassJoinR++;
+                    else if (x >= 11) brassOuterR++;
+                }
+            }
+        }
+        assertTrue(brassJoinL >= 4, "left half should carry the lock on the join, got " + brassJoinL);
+        assertTrue(brassJoinR >= 4, "right half should carry the lock on the join, got " + brassJoinR);
+        assertTrue(brassJoinL > brassOuterL, "lock lives on the join, not the outer left");
+        assertTrue(brassJoinR > brassOuterR, "lock lives on the join, not the outer right");
+
+        int topLatch = countExactLatch(topL) + countExactLatch(topR);
+        int plainLatch = countExactLatch(plainL);
+        assertTrue(topLatch >= 4, "double lid should show the latch on the join");
+        assertEquals(0, plainLatch, "quad back-row lid has no latch");
+        assertTrue((topL.getRGB(px - 1, 8) & 0xFFFFFF) != rim, "lid join is not a rim");
+        assertTrue((topR.getRGB(0, 8) & 0xFFFFFF) != rim, "lid join is not a rim");
+    }
+
+    @Test
     void destroyStagesAccumulateCracksOnATransparentTile() {
         BufferedImage image = atlas();
         int stage0 = countOpaque(tile(image, TextureAtlas.DESTROY_STAGE_TILE));
@@ -191,6 +241,17 @@ class TextureAtlasTest {
 
     private static boolean isBrass(int r, int g, int b) {
         return r > 150 && g > 90 && r > g && g > b + 20 && b < 140;
+    }
+
+    private static int countExactLatch(BufferedImage tile) {
+        int n = 0, px = TextureAtlas.TILE_PX;
+        for (int y = 12; y <= 14; y++) {
+            for (int x = 0; x < px; x++) {
+                int rgb = tile.getRGB(x, y) & 0xFFFFFF;
+                if (rgb == 0xF2D878 || rgb == 0xD4B44A || rgb == 0x8A6A18) n++;
+            }
+        }
+        return n;
     }
 
     private static boolean isDark(int argb) {

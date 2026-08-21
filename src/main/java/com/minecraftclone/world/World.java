@@ -336,6 +336,19 @@ public class World implements BlockAccessor {
         if (lz == 0) markNeighborDirty(cx, cz - 1);
         if (lz == Chunk.SIZE - 1) markNeighborDirty(cx, cz + 1);
 
+        // Doubles and quads change a neighbour's texture, including the
+        // diagonal of a 2x2 that can sit across four chunks.
+        if (old == BlockType.CHEST || type == BlockType.CHEST) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dz == 0) continue;
+                    int ncx = worldToChunk(worldX + dx);
+                    int ncz = worldToChunk(worldZ + dz);
+                    if (ncx != cx || ncz != cz) markNeighborDirty(ncx, ncz);
+                }
+            }
+        }
+
         // Notify the multi-block manager so smeltery (and future) structures can
         // form or deform when their structural blocks change.
         multiBlockManager.onBlockChanged(this, worldX, worldY, worldZ);
@@ -792,6 +805,7 @@ public class World implements BlockAccessor {
         Chunk chunk = getChunk(cx, cz);
         if (chunk == null) return;
         chunk.setOrientation(Math.floorMod(worldX, Chunk.SIZE), worldY, Math.floorMod(worldZ, Chunk.SIZE), orientation);
+        chunk.markDirty();
     }
 
     /** The per-block facing hint at a world position (0 if unset) - used for stair/fence collision. */

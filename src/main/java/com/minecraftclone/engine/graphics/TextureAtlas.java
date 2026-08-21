@@ -57,6 +57,26 @@ public class TextureAtlas {
     public static final int CHEST_SIDE_TILE = 65;
     /** Tile index of the chest's underside. */
     public static final int CHEST_BOTTOM_TILE = 66;
+    /** Left half of a double/quad chest front (lock sits on the join). */
+    public static final int CHEST_DOUBLE_FRONT_L = 244;
+    /** Right half of a double/quad chest front. */
+    public static final int CHEST_DOUBLE_FRONT_R = 245;
+    /** Left half of a double-chest lid (latch on the join). */
+    public static final int CHEST_DOUBLE_TOP_L = 246;
+    /** Right half of a double-chest lid. */
+    public static final int CHEST_DOUBLE_TOP_R = 247;
+    /** Left half of a quad-chest back-row lid (no latch). */
+    public static final int CHEST_DOUBLE_TOP_PLAIN_L = 248;
+    /** Right half of a quad-chest back-row lid. */
+    public static final int CHEST_DOUBLE_TOP_PLAIN_R = 249;
+    /** Left half of a double/quad chest back. */
+    public static final int CHEST_DOUBLE_BACK_L = 250;
+    /** Right half of a double/quad chest back. */
+    public static final int CHEST_DOUBLE_BACK_R = 251;
+    /** Left half of a double/quad chest underside. */
+    public static final int CHEST_DOUBLE_BOTTOM_L = 252;
+    /** Right half of a double/quad chest underside. */
+    public static final int CHEST_DOUBLE_BOTTOM_R = 253;
     /** First of {@link #DESTROY_STAGE_COUNT} accumulating crack overlays (hold-to-break). */
     public static final int DESTROY_STAGE_TILE = 67;
     public static final int DESTROY_STAGE_COUNT = 10;
@@ -304,6 +324,11 @@ public class TextureAtlas {
         paintChest(image, CHEST_TOP_TILE, ChestFace.TOP);
         paintChest(image, CHEST_SIDE_TILE, ChestFace.SIDE);
         paintChest(image, CHEST_BOTTOM_TILE, ChestFace.BOTTOM);
+        paintChestPair(image, CHEST_DOUBLE_FRONT_L, CHEST_DOUBLE_FRONT_R, ChestFace.FRONT);
+        paintChestPair(image, CHEST_DOUBLE_TOP_L, CHEST_DOUBLE_TOP_R, ChestFace.TOP);
+        paintChestPair(image, CHEST_DOUBLE_TOP_PLAIN_L, CHEST_DOUBLE_TOP_PLAIN_R, ChestFace.TOP_PLAIN);
+        paintChestPair(image, CHEST_DOUBLE_BACK_L, CHEST_DOUBLE_BACK_R, ChestFace.BACK);
+        paintChestPair(image, CHEST_DOUBLE_BOTTOM_L, CHEST_DOUBLE_BOTTOM_R, ChestFace.BOTTOM);
         paintBarrel(image, BARREL_TILE);
         paintBerryBush(image, 37, rnd);
         paintTorch(image, 38);
@@ -1535,23 +1560,65 @@ public class TextureAtlas {
     }
 
     /** A wooden oak chest: distinct lid/body, dark frame, brass lock on the front. */
-    private enum ChestFace { FRONT, SIDE, TOP, BOTTOM }
+    private enum ChestFace { FRONT, SIDE, TOP, BOTTOM, BACK, TOP_PLAIN }
 
     private void paintChest(BufferedImage img, int index, ChestFace face) {
+        paintChestInto(img, tileX(index), tileY(index), TILE_PX, face);
+    }
+
+    /**
+     * Paints a 32-wide chest and blits the left/right 16px halves. The join
+     * has no rim and the lock/latch sits on the center so a pair reads as
+     * one chest, the way Minecraft's large-chest texture does.
+     */
+    private void paintChestPair(BufferedImage img, int leftIndex, int rightIndex, ChestFace face) {
+        BufferedImage wide = new BufferedImage(TILE_PX * 2, TILE_PX, BufferedImage.TYPE_INT_ARGB);
+        paintChestInto(wide, 0, 0, TILE_PX * 2, face);
+        blitChestHalf(wide, 0, img, leftIndex);
+        blitChestHalf(wide, TILE_PX, img, rightIndex);
+    }
+
+    private void blitChestHalf(BufferedImage src, int srcX, BufferedImage dest, int destIndex) {
+        int dx = tileX(destIndex);
+        int dy = tileY(destIndex);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                dest.setRGB(dx + x, dy + y, src.getRGB(srcX + x, y));
+            }
+        }
+    }
+
+    private void paintChestInto(BufferedImage img, int ox, int oy, int width, ChestFace face) {
         Random rnd = new Random(50 + face.ordinal() * 31);
-        int light = switch (face) {
-            case TOP -> 0xD4B06C;
+        ChestFace palette = switch (face) {
+            case BACK -> ChestFace.FRONT;
+            case TOP_PLAIN -> ChestFace.TOP;
+            default -> face;
+        };
+        int light = switch (palette) {
+            case TOP, TOP_PLAIN -> 0xD4B06C;
             case BOTTOM -> 0x8A5E2C;
-            case FRONT, SIDE -> 0xC9A15B;
+            case FRONT, SIDE, BACK -> 0xC9A15B;
         };
-        int dark = switch (face) {
-            case TOP -> 0x8E5C28;
+        int dark = switch (palette) {
+            case TOP, TOP_PLAIN -> 0x8E5C28;
             case BOTTOM -> 0x5A3818;
-            case FRONT, SIDE -> 0x7A4E22;
+            case FRONT, SIDE, BACK -> 0x7A4E22;
         };
-        paintNoiseTile(img, index, light, dark, 0.42f, rnd);
-        int ox = tileX(index);
-        int oy = tileY(index);
+        float oxs = noiseOffset(rnd);
+        float oys = noiseOffset(rnd);
+        float xMid = (width - 1) / 2f;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < width; x++) {
+                float n = (fbm(x + oxs, y + oys) - 0.5f) * 0.42f + 0.5f;
+                int color = lerpColor(dark, light, n);
+                float dx = (x - xMid) / xMid;
+                float dy = (y - 7.5f) / 7.5f;
+                float top = 1f + 0.04f - 0.09f * (y / (TILE_PX - 1f));
+                float f = top * (1f - 0.04f * (dx * dx + dy * dy));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | shade(color, f));
+            }
+        }
         int rim = 0x2C1A0C;
         int inner = 0x5A3818;
         int seam = 0x3A2410;
@@ -1561,65 +1628,67 @@ public class TextureAtlas {
         int brassLo = 0x8A6A18;
         int hole = 0x1A1008;
 
-        boolean wall = face == ChestFace.FRONT || face == ChestFace.SIDE;
+        boolean wall = face == ChestFace.FRONT || face == ChestFace.SIDE || face == ChestFace.BACK;
         int seamY = 5;
 
         if (wall) {
             // Lid is the top band: lift it; body below the seam: drop it.
             for (int y = 1; y < TILE_PX - 1; y++) {
-                for (int x = 1; x < TILE_PX - 1; x++) {
+                for (int x = 1; x < width - 1; x++) {
                     int rgb = img.getRGB(ox + x, oy + y) & 0xFFFFFF;
                     float f = y < seamY ? 1.10f : 0.88f;
                     img.setRGB(ox + x, oy + y, 0xFF000000 | shade(rgb, f));
                 }
             }
-            for (int x = 1; x < TILE_PX - 1; x++) {
+            for (int x = 1; x < width - 1; x++) {
                 img.setRGB(ox + x, oy + seamY, 0xFF000000 | seam);
                 if (seamY + 1 < TILE_PX - 1) {
                     img.setRGB(ox + x, oy + seamY + 1, 0xFF000000 | shade(seam, 1.35f));
                 }
             }
-            for (int x = 2; x < TILE_PX - 2; x++) {
+            for (int x = 2; x < width - 2; x++) {
                 img.setRGB(ox + x, oy + 2, 0xFF000000 | shade(lidHi, 0.92f + 0.04f * (x % 3)));
             }
         }
 
-        for (int x = 1; x < TILE_PX - 1; x++) {
+        for (int x = 1; x < width - 1; x++) {
             img.setRGB(ox + x, oy + 1, 0xFF000000 | inner);
             img.setRGB(ox + x, oy + TILE_PX - 2, 0xFF000000 | inner);
         }
         for (int y = 1; y < TILE_PX - 1; y++) {
             img.setRGB(ox + 1, oy + y, 0xFF000000 | inner);
-            img.setRGB(ox + TILE_PX - 2, oy + y, 0xFF000000 | inner);
+            img.setRGB(ox + width - 2, oy + y, 0xFF000000 | inner);
         }
 
         if (face == ChestFace.FRONT) {
             // Brass lock plate centred on the lid seam, with a keyhole.
+            int lockX = width / 2 - 2;
             int[][] lock = {
-                    {0, 7, brassHi}, {0, 8, brassHi},
-                    {1, 6, brass}, {1, 7, brassHi}, {1, 8, brassHi}, {1, 9, brass},
-                    {2, 6, brass}, {2, 7, hole}, {2, 8, hole}, {2, 9, brass},
-                    {3, 6, brassLo}, {3, 7, brass}, {3, 8, brass}, {3, 9, brassLo},
-                    {4, 7, brassLo}, {4, 8, brassLo},
+                    {0, 1, brassHi}, {0, 2, brassHi},
+                    {1, 0, brass}, {1, 1, brassHi}, {1, 2, brassHi}, {1, 3, brass},
+                    {2, 0, brass}, {2, 1, hole}, {2, 2, hole}, {2, 3, brass},
+                    {3, 0, brassLo}, {3, 1, brass}, {3, 2, brass}, {3, 3, brassLo},
+                    {4, 1, brassLo}, {4, 2, brassLo},
             };
             for (int[] p : lock) {
                 int y = seamY - 1 + p[0];
-                int x = p[1];
+                int x = lockX + p[1];
                 img.setRGB(ox + x, oy + y, 0xFF000000 | p[2]);
             }
         }
 
         if (face == ChestFace.TOP) {
-            // Latch tab on the front edge of the lid.
+            // Latch tab on the front edge of the lid, centred so a pair shares one.
+            int latchX0 = width / 2 - 2;
             for (int y = 12; y <= 14; y++) {
-                for (int x = 6; x <= 9; x++) {
-                    int c = (y == 12) ? brassHi : ((x == 6 || x == 9) ? brassLo : brass);
+                for (int x = latchX0; x <= latchX0 + 3; x++) {
+                    int c = (y == 12) ? brassHi : ((x == latchX0 || x == latchX0 + 3) ? brassLo : brass);
                     img.setRGB(ox + x, oy + y, 0xFF000000 | c);
                 }
             }
         }
 
-        if (face == ChestFace.SIDE) {
+        if (face == ChestFace.SIDE && width == TILE_PX) {
             // Thin dark straps so the side doesn't read as a plain plank.
             for (int y = 2; y < TILE_PX - 2; y++) {
                 img.setRGB(ox + 3, oy + y, 0xFF000000 | inner);
@@ -1627,13 +1696,13 @@ public class TextureAtlas {
             }
         }
 
-        for (int x = 0; x < TILE_PX; x++) {
+        for (int x = 0; x < width; x++) {
             img.setRGB(ox + x, oy, 0xFF000000 | rim);
             img.setRGB(ox + x, oy + TILE_PX - 1, 0xFF000000 | rim);
         }
         for (int y = 0; y < TILE_PX; y++) {
             img.setRGB(ox, oy + y, 0xFF000000 | rim);
-            img.setRGB(ox + TILE_PX - 1, oy + y, 0xFF000000 | rim);
+            img.setRGB(ox + width - 1, oy + y, 0xFF000000 | rim);
         }
     }
 
