@@ -24,6 +24,9 @@ class BlockTypeTest {
         assertTrue(BlockType.GLASS.isTranslucent());
         assertTrue(BlockType.ICE.isTranslucent());
         assertFalse(BlockType.STONE.isTranslucent());
+        assertFalse(BlockType.WATER.isTranslucent(), "fluids use emitFluid, not the glass cube path");
+        assertFalse(BlockType.WATER_FLOW.isTranslucent());
+        assertFalse(BlockType.LAVA.isTranslucent());
     }
 
     @Test
@@ -240,5 +243,17 @@ class BlockTypeTest {
         assertEquals(3, boxes[0].minX, 1e-6f);
         assertEquals(4, boxes[0].minY, 1e-6f);
         assertEquals(4f + BlockType.STONE.collisionHeight, boxes[0].maxY, 1e-6f);
+    }
+
+    @Test
+    void fluidSideUvsScaleWithFaceHeight() {
+        float[][] uvs = {{0f, 1f}, {1f, 1f}, {1f, 0f}, {0f, 0f}};
+        float[][] full = Chunk.fluidSideUvs(uvs, 10f, 11f, 11f);
+        assertEquals(0f, full[2][1], 0.001f, "full-height face uses the full tile");
+        assertEquals(0f, full[3][1], 0.001f);
+        float[][] shallow = Chunk.fluidSideUvs(uvs, 10f, 10.25f, 10.25f);
+        assertEquals(0.75f, shallow[2][1], 0.001f,
+                "quarter-height stream should use a quarter of the tile, not squash it");
+        assertEquals(1f, shallow[0][1], 0.001f);
     }
 }

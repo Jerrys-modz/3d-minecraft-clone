@@ -1260,9 +1260,11 @@ public class World implements BlockAccessor {
         for (Chunk chunk : visibleChunks) {
             chunk.render();
         }
-        // See-through geometry (glass/ice) draws after everything opaque and blends
-        // over it; depth writes are off so overlapping translucent faces don't cull
-        // each other.
+        // See-through geometry (water, lava, glass, ice) draws after everything
+        // opaque and blends over it; depth writes are off so overlapping
+        // translucent faces don't cull each other. Fluids used to live in the
+        // opaque pass, which wrote depth and punched sky/cave-shaped holes
+        // through waterfalls whenever a later chunk lost the depth test.
         glDepthMask(false);
         for (Chunk chunk : visibleChunks) {
             chunk.renderTranslucent();
