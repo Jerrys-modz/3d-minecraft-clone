@@ -65,8 +65,49 @@ public class WorldGenSettings {
         this.seed = seed == null ? "" : seed.trim();
     }
 
+    /** World type as its ordinal index (matches the persisted {@code worldgen_world_type} value). */
+    public void setWorldType(int worldType) {
+        this.worldType = Math.floorMod(worldType, WorldType.values().length);
+    }
+
+    public void setStructures(boolean structures) {
+        this.structures = structures;
+    }
+
+    /** Sea level as its ordinal index (matches the persisted {@code worldgen_sea_level} value). */
+    public void setSeaLevelIndex(int index) {
+        this.seaLevelIndex = Math.floorMod(index, SEA_LEVELS.length);
+    }
+
+    /** Terrain size as its ordinal index (matches the persisted {@code worldgen_terrain_size} value). */
+    public void setTerrainSizeIndex(int index) {
+        this.terrainSizeIndex = Math.floorMod(index, TERRAIN_SIZES.length);
+    }
+
+    /** Weeks per month as its ordinal index (matches the persisted {@code worldgen_weeks_per_month} value). */
+    public void setWeeksPerMonthIndex(int index) {
+        this.weeksPerMonthIndex = Math.floorMod(index, WEEKS_PER_MONTH.length);
+    }
+
     public boolean isSeedBlank() {
         return seed.isBlank();
+    }
+
+    /** The world type ordinal index (see {@link #setWorldType}). */
+    public int getWorldTypeIndex() {
+        return worldType;
+    }
+
+    public int getSeaLevelIndex() {
+        return seaLevelIndex;
+    }
+
+    public int getTerrainSizeIndex() {
+        return terrainSizeIndex;
+    }
+
+    public int getWeeksPerMonthIndex() {
+        return weeksPerMonthIndex;
     }
 
     /**

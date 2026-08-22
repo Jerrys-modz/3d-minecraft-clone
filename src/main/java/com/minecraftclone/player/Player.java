@@ -109,6 +109,7 @@ public class Player {
     private boolean onGround = false;
     private boolean flying = false;
     private boolean movingOnGround = false; // moving horizontally while grounded (drives view bob)
+    private boolean sprinting = false; // currently sprinting and actually moving (exposed for remote-player sync)
     private boolean swimmingAndMoving = false; // moving horizontally while swimming (drives the stroke sound)
     private float lastFallImpactSpeed = 0f;
     private final DoubleTapDetector wTapDetector = new DoubleTapDetector(DOUBLE_TAP_WINDOW);
@@ -149,6 +150,14 @@ public class Player {
         velocity.set(0, 0, 0);
         camera.setPosition(x, position.y + getEyeHeight(), z);
         landingArmed = false; // disarm landing detection until the first real ground contact
+    }
+
+    /** Places the player at an exact server-provided position (multiplayer spawn), feet at {@code y}. */
+    public void teleport(float x, float y, float z) {
+        position.set(x, y, z);
+        velocity.set(0, 0, 0);
+        camera.setPosition(x, y + EYE_HEIGHT, z);
+        landingArmed = false;
     }
 
     /** Full respawn: stats and position reset, as if starting over (used after death). */
@@ -253,6 +262,16 @@ public class Player {
 
     public boolean isFlying() {
         return flying;
+    }
+
+    /** Whether the player is standing on solid ground this frame (drives remote-player pose sync). */
+    public boolean isOnGround() {
+        return onGround;
+    }
+
+    /** Whether the player is currently sprinting (and actually moving) - sent to remote players. */
+    public boolean isSprinting() {
+        return sprinting;
     }
 
     /** Restores flight from a save. Creative/spectator keep it; survival ignores it. */
@@ -790,6 +809,7 @@ public class Player {
         swimming = computeSwimming(flying, gameMode.isSpectator(), onGround, inWater);
 
         boolean sprinting = (input.isKeyDown(keyBinds.get(KeyBindings.SPRINT)) || sprintLatched) && stats.canSprint();
+        this.sprinting = sprinting && moving;
         float speed;
         if (flying) {
             speed = sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
