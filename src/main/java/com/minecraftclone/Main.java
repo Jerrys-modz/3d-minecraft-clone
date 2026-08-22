@@ -806,6 +806,8 @@ public class Main {
             case Chest.TYPE -> block == BlockType.CHEST;
             case Barrel.TYPE -> block == BlockType.BARREL;
             case Furnace.TYPE -> block == BlockType.FURNACE;
+            case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
+            case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             default -> false;
         };
     }
@@ -3192,12 +3194,14 @@ public class Main {
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.PART_BUILDER) {
                         // Right-click a Part Builder to open the Tinkers' part-crafting gui.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.tinkers.PartBuilderEntity pbEntity =
                                 world.getOrCreatePartBuilder(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forPartBuilder(player.getInventory(), pbEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.TOOL_STATION) {
                         // Right-click a Tool Station to open the Tinkers' assembly gui.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.tinkers.ToolStationEntity tsEntity =
                                 world.getOrCreateToolStation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());

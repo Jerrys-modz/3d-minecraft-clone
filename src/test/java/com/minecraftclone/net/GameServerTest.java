@@ -264,6 +264,25 @@ class GameServerTest {
     }
 
     @Test
+    void tinkersStationContainerSyncs() throws Exception {
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            Packets.Welcome welcome = assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            int px = (int) Math.floor(welcome.spawnX());
+            int py = Math.round(welcome.spawnY());
+            int pz = (int) Math.floor(welcome.spawnZ());
+            // Place a Tool Station and open it: the snapshot must come back
+            // with the tool_station type (whitelist plumbing for Tinkers).
+            a.sendPlaceBlock(new Packets.PlaceBlock((byte) 0, px, py, pz, BlockType.TOOL_STATION.id, (byte) 0, false));
+            awaitPacket(a, Packets.BlockChange.class);
+            a.sendContainerOpen((byte) 0, px, py, pz);
+            Packets.ContainerData snap = assertInstanceOf(Packets.ContainerData.class,
+                    awaitPacketMatching(a, Packets.ContainerData.class, p -> true));
+            assertEquals(com.minecraftclone.world.tinkers.ToolStationEntity.TYPE, snap.type());
+        }
+    }
+
+    @Test
     void containerContentsSyncBetweenClients() throws Exception {
         try (NetClient a = new NetClient("127.0.0.1", server.getPort());
              NetClient b = new NetClient("127.0.0.1", server.getPort())) {

@@ -752,11 +752,13 @@ public class GameServer implements AutoCloseable {
     }
 
     /**
-     * The block-entity types that sync over the wire. Tinkers stations and
-     * smelteries are multi-block structures with their own GUIs - not synced yet.
+     * The block-entity types that sync over the wire. The smeltery is a
+     * multi-block structure whose entity is formed by structure detection on
+     * each side - not synced yet.
      */
     private static boolean isSyncedContainer(BlockType block) {
-        return block == BlockType.CHEST || block == BlockType.BARREL || block == BlockType.FURNACE;
+        return block == BlockType.CHEST || block == BlockType.BARREL || block == BlockType.FURNACE
+                || block == BlockType.PART_BUILDER || block == BlockType.TOOL_STATION;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -765,6 +767,8 @@ public class GameServer implements AutoCloseable {
             case Chest.TYPE -> block == BlockType.CHEST;
             case Barrel.TYPE -> block == BlockType.BARREL;
             case Furnace.TYPE -> block == BlockType.FURNACE;
+            case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
+            case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             default -> false;
         };
     }
@@ -811,6 +815,8 @@ public class GameServer implements AutoCloseable {
             case CHEST -> world.getOrCreateChest(open.x(), open.y(), open.z());
             case BARREL -> world.getOrCreateBarrel(open.x(), open.y(), open.z());
             case FURNACE -> world.getOrCreateFurnace(open.x(), open.y(), open.z());
+            case PART_BUILDER -> world.getOrCreatePartBuilder(open.x(), open.y(), open.z());
+            case TOOL_STATION -> world.getOrCreateToolStation(open.x(), open.y(), open.z());
             default -> null;
         };
         if (entity == null) return;
