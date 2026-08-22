@@ -191,6 +191,8 @@ Two ways to play with others:
 - **Host & Play**: main menu → **Multiplayer** → **Host & Play**. This starts an embedded server on the same machine (default port `25565`, configurable in the Port field) and connects you to it. Anyone on your LAN can then join with **Join Server** using your machine's IP and that port.
 - **Dedicated server**: `java -jar minecraft-clone.jar --server [port]` runs a headless authoritative world with no window at all (no OpenGL needed). Clients join it the same way. The server persists edited chunks to `saves/multiplayer_server/`.
 
+The dedicated server reads **`saves/multiplayer_server/server.properties`** (written with defaults on first start) for `port`, `max-players`, `pvp` (whether players can damage each other) and `motd` (a chat line shown to everyone on join). Its console also takes operator commands while running: `list`, `kick <name>`, `ban <name>`, `unban <name>` and `banlist` - bans are persisted to `banned-players.txt` and survive restarts.
+
 The server is authoritative for the world. It uses a fresh random seed each launch (the embedded Host & Play and dedicated server are throwaway worlds; the client always mirrors whatever the server picks). On join you receive the seed + worldgen settings, so your client regenerates untouched terrain locally and only asks the server for chunks a player has edited - keeping bandwidth to the deltas. Everything shared:
 
 - **Terrain and blocks** - a place or break anywhere is validated by the server and broadcast to every client, so everyone sees the same world (including door toggles and directional facing).

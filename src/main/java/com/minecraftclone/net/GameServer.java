@@ -117,7 +117,12 @@ public class GameServer implements AutoCloseable {
     private final World[] worlds;
     private final WorldGenSettings settings;
     private final long seed;
+    private final Path saveDir;
     private final Path playersDir;
+    /** Operator settings (port, player cap, pvp, motd) - dedicated servers load server.properties. */
+    private final ServerConfig config;
+    /** One banned player name per line, persisted next to the worlds. */
+    private final java.util.Set<String> bannedNames = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final float spawnX;
     private final float spawnZ;
 
@@ -148,9 +153,23 @@ public class GameServer implements AutoCloseable {
     }
 
     public GameServer(int port, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
+        this(configForPort(port), settings, seed, saveDir);
+    }
+
+    /** A config carrying just a port (used by the legacy port-based constructor). */
+    private static ServerConfig configForPort(int port) {
+        ServerConfig cfg = new ServerConfig();
+        cfg.setPort(port);
+        return cfg;
+    }
+
+    public GameServer(ServerConfig config, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
+        this.config = config;
         this.settings = settings;
         this.seed = seed;
+        this.saveDir = saveDir;
         this.playersDir = saveDir.resolve("players");
+        loadBans();
         this.worlds = new World[DimensionType.values().length];
         for (DimensionType dim : DimensionType.values()) {
             World w = new World(seed, settings, null, saveDir, dim, true);
@@ -168,11 +187,16 @@ public class GameServer implements AutoCloseable {
         float[] spawn = findSpawn();
         this.spawnX = spawn[0];
         this.spawnZ = spawn[1];
-        this.serverSocket = new ServerSocket(port);
+        this.serverSocket = new ServerSocket(config.getPort());
     }
 
     public int getPort() {
         return serverSocket.getLocalPort();
+    }
+
+    /** The operator config this server was built from (pvp flag, motd, player cap). */
+    public ServerConfig getConfig() {
+        return config;
     }
 
     public long getSeed() {
@@ -213,7 +237,7 @@ public class GameServer implements AutoCloseable {
                 // A peer that connects but never speaks holds a thread forever
                 // without this; once joined, clients talk every tick anyway.
                 socket.setSoTimeout(JOIN_TIMEOUT_MILLIS);
-                if (pending.size() >= MAX_PENDING_CONNECTIONS) {
+                if (pending.size() >= Math.max(config.getMaxPlayers() * 2, MAX_PENDING_CONNECTIONS)) {
                     // Too many half-open connections: refuse immediately rather
                     // than queueing another thread behind them.
                     socket.close();
@@ -479,7 +503,7 @@ public class GameServer implements AutoCloseable {
             send(client, Packets.encodeReject("Already joined."));
             return;
         }
-        if (getPlayerCount() >= MAX_PLAYERS) {
+        if (getPlayerCount() >= config.getMaxPlayers()) {
             send(client, Packets.encodeReject("Server is full."));
             disconnect(client);
             return;
@@ -488,6 +512,12 @@ public class GameServer implements AutoCloseable {
         client.id = nextId++;
         String name = join.name().trim();
         if (!isSafePlayerName(name)) name = "Player-" + client.id;
+        if (isBanned(name)) {
+            send(client, Packets.encodeReject("You are banned from this server."));
+            System.out.println("Rejected banned player: " + name);
+            disconnect(client);
+            return;
+        }
         client.name = name;
         client.joined = true;
         pending.remove(client);
@@ -553,6 +583,12 @@ public class GameServer implements AutoCloseable {
                 System.err.println("Could not read player file for " + name + ": " + e.getMessage());
             }
         }
+
+        // Message of the day: delivered as a chat line from "Server" so it
+        // lands in the same place every other message does.
+        if (!config.getMotd().isEmpty()) {
+            send(client, Packets.encodeChatMsg(new Packets.ChatMsg(0, "Server", config.getMotd())));
+        }
         System.out.println(name + " joined (" + getPlayerCount() + " online)");
     }
 
@@ -564,6 +600,83 @@ public class GameServer implements AutoCloseable {
             if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) return false;
         }
         return true;
+    }
+
+    // ------------------------------------------------------------------
+    // Operator administration (dedicated-server console)
+    // ------------------------------------------------------------------
+
+    private Path banFile() {
+        return saveDir.resolve("banned-players.txt");
+    }
+
+    /** Loads the persisted ban list (one name per line); a missing file means nobody is banned. */
+    private void loadBans() {
+        Path file = banFile();
+        if (!java.nio.file.Files.isRegularFile(file)) return;
+        try {
+            for (String line : java.nio.file.Files.readAllLines(file)) {
+                String name = line.trim();
+                if (!name.isEmpty()) bannedNames.add(name.toLowerCase(java.util.Locale.ROOT));
+            }
+        } catch (IOException e) {
+            System.err.println("Could not read banned-players.txt: " + e.getMessage());
+        }
+    }
+
+    private void saveBans() {
+        try {
+            java.nio.file.Files.createDirectories(saveDir);
+            java.nio.file.Files.write(banFile(),
+                    bannedNames.stream().sorted().toList(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            System.err.println("Could not write banned-players.txt: " + e.getMessage());
+        }
+    }
+
+    /** True if the name is on the ban list. */
+    public boolean isBanned(String name) {
+        return name != null && bannedNames.contains(name.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /**
+     * Bans a player by name (persisted across restarts) and kicks them if
+     * they're online. Returns true when the ban was newly added.
+     */
+    public boolean ban(String name) {
+        if (!isSafePlayerName(name)) return false;
+        boolean added = bannedNames.add(name.toLowerCase(java.util.Locale.ROOT));
+        saveBans();
+        kick(name);
+        return added;
+    }
+
+    /** Lifts a ban; returns true when the name had been banned. */
+    public boolean unban(String name) {
+        boolean removed = name != null && bannedNames.remove(name.toLowerCase(java.util.Locale.ROOT));
+        if (removed) saveBans();
+        return removed;
+    }
+
+    /** The current ban list, sorted (for `banlist`). */
+    public List<String> getBannedNames() {
+        return bannedNames.stream().sorted().toList();
+    }
+
+    /** Disconnects the joined player with this exact name; returns true if one was found. */
+    public boolean kick(String name) {
+        for (Client c : clients.values()) {
+            if (c.joined && c.name.equalsIgnoreCase(name)) {
+                try {
+                    send(c, Packets.encodeReject("Kicked by operator."));
+                } catch (IOException ignored) {
+                }
+                disconnect(c);
+                System.out.println("Kicked " + c.name);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -953,6 +1066,7 @@ public class GameServer implements AutoCloseable {
      */
     private void handlePlayerAttack(Client client, Packets.PlayerAttack attack) throws IOException {
         if (!client.joined) return;
+        if (!config.isPvpEnabled()) return; // server.properties: pvp=false
         float damage = attack.damage();
         if (!Float.isFinite(damage) || damage <= 0f) return;
         damage = Math.min(damage, MAX_ATTACK_DAMAGE);
