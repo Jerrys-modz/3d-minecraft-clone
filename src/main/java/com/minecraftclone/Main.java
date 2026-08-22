@@ -898,6 +898,27 @@ public class Main {
         return best;
     }
 
+    /** The remote player the crosshair is aimed at (same dimension), or null - PvP targeting. */
+    private RemotePlayer raycastTargetRemotePlayer(Player player) {
+        if (netClient == null || !netClient.isConnected()) return null;
+        Vector3f eye = player.getEyePosition();
+        Vector3f front = player.getCamera().getFront();
+        byte myDim = (byte) currentDim[0].ordinal();
+        RemotePlayer best = null;
+        float bestT = REACH_DISTANCE;
+        for (RemotePlayer rp : remotePlayers.values()) {
+            if (rp.dimension != myDim) continue;
+            AABB box = new AABB(rp.position.x - 0.3f, rp.position.y, rp.position.z - 0.3f,
+                    rp.position.x + 0.3f, rp.position.y + 1.8f, rp.position.z + 0.3f);
+            float t = Mob.rayIntersects(eye, front, bestT, box);
+            if (t >= 0f) {
+                bestT = t;
+                best = rp;
+            }
+        }
+        return best;
+    }
+
     /** Tears down the multiplayer session and returns to the main menu. */
     private void leaveMultiplayer() {
         if (hostServer != null) {
@@ -3008,26 +3029,43 @@ public class Main {
                 BlockType heldItem = heldStack.isEmpty() ? null : heldStack.type();
                 GameMode mode = settings.getGameMode();
 
-                // What the crosshair is aimed at: a mob takes priority over the block
-                // behind it, so swinging at a pig doesn't dig up the ground behind it.
-                Mob targetedMob = raycastTargetMob(player, world);
+                // What the crosshair is aimed at: a remote player beats a mob beats
+                // the block behind them, so swinging at someone doesn't dig up
+                // whatever happens to be behind their back.
+                RemotePlayer targetedPlayer = raycastTargetRemotePlayer(player);
+                Mob targetedMob = targetedPlayer == null ? raycastTargetMob(player, world) : null;
                 targetedMobRef[0] = targetedMob;
 
-                // Attacking: holding left-click hits the targeted mob on a short cooldown
-                // (mobs can't be hurt in spectator - no interaction).
-                if (targetedMob != null && !mode.isSpectator()
+                // Attacking: holding left-click hits the targeted mob (or, in
+                // multiplayer, another player) on a short cooldown (mobs and
+                // players can't be hurt in spectator - no interaction).
+                if (!mode.isSpectator()
                         && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && attackCooldown[0] <= 0f) {
-                    // Creative kills in one hit; survival/adventure deal tool damage
-                    // (a sword hits harder than a bare-handed punch).
-                    float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldStack);
-                    if (netClient != null && netClient.isConnected()) {
-                        // Server-authoritative: send the swing; the server applies
-                        // damage and broadcasts death/loot.
-                        sendMobAttack(targetedMob, damage);
-                    } else {
-                        boolean killed = world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
-                        audio.playAt(killed ? SoundEvent.MOB_DEATH : SoundEvent.ATTACK,
-                                targetedMob.position.x, targetedMob.position.y, targetedMob.position.z, 1f);
+                    if (targetedPlayer != null) {
+                        // PvP: the server validates reach/cadence and relays the hit;
+                        // the target's own client applies it to their health.
+                        float pvpDamage = mode.isCreative() ? 100f : Mining.attackDamage(heldStack);
+                        NetClient client = netClient;
+                        try {
+                            client.sendPlayerAttack(targetedPlayer.id, pvpDamage);
+                            audio.play(SoundEvent.ATTACK);
+                            handRenderer.triggerSwing();
+                        } catch (IOException e) {
+                            netError = e.getMessage();
+                        }
+                    } else if (targetedMob != null) {
+                        // Creative kills in one hit; survival/adventure deal tool damage
+                        // (a sword hits harder than a bare-handed punch).
+                        float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldStack);
+                        if (netClient != null && netClient.isConnected()) {
+                            // Server-authoritative: send the swing; the server applies
+                            // damage and broadcasts death/loot.
+                            sendMobAttack(targetedMob, damage);
+                        } else {
+                            boolean killed = world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
+                            audio.playAt(killed ? SoundEvent.MOB_DEATH : SoundEvent.ATTACK,
+                                    targetedMob.position.x, targetedMob.position.y, targetedMob.position.z, 1f);
+                        }
                     }
                     attackCooldown[0] = 0.45f;
                     // Swords wear out with use (creative tools never break).

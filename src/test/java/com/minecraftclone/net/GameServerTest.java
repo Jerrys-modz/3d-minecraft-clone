@@ -402,4 +402,61 @@ class GameServerTest {
             assertTrue(restore.data().contains("dim=NETHER"));
         }
     }
+
+    @Test
+    void playerAttackRelaysDamageToTarget() throws Exception {
+        // Widen the server-side swing cooldown for this test so the "second
+        // swing is gated" assertion can't race tick-scheduling gaps.
+        server.setAttackCooldownNanos(2_000_000_000L);
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort());
+             NetClient b = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            Packets.Welcome welcomeA = assertInstanceOf(Packets.Welcome.class,
+                    awaitPacketMatching(a, Packets.Welcome.class, p -> true));
+            b.sendJoin("Bob");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(b, Packets.Welcome.class));
+            // Alice learns Bob's id from his join notice...
+            Packets.PlayerJoined bobJoin = assertInstanceOf(Packets.PlayerJoined.class,
+                    awaitPacketMatching(a, Packets.PlayerJoined.class, p -> ((Packets.PlayerJoined) p).name().equals("Bob")));
+            // ...and Bob stands next to her so the reach check passes.
+            b.sendMove(new Packets.Move(welcomeA.spawnX(), welcomeA.spawnY(), welcomeA.spawnZ(), 0f, 0f, true, false, false));
+
+            a.sendPlayerAttack(bobJoin.id(), 2f);
+            Packets.PlayerDamage hit = assertInstanceOf(Packets.PlayerDamage.class,
+                    awaitPacketMatching(b, Packets.PlayerDamage.class, p -> ((Packets.PlayerDamage) p).amount() == 2f));
+            assertEquals(2f, hit.amount());
+
+            // A swing inside the server-side cooldown is dropped: it carries a
+            // distinctive amount, and no such packet may EVER arrive.
+            a.sendPlayerAttack(bobJoin.id(), 3f);
+            long deadline = System.currentTimeMillis() + 1000;
+            while (System.currentTimeMillis() < deadline) {
+                Object p = b.poll();
+                if (p instanceof Packets.PlayerDamage d && d.amount() == 3f) {
+                    throw new AssertionError("Cooldown did not gate the second swing");
+                }
+                Thread.sleep(10);
+            }
+
+            // Out of reach: move Bob far away, then keep swinging with another
+            // distinctive amount across more than one cooldown window. Nothing
+            // should EVER be relayed - the move travels on Bob's socket, so
+            // give it a beat to land before the first swing.
+            b.sendMove(new Packets.Move(welcomeA.spawnX() + 100f, welcomeA.spawnY(), welcomeA.spawnZ(), 0f, 0f, true, false, false));
+            Thread.sleep(300);
+            long rejectWindowEnd = System.currentTimeMillis() + 2500;
+            long nextSwing = System.currentTimeMillis();
+            while (System.currentTimeMillis() < rejectWindowEnd) {
+                Object p = b.poll();
+                if (p instanceof Packets.PlayerDamage d && d.amount() == 4f) {
+                    throw new AssertionError("Server relayed an out-of-reach player attack");
+                }
+                if (System.currentTimeMillis() >= nextSwing) {
+                    nextSwing = System.currentTimeMillis() + 600;
+                    a.sendPlayerAttack(bobJoin.id(), 4f);
+                }
+                Thread.sleep(20);
+            }
+        }
+    }
 }

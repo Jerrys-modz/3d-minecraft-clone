@@ -68,6 +68,7 @@ public final class Packets {
     public static final byte OP_ITEM_SPAWN = 33;    // C->S: I broke a block / died - spawn these drops server-side
     public static final byte OP_PLAYER_SYNC = 34;   // C->S: snapshot of my position/inventory/stats (PlayerSave lines)
     public static final byte OP_PLAYER_RESTORE = 35; // S->C: a saved snapshot for you, from a previous session
+    public static final byte OP_PLAYER_ATTACK = 36;  // C->S: I swung at another player - server validates, target takes damage
 
     // ---------------------------------------------------------------
     // Shared encode/decode helpers
@@ -201,6 +202,10 @@ public final class Packets {
 
     /** A previously-saved snapshot for this player - apply it instead of spawning fresh. */
     public record PlayerRestore(String data) {
+    }
+
+    /** A player swung at another player: the server validates and relays damage to the target. */
+    public record PlayerAttack(int targetId, float damage) {
     }
 
     public record Respawn() {
@@ -416,6 +421,16 @@ public final class Packets {
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_PLAYER_RESTORE);
         out.writeUTF(data);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodePlayerAttack(PlayerAttack attack) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_PLAYER_ATTACK);
+        out.writeInt(attack.targetId());
+        out.writeFloat(attack.damage());
         out.close();
         return buf.toByteArray();
     }
@@ -728,6 +743,7 @@ public final class Packets {
                     in.readFloat(), in.readShort(), in.readUnsignedByte());
             case OP_PLAYER_SYNC -> new PlayerSync(in.readUTF());
             case OP_PLAYER_RESTORE -> new PlayerRestore(in.readUTF());
+            case OP_PLAYER_ATTACK -> new PlayerAttack(in.readInt(), in.readFloat());
             case OP_RESPAWN -> new Respawn();
             case OP_READY -> new Ready();
             case OP_WELCOME -> new Welcome(in.readInt(), in.readLong(), in.readInt(), in.readBoolean(),

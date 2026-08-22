@@ -53,6 +53,7 @@ class PacketsTest {
         else if (packet instanceof Packets.ItemSpawn p) payload = Packets.encodeItemSpawn(p);
         else if (packet instanceof Packets.PlayerSync p) payload = Packets.encodePlayerSync(p.data());
         else if (packet instanceof Packets.PlayerRestore p) payload = Packets.encodePlayerRestore(p.data());
+        else if (packet instanceof Packets.PlayerAttack p) payload = Packets.encodePlayerAttack(p);
         else if (packet instanceof Packets.DimensionChange p) payload = Packets.encodeDimensionChange(p);
         else if (packet instanceof Packets.TimeSync p) payload = Packets.encodeTimeSync(p);
         else if (packet instanceof Packets.PlayerDeath p) payload = Packets.encodePlayerDeath(p);
@@ -341,6 +342,11 @@ class PacketsTest {
         Packets.PlayerRestore restore = assertInstanceOf(Packets.PlayerRestore.class,
                 roundTrip(new Packets.PlayerRestore(sync.data())));
         assertEquals(sync.data(), restore.data());
+
+        Packets.PlayerAttack attack = assertInstanceOf(Packets.PlayerAttack.class,
+                roundTrip(new Packets.PlayerAttack(7, 2.5f)));
+        assertEquals(7, attack.targetId());
+        assertEquals(2.5f, attack.damage());
     }
 
     @Test

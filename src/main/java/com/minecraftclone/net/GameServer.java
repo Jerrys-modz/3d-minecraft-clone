@@ -72,6 +72,13 @@ public class GameServer implements AutoCloseable {
     private static final int MAX_QUEUED_PACKETS = 4096;
     /** Server-side swing cooldown; anything faster than the client's 0.45s is clamped here. */
     private static final long ATTACK_COOLDOWN_NANOS = (long) (0.4f * 1_000_000_000L);
+    /** The active per-client swing cooldown (shared by mob and PvP attacks). */
+    private long attackCooldownNanos = ATTACK_COOLDOWN_NANOS;
+
+    /** Overrides the swing cooldown - tests widen it so assertions don't race tick scheduling. */
+    void setAttackCooldownNanos(long nanos) {
+        this.attackCooldownNanos = nanos;
+    }
     /** Largest mob-hit damage the server accepts (creative one-shots need getMaxHealth). */
     private static final float MAX_ATTACK_DAMAGE = 100f;
 
@@ -439,6 +446,8 @@ public class GameServer implements AutoCloseable {
                     handleItemPickup(client, pickup);
                 } else if (packet instanceof Packets.PlayerSync sync) {
                     handlePlayerSync(client, sync);
+                } else if (packet instanceof Packets.PlayerAttack attack) {
+                    handlePlayerAttack(client, attack);
                 }
             } catch (IOException e) {
                 disconnect(client);
@@ -654,7 +663,7 @@ public class GameServer implements AutoCloseable {
         if (!Float.isFinite(damage) || damage <= 0f) return;
         damage = Math.min(damage, MAX_ATTACK_DAMAGE);
         long now = System.nanoTime();
-        if (now - client.lastAttackNanos < ATTACK_COOLDOWN_NANOS) return;
+        if (now - client.lastAttackNanos < attackCooldownNanos) return;
         client.lastAttackNanos = now;
         World world = worlds[DimensionType.OVERWORLD.ordinal()];
         Mob mob = world.mobById(attack.mobId());
@@ -913,6 +922,30 @@ public class GameServer implements AutoCloseable {
 
     /** How far from their reported position a client may pick an item up (blocks). */
     private static final float MAX_PICKUP_DISTANCE_SQ = 3f * 3f;
+
+    /**
+     * A player swung at another player: validate reach and swing cadence (the
+     * same clamp/cooldown mob attacks get - one client never dictates how much
+     * damage another takes), then relay the hit to the target, whose own
+     * client applies it to its local health. Death/respawn then flows through
+     * the existing server path.
+     */
+    private void handlePlayerAttack(Client client, Packets.PlayerAttack attack) throws IOException {
+        if (!client.joined) return;
+        float damage = attack.damage();
+        if (!Float.isFinite(damage) || damage <= 0f) return;
+        damage = Math.min(damage, MAX_ATTACK_DAMAGE);
+        long now = System.nanoTime();
+        if (now - client.lastAttackNanos < attackCooldownNanos) return;
+        client.lastAttackNanos = now;
+        Client target = clients.get(attack.targetId());
+        if (target == null || !target.joined || target == client) return;
+        if (target.dimension != client.dimension) return;
+        float dx = target.x - client.x, dy = target.y - client.y, dz = target.z - client.z;
+        if (dx * dx + dy * dy + dz * dz > MAX_EDIT_DISTANCE_SQ) return;
+        send(target, Packets.encodePlayerDamage(new Packets.PlayerDamage(damage)));
+        System.out.println(client.name + " hit " + target.name + " for " + damage);
+    }
 
     /**
      * A player walked over a dropped item: validate they're actually near it,

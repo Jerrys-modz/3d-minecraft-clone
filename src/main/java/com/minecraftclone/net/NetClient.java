@@ -171,6 +171,10 @@ public class NetClient implements AutoCloseable {
         send(Packets.encodePlayerSync(data));
     }
 
+    public void sendPlayerAttack(int targetId, float damage) throws IOException {
+        send(Packets.encodePlayerAttack(new Packets.PlayerAttack(targetId, damage)));
+    }
+
     private void send(byte[] payload) throws IOException {
         if (disconnected) throw new IOException("Not connected.");
         synchronized (out) {
