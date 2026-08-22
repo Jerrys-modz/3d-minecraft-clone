@@ -25,19 +25,39 @@ public final class ServerConfig {
     private boolean pvp = true;
     private String motd = "";
 
+    /**
+     * Retrieves the configured server port.
+     *
+     * @return the server port
+     */
     public int getPort() {
         return port;
     }
 
+    /**
+     * Sets the server port when it is within the valid port range.
+     *
+     * @param port the server port, from 0 through 65535; 0 allows the operating system to select an ephemeral port
+     */
     public void setPort(int port) {
         // 0 = let the OS pick an ephemeral port (used by tests).
         if (port >= 0 && port <= 65535) this.port = port;
     }
 
+    /**
+     * Retrieves the maximum number of players allowed on the server.
+     *
+     * @return the configured maximum player count, with a minimum of 1
+     */
     public int getMaxPlayers() {
         return Math.max(1, maxPlayers);
     }
 
+    /**
+     * Sets the maximum number of players allowed on the server.
+     *
+     * @param maxPlayers the maximum player count, from 1 through 100
+     */
     public void setMaxPlayers(int maxPlayers) {
         if (maxPlayers >= 1 && maxPlayers <= 100) this.maxPlayers = maxPlayers;
     }
@@ -47,6 +67,11 @@ public final class ServerConfig {
         return pvp;
     }
 
+    /**
+     * Sets whether player-versus-player combat is enabled.
+     *
+     * @param pvp {@code true} to enable player-versus-player combat; {@code false} to disable it
+     */
     public void setPvp(boolean pvp) {
         this.pvp = pvp;
     }
@@ -56,15 +81,21 @@ public final class ServerConfig {
         return motd == null ? "" : motd;
     }
 
+    /**
+     * Sets the server's message of the day.
+     *
+     * @param motd the message, with newline characters replaced by spaces and surrounding whitespace removed
+     */
     public void setMotd(String motd) {
         // One line only - newlines would break the properties format.
         this.motd = motd == null ? "" : motd.replace("\n", " ").replace("\r", " ").trim();
     }
 
     /**
-     * Loads a config from {@code file}, falling back to defaults for any
-     * missing or malformed key. Never fails: an unreadable file just means
-     * defaults.
+     * Loads server settings from a UTF-8 properties file.
+     *
+     * @param file the configuration file to load
+     * @return the loaded configuration, with defaults retained for missing or invalid settings
      */
     public static ServerConfig load(Path file) {
         ServerConfig cfg = new ServerConfig();
@@ -91,7 +122,13 @@ public final class ServerConfig {
         return cfg;
     }
 
-    /** Strict boolean: only true/false count; anything else keeps the fallback. */
+    /**
+     * Parses a boolean value using case-insensitive {@code true} and {@code false} literals.
+     *
+     * @param val      the value to parse
+     * @param fallback the value to return when {@code val} is not a recognized boolean literal
+     * @return {@code true} or {@code false} for a recognized literal; otherwise, {@code fallback}
+     */
     private static boolean parseBool(String val, boolean fallback) {
         if (val.equalsIgnoreCase("true")) return true;
         if (val.equalsIgnoreCase("false")) return false;
@@ -112,7 +149,12 @@ public final class ServerConfig {
         }
     }
 
-    /** Writes this config to {@code file} (creating parent dirs), so first-time operators have a template. */
+    /**
+     * Writes the current server configuration to a UTF-8 properties file and creates its parent directories.
+     * The generated file includes comments describing each setting.
+     *
+     * @param file the path of the configuration file to write
+     */
     public void save(Path file) {
         List<String> lines = List.of(
                 "# 3D Minecraft Clone dedicated server configuration",

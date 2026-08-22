@@ -152,6 +152,14 @@ public class GameServer implements AutoCloseable {
         return worlds[dim];
     }
 
+    /**
+     * Creates a game server using the specified listening port and world settings.
+     *
+     * @param port    the TCP port on which the server listens
+     * @param settings the world-generation settings
+     * @param seed    the world seed
+     * @param saveDir the directory for persisted world and server data
+     */
     public GameServer(int port, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
         this(configForPort(port), settings, seed, saveDir);
     }
@@ -163,6 +171,15 @@ public class GameServer implements AutoCloseable {
         return cfg;
     }
 
+    /**
+     * Initializes the server, its dimension worlds, persisted bans, spawn location, and listening socket.
+     *
+     * @param config  server configuration, including the listening port
+     * @param settings world-generation settings
+     * @param seed    seed used to initialize the worlds
+     * @param saveDir directory containing world and player data
+     * @throws IOException if the server socket cannot be opened
+     */
     public GameServer(ServerConfig config, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
         this.config = config;
         this.settings = settings;
@@ -190,6 +207,11 @@ public class GameServer implements AutoCloseable {
         this.serverSocket = new ServerSocket(config.getPort());
     }
 
+    /**
+     * Gets the local port used by the server socket.
+     *
+     * @return the server's local port
+     */
     public int getPort() {
         return serverSocket.getLocalPort();
     }
@@ -199,6 +221,11 @@ public class GameServer implements AutoCloseable {
         return config;
     }
 
+    /**
+     * Gets the seed used to generate the server worlds.
+     *
+     * @return the world-generation seed
+     */
     public long getSeed() {
         return seed;
     }
@@ -229,6 +256,12 @@ public class GameServer implements AutoCloseable {
         tickThread.start();
     }
 
+    /**
+     * Accepts incoming client connections and starts their reader threads.
+     *
+     * <p>New connections are subject to the pending-connection limit and join timeout.
+     * Connections exceeding the limit are closed immediately.</p>
+     */
     private void acceptLoop() {
         while (running) {
             try {
@@ -496,6 +529,14 @@ public class GameServer implements AutoCloseable {
         }
     }
 
+    /**
+     * Accepts a client join request, initializes the player's state, and sends
+     * the player their welcome data and current world state.
+     *
+     * @param client the client requesting to join
+     * @param join   the join request containing the player's requested name
+     * @throws IOException if sending join data fails
+     */
     private void handleJoin(Client client, Packets.Join join) throws IOException {
         if (client.joined) {
             // A second JOIN on the same connection would reassign its id and
@@ -592,7 +633,13 @@ public class GameServer implements AutoCloseable {
         System.out.println(name + " joined (" + getPlayerCount() + " online)");
     }
 
-    /** Player names must be filename-safe: letters, digits, underscore and dash only. */
+    /**
+     * Validates whether a player name uses an allowed format.
+     *
+     * @param name the player name to validate
+     * @return {@code true} if the name contains 1 to 16 letters, digits, underscores,
+     *         or dashes; {@code false} otherwise
+     */
     private static boolean isSafePlayerName(String name) {
         if (name.isEmpty() || name.length() > 16) return false;
         for (int i = 0; i < name.length(); i++) {
@@ -604,7 +651,11 @@ public class GameServer implements AutoCloseable {
 
     // ------------------------------------------------------------------
     // Operator administration (dedicated-server console)
-    // ------------------------------------------------------------------
+    /**
+     * Gets the path to the persisted banned-player list.
+     *
+     * @return the path to the banned-player file
+     */
 
     private Path banFile() {
         return saveDir.resolve("banned-players.txt");
@@ -624,6 +675,9 @@ public class GameServer implements AutoCloseable {
         }
     }
 
+    /**
+     * Persists the current banned-player names to the server's ban file.
+     */
     private void saveBans() {
         try {
             java.nio.file.Files.createDirectories(saveDir);
@@ -634,14 +688,20 @@ public class GameServer implements AutoCloseable {
         }
     }
 
-    /** True if the name is on the ban list. */
+    /**
+     * Checks whether a player name appears on the ban list.
+     *
+     * @param name the player name to check
+     * @return {@code true} if the name is banned, {@code false} otherwise
+     */
     public boolean isBanned(String name) {
         return name != null && bannedNames.contains(name.toLowerCase(java.util.Locale.ROOT));
     }
 
     /**
-     * Bans a player by name (persisted across restarts) and kicks them if
-     * they're online. Returns true when the ban was newly added.
+     * Persists a name ban and disconnects the matching online player.
+     *
+     * @return {@code true} if the ban was newly added, {@code false} otherwise
      */
     public boolean ban(String name) {
         if (!isSafePlayerName(name)) return false;
@@ -658,12 +718,22 @@ public class GameServer implements AutoCloseable {
         return removed;
     }
 
-    /** The current ban list, sorted (for `banlist`). */
+    /**
+     * Provides the names of all banned players in sorted order.
+     *
+     * @return a sorted list of banned player names
+     */
     public List<String> getBannedNames() {
         return bannedNames.stream().sorted().toList();
     }
 
-    /** Disconnects the joined player with this exact name; returns true if one was found. */
+    /**
+     * Disconnects the joined player whose name matches the supplied name,
+     * ignoring letter case.
+     *
+     * @param name the player name to search for
+     * @return {@code true} if a matching player was disconnected, {@code false} otherwise
+     */
     public boolean kick(String name) {
         for (Client c : clients.values()) {
             if (c.joined && c.name.equalsIgnoreCase(name)) {
@@ -1058,11 +1128,7 @@ public class GameServer implements AutoCloseable {
     private static final float MAX_PICKUP_DISTANCE_SQ = 3f * 3f;
 
     /**
-     * A player swung at another player: validate reach and swing cadence (the
-     * same clamp/cooldown mob attacks get - one client never dictates how much
-     * damage another takes), then relay the hit to the target, whose own
-     * client applies it to its local health. Death/respawn then flows through
-     * the existing server path.
+     * Processes a player attack against another player when PvP and attack validation permit it.
      */
     private void handlePlayerAttack(Client client, Packets.PlayerAttack attack) throws IOException {
         if (!client.joined) return;

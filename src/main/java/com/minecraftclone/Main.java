@@ -1367,7 +1367,11 @@ public class Main {
         new Main().run();
     }
 
-    /** Hosts a headless world that clients connect to; runs until interrupted. */
+    /**
+     * Starts a headless multiplayer server and processes operator commands.
+     *
+     * @param args command-line arguments; the second argument, when present, overrides the configured port
+     */
     private static void runDedicatedServer(String[] args) {
         String saveEnv = System.getenv("MCCLONE_SAVE_DIR");
         Path saveRoot = saveEnv != null ? Paths.get(saveEnv).getParent() : Paths.get("saves");
@@ -1403,9 +1407,9 @@ public class Main {
     }
 
     /**
-     * Reads operator commands from the console until EOF: `list`, `kick`,
-     * `ban`, `unban`, `banlist`. Runs on the main thread - the server's own
-     * threads keep the world running regardless.
+     * Processes operator commands from standard input until end of input.
+     *
+     * @throws IOException if reading standard input fails
      */
     private static void runServerConsole(GameServer server) throws IOException {
         java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
@@ -1433,6 +1437,11 @@ public class Main {
         }
     }
 
+    /**
+     * Runs the client application, including initialization, input processing, world
+     * simulation, rendering, networking, automated screenshot tests, persistence, and
+     * resource cleanup.
+     */
     private void run() {
         Window window = new Window("3D Minecraft Clone", 1280, 720);
         window.init();
