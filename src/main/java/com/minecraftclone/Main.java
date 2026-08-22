@@ -23,6 +23,7 @@ import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.net.GameServer;
 import com.minecraftclone.net.NetClient;
 import com.minecraftclone.net.Packets;
+import com.minecraftclone.net.ServerConfig;
 import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
@@ -810,6 +811,7 @@ public class Main {
             case Furnace.TYPE -> block == BlockType.FURNACE;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
+            case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
             default -> false;
         };
     }
@@ -1366,34 +1368,81 @@ public class Main {
         new Main().run();
     }
 
-    /** Hosts a headless world that clients connect to; runs until interrupted. */
+    /**
+     * Starts a headless multiplayer server and processes operator commands.
+     *
+     * @param args command-line arguments; the second argument, when present, overrides the configured port
+     */
     private static void runDedicatedServer(String[] args) {
-        int port = 25565;
-        if (args.length >= 2) {
-            try {
-                port = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                System.err.println("Bad port '" + args[1] + "', using " + port);
-            }
-        }
         String saveEnv = System.getenv("MCCLONE_SAVE_DIR");
         Path saveRoot = saveEnv != null ? Paths.get(saveEnv).getParent() : Paths.get("saves");
         Path serverSaveDir = saveRoot.resolve("multiplayer_server");
+
+        // server.properties lives next to the worlds; a first run writes one
+        // with defaults so operators have something to edit.
+        ServerConfig config = ServerConfig.load(serverSaveDir.resolve(ServerConfig.FILE_NAME));
+        if (!java.nio.file.Files.isRegularFile(serverSaveDir.resolve(ServerConfig.FILE_NAME))) {
+            config.save(serverSaveDir.resolve(ServerConfig.FILE_NAME));
+        }
+        // The CLI port (if given) wins over the file.
+        if (args.length >= 2) {
+            try {
+                config.setPort(Integer.parseInt(args[1]));
+            } catch (NumberFormatException e) {
+                System.err.println("Bad port '" + args[1] + "', using " + config.getPort());
+            }
+        }
         try {
             WorldGenSettings settings = new WorldGenSettings();
             long seed = settings.resolveSeed();
-            GameServer server = new GameServer(port, settings, seed, serverSaveDir);
+            GameServer server = new GameServer(config, settings, seed, serverSaveDir);
             server.start();
             System.out.println("Multiplayer server running on port " + server.getPort()
                     + " (seed " + seed + ", save dir " + serverSaveDir + ")");
-            System.out.println("Press Ctrl+C to stop.");
-            Thread.currentThread().join(); // block until interrupted
+            System.out.println("Commands: list | kick <name> | ban <name> | unban <name> | banlist | help. Press Ctrl+C to stop.");
+            runServerConsole(server);
         } catch (Exception e) {
             System.err.println("Server failed: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
+    /**
+     * Processes operator commands from standard input until end of input.
+     *
+     * @throws IOException if reading standard input fails
+     */
+    private static void runServerConsole(GameServer server) throws IOException {
+        java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
+        String line;
+        while ((line = in.readLine()) != null) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            String[] parts = trimmed.split("\\s+", 2);
+            String cmd = parts[0].toLowerCase(java.util.Locale.ROOT);
+            String arg = parts.length > 1 ? parts[1].trim() : "";
+            switch (cmd) {
+                case "list" -> System.out.println("Online (" + server.getPlayerCount() + "): "
+                        + String.join(", ", server.getPlayerNames()));
+                case "kick" -> System.out.println(server.kick(arg) ? "Kicked " + arg
+                        : "No online player named '" + arg + "'");
+                case "ban" -> System.out.println(server.ban(arg) ? "Banned " + arg
+                        : (server.isBanned(arg) ? "'" + arg + "' is already banned" : "Invalid name '" + arg + "'"));
+                case "unban" -> System.out.println(server.unban(arg) ? "Unbanned " + arg
+                        : "'" + arg + "' was not banned");
+                case "banlist" -> System.out.println(server.getBannedNames().isEmpty()
+                        ? "Nobody is banned" : "Banned: " + String.join(", ", server.getBannedNames()));
+                case "help" -> System.out.println("Commands: list | kick <name> | ban <name> | unban <name> | banlist");
+                default -> System.out.println("Unknown command '" + cmd + "'. Try 'help'.");
+            }
+        }
+    }
+
+    /**
+     * Runs the client application, including initialization, input processing, world
+     * simulation, rendering, networking, automated screenshot tests, persistence, and
+     * resource cleanup.
+     */
     private void run() {
         Window window = new Window("3D Minecraft Clone", 1280, 720);
         window.init();
@@ -3219,6 +3268,22 @@ public class Main {
                                 world.getOrCreateToolStation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.SMELTERY_CONTROLLER) {
+                        // Right-click a formed Smeltery controller to open its gui
+                        // (input slot, heat flame, melt arrow, output). An unformed
+                        // structure has no block entity to open.
+                        com.minecraftclone.world.multiblock.SmelteryEntity smeltery =
+                                world.blockEntityAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z)
+                                instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+                        if (smeltery == null) {
+                            showMessage(messages, "The smeltery is not formed yet.",
+                                    new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            activeGui[0] = new ContainerGui(ContainerGui.Kind.SMELTERY, player.getInventory(),
+                                    craftingGrid, smeltery);
+                            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                        }
                     } else if (noMob && targeted.isBed()) {
                         // Right-click a bed: always set spawn in the overworld.
                         // Sleep (and skip to morning) still only happens at night, or
