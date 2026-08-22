@@ -817,6 +817,38 @@ public class Main {
     }
 
     /**
+     * The smeltery entity whose structure contains the given cell (e.g. a
+     * Seared Tank shell block), or null when no formed smeltery covers it.
+     */
+    private static com.minecraftclone.world.multiblock.SmelteryEntity smelteryContainingAt(
+            int x, int y, int z, World world) {
+        var instance = world.multiBlockContaining(x, y, z);
+        if (instance == null) return null;
+        return world.blockEntityAt(instance.controllerX, instance.controllerY, instance.controllerZ)
+                instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+    }
+
+    /**
+     * Pushes one cell's block-entity state to the server (multiplayer) so
+     * everyone converges after a local mutation like pouring lava into a tank.
+     */
+    private void pushContainerSnapshot(int x, int y, int z) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        World world = activeWorlds != null && currentDim[0].ordinal() < activeWorlds.length
+                ? activeWorlds[currentDim[0].ordinal()] : null;
+        if (world == null) return;
+        BlockEntity entity = world.blockEntityAt(x, y, z);
+        if (entity == null || !typeMatchesBlock(entity.type(), world.getBlock(x, y, z))) return;
+        try {
+            client.sendContainerData(new Packets.ContainerData(
+                    (byte) currentDim[0].ordinal(), x, y, z, entity.type(), snapshotBlockEntity(entity)));
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /**
      * Right-clicked a chest/barrel/furnace in multiplayer: remember the cell so
      * closing the GUI publishes its contents, and ask the server for its
      * authoritative snapshot (it overwrites the local copy on arrival).
@@ -3284,6 +3316,60 @@ public class Main {
                                     craftingGrid, smeltery);
                             openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                         }
+                    } else if (noMob && hit != null && heldItem == BlockType.IRON_BUCKET && targeted.isLava()) {
+                        // Empty bucket on still lava: scoop it up (flowing lava
+                        // can't be picked, Minecraft-style).
+                        if (targeted == BlockType.LAVA_FLOW) {
+                            showMessage(messages, "Only still lava can be scooped.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            player.getInventory().remove(BlockType.IRON_BUCKET, 1);
+                            player.getInventory().add(BlockType.LAVA_BUCKET, 1);
+                            world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                            audio.play(SoundEvent.UI_CLICK);
+                            handRenderer.triggerSwing();
+                            syncBlockToServer((byte) currentDim[0].ordinal(), world,
+                                    hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
+                            showMessage(messages, "Scooped lava.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.LAVA_BUCKET && targeted == BlockType.SEARED_TANK) {
+                        // Full bucket on a Seared Tank: find the formed smeltery
+                        // this tank belongs to and pour the lava in as fuel.
+                        com.minecraftclone.world.multiblock.SmelteryEntity smeltery =
+                                smelteryContainingAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, world);
+                        if (smeltery == null) {
+                            showMessage(messages, "This tank isn't part of a formed smeltery.",
+                                    new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            float accepted = smeltery.addFuel(com.minecraftclone.world.multiblock.SmelteryEntity.LAVA_SECONDS);
+                            if (accepted <= 0f) {
+                                showMessage(messages, "The smeltery's tanks are full.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            } else {
+                                player.getInventory().remove(BlockType.LAVA_BUCKET, 1);
+                                player.getInventory().add(BlockType.IRON_BUCKET, 1);
+                                handRenderer.triggerSwing();
+                                audio.playBlockSound(SoundMaterial.of(BlockType.LAVA), BlockAction.PLACE,
+                                        hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                                pushContainerSnapshot(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                                int cx = World.worldToChunk(hit.blockPos.x);
+                                int cz = World.worldToChunk(hit.blockPos.z);
+                                world.markChunkModifiedByPlayer(cx, cz);
+                                saveOpenWorld(worlds, currentWorldDir[0], player, currentDim[0], selectedSlot[0]);
+                                showMessage(messages, "Poured lava into the smeltery.",
+                                        new Vector4f(0.98f, 0.55f, 0.12f, 1f), 2f);
+                            }
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.LAVA_BUCKET
+                            && mode.canPlace() && world.getBlock(hit.placePos.x, hit.placePos.y, hit.placePos.z) == BlockType.AIR) {
+                        // Full bucket on open ground: place a lava source.
+                        Vector3i p = hit.placePos;
+                        world.setBlock(p.x, p.y, p.z, BlockType.LAVA_SOURCE);
+                        player.getInventory().remove(BlockType.LAVA_BUCKET, 1);
+                        player.getInventory().add(BlockType.IRON_BUCKET, 1);
+                        handRenderer.triggerSwing();
+                        audio.playBlockSound(SoundMaterial.of(BlockType.LAVA), BlockAction.PLACE,
+                                p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
+                        byte dim = (byte) currentDim[0].ordinal();
+                        sendBlockChange(dim, p.x, p.y, p.z, BlockType.LAVA_SOURCE, (byte) 0, false);
                     } else if (noMob && targeted.isBed()) {
                         // Right-click a bed: always set spawn in the overworld.
                         // Sleep (and skip to morning) still only happens at night, or

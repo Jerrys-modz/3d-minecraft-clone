@@ -750,7 +750,23 @@ public enum BlockType {
     TINKERS_PART(500, 0),
 
     /** Sentinel for any assembled Tinkers' modular tool; the real data lives in {@code ItemStack.tinkersItem()}. */
-    TINKERS_TOOL(501, 0);
+    TINKERS_TOOL(501, 0),
+
+    // -----------------------------------------------------------------------
+    // Iron bucket + lava bucket: the lava-transport pair. An empty bucket
+    // right-clicked on a lava source scoops it up (the source becomes air);
+    // a full bucket right-clicked on a Seared Tank pours the lava into the
+    // tank as smeltery fuel and returns the empty bucket.
+    // -----------------------------------------------------------------------
+
+    /** Empty iron bucket: right-click a lava source to fill it. Crafted from 3 iron ingots in a V. */
+    IRON_BUCKET(502, 0),
+
+    /**
+     * Full lava bucket: right-click a Smeltery's Seared Tank to pour the lava
+     * in as fuel (returns the empty bucket). Also placeable as a lava source.
+     */
+    LAVA_BUCKET(503, 0);
 
     public final short id;
     public final boolean solid;

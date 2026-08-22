@@ -111,10 +111,49 @@ class SmelteryEntityTest {
     }
 
     @Test
+    void fuelBurnsOnlyWhileMelting() {
+        SmelteryEntity e = formed();
+        e.insert(BlockType.IRON_ORE, 2);
+        e.addFuel(SmelteryEntity.MELT_SECONDS * 2f); // exactly enough for two items
+        assertTrue(e.isHot());
+        e.tick(SmelteryEntity.MELT_SECONDS); // one tick = one melted item
+        assertTrue(e.hasOutput());
+        assertEquals(SmelteryEntity.MELT_SECONDS, e.lavaFuel(), 0.01f);
+
+        e.tick(SmelteryEntity.MELT_SECONDS); // second item drains the rest
+        assertEquals(4, e.countOf(SmelteryEntity.SLOT_OUTPUT));
+        assertEquals(0f, e.lavaFuel(), 0.01f);
+        assertFalse(e.isHot()); // dry: queue waits
+
+        // Refill finishes nothing extra - the input slot is already empty.
+        e.addFuel(SmelteryEntity.LAVA_SECONDS);
+        e.tick(SmelteryEntity.MELT_SECONDS);
+        assertEquals(4, e.countOf(SmelteryEntity.SLOT_OUTPUT));
+    }
+
+    @Test
+    void idleSmelteryKeepsItsFuel() {
+        SmelteryEntity idle = formed();
+        idle.addFuel(50f);
+        idle.tick(10f); // nothing queued - no burn
+        assertEquals(50f, idle.lavaFuel(), 0.01f);
+    }
+
+    @Test
+    void addFuelClampsAtCapacity() {
+        SmelteryEntity e = formed();
+        float accepted = e.addFuel(SmelteryEntity.MAX_FUEL * 3f);
+        assertEquals(SmelteryEntity.MAX_FUEL, accepted, 0.01f);
+        assertEquals(SmelteryEntity.MAX_FUEL, e.lavaFuel(), 0.01f);
+        assertEquals(0f, e.addFuel(1f), 0.001f); // full: refuses more
+    }
+
+    @Test
     void persistsSlotsAndProgress() throws Exception {
         SmelteryEntity e = formed();
         e.insert(BlockType.IRON_ORE, 7);
-        for (float t = 0; t < SmelteryEntity.MELT_SECONDS; t += 1f) e.advance(1f, true);
+        e.addFuel(123f);
+        for (float t = 0; t < SmelteryEntity.MELT_SECONDS; t += 1f) e.tick(1f);
         assertTrue(e.hasOutput());
 
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
@@ -127,5 +166,7 @@ class SmelteryEntityTest {
         assertEquals(6, loaded.countOf(SmelteryEntity.SLOT_INPUT));
         assertEquals(BlockType.IRON_INGOT, loaded.typeOf(SmelteryEntity.SLOT_OUTPUT));
         assertEquals(2, loaded.countOf(SmelteryEntity.SLOT_OUTPUT));
+        // Fuel persists too: 123 poured minus 8 burned.
+        assertEquals(115f, loaded.lavaFuel(), 0.5f);
     }
 }

@@ -42,6 +42,12 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
     /** Real-time seconds to melt one item (same pace as a furnace). */
     public static final float MELT_SECONDS = 8f;
 
+    /** How many seconds of melting one scooped lava block provides. */
+    public static final float LAVA_SECONDS = 100f;
+
+    /** Fuel buffer cap (six lava buckets' worth). */
+    public static final float MAX_FUEL = LAVA_SECONDS * 6f;
+
     /** Raw ores melt into this many ingots (dusts/crushed ores yield one). */
     public static final int ORE_YIELD = 2;
 
@@ -59,9 +65,12 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
     /** Progress (seconds) toward melting one item out of the input slot. */
     private float meltProgress;
 
-    /** Cached heat state, refreshed periodically from the world (multiplayer snapshots may override). */
-    private boolean hot;
-    private float heatCheckTimer;
+    /**
+     * Remaining burn time (seconds) in the fuel buffer, filled by pouring
+     * lava buckets into a Seared Tank. One lava block holds
+     * {@link #LAVA_SECONDS}; melting only runs while this is above zero.
+     */
+    private float lavaFuel;
 
     /** No-arg constructor for {@link com.minecraftclone.world.BlockEntities} deserialization. */
     public SmelteryEntity() {
@@ -109,7 +118,25 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
 
     /** Whether the last heat scan found lava under the floor (drives pause/HUD). */
     public boolean isHot() {
-        return hot;
+        return lavaFuel > 0f;
+    }
+
+    /** Seconds of melt time left in the fuel buffer. */
+    public float lavaFuel() {
+        return lavaFuel;
+    }
+
+    /**
+     * Pours lava into the fuel buffer (one bucket = {@link #LAVA_SECONDS}).
+     * Returns how many seconds were actually accepted (0 when full/unformed).
+     */
+    public float addFuel(float seconds) {
+        if (!formed || seconds <= 0) return 0f;
+        float space = MAX_FUEL - lavaFuel;
+        float take = Math.min(space, seconds);
+        if (take <= 0f) return 0f;
+        lavaFuel += take;
+        return take;
     }
 
     /** Total items waiting in the input slot (for HUD messages). */
@@ -147,24 +174,23 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
     }
 
     /**
-     * Heat indicator for the HUD flame: full while lava feeds the structure,
-     * empty while cold (progress paused, nothing lost).
+     * Fuel indicator for the HUD flame: the fraction of the buffer still
+     * filled (drains as items melt; empty = paused, nothing lost).
      */
     public float heatFraction() {
-        return hot ? 1f : 0f;
+        return Math.min(1f, Math.max(0f, lavaFuel / MAX_FUEL));
     }
 
     @Override
     public void tick(float dt) {
         if (!formed) return;
-        // Heat is world-derived: rescan under the floor a couple times per
-        // second rather than every tick (the answer rarely changes).
-        heatCheckTimer -= dt;
-        if (heatCheckTimer <= 0f) {
-            heatCheckTimer = 0.5f;
-            hot = scanForLavaBelow();
+        // Burn fuel only while there is something to melt (furnace-style);
+        // an idle full smeltery keeps its lava.
+        boolean burning = lavaFuel > 0f && counts[SLOT_INPUT] > 0;
+        if (burning) {
+            lavaFuel = Math.max(0f, lavaFuel - dt);
         }
-        advance(dt, hot);
+        advance(dt, burning);
     }
 
     /**
@@ -204,22 +230,6 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
     /** Tinkers-style bonus: raw ores give double ingots, processed forms give one. */
     public static int yieldFor(BlockType type) {
         return type != null && type.name().endsWith("_ORE") ? ORE_YIELD : 1;
-    }
-
-    /** Any lava in the layer directly beneath the smeltery's floor footprint? */
-    private boolean scanForLavaBelow() {
-        if (world == null || instance == null) return false;
-        int y = instance.minY - 1;
-        if (y < 0) return false;
-        for (int x = instance.minX + 1; x <= instance.maxX - 1; x++) {
-            for (int z = instance.minZ + 1; z <= instance.maxZ - 1; z++) {
-                BlockType below = world.getBlock(x, y, z);
-                if (below == BlockType.LAVA || below == BlockType.LAVA_SOURCE || below == BlockType.LAVA_FLOW) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     // -----------------------------------------------------------------------
@@ -294,7 +304,7 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
             out.writeInt(counts[i]);
         }
         out.writeFloat(meltProgress);
-        out.writeBoolean(hot);
+        out.writeFloat(lavaFuel);
     }
 
     @Override
@@ -307,7 +317,7 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
             counts[i] = types[i] == null ? 0 : count;
         }
         meltProgress = Math.max(0f, in.readFloat());
-        hot = in.readBoolean();
+        lavaFuel = Math.max(0f, Math.min(MAX_FUEL, in.readFloat()));
         // Do not restore 'formed' from disk; always start unformed and let MultiBlockManager re-form
         this.formed = false;
     }
