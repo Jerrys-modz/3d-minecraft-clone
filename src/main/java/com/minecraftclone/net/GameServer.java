@@ -79,6 +79,11 @@ public class GameServer implements AutoCloseable {
     void setAttackCooldownNanos(long nanos) {
         this.attackCooldownNanos = nanos;
     }
+
+    /** Pins the server's time of day - tests use it to reach nighttime instantly. */
+    void setTimeOfDayForTesting(float t) {
+        dayNightCycle.setTime(t);
+    }
     /** Largest mob-hit damage the server accepts (creative one-shots need getMaxHealth). */
     private static final float MAX_ATTACK_DAMAGE = 100f;
 
@@ -94,6 +99,8 @@ public class GameServer implements AutoCloseable {
         volatile boolean joined;
         volatile boolean disconnected;
         volatile long lastAttackNanos;
+        /** True while this player is in bed voting to skip the night (multiplayer sleep). */
+        volatile boolean sleepVoted;
 
         Client(Socket socket, DataOutputStream out) {
             this.socket = socket;
@@ -263,6 +270,12 @@ public class GameServer implements AutoCloseable {
 
             // Server-authoritative day/night drives hostile mob spawning.
             dayNightCycle.update(dt);
+            // When dawn breaks naturally, clear any leftover bed votes so they
+            // don't carry into the following night.
+            if (!dayNightCycle.isNight() && anySleepVotes()) {
+                for (Client c : clients.values()) c.sleepVoted = false;
+                broadcastSleepState();
+            }
 
             // Stream chunks around ONE player per dimension per tick, rotating
             // through the group. world.update has its own per-call time budget,
@@ -448,6 +461,8 @@ public class GameServer implements AutoCloseable {
                     handlePlayerSync(client, sync);
                 } else if (packet instanceof Packets.PlayerAttack attack) {
                     handlePlayerAttack(client, attack);
+                } else if (packet instanceof Packets.SleepVote) {
+                    handleSleepVote(client);
                 }
             } catch (IOException e) {
                 disconnect(client);
@@ -953,6 +968,55 @@ public class GameServer implements AutoCloseable {
         System.out.println(client.name + " hit " + target.name + " for " + damage);
     }
 
+    /** How many joined players are in bed, and the total joined (for SLEEP_STATE). */
+    private int[] sleepCounts() {
+        int sleeping = 0, total = 0;
+        for (Client c : clients.values()) {
+            if (!c.joined) continue;
+            total++;
+            if (c.sleepVoted) sleeping++;
+        }
+        return new int[]{sleeping, total};
+    }
+
+    /** True if any joined player currently has a bed vote outstanding. */
+    private boolean anySleepVotes() {
+        for (Client c : clients.values()) {
+            if (c.joined && c.sleepVoted) return true;
+        }
+        return false;
+    }
+
+    private void broadcastSleepState() {
+        int[] counts = sleepCounts();
+        try {
+            broadcastAll(Packets.encodeSleepState(new Packets.SleepState(counts[0], counts[1])));
+        } catch (IOException ignored) {
+            // Fixed-size record; cannot realistically fail.
+        }
+    }
+
+    /**
+     * A player climbed into a bed at night: count their vote, tell everyone,
+     * and when EVERY connected player is in bed advance the authoritative
+     * clock to morning (Minecraft's rule - one player sleeping shouldn't
+     * skip someone else's night).
+     */
+    private void handleSleepVote(Client client) throws IOException {
+        if (!client.joined || !dayNightCycle.isNight()) return;
+        client.sleepVoted = true;
+        System.out.println(client.name + " wants to sleep");
+        broadcastSleepState();
+        int[] counts = sleepCounts();
+        if (counts[0] > 0 && counts[0] == counts[1]) {
+            dayNightCycle.skipToMorning();
+            for (Client c : clients.values()) c.sleepVoted = false;
+            broadcastSleepState();
+            broadcastTime(); // push morning immediately instead of waiting for the next 1s sync
+            System.out.println("Everyone is asleep - skipping to morning");
+        }
+    }
+
     /**
      * A player walked over a dropped item: validate they're actually near it,
      * remove it, grant it to them alone, and tell everyone else it's gone.
@@ -1008,6 +1072,18 @@ public class GameServer implements AutoCloseable {
         pending.remove(client);
         boolean wasJoined = client.joined;
         clients.remove(client.id);
+        if (wasJoined && client.sleepVoted) {
+            // A sleeping player left: their vote vanishes with them, which can
+            // complete (everyone left is asleep) or change the count.
+            broadcastSleepState();
+            int[] counts = sleepCounts();
+            if (counts[0] > 0 && counts[0] == counts[1] && dayNightCycle.isNight()) {
+                dayNightCycle.skipToMorning();
+                for (Client c : clients.values()) c.sleepVoted = false;
+                broadcastSleepState();
+                broadcastTime();
+            }
+        }
         try {
             client.socket.close();
         } catch (IOException ignored) {

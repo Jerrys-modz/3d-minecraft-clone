@@ -781,6 +781,8 @@ public class Main {
     private String pendingPlayerRestore;
     /** Seconds since the last periodic player-snapshot push to the server. */
     private float netPlayerSyncTimer;
+    /** Last shown "players in bed" counts, so identical SLEEP_STATE packets don't re-message. */
+    private final int[] lastSleepShown = {-1, -1};
     /** The active hotbar slot (shared with helpers like snapshot capture). */
     private final int[] selectedSlot = {0};
 
@@ -1131,6 +1133,17 @@ public class Main {
             } else if (packet instanceof Packets.PlayerRestore restore) {
                 // Applied after this drain, once the mirror worlds are wired up.
                 pendingPlayerRestore = restore.data();
+            } else if (packet instanceof Packets.SleepState sleep) {
+                // "x/y in bed" notice - only re-show when the counts change.
+                if (sleep.sleeping() != lastSleepShown[0] || sleep.total() != lastSleepShown[1]) {
+                    lastSleepShown[0] = sleep.sleeping();
+                    lastSleepShown[1] = sleep.total();
+                    if (sleep.total() > 1) {
+                        showMessage(messages, "Players in bed: " + sleep.sleeping() + " / " + sleep.total()
+                                        + (sleep.sleeping() == sleep.total() ? " - Good morning!" : ""),
+                                new Vector4f(0.7f, 0.8f, 1f, 1f), 3f);
+                    }
+                }
             } else if (packet instanceof Packets.PlayerDamage dmg) {
                 if (world != null && player != null) {
                     player.getStats().damage(dmg.amount());
@@ -3216,7 +3229,21 @@ public class Main {
                                 int[] foot = Bed.footPos(world, bx, by, bz);
                                 player.setSpawnPoint(foot[0], foot[1], foot[2]);
                                 showMessage(messages, "Respawn point set", new Vector4f(0.7f, 0.9f, 1f, 1f), 2f);
-                                if (dayNightCycle.isNight() || mode.isCreative()) {
+                                boolean mp = netClient != null && netClient.isConnected();
+                                if (mp) {
+                                    // Multiplayer: sleeping is a vote - the server skips
+                                    // the night once EVERY connected player is in bed.
+                                    handRenderer.triggerSwing();
+                                    if (dayNightCycle.isNight()) {
+                                        try {
+                                            netClient.sendSleepVote();
+                                            showMessage(messages, "You are in bed...",
+                                                    new Vector4f(0.8f, 0.8f, 0.9f, 1f), 2.5f);
+                                        } catch (IOException e) {
+                                            netError = e.getMessage();
+                                        }
+                                    }
+                                } else if (dayNightCycle.isNight() || mode.isCreative()) {
                                     if (!player.isSleeping()) {
                                         player.setSleeping(true);
                                         showMessage(messages, "Sleeping...", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1f);

@@ -423,6 +423,35 @@ class GameServerTest {
     }
 
     @Test
+    void sleepVoteSkipsNightWhenEveryoneIsInBed() throws Exception {
+        server.setTimeOfDayForTesting(0f); // midnight - night
+        try (NetClient a = new NetClient("127.0.0.1", server.getPort());
+             NetClient b = new NetClient("127.0.0.1", server.getPort())) {
+            a.sendJoin("Alice");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+            b.sendJoin("Bob");
+            assertInstanceOf(Packets.Welcome.class, awaitPacket(b, Packets.Welcome.class));
+
+            // Alice goes to bed: everyone hears 1/2.
+            a.sendSleepVote();
+            assertInstanceOf(Packets.SleepState.class,
+                    awaitPacketMatching(a, Packets.SleepState.class, p -> ((Packets.SleepState) p).sleeping() == 1 && ((Packets.SleepState) p).total() == 2));
+            assertInstanceOf(Packets.SleepState.class,
+                    awaitPacketMatching(b, Packets.SleepState.class, p -> ((Packets.SleepState) p).sleeping() == 1 && ((Packets.SleepState) p).total() == 2));
+
+            // Bob joins her: unanimous - the server skips to morning (a TimeSync
+            // well past midnight) and the count resets to 0/2.
+            b.sendSleepVote();
+            assertInstanceOf(Packets.SleepState.class,
+                    awaitPacketMatching(b, Packets.SleepState.class, p -> ((Packets.SleepState) p).sleeping() == 0 && ((Packets.SleepState) p).total() == 2));
+            assertInstanceOf(Packets.TimeSync.class,
+                    awaitPacketMatching(b, Packets.TimeSync.class, p -> ((Packets.TimeSync) p).timeOfDay() > 0.2f));
+            assertInstanceOf(Packets.TimeSync.class,
+                    awaitPacketMatching(a, Packets.TimeSync.class, p -> ((Packets.TimeSync) p).timeOfDay() > 0.2f));
+        }
+    }
+
+    @Test
     void playerAttackRelaysDamageToTarget() throws Exception {
         // Widen the server-side swing cooldown for this test so the "second
         // swing is gated" assertion can't race tick-scheduling gaps.

@@ -175,6 +175,10 @@ public class NetClient implements AutoCloseable {
         send(Packets.encodePlayerAttack(new Packets.PlayerAttack(targetId, damage)));
     }
 
+    public void sendSleepVote() throws IOException {
+        send(Packets.opcodeOnly(Packets.OP_SLEEP_VOTE));
+    }
+
     private void send(byte[] payload) throws IOException {
         if (disconnected) throw new IOException("Not connected.");
         synchronized (out) {

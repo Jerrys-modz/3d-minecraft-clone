@@ -69,6 +69,8 @@ public final class Packets {
     public static final byte OP_PLAYER_SYNC = 34;   // C->S: snapshot of my position/inventory/stats (PlayerSave lines)
     public static final byte OP_PLAYER_RESTORE = 35; // S->C: a saved snapshot for you, from a previous session
     public static final byte OP_PLAYER_ATTACK = 36;  // C->S: I swung at another player - server validates, target takes damage
+    public static final byte OP_SLEEP_VOTE = 37;     // C->S: I'm in bed - count me toward the night-skip vote
+    public static final byte OP_SLEEP_STATE = 38;    // S->C: how many players are in bed (sleeping/total)
 
     // ---------------------------------------------------------------
     // Shared encode/decode helpers
@@ -206,6 +208,14 @@ public final class Packets {
 
     /** A player swung at another player: the server validates and relays damage to the target. */
     public record PlayerAttack(int targetId, float damage) {
+    }
+
+    /** A player climbed into a bed at night: one vote toward skipping to morning. */
+    public record SleepVote() {
+    }
+
+    /** How many players are currently in bed vs connected (drives the HUD notice). */
+    public record SleepState(int sleeping, int total) {
     }
 
     public record Respawn() {
@@ -431,6 +441,16 @@ public final class Packets {
         out.writeByte(OP_PLAYER_ATTACK);
         out.writeInt(attack.targetId());
         out.writeFloat(attack.damage());
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeSleepState(SleepState state) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_SLEEP_STATE);
+        out.writeByte(state.sleeping());
+        out.writeByte(state.total());
         out.close();
         return buf.toByteArray();
     }
@@ -744,6 +764,8 @@ public final class Packets {
             case OP_PLAYER_SYNC -> new PlayerSync(in.readUTF());
             case OP_PLAYER_RESTORE -> new PlayerRestore(in.readUTF());
             case OP_PLAYER_ATTACK -> new PlayerAttack(in.readInt(), in.readFloat());
+            case OP_SLEEP_VOTE -> new SleepVote();
+            case OP_SLEEP_STATE -> new SleepState(in.readUnsignedByte(), in.readUnsignedByte());
             case OP_RESPAWN -> new Respawn();
             case OP_READY -> new Ready();
             case OP_WELCOME -> new Welcome(in.readInt(), in.readLong(), in.readInt(), in.readBoolean(),
