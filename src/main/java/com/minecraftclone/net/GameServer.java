@@ -950,13 +950,14 @@ public class GameServer implements AutoCloseable {
     }
 
     /**
-     * The block-entity types that sync over the wire. The smeltery is a
-     * multi-block structure whose entity is formed by structure detection on
-     * each side - not synced yet.
+     * The block-entity types that sync over the wire. All formed containers
+     * are included; the smeltery's entity only exists while its structure is
+     * intact, so an unformed controller simply has nothing to snapshot.
      */
     private static boolean isSyncedContainer(BlockType block) {
         return block == BlockType.CHEST || block == BlockType.BARREL || block == BlockType.FURNACE
-                || block == BlockType.PART_BUILDER || block == BlockType.TOOL_STATION;
+                || block == BlockType.PART_BUILDER || block == BlockType.TOOL_STATION
+                || block == BlockType.SMELTERY_CONTROLLER;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -967,6 +968,7 @@ public class GameServer implements AutoCloseable {
             case Furnace.TYPE -> block == BlockType.FURNACE;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
+            case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
             default -> false;
         };
     }
@@ -1015,6 +1017,11 @@ public class GameServer implements AutoCloseable {
             case FURNACE -> world.getOrCreateFurnace(open.x(), open.y(), open.z());
             case PART_BUILDER -> world.getOrCreatePartBuilder(open.x(), open.y(), open.z());
             case TOOL_STATION -> world.getOrCreateToolStation(open.x(), open.y(), open.z());
+            case SMELTERY_CONTROLLER -> {
+                // Formed by structure detection, not getOrCreate - absent when
+                // the shell is broken or hasn't been detected yet.
+                yield world.blockEntityAt(open.x(), open.y(), open.z()) instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+            }
             default -> null;
         };
         if (entity == null) return;

@@ -811,6 +811,7 @@ public class Main {
             case Furnace.TYPE -> block == BlockType.FURNACE;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
+            case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
             default -> false;
         };
     }
@@ -3267,6 +3268,22 @@ public class Main {
                                 world.getOrCreateToolStation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.SMELTERY_CONTROLLER) {
+                        // Right-click a formed Smeltery controller to open its gui
+                        // (input slot, heat flame, melt arrow, output). An unformed
+                        // structure has no block entity to open.
+                        com.minecraftclone.world.multiblock.SmelteryEntity smeltery =
+                                world.blockEntityAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z)
+                                instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+                        if (smeltery == null) {
+                            showMessage(messages, "The smeltery is not formed yet.",
+                                    new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            activeGui[0] = new ContainerGui(ContainerGui.Kind.SMELTERY, player.getInventory(),
+                                    craftingGrid, smeltery);
+                            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                        }
                     } else if (noMob && targeted.isBed()) {
                         // Right-click a bed: always set spawn in the overworld.
                         // Sleep (and skip to morning) still only happens at night, or

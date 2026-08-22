@@ -2121,6 +2121,14 @@ public class Hud {
                 int r = cs / CHEST_COLUMNS, c = cs % CHEST_COLUMNS;
                 return new float[]{invGridLeft() + c * INV_STEP, chestTopRowY(gui) - r * INV_STEP - chestLayoutShift(gui)};
             }
+            if (gui.kind() == ContainerGui.Kind.SMELTERY) {
+                // Smeltery: input top-left, output mid-right - same layout the
+                // furnace uses, minus the fuel slot (lava below does the heating).
+                if (cs == com.minecraftclone.world.multiblock.SmelteryEntity.SLOT_OUTPUT) {
+                    return new float[]{FURNACE_OUTPUT_X, FURNACE_MID_Y};
+                }
+                return new float[]{FURNACE_INPUT_X, INV_TOP_ROW_Y};
+            }
             // Furnace: a 3-slot column - input, fuel, output.
             int fs = cs;
             if (fs == Furnace.SLOT_OUTPUT) return new float[]{FURNACE_OUTPUT_X, FURNACE_MID_Y};
@@ -2477,6 +2485,10 @@ public class Hud {
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
             renderFurnaceProgress(gui.furnace());
         }
+        // Smeltery decorations (heat flame + progress arrow) behind the slot icons.
+        if (gui.kind() == ContainerGui.Kind.SMELTERY && gui.smeltery() != null) {
+            renderSmelteryProgress(gui.smeltery());
+        }
 
         // Part Builder decorations: selected-shape highlight + arrow.
         if (gui.kind() == ContainerGui.Kind.PART_BUILDER) {
@@ -2671,6 +2683,58 @@ public class Hud {
         // Arrow fill grows left to right with smelting progress.
         furnaceDeco.clear();
         float fill = (FURNACE_ARROW_X1 - FURNACE_ARROW_X0) * Math.min(1f, Math.max(0f, furnace.progressFraction()));
+        if (fill > 0f) {
+            addQuad3(furnaceDeco, FURNACE_ARROW_X0, FURNACE_MID_Y - arrowHalf, FURNACE_ARROW_X0 + fill, FURNACE_MID_Y + arrowHalf);
+            inventoryPanel.upload(furnaceDeco.toArray());
+            lineShader.setUniform("color", new Vector4f(0.95f, 0.95f, 0.95f, 1f));
+            inventoryPanel.render();
+        }
+
+        lineShader.unbind();
+    }
+
+    /**
+     * Draws the smeltery's heat flame and melting progress arrow. Same layout
+     * as the furnace's, but the flame shows whether lava is heating the
+     * structure (bright orange = hot, dark grey = cold/paused) and the arrow
+     * fills with the melt progress of the input slot.
+     */
+    private void renderSmelteryProgress(com.minecraftclone.world.multiblock.SmelteryEntity smeltery) {
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
+        // Flame track behind the flame itself.
+        furnaceDeco.clear();
+        float flameHalf = 0.0225f;
+        float flameTop = FURNACE_MID_Y + 0.045f;
+        float flameBottom = FURNACE_MID_Y - 0.045f;
+        addQuad3(furnaceDeco, FURNACE_FLAME_X - flameHalf, flameBottom, FURNACE_FLAME_X + flameHalf, flameTop);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.15f, 0.15f, 0.15f, 0.9f));
+        inventoryPanel.render();
+
+        // Flame fill: full-height while lava heats the structure.
+        if (smeltery.isHot()) {
+            furnaceDeco.clear();
+            addQuad3(furnaceDeco, FURNACE_FLAME_X - flameHalf, flameBottom, FURNACE_FLAME_X + flameHalf, flameTop);
+            inventoryPanel.upload(furnaceDeco.toArray());
+            lineShader.setUniform("color", new Vector4f(0.98f, 0.55f, 0.12f, 1f));
+            inventoryPanel.render();
+        }
+
+        // Arrow track from the input column toward the output slot.
+        float arrowHalf = 0.0225f;
+        furnaceDeco.clear();
+        addQuad3(furnaceDeco, FURNACE_ARROW_X0, FURNACE_MID_Y - arrowHalf, FURNACE_ARROW_X1, FURNACE_MID_Y + arrowHalf);
+        inventoryPanel.upload(furnaceDeco.toArray());
+        lineShader.setUniform("color", new Vector4f(0.3f, 0.3f, 0.3f, 0.9f));
+        inventoryPanel.render();
+
+        // Arrow fill grows left to right with melt progress.
+        furnaceDeco.clear();
+        float fill = (FURNACE_ARROW_X1 - FURNACE_ARROW_X0) * Math.min(1f, Math.max(0f, smeltery.progressFraction()));
         if (fill > 0f) {
             addQuad3(furnaceDeco, FURNACE_ARROW_X0, FURNACE_MID_Y - arrowHalf, FURNACE_ARROW_X0 + fill, FURNACE_MID_Y + arrowHalf);
             inventoryPanel.upload(furnaceDeco.toArray());
