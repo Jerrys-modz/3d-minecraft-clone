@@ -2638,6 +2638,46 @@ public class Hud {
     }
 
     /**
+     * Draws a compact translucent panel (top-right) listing the online
+     * players - held open with the Tab key in multiplayer.
+     */
+    public void renderPlayerList(List<String> names, float aspectRatio) {
+        if (names == null || names.isEmpty()) return;
+        float size = 0.035f;
+        float rowStep = 0.055f;
+        float panelW = 0.62f;
+        float panelH = 0.06f + names.size() * rowStep;
+        float x1 = 0.97f;                       // right edge
+        float y1 = 0.97f;                       // top edge
+        float y0 = y1 - panelH;
+        float x0 = x1 - panelW;
+
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+
+        FloatArray quads = new FloatArray(8);
+        // Convert logical-square coords to this HUD's aspect-corrected space.
+        float lx0 = x0 * aspectRatio, lx1 = x1 * aspectRatio;
+        addQuad3(quads, lx0, y0, lx1, y1);
+        inventoryPanel.upload(quads.toArray());
+        lineShader.setUniform("color", new Vector4f(0.05f, 0.05f, 0.08f, 0.72f));
+        inventoryPanel.render();
+
+        // Header + name rows.
+        Vector4f header = new Vector4f(0.65f, 0.85f, 1f, 1f);
+        Vector4f white = new Vector4f(1f, 1f, 1f, 1f);
+        drawTextLeft("Players (" + names.size() + ")", x1 - panelW + 0.02f, y1 - 0.045f,
+                size * 0.9f, header, aspectRatio);
+        for (int i = 0; i < names.size(); i++) {
+            drawTextLeft(names.get(i), x1 - panelW + 0.03f, y1 - 0.09f - i * rowStep,
+                    size, white, aspectRatio);
+        }
+        lineShader.unbind();
+    }
+
+    /**
      * Draws the furnace's burn flame and smelting progress arrow (both driven
      * by the furnace state). Binds {@link #lineShader} itself rather than
      * assuming it's already active - the textured-GUI panel path (see

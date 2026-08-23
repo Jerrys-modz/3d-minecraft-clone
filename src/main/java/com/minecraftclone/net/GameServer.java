@@ -418,12 +418,34 @@ public class GameServer implements AutoCloseable {
         for (int i = 0; i < players.size(); i++) {
             if (damage[i] > 0f) {
                 try {
-                    send(players.get(i), Packets.encodePlayerDamage(new Packets.PlayerDamage(damage[i])));
+                    // Mob hits shove the player away from the mob that landed it.
+                    Vector3f mobPos = world.getMobs().isEmpty() ? null : nearestMobToward(positions.get(i), world);
+                    float kx = 0f, kz = 0f;
+                    if (mobPos != null) {
+                        float ddx = positions.get(i).x - mobPos.x;
+                        float ddz = positions.get(i).z - mobPos.z;
+                        float len = (float) Math.sqrt(ddx * ddx + ddz * ddz);
+                        if (len > 1e-4f) { kx = ddx / len; kz = ddz / len; }
+                    }
+                    send(players.get(i), Packets.encodePlayerDamage(new Packets.PlayerDamage(damage[i], kx, kz)));
                 } catch (IOException e) {
                     disconnect(players.get(i));
                 }
             }
         }
+    }
+
+    /** The closest mob to a player position, for knockback direction. */
+    private Vector3f nearestMobToward(Vector3f playerPos, World world) {
+        Vector3f best = null;
+        float bestSq = Float.MAX_VALUE;
+        for (Mob m : world.getMobs()) {
+            float dx = m.position.x - playerPos.x;
+            float dz = m.position.z - playerPos.z;
+            float sq = dx * dx + dz * dz;
+            if (sq < bestSq) { bestSq = sq; best = m.position; }
+        }
+        return best;
     }
 
     /** Sends every currently-loaded overworld mob's pose to all clients, plus spawn/removal diffs. */
@@ -1245,7 +1267,11 @@ public class GameServer implements AutoCloseable {
         if (target.dimension != client.dimension) return;
         float dx = target.x - client.x, dy = target.y - client.y, dz = target.z - client.z;
         if (dx * dx + dy * dy + dz * dz > MAX_EDIT_DISTANCE_SQ) return;
-        send(target, Packets.encodePlayerDamage(new Packets.PlayerDamage(damage)));
+        // Knock the target away from the attacker.
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        float kx = len > 1e-4f ? dx / len : 0f;
+        float kz = len > 1e-4f ? dz / len : 0f;
+        send(target, Packets.encodePlayerDamage(new Packets.PlayerDamage(damage, kx, kz)));
         System.out.println(client.name + " hit " + target.name + " for " + damage);
     }
 

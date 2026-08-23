@@ -83,6 +83,21 @@ public class Player {
     /** Feet position: bottom-center of the player's bounding box. */
     private final Vector3f position = new Vector3f();
     private final Vector3f velocity = new Vector3f();
+    /** External shove from hits; decays quickly and rides on top of input movement. */
+    private final Vector3f knockbackImpulse = new Vector3f();
+
+    /**
+     * Adds a horizontal knockback shove (direction = away from the attacker)
+     * plus a small upward pop, Minecraft-style. Call on the client that owns
+     * this player when it receives a damage packet.
+     */
+    public void knockback(float dx, float dz, float strength) {
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        if (len < 1e-4f) return;
+        knockbackImpulse.x += dx / len * strength;
+        knockbackImpulse.z += dz / len * strength;
+        velocity.y = Math.max(velocity.y, 4.5f);
+    }
     private final Vector3f eyePosition = new Vector3f();
     private final Camera camera = new Camera();
     private final Inventory inventory = new Inventory();
@@ -821,6 +836,14 @@ public class Player {
 
         velocity.x = moveX * speed;
         velocity.z = moveZ * speed;
+
+        // External shoves (PvP/mob hits) ride on top of input movement and
+        // decay fast, so a hit shoves you without fighting the controls.
+        velocity.x += knockbackImpulse.x;
+        velocity.z += knockbackImpulse.z;
+        float kbDecay = Math.max(0f, 1f - 6f * dt);
+        knockbackImpulse.x *= kbDecay;
+        knockbackImpulse.z *= kbDecay;
 
         if (flying) {
             float vy = 0;

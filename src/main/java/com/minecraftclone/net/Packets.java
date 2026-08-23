@@ -157,7 +157,11 @@ public final class Packets {
     public record MobRemove(int mobId, byte typeId, float x, float y, float z) {
     }
 
-    public record PlayerDamage(float amount) {
+    /**
+     * S->C: something hurt you. Carries the hit direction so the target's
+     * client can knock them back away from the attacker.
+     */
+    public record PlayerDamage(float amount, float knockX, float knockZ) {
     }
 
     public record PortalUse(byte dimension, short blockId) {
@@ -734,6 +738,8 @@ public final class Packets {
         DataOutputStream out = new DataOutputStream(buf);
         out.writeByte(OP_PLAYER_DAMAGE);
         out.writeFloat(damage.amount());
+        out.writeFloat(damage.knockX());
+        out.writeFloat(damage.knockZ());
         out.close();
         return buf.toByteArray();
     }
@@ -833,7 +839,7 @@ public final class Packets {
             case OP_MOB_SPAWN -> new MobSpawn(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat());
             case OP_MOB_STATE -> new MobState(in.readInt(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat());
             case OP_MOB_REMOVE -> new MobRemove(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat());
-            case OP_PLAYER_DAMAGE -> new PlayerDamage(in.readFloat());
+            case OP_PLAYER_DAMAGE -> new PlayerDamage(in.readFloat(), in.readFloat(), in.readFloat());
             case OP_DIMENSION_CHANGE -> new DimensionChange(in.readByte(), in.readFloat(), in.readFloat(), in.readFloat());
             case OP_TIME_SYNC -> new TimeSync(in.readFloat(), in.readInt());
             case OP_PLAYER_DEATH -> new PlayerDeath(in.readInt());
