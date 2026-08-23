@@ -87,14 +87,16 @@ public final class PipeNetworkManager {
         if (cells.isEmpty()) return null;
 
         // The network conducts at its weakest tier (GTNH weakest-link rule).
+        // Compare throughput values, not ordinals - new tiers may be inserted
+        // at any enum position.
         SteamPipeTier minTier = null;
         for (long cellKey : cells) {
             int cx = (int) (cellKey & 0x1FFFFFL) << 21 >> 21;
             int cy = (int) ((cellKey >> 21) & 0x1FFFFFL) << 21 >> 21;
             int cz = (int) ((cellKey >> 42) & 0x1FFFFFL) << 21 >> 21;
             BlockType cellBlock = world.getBlock(cx, cy, cz);
-            SteamPipeTier t = com.minecraftclone.world.SteamPipeTier.of(cellBlock);
-            if (t != null && (minTier == null || t.ordinal() < minTier.ordinal())) minTier = t;
+            SteamPipeTier t = SteamPipeTier.of(cellBlock);
+            if (t != null && (minTier == null || t.throughput < minTier.throughput)) minTier = t;
         }
 
         PipeNetwork network = new PipeNetwork(type, cells, minTier);

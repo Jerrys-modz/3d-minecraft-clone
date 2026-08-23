@@ -232,6 +232,9 @@ public final class Crafting {
         // Wooden Steam Pipe: cheap starter tier, throttles flow to half rate.
         shaped3x3(".P.", ".P.", ".P.", BlockType.STEAM_PIPE_WOOD, 8);
 
+        // Iron Steam Pipe: high-pressure tier, 1.5x throughput.
+        shaped3x3(".I.", ".I.", ".I.", BlockType.STEAM_PIPE_IRON, 6);
+
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.
 

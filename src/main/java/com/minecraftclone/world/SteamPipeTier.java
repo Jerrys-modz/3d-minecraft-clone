@@ -1,10 +1,13 @@
 package com.minecraftclone.world;
 
 /**
- * Tiers of steam pipe, GTNH-style: each tier is cheaper to build but
- * throttles the steam flowing through it. A network's effective rate is set
- * by its LOWEST tier member - one wooden segment downgrades a whole bronze
- * run.
+ * Tiers of steam pipe, GTNH-style: higher tiers cost more but conduct steam
+ * faster. A network's effective rate is set by its LOWEST tier member - one
+ * wooden segment downgrades a whole bronze run.
+ *
+ * <p>Ordering is by ascending throughput (WOOD first, IRON last); the
+ * weakest-link check in {@code PipeNetworkManager} compares throughput
+ * values rather than ordinals, so new tiers can be inserted at any position.
  */
 public enum SteamPipeTier {
 
@@ -12,9 +15,12 @@ public enum SteamPipeTier {
     WOOD(0.5f),
 
     /** Standard Steam Age tier: full rate. Crafted from bronze ingots. */
-    BRONZE(1f);
+    BRONZE(1f),
 
-    /** Fraction of normal steam throughput this tier conducts (0..1]. */
+    /** High-pressure tier: 1.5x rate. Crafted from iron ingots. */
+    IRON(1.5f);
+
+    /** Fraction of normal steam throughput this tier conducts (>0). */
     public final float throughput;
 
     SteamPipeTier(float throughput) {
@@ -25,6 +31,7 @@ public enum SteamPipeTier {
     public static SteamPipeTier of(BlockType type) {
         if (type == BlockType.STEAM_PIPE_WOOD) return WOOD;
         if (type == BlockType.STEAM_PIPE_BRONZE) return BRONZE;
+        if (type == BlockType.STEAM_PIPE_IRON) return IRON;
         return null;
     }
 

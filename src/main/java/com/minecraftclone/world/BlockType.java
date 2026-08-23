@@ -804,7 +804,13 @@ public enum BlockType {
     STEAM_PIPE_WOOD(509, true, false, 261, 261, 261),
 
     /** Bronze steam pipe: the standard Steam Age tier, full throughput. */
-    STEAM_PIPE_BRONZE(508, true, false, 260, 260, 260);
+    STEAM_PIPE_BRONZE(508, true, false, 260, 260, 260),
+
+    /**
+     * Iron steam pipe: high-pressure tier, conducts at 1.5x rate. Built
+     * from iron ingots; the upgrade path past bronze.
+     */
+    STEAM_PIPE_IRON(510, true, false, 262, 262, 262);
 
     public final short id;
     public final boolean solid;
