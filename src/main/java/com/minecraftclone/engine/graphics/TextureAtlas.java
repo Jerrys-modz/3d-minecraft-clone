@@ -370,7 +370,8 @@ public class TextureAtlas {
         paintSteamBoiler(image, 257, rnd, true);          // STEAM_BOILER front (steaming)
         paintSteamFurnace(image, 258, rnd, false);        // STEAM_FURNACE sides/top/bottom + front off
         paintSteamFurnace(image, 259, rnd, true);         // STEAM_FURNACE front (active)
-        paintSteamPipe(image, 260, rnd);                  // STEAM_PIPE
+        paintSteamPipe(image, 260, rnd, false);           // STEAM_PIPE_BRONZE
+        paintSteamPipe(image, 261, rnd, true);            // STEAM_PIPE_WOOD
 
         return image;
     }
@@ -2155,26 +2156,32 @@ public class TextureAtlas {
     }
 
     /**
-     * STEAM_PIPE (tile 260): a bronze pipe segment - dark bronze ring with a
-     * lighter bore running horizontally through the tile.
+     * STEAM_PIPE (tile 260 bronze / 261 wood): a pipe segment with coupling
+     * rings at both ends and a dark bore running horizontally through it.
      */
-    private void paintSteamPipe(BufferedImage img, int index, Random rnd) {
-        paintBronzeMachineBox(img, index, rnd);
+    private void paintSteamPipe(BufferedImage img, int index, Random rnd, boolean wooden) {
+        paintMachineBox(img, index, rnd, wooden ? 0x7B5A2D : 0xB87333,
+                wooden ? 0x4A3418 : 0x6E4420, wooden ? 0xA9814F : 0xDCA05A);
         int ox = tileX(index), oy = tileY(index);
         for (int y = 5; y < 11; y++) {
             for (int x = 0; x < TILE_PX; x++) {
                 boolean edge = y == 5 || y == 10;
                 boolean bore = y >= 7 && y <= 8;
-                int color = bore ? 0xFF1A1210 : (edge ? 0xFF6E4420 : 0xB87333);
+                int color = bore ? 0xFF1A1210 : (edge ? (wooden ? 0xFF4A3418 : 0xFF6E4420)
+                        : (wooden ? 0xFF7B5A2D : 0xFFB87333));
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }
         // Coupling rings at both ends.
         for (int x = 0; x <= 2; x++) {
-            for (int y = 5; y < 11; y++) img.setRGB(ox + x, oy + y, 0xFF6E4420);
+            for (int y = 5; y < 11; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (wooden ? 0xFF4A3418 : 0xFF6E4420));
+            }
         }
         for (int x = 13; x < TILE_PX; x++) {
-            for (int y = 5; y < 11; y++) img.setRGB(ox + x, oy + y, 0xFF6E4420);
+            for (int y = 5; y < 11; y++) {
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (wooden ? 0xFF4A3418 : 0xFF6E4420));
+            }
         }
     }
 
@@ -2194,12 +2201,10 @@ public class TextureAtlas {
         }
     }
 
-    /** Shared bronze hull for Steam Age machines: plated bronze with corner rivets. */
-    private void paintBronzeMachineBox(BufferedImage img, int index, Random rnd) {
+    /** Shared machine hull painter: plated metal with corner rivets, tinted per material. */
+    private void paintMachineBox(BufferedImage img, int index, Random rnd,
+                                 int bronze, int dark, int light) {
         int ox = tileX(index), oy = tileY(index);
-        int bronze = 0xB87333;
-        int dark = 0x6E4420;
-        int light = 0xDCA05A;
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
                 int noise = rnd.nextInt(10) - 5;
@@ -2219,6 +2224,11 @@ public class TextureAtlas {
                 img.setRGB(ox + rx, oy + ry, 0xFFE8C890);
             }
         }
+    }
+
+    /** Shared bronze hull for Steam Age machines: plated bronze with corner rivets. */
+    private void paintBronzeMachineBox(BufferedImage img, int index, Random rnd) {
+        paintMachineBox(img, index, rnd, 0xB87333, 0x6E4420, 0xDCA05A);
     }
 
     /**

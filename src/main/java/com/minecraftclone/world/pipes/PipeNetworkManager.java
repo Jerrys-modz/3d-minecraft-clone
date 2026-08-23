@@ -1,6 +1,7 @@
 package com.minecraftclone.world.pipes;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.SteamPipeTier;
 import com.minecraftclone.world.World;
 
 import java.util.ArrayDeque;
@@ -56,7 +57,7 @@ public final class PipeNetworkManager {
         Set<Long> visited = new HashSet<>();
         Set<Long> cells = new HashSet<>();
         ArrayDeque<long[]> queue = new ArrayDeque<>();
-        if (world.getBlock(x, y, z) == pipeBlock) {
+        if (type.matches(world.getBlock(x, y, z))) {
             visited.add(here);
             cells.add(here);
             queue.add(new long[]{x, y, z});
@@ -64,7 +65,7 @@ public final class PipeNetworkManager {
         for (int[] d : FACES) {
             long key = key(x + d[0], y + d[1], z + d[2]);
             if (!visited.add(key)) continue;
-            if (world.getBlock(x + d[0], y + d[1], z + d[2]) == pipeBlock) {
+            if (type.matches(world.getBlock(x + d[0], y + d[1], z + d[2]))) {
                 cells.add(key);
                 queue.add(new long[]{x + d[0], y + d[1], z + d[2]});
             }
@@ -75,7 +76,7 @@ public final class PipeNetworkManager {
                 int nx = (int) cell[0] + d[0], ny = (int) cell[1] + d[1], nz = (int) cell[2] + d[2];
                 long key = key(nx, ny, nz);
                 if (!visited.add(key)) continue;
-                if (world.getBlock(nx, ny, nz) == pipeBlock) {
+                if (type.matches(world.getBlock(nx, ny, nz))) {
                     cells.add(key);
                     queue.add(new long[]{nx, ny, nz});
                 }
@@ -85,7 +86,18 @@ public final class PipeNetworkManager {
         // No connected pipes at all: nothing to cache or return.
         if (cells.isEmpty()) return null;
 
-        PipeNetwork network = new PipeNetwork(type, cells);
+        // The network conducts at its weakest tier (GTNH weakest-link rule).
+        SteamPipeTier minTier = null;
+        for (long cellKey : cells) {
+            int cx = (int) (cellKey & 0x1FFFFFL) << 21 >> 21;
+            int cy = (int) ((cellKey >> 21) & 0x1FFFFFL) << 21 >> 21;
+            int cz = (int) ((cellKey >> 42) & 0x1FFFFFL) << 21 >> 21;
+            BlockType cellBlock = world.getBlock(cx, cy, cz);
+            SteamPipeTier t = com.minecraftclone.world.SteamPipeTier.of(cellBlock);
+            if (t != null && (minTier == null || t.ordinal() < minTier.ordinal())) minTier = t;
+        }
+
+        PipeNetwork network = new PipeNetwork(type, cells, minTier);
         for (long key : cells) byCell.put(key, network);
         return network;
     }

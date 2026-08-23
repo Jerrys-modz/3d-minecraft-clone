@@ -106,6 +106,12 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
             boilerCheckTimer = 0.5f;
             if (attached && world != null) {
                 boiler = findSteamSource();
+                // Throttle to the network's weakest pipe tier (weakest-link).
+                com.minecraftclone.world.pipes.PipeNetwork net =
+                        attached && world != null
+                                ? world.pipeNetworks().networkAt(com.minecraftclone.world.pipes.PipeType.STEAM, posX, posY, posZ)
+                                : null;
+                drawRate = net != null && net.minTier != null ? net.minTier.throughput : 1f;
             }
         }
         boolean hot = boiler != null && boiler.steamSeconds() > 0f && canSmelt();
@@ -114,12 +120,18 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
             return;
         }
 
-        // Pull exactly the time we need out of the boiler's steam buffer.
-        float draw = Math.min(dt, boiler.steamSeconds());
+        // Pull time out of the boiler's steam buffer, throttled by the pipe
+        // tier feeding this machine (wood pipes conduct at half rate). With no
+        // pipe tier involved (direct adjacency) there's no cap.
+        float draw = Math.min(dt * drawRate, boiler.steamSeconds());
+        if (draw <= 0f) return;
         boiler.drainSteam(draw);
         lastSteamFraction = Math.min(1f, boiler.steamSeconds() / SteamBoilerEntity.MAX_STEAM_SECONDS);
         advance(draw);
     }
+
+    /** Throughput multiplier from the connecting pipe network; 1 when direct or unknown. */
+    private float drawRate = 1f;
 
     /** Advances smelting by {@code dt} seconds of steam-heated time. */
     private void advance(float dt) {

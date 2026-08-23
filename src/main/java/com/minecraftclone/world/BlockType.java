@@ -797,7 +797,14 @@ public enum BlockType {
      * A chain of pipes conducts the boiler's steam buffer to any steam
      * machine touching either end (or any pipe along the run).
      */
-    STEAM_PIPE(508, true, false, 260, 260, 260);
+    /**
+     * Wooden steam pipe: the cheap starter tier. Carries steam, but its
+     * narrow bore throttles flow to half rate. Burns if... it's wood.
+     */
+    STEAM_PIPE_WOOD(509, true, false, 261, 261, 261),
+
+    /** Bronze steam pipe: the standard Steam Age tier, full throughput. */
+    STEAM_PIPE_BRONZE(508, true, false, 260, 260, 260);
 
     public final short id;
     public final boolean solid;
