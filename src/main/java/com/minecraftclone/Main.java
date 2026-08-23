@@ -1598,6 +1598,8 @@ public class Main {
         // JEI-style recipe book screen.
         boolean[] recipeBookOpen = {false};
         final RecipeBookGui recipeBook = new RecipeBookGui();
+        Path bookmarkFile = saveRoot.resolve("recipe_bookmarks.txt");
+        recipeBook.loadBookmarks(bookmarkFile);
         int[] hoveredSlot = {-1};
         boolean[] mainMenuOpen = {true};
         boolean[] mainSettingsOpen = {false}; // settings page opened from the main menu
@@ -2643,6 +2645,11 @@ public class Main {
                     int idx = hud.recipeBookItemAt(logicalX, logicalY, recipeBook);
                     recipeBook.select(idx);
                     audio.play(SoundEvent.UI_CLICK);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_B)) {
+                    if (recipeBook.toggleBookmarkOnSelection()) {
+                        recipeBook.saveBookmarks(bookmarkFile);
+                    }
                 }
             }
 
