@@ -980,7 +980,8 @@ public class GameServer implements AutoCloseable {
     private static boolean isSyncedContainer(BlockType block) {
         return block == BlockType.CHEST || block == BlockType.BARREL || block == BlockType.FURNACE
                 || block == BlockType.PART_BUILDER || block == BlockType.TOOL_STATION
-                || block == BlockType.SMELTERY_CONTROLLER;
+                || block == BlockType.SMELTERY_CONTROLLER
+                || block == BlockType.CASTING_TABLE || block == BlockType.CASTING_BASIN;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -992,6 +993,8 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
+            case com.minecraftclone.world.CastingEntity.TABLE_TYPE -> block == BlockType.CASTING_TABLE;
+            case com.minecraftclone.world.CastingEntity.BASIN_TYPE -> block == BlockType.CASTING_BASIN;
             default -> false;
         };
     }
@@ -1051,6 +1054,7 @@ public class GameServer implements AutoCloseable {
                 // the shell is broken or hasn't been detected yet.
                 yield world.blockEntityAt(open.x(), open.y(), open.z()) instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
             }
+            case CASTING_TABLE, CASTING_BASIN -> world.getOrCreateCasting(open.x(), open.y(), open.z());
             default -> null;
         };
         if (entity == null) return;

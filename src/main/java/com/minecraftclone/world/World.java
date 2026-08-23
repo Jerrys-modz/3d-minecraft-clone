@@ -651,6 +651,26 @@ public class World implements BlockAccessor {
         return ts;
     }
 
+    /**
+     * Returns the Casting Table / Basin entity at a position, creating and
+     * registering it on first use. The block at the cell decides which
+     * variant is built; an incompatible existing entity yields null.
+     */
+    public CastingEntity getOrCreateCasting(int x, int y, int z) {
+        BlockType block = getBlock(x, y, z);
+        boolean basin = block == BlockType.CASTING_BASIN;
+        if (block != BlockType.CASTING_TABLE && !basin) return null;
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof CastingEntity ce) {
+            ce.attach(x, y, z, this);
+            return ce;
+        }
+        CastingEntity ce = new CastingEntity(block, basin);
+        ce.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), ce);
+        return ce;
+    }
+
     /** Forgets a block entity - call when its block is mined or removed. */
     public void removeBlockEntity(int x, int y, int z) {
         blockEntities.remove(blockKey(x, y, z));
