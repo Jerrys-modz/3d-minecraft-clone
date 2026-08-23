@@ -766,7 +766,31 @@ public enum BlockType {
      * Full lava bucket: right-click a Smeltery's Seared Tank to pour the lava
      * in as fuel (returns the empty bucket). Also placeable as a lava source.
      */
-    LAVA_BUCKET(503, 0);
+    LAVA_BUCKET(503, 0),
+
+    // -----------------------------------------------------------------------
+    // Steam Age (GTNH phase 1): bronze material chain + steam machines.
+    // Bronze = copper + tin alloy; machines burn solid fuel into steam and
+    // run off it, doubling ore and automating smelting before electricity.
+    // -----------------------------------------------------------------------
+
+    /** Crushed bronze blend: shapeless-craft 1 copper + 1 tin dust/ingot pair. Smelts into bronze ingots. */
+    BRONZE_DUST(504, 0),
+
+    /** Bronze ingot: the Steam Age structural metal for machine hulls. */
+    BRONZE_INGOT(505, 0),
+
+    /**
+     * Coal-fired steam boiler: right-click to load solid fuel; while burning
+     * it builds up a steam buffer that adjacent steam machines consume.
+     */
+    STEAM_BOILER(506, true, false, 244, 244, 244, 244, 245, 0, 0),
+
+    /**
+     * Steam-powered furnace: furnace GUI and behavior, but its heat comes
+     * from an adjacent, steaming boiler instead of fuel in the fuel slot.
+     */
+    STEAM_FURNACE(507, true, false, 246, 246, 246, 246, 247, 0, 0);
 
     public final short id;
     public final boolean solid;

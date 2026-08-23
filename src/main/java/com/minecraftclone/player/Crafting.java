@@ -87,6 +87,9 @@ public final class Crafting {
         CHARS.put('H', BlockType.WHEAT);        // H = wHeat
         // Phase 0.5: Tinkers' Construct ingredient shortcuts
         CHARS.put('Z', BlockType.SEARED_BRICK);       // Z = seared/sintered (kiln)
+        // Steam Age: bronze machinery
+        CHARS.put('F', BlockType.FURNACE);            // F = Furnace block
+        CHARS.put('E', BlockType.BRONZE_INGOT);       // E = bronzE ingot
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -208,6 +211,20 @@ public final class Crafting {
 
         // Iron bucket: three ingots in a V (transports lava for the smeltery)
         shaped3x3("I.I", ".I.", "...", BlockType.IRON_BUCKET, 1);
+
+        // --- Steam Age: bronze alloy + machines ---
+        // Bronze blend: 1 copper + 1 tin (dust or ingot forms), smelts to bronze.
+        shapeless2x2(BlockType.BRONZE_DUST, 1, BlockType.COPPER_DUST, BlockType.TIN_DUST);
+        shapeless3x3(BlockType.BRONZE_DUST, 1, BlockType.COPPER_DUST, BlockType.TIN_DUST);
+        shapeless3x3(BlockType.BRONZE_DUST, 2, BlockType.COPPER_INGOT, BlockType.TIN_INGOT);
+
+        // Steam Boiler: bronze ring, hollow center. Loads solid fuel,
+        // builds steam while burning; adjacent steam machines draw from it.
+        shaped3x3("EEE", "E.E", "EEE", BlockType.STEAM_BOILER, 1);
+
+        // Steam Furnace: bronze shell around a furnace; runs off boiler steam
+        // instead of fuel in its own slot.
+        shaped3x3("EEE", "EFE", "EEE", BlockType.STEAM_FURNACE, 1);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.

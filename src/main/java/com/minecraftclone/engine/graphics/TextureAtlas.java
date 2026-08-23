@@ -365,6 +365,12 @@ public class TextureAtlas {
         paintPartBuilder(image, 242, rnd);                // PART_BUILDER
         paintToolStation(image, 243, rnd);                // TOOL_STATION
 
+        // --- Steam Age machines (244-247) ---
+        paintSteamBoiler(image, 244, rnd, false);         // STEAM_BOILER front (cold)
+        paintSteamBoiler(image, 245, rnd, true);          // STEAM_BOILER front (steaming)
+        paintSteamFurnace(image, 246, rnd, false);        // STEAM_FURNACE sides/top/bottom + front off
+        paintSteamFurnace(image, 247, rnd, true);         // STEAM_FURNACE front (active)
+
         return image;
     }
 
@@ -2108,6 +2114,84 @@ public class TextureAtlas {
                 img.setRGB(ox + 3, oy + i, 0xFF4A2810);
                 img.setRGB(ox + i, oy + 12, 0xFF1A0A04);
                 img.setRGB(ox + 12, oy + i, 0xFF1A0A04);
+            }
+        }
+    }
+
+    /**
+     * STEAM_BOILER front (tiles 244 cold / 245 steaming): a bronze metal box
+     * with riveted edges and a round pressure gauge; the gauge glows green
+     * with steam pressure when the boiler is running.
+     */
+    private void paintSteamBoiler(BufferedImage img, int index, Random rnd, boolean hot) {
+        paintBronzeMachineBox(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        // Round pressure gauge in the centre.
+        for (int y = 4; y < 12; y++) {
+            for (int x = 4; x < 12; x++) {
+                float dist = (float) Math.sqrt((x - 7.5) * (x - 7.5) + (y - 7.5) * (y - 7.5));
+                if (dist > 3.8f) continue;
+                int color = hot
+                        ? (0xFF000000 | lerpColor(0x2FA84F, 0xA8F0B0, Math.max(0f, 1f - dist / 4f)))
+                        : 0xFF1E2820;
+                img.setRGB(ox + x, oy + y, color);
+            }
+        }
+        // Needle.
+        if (hot) {
+            for (int i = 0; i <= 3; i++) {
+                img.setRGB(ox + 7 + i, oy + 8 - i, 0xFF102010);
+            }
+        }
+        // Steam wisps at the top when running.
+        if (hot) {
+            for (int i = 0; i < 6; i++) {
+                int wx = ox + 3 + rnd.nextInt(10);
+                int wy = oy + 1 + rnd.nextInt(3);
+                img.setRGB(wx, wy, 0xFFD8E8E8);
+            }
+        }
+    }
+
+    /**
+     * STEAM_FURNACE (tiles 246 off / 247 active): a bronze machine box with a
+     * dark furnace mouth; the mouth glows while the machine is working.
+     */
+    private void paintSteamFurnace(BufferedImage img, int index, Random rnd, boolean active) {
+        paintBronzeMachineBox(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 5; y < 12; y++) {
+            for (int x = 4; x < 12; x++) {
+                boolean edge = y == 5 || y == 11 || x == 4 || x == 11;
+                int color = edge ? 0xFF3A2A18 : (active ? 0xFFC84810 : 0xFF140A04);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** Shared bronze hull for Steam Age machines: plated bronze with corner rivets. */
+    private void paintBronzeMachineBox(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int bronze = 0xB87333;
+        int dark = 0x6E4420;
+        int light = 0xDCA05A;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(10) - 5;
+                // Horizontal plating bands.
+                boolean bandEdge = y % 5 == 0;
+                int base = bandEdge ? dark : bronze;
+                if ((x + y) % 7 == 0) base = light;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Corner rivets.
+        for (int ry = 1; ry <= 14; ry += 13) {
+            for (int rx = 1; rx <= 14; rx += 13) {
+                img.setRGB(ox + rx, oy + ry, 0xFFE8C890);
             }
         }
     }
