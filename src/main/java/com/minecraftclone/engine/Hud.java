@@ -2777,13 +2777,18 @@ public class Hud {
             lineShader.unbind();
         }
 
-        // Detail card (right side) for the selected entry.
+        // Detail card (right side) for the selected entry. Height scales with
+        // the pattern's grid size so a 5x5 layout still fits inside the card.
         RecipeBookGui.Entry sel = book.selectedEntry();
         if (sel != null) {
+            int patternGrid = sel.crafting() != null ? Crafting.gridSizeOf(sel.crafting()) : 1;
+            float iconHalf = CAT_SLOT / 2f;
+            float step = iconHalf * 2f + 0.02f;
+            float cardH = Math.max(0.72f, 0.42f + patternGrid * step + 0.12f);
             float dx0 = catalogGridRightX() + 0.10f;
             float dx1 = Math.min(aspectRatio * 0.95f, dx0 + 0.85f);
             float dy1 = CAT_GRID_TOP_Y + 0.30f;
-            float dy0 = dy1 - 0.72f;
+            float dy0 = dy1 - cardH;
             slotBgVerts.clear();
             addQuad3(slotBgVerts, dx0, dy0, dx1, dy1);
             lineShader.bind();
@@ -2796,39 +2801,39 @@ public class Hud {
             lineShader.unbind();
 
             float pad = 0.05f;
-            drawTextLeft(sel.output().name(), dx0 + pad, dy1 - 0.06f, 0.030f, WHITE, aspectRatio);
+            drawTextLeft(sel.output().displayName(), dx0 + pad, dy1 - 0.06f, 0.030f, WHITE, aspectRatio);
             drawTextLeft("Crafted at: " + sel.station(), dx0 + pad, dy1 - 0.115f, 0.026f,
                     new Vector4f(0.65f, 0.85f, 1f, 1f), aspectRatio);
 
             beginSlotBatch();
-            float iconHalf = CAT_SLOT / 2f;
-
             // Big output icon top-right of the card.
-            addSlotIcon(dx1 - pad - iconHalf, dy1 - 0.16f, iconHalf * 1.4f,
+            addSlotIcon(dx1 - pad - iconHalf * 1.4f, dy1 - 0.16f, iconHalf * 1.4f,
                     ItemStack.of(sel.output(), 1), itemTextures, atlas, durability);
-
             // Ingredients layout.
             float iy = dy1 - 0.30f;
             if (sel.isSmelting()) {
                 addSlotIcon(dx0 + pad + iconHalf, iy, iconHalf,
                         ItemStack.of(sel.smelting().input(), 1), itemTextures, atlas, durability);
-                drawTextLeft("Smelt 1x " + sel.smelting().input().name() + " in a furnace.",
+                drawTextLeft("Smelt 1x " + sel.smelting().input().displayName() + " in a furnace.",
                         dx0 + pad + iconHalf * 3f, iy - 0.02f, 0.024f, WHITE, aspectRatio);
             } else {
                 Crafting.Recipe r = sel.crafting();
-                int gridSize = Crafting.gridSizeOf(r);
+                int gridSize = patternGrid;
                 if (r instanceof Crafting.ShapedRecipe shaped) {
                     drawTextLeft("Pattern:", dx0 + pad, iy, 0.024f, WHITE, aspectRatio);
                     for (int cell = 0; cell < shaped.pattern().length; cell++) {
                         BlockType ing = shaped.pattern()[cell];
                         if (ing == null) continue;
                         int cr = cell / gridSize, cc = cell % gridSize;
-                        float cx = dx0 + pad + iconHalf + cc * (iconHalf * 2f + 0.02f);
-                        float cy = iy - 0.08f - cr * (iconHalf * 2f + 0.02f);
+                        float cx = dx0 + pad + iconHalf + cc * step;
+                        float cy = iy - 0.08f - cr * step;
                         addSlotIcon(cx, cy, iconHalf, ItemStack.of(ing, 1), itemTextures, atlas, durability);
                     }
-                    drawTextLeft("-> " + shaped.outputAmount() + "x " + shaped.output().name(),
-                            dx0 + pad, iy - 0.42f, 0.026f, new Vector4f(0.7f, 0.9f, 0.5f, 1f), aspectRatio);
+                    // Yield line sits below the last drawn row (inside the card).
+                    float lastRow = (shaped.pattern().length - 1) / gridSize;
+                    drawTextLeft("-> " + shaped.outputAmount() + "x " + shaped.output().displayName(),
+                            dx0 + pad, iy - 0.08f - lastRow * step - 0.06f, 0.026f,
+                            new Vector4f(0.7f, 0.9f, 0.5f, 1f), aspectRatio);
                 } else if (r instanceof Crafting.ShapelessRecipe shapeless) {
                     drawTextLeft("Ingredients (any layout):", dx0 + pad, iy, 0.024f, WHITE, aspectRatio);
                     int shown = 0;
@@ -2837,14 +2842,16 @@ public class Hud {
                         grouped.merge(ing, 1, Integer::sum);
                     }
                     for (var e : grouped.entrySet()) {
-                        float cx = dx0 + pad + iconHalf + (shown % 5) * (iconHalf * 2f + 0.02f);
-                        float cy = iy - 0.09f - (shown / 5) * (iconHalf * 2f + 0.02f);
+                        float cx = dx0 + pad + iconHalf + (shown % 5) * step;
+                        float cy = iy - 0.09f - (shown / 5) * step;
                         addSlotIcon(cx, cy, iconHalf, ItemStack.of(e.getKey(), e.getValue()),
                                 itemTextures, atlas, durability);
                         shown++;
                     }
-                    drawTextLeft("-> " + shapeless.outputAmount() + "x " + shapeless.output().name(),
-                            dx0 + pad, iy - 0.42f, 0.026f, new Vector4f(0.7f, 0.9f, 0.5f, 1f), aspectRatio);
+                    int lastRow = (shown - 1) / 5;
+                    drawTextLeft("-> " + shapeless.outputAmount() + "x " + shapeless.output().displayName(),
+                            dx0 + pad, iy - 0.09f - lastRow * step - 0.07f, 0.026f,
+                            new Vector4f(0.7f, 0.9f, 0.5f, 1f), aspectRatio);
                 }
             }
 

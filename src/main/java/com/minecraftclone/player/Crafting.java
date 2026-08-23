@@ -145,16 +145,9 @@ public final class Crafting {
         armor('V', BlockType.WOLF_HELMET, BlockType.WOLF_CHESTPLATE, BlockType.WOLF_LEGGINGS, BlockType.WOLF_BOOTS);
         armor('B', BlockType.BEAR_HELMET, BlockType.BEAR_CHESTPLATE, BlockType.BEAR_LEGGINGS, BlockType.BEAR_BOOTS);
 
-        // Stairs (wedge pattern: K.. / KK. / KKK)
-        shaped3x3("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);                       // 6 stone -> 4 stairs
-        shaped3x3("P..", "PP.", "PPP", BlockType.PLANKS_STAIRS, 4);                      // 6 planks -> 4 stairs
-
-        // Door and trapdoor
-        shaped3x3("PP.", "PP.", "PP.", BlockType.DOOR, 1);                               // 6 planks -> door
+        // Stairs and doors are registered earlier (see "3x3 recipes from
+        // crafting table"); trapdoor is new here.
         shaped3x3("PPP", "PPP", "...", BlockType.TRAPDOOR, 2);                           // 6 planks -> 2 trapdoors
-
-        // Fence
-        shaped3x3("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);                       // 4 planks + 2 sticks -> 3 fence
 
         // --- Farming recipes ---
         // Hoes: two material on top, column of two sticks below (vanilla, mirrors for left-hand).

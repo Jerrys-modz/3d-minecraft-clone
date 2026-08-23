@@ -2535,6 +2535,10 @@ public class Main {
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 if (bindingAction[0] >= 0) {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
+                } else if (recipeBookOpen[0]) {
+                    recipeBookOpen[0] = false; // Esc closes the recipe book first
+                    window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
+                    input.resetMouseDelta();
                 } else if (mapOpen[0]) {
                     mapOpen[0] = false;
                     hud.renderFullMap(null, -1); // clear GL texture cache
@@ -2578,11 +2582,18 @@ public class Main {
                         recipeBookOpen[0] = true;
                         audio.play(SoundEvent.UI_OPEN);
                     }
-                    window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
+                    // The book needs a free cursor for hover/click selection -
+                    // the shared predicate doesn't know about it, so set it directly.
+                    window.setCursorCaptured(recipeBookOpen[0]);
                 }
 
                 boolean inventoryKey = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY));
-                if (inventoryKey && !(creativeOpen[0] && creativeSearchFocused[0])) {
+                if (inventoryKey && recipeBookOpen[0]) {
+                    // E closes the book instead of stacking the inventory on top.
+                    recipeBookOpen[0] = false;
+                    audio.play(SoundEvent.UI_CLOSE);
+                    window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
+                } else if (inventoryKey && !(creativeOpen[0] && creativeSearchFocused[0])) {
                     if (inventoryOpen[0]) {
                         closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                     } else if (creativeOpen[0]) {
