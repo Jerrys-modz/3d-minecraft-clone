@@ -105,7 +105,7 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
         if (boilerCheckTimer <= 0f) {
             boilerCheckTimer = 0.5f;
             if (attached && world != null) {
-                boiler = findSteamSource(world, posX, posY, posZ);
+                boiler = findSteamSource();
             }
         }
         boolean hot = boiler != null && boiler.steamSeconds() > 0f && canSmelt();
@@ -138,57 +138,38 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
         }
     }
 
-    /** Max cells a steam-pipe flood fill may visit before giving up. */
-    static final int PIPE_SEARCH_LIMIT = 256;
-
-    /**
-     * Finds a steaming boiler for the machine at {@code (posX, posY, posZ)}:
-     * either face-adjacent directly, or through any connected network of
-     * {@link BlockType#STEAM_PIPE} blocks (flood fill, capped at
-     * {@link #PIPE_SEARCH_LIMIT} visited pipes so runaway pipe loops can't
-     * stall the tick). Returns null when no powered boiler feeds this machine.
-     */
-    static SteamBoilerEntity findSteamSource(World world, int x, int y, int z) {
-        // Direct adjacency first - the common case, zero search cost.
-        for (int[] d : FACES) {
-            BlockEntity e = world.blockEntityAt(x + d[0], y + d[1], z + d[2]);
-            if (e instanceof SteamBoilerEntity b) return b;
-        }
-        // Otherwise flood fill through connected steam pipes looking for one.
-        java.util.Set<Long> visited = new java.util.HashSet<>();
-        java.util.ArrayDeque<int[]> queue = new java.util.ArrayDeque<>();
-        for (int[] d : FACES) {
-            int px = x + d[0], py = y + d[1], pz = z + d[2];
-            long key = pipeKey(px, py, pz);
-            if (!visited.add(key)) continue;
-            BlockEntity e = world.blockEntityAt(px, py, pz);
-            if (e instanceof SteamBoilerEntity b) return b;
-            if (world.getBlock(px, py, pz) == BlockType.STEAM_PIPE) {
-                queue.add(new int[]{px, py, pz});
-            }
-        }
-        while (!queue.isEmpty()) {
-            int[] cell = queue.poll();
-            for (int[] d : FACES) {
-                int nx = cell[0] + d[0], ny = cell[1] + d[1], nz = cell[2] + d[2];
-                long key = pipeKey(nx, ny, nz);
-                if (!visited.add(key)) continue;
-                if (world.blockEntityAt(nx, ny, nz) instanceof SteamBoilerEntity b) return b;
-                if (world.getBlock(nx, ny, nz) == BlockType.STEAM_PIPE
-                        && visited.size() <= PIPE_SEARCH_LIMIT) {
-                    queue.add(new int[]{nx, ny, nz});
-                }
-            }
-        }
-        return null;
-    }
-
     private static final int[][] FACES = {
             {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
     };
 
-    private static long pipeKey(int x, int y, int z) {
-        return ((long) x & 0x1FFFFFL) | (((long) y & 0x1FFFFFL) << 21) | (((long) z & 0x1FFFFFL) << 42);
+    /**
+     * Finds a steaming boiler for this machine: either face-adjacent
+     * directly, or through the connected steam pipe network (resolved via the
+     * world's shared {@link com.minecraftclone.world.pipes.PipeNetworkManager},
+     * which caches runs and caps them at a fixed cell budget). Returns null
+     * when no powered boiler feeds this machine.
+     */
+    private SteamBoilerEntity findSteamSource() {
+        if (!attached || world == null) return null;
+        // Direct adjacency first - the common case, zero search cost.
+        for (int[] d : FACES) {
+            BlockEntity e = world.blockEntityAt(posX + d[0], posY + d[1], posZ + d[2]);
+            if (e instanceof SteamBoilerEntity b) return b;
+        }
+        // Otherwise resolve through the pipe network and scan its perimeter.
+        com.minecraftclone.world.pipes.PipeNetwork net =
+                world.pipeNetworks().networkAt(com.minecraftclone.world.pipes.PipeType.STEAM, posX, posY, posZ);
+        if (net == null) return null;
+        for (long key : net.cells) {
+            int cx = (int) (key & 0x1FFFFFL) << 21 >> 21;
+            int cy = (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
+            int cz = (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+            for (int[] d : FACES) {
+                BlockEntity e = world.blockEntityAt(cx + d[0], cy + d[1], cz + d[2]);
+                if (e instanceof SteamBoilerEntity b) return b;
+            }
+        }
+        return null;
     }
 
     // -----------------------------------------------------------------------

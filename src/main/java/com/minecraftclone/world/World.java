@@ -472,6 +472,8 @@ public class World implements BlockAccessor {
         // Notify the multi-block manager so smeltery (and future) structures can
         // form or deform when their structural blocks change.
         multiBlockManager.onBlockChanged(this, worldX, worldY, worldZ);
+        // A pipe placed or broken changes network topology: drop stale runs.
+        pipeNetworkManager.onBlockChanged(worldX, worldY, worldZ);
 
         // Placing/removing a light source (e.g. a torch) can change the baked glow
         // in every chunk within its radius, not just literal boundary columns - the
@@ -2114,6 +2116,9 @@ public class World implements BlockAccessor {
     /** The multi-block manager — tracks formed structures and drives formation / deformation. */
     private final com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager =
             new com.minecraftclone.world.multiblock.MultiBlockManager();
+    /** Discovers + caches connected pipe networks for every transport type. */
+    private final com.minecraftclone.world.pipes.PipeNetworkManager pipeNetworkManager =
+            new com.minecraftclone.world.pipes.PipeNetworkManager(this);
 
     /**
      * Returns the multi-block manager.  Call {@code manager().register(def)} at startup
@@ -2121,6 +2126,11 @@ public class World implements BlockAccessor {
      */
     public com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager() {
         return multiBlockManager;
+    }
+
+    /** The pipe network cache/discovery manager for this world. */
+    public com.minecraftclone.world.pipes.PipeNetworkManager pipeNetworks() {
+        return pipeNetworkManager;
     }
 
     /**
