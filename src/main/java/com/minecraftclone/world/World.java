@@ -674,6 +674,25 @@ public class World implements BlockAccessor {
         return ce;
     }
 
+    /** Returns the Steam Boiler entity at a position, creating it on first use. */
+    public SteamBoilerEntity getOrCreateSteamBoiler(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamBoilerEntity b) return b;
+        SteamBoilerEntity b = new SteamBoilerEntity();
+        blockEntities.put(blockKey(x, y, z), b);
+        return b;
+    }
+
+    /** Returns the Steam Furnace entity at a position, creating + attaching it on first use. */
+    public SteamFurnaceEntity getOrCreateSteamFurnace(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamFurnaceEntity sf) return sf;
+        SteamFurnaceEntity sf = new SteamFurnaceEntity();
+        sf.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), sf);
+        return sf;
+    }
+
     /** Forgets a block entity - call when its block is mined or removed. */
     public void removeBlockEntity(int x, int y, int z) {
         blockEntities.remove(blockKey(x, y, z));

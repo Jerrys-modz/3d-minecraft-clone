@@ -35,6 +35,10 @@ public final class BlockEntities {
         // Casting stations: one entity class, two block variants.
         register(CastingEntity.TABLE_TYPE, () -> new CastingEntity(BlockType.CASTING_TABLE, false));
         register(CastingEntity.BASIN_TYPE, () -> new CastingEntity(BlockType.CASTING_BASIN, true));
+
+        // Steam Age machines.
+        register(SteamBoilerEntity.TYPE, SteamBoilerEntity::new);
+        register(SteamFurnaceEntity.TYPE, SteamFurnaceEntity::new);
     }
 
     private BlockEntities() {
