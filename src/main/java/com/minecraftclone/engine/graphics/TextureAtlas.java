@@ -365,11 +365,12 @@ public class TextureAtlas {
         paintPartBuilder(image, 242, rnd);                // PART_BUILDER
         paintToolStation(image, 243, rnd);                // TOOL_STATION
 
-        // --- Steam Age machines (244-247) ---
+        // --- Steam Age machines (256-260) ---
         paintSteamBoiler(image, 256, rnd, false);         // STEAM_BOILER front (cold)
         paintSteamBoiler(image, 257, rnd, true);          // STEAM_BOILER front (steaming)
         paintSteamFurnace(image, 258, rnd, false);        // STEAM_FURNACE sides/top/bottom + front off
         paintSteamFurnace(image, 259, rnd, true);         // STEAM_FURNACE front (active)
+        paintSteamPipe(image, 260, rnd);                  // STEAM_PIPE
 
         return image;
     }
@@ -2150,6 +2151,30 @@ public class TextureAtlas {
                 int wy = oy + 1 + rnd.nextInt(3);
                 img.setRGB(wx, wy, 0xFFD8E8E8);
             }
+        }
+    }
+
+    /**
+     * STEAM_PIPE (tile 260): a bronze pipe segment - dark bronze ring with a
+     * lighter bore running horizontally through the tile.
+     */
+    private void paintSteamPipe(BufferedImage img, int index, Random rnd) {
+        paintBronzeMachineBox(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 5; y < 11; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                boolean edge = y == 5 || y == 10;
+                boolean bore = y >= 7 && y <= 8;
+                int color = bore ? 0xFF1A1210 : (edge ? 0xFF6E4420 : 0xB87333);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+        // Coupling rings at both ends.
+        for (int x = 0; x <= 2; x++) {
+            for (int y = 5; y < 11; y++) img.setRGB(ox + x, oy + y, 0xFF6E4420);
+        }
+        for (int x = 13; x < TILE_PX; x++) {
+            for (int y = 5; y < 11; y++) img.setRGB(ox + x, oy + y, 0xFF6E4420);
         }
     }
 

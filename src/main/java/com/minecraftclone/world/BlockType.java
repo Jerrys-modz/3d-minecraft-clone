@@ -790,7 +790,14 @@ public enum BlockType {
      * Steam-powered furnace: furnace GUI and behavior, but its heat comes
      * from an adjacent, steaming boiler instead of fuel in the fuel slot.
      */
-    STEAM_FURNACE(507, true, false, 258, 258, 258, 258, 259, 0, 0);
+    STEAM_FURNACE(507, true, false, 258, 258, 258, 258, 259, 0, 0),
+
+    /**
+     * Steam pipe: connects steam machines to a boiler over a distance.
+     * A chain of pipes conducts the boiler's steam buffer to any steam
+     * machine touching either end (or any pipe along the run).
+     */
+    STEAM_PIPE(508, true, false, 260, 260, 260);
 
     public final short id;
     public final boolean solid;

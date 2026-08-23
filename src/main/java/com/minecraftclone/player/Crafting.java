@@ -226,6 +226,9 @@ public final class Crafting {
         // instead of fuel in its own slot.
         shaped3x3("EEE", "EFE", "EEE", BlockType.STEAM_FURNACE, 1);
 
+        // Steam Pipe: bronze column - connects machines to a boiler's steam.
+        shaped3x3(".E.", ".E.", ".E.", BlockType.STEAM_PIPE, 6);
+
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.
 

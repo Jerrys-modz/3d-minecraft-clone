@@ -98,11 +98,15 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
     @Override
     public void tick(float dt) {
         if (dt <= 0) return;
-        // Re-scan neighbours for a steaming boiler a couple times per second.
+        // Re-scan for a steaming boiler (direct or through pipes) a couple
+        // times per second. Unattached entities (tests) keep their injected
+        // boiler reference instead of scanning.
         boilerCheckTimer -= dt;
         if (boilerCheckTimer <= 0f) {
             boilerCheckTimer = 0.5f;
-            boiler = findBoiler();
+            if (attached && world != null) {
+                boiler = findSteamSource(world, posX, posY, posZ);
+            }
         }
         boolean hot = boiler != null && boiler.steamSeconds() > 0f && canSmelt();
         if (!hot) {
@@ -134,21 +138,57 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
         }
     }
 
-    /** Any of the six face-adjacent blocks is a Steam Boiler entity? */
-    private SteamBoilerEntity findBoiler() {
-        // Without a world context (tests, or an unregistered entity) keep the
-        // injected/cached boiler rather than forcing a re-scan.
-        if (!attached || world == null) return boiler;
-        int[][] dirs = {
-                {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
-        };
-        for (int[] d : dirs) {
-            int x = posX + d[0], y = posY + d[1], z = posZ + d[2];
-            if (world.blockEntityAt(x, y, z) instanceof SteamBoilerEntity b) {
-                return b;
+    /** Max cells a steam-pipe flood fill may visit before giving up. */
+    static final int PIPE_SEARCH_LIMIT = 256;
+
+    /**
+     * Finds a steaming boiler for the machine at {@code (posX, posY, posZ)}:
+     * either face-adjacent directly, or through any connected network of
+     * {@link BlockType#STEAM_PIPE} blocks (flood fill, capped at
+     * {@link #PIPE_SEARCH_LIMIT} visited pipes so runaway pipe loops can't
+     * stall the tick). Returns null when no powered boiler feeds this machine.
+     */
+    static SteamBoilerEntity findSteamSource(World world, int x, int y, int z) {
+        // Direct adjacency first - the common case, zero search cost.
+        for (int[] d : FACES) {
+            BlockEntity e = world.blockEntityAt(x + d[0], y + d[1], z + d[2]);
+            if (e instanceof SteamBoilerEntity b) return b;
+        }
+        // Otherwise flood fill through connected steam pipes looking for one.
+        java.util.Set<Long> visited = new java.util.HashSet<>();
+        java.util.ArrayDeque<int[]> queue = new java.util.ArrayDeque<>();
+        for (int[] d : FACES) {
+            int px = x + d[0], py = y + d[1], pz = z + d[2];
+            long key = pipeKey(px, py, pz);
+            if (!visited.add(key)) continue;
+            BlockEntity e = world.blockEntityAt(px, py, pz);
+            if (e instanceof SteamBoilerEntity b) return b;
+            if (world.getBlock(px, py, pz) == BlockType.STEAM_PIPE) {
+                queue.add(new int[]{px, py, pz});
+            }
+        }
+        while (!queue.isEmpty()) {
+            int[] cell = queue.poll();
+            for (int[] d : FACES) {
+                int nx = cell[0] + d[0], ny = cell[1] + d[1], nz = cell[2] + d[2];
+                long key = pipeKey(nx, ny, nz);
+                if (!visited.add(key)) continue;
+                if (world.blockEntityAt(nx, ny, nz) instanceof SteamBoilerEntity b) return b;
+                if (world.getBlock(nx, ny, nz) == BlockType.STEAM_PIPE
+                        && visited.size() <= PIPE_SEARCH_LIMIT) {
+                    queue.add(new int[]{nx, ny, nz});
+                }
             }
         }
         return null;
+    }
+
+    private static final int[][] FACES = {
+            {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+    };
+
+    private static long pipeKey(int x, int y, int z) {
+        return ((long) x & 0x1FFFFFL) | (((long) y & 0x1FFFFFL) << 21) | (((long) z & 0x1FFFFFL) << 42);
     }
 
     // -----------------------------------------------------------------------
