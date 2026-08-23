@@ -1440,11 +1440,13 @@ public class Main {
     }
 
     /**
-     * Processes operator commands from standard input until end of input.
-     *
-     * @throws IOException if reading standard input fails
+     * Reads operator commands from the console until EOF: `list`, `kick`,
+     * `ban`, `unban`, `banlist`. Runs on the main thread - the server's own
+     * threads keep the world running regardless. When stdin closes (nohup,
+     * systemd, docker without -i) we park the main thread forever instead of
+     * letting the JVM die now that every other thread is a daemon.
      */
-    private static void runServerConsole(GameServer server) throws IOException {
+    private static void runServerConsole(GameServer server) throws IOException, InterruptedException {
         java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
         String line;
         while ((line = in.readLine()) != null) {
@@ -1468,6 +1470,10 @@ public class Main {
                 default -> System.out.println("Unknown command '" + cmd + "'. Try 'help'.");
             }
         }
+        // Stdin is closed (or was never interactive): keep serving players and
+        // stop accepting console input rather than exiting the JVM.
+        System.out.println("Console closed - server keeps running (Ctrl+C to stop).");
+        Thread.currentThread().join();
     }
 
     /**
@@ -3339,24 +3345,30 @@ public class Main {
                         if (smeltery == null) {
                             showMessage(messages, "This tank isn't part of a formed smeltery.",
                                     new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else if (smeltery.lavaFuel() + com.minecraftclone.world.multiblock.SmelteryEntity.LAVA_SECONDS
+                                > com.minecraftclone.world.multiblock.SmelteryEntity.MAX_FUEL) {
+                            // Require room for the WHOLE bucket - a partially
+                            // accepted pour would waste the lava.
+                            showMessage(messages, "The smeltery's tanks are full.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
                         } else {
-                            float accepted = smeltery.addFuel(com.minecraftclone.world.multiblock.SmelteryEntity.LAVA_SECONDS);
-                            if (accepted <= 0f) {
-                                showMessage(messages, "The smeltery's tanks are full.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
-                            } else {
-                                player.getInventory().remove(BlockType.LAVA_BUCKET, 1);
-                                player.getInventory().add(BlockType.IRON_BUCKET, 1);
-                                handRenderer.triggerSwing();
-                                audio.playBlockSound(SoundMaterial.of(BlockType.LAVA), BlockAction.PLACE,
-                                        hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
-                                pushContainerSnapshot(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
-                                int cx = World.worldToChunk(hit.blockPos.x);
-                                int cz = World.worldToChunk(hit.blockPos.z);
-                                world.markChunkModifiedByPlayer(cx, cz);
-                                saveOpenWorld(worlds, currentWorldDir[0], player, currentDim[0], selectedSlot[0]);
-                                showMessage(messages, "Poured lava into the smeltery.",
-                                        new Vector4f(0.98f, 0.55f, 0.12f, 1f), 2f);
+                            smeltery.addFuel(com.minecraftclone.world.multiblock.SmelteryEntity.LAVA_SECONDS);
+                            player.getInventory().remove(BlockType.LAVA_BUCKET, 1);
+                            player.getInventory().add(BlockType.IRON_BUCKET, 1);
+                            handRenderer.triggerSwing();
+                            audio.playBlockSound(SoundMaterial.of(BlockType.LAVA), BlockAction.PLACE,
+                                    hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                            // The entity lives at the CONTROLLER, not the tank -
+                            // resolve the structure's controller cell for sync.
+                            var instance = world.multiBlockContaining(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            if (instance != null) {
+                                pushContainerSnapshot(instance.controllerX, instance.controllerY, instance.controllerZ);
                             }
+                            int cx = World.worldToChunk(hit.blockPos.x);
+                            int cz = World.worldToChunk(hit.blockPos.z);
+                            world.markChunkModifiedByPlayer(cx, cz);
+                            saveOpenWorld(worlds, currentWorldDir[0], player, currentDim[0], selectedSlot[0]);
+                            showMessage(messages, "Poured lava into the smeltery.",
+                                    new Vector4f(0.98f, 0.55f, 0.12f, 1f), 2f);
                         }
                     } else if (noMob && hit != null && heldItem == BlockType.LAVA_BUCKET
                             && mode.canPlace() && world.getBlock(hit.placePos.x, hit.placePos.y, hit.placePos.z) == BlockType.AIR) {

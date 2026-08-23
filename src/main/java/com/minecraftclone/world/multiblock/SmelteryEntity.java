@@ -184,13 +184,19 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
     @Override
     public void tick(float dt) {
         if (!formed) return;
-        // Burn fuel only while there is something to melt (furnace-style);
-        // an idle full smeltery keeps its lava.
-        boolean burning = lavaFuel > 0f && counts[SLOT_INPUT] > 0;
+        // Burn fuel only while there is something to melt AND the output can
+        // actually accept the result (furnace-style); an idle or blocked
+        // smeltery keeps its lava. Only the elapsed time that was really
+        // available is handed to advance(), so a nearly-dry tank can't melt
+        // an item it no longer has heat for.
+        boolean blocked = counts[SLOT_INPUT] > 0 && types[SLOT_OUTPUT] != null
+                && Smelting.outputFor(types[SLOT_INPUT]) != types[SLOT_OUTPUT];
+        boolean burning = lavaFuel > 0f && counts[SLOT_INPUT] > 0 && !blocked;
         if (burning) {
-            lavaFuel = Math.max(0f, lavaFuel - dt);
+            float elapsed = Math.min(dt, lavaFuel);
+            lavaFuel -= elapsed;
+            advance(elapsed, true);
         }
-        advance(dt, burning);
     }
 
     /**
@@ -217,6 +223,8 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
             meltProgress = MELT_SECONDS;
             return false;
         }
+        // Internal write path: fills output directly (setSlot would reject
+        // GUI-initiated writes there, but melting owns this slot).
         types[SLOT_OUTPUT] = result;
         counts[SLOT_OUTPUT] += yieldFor(head);
         if (counts[SLOT_INPUT] <= 1) {
@@ -256,13 +264,24 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
     @Override
     public void setSlot(int slot, BlockType type, int count) {
         if (slot < 0 || slot >= SLOT_COUNT) return;
-        // The output slot only ever fills from melting; taking empties it.
-        if (type == null || count <= 0) {
-            types[slot] = null;
-            counts[slot] = 0;
+        boolean clearing = type == null || count <= 0;
+        if (slot == SLOT_INPUT) {
+            // Input: only smeltables, up to the cap. Clearing is always fine
+            // (taking items back out); non-smeltable writes are ignored.
+            if (clearing) {
+                types[slot] = null;
+                counts[slot] = 0;
+            } else if (Smelting.isSmeltable(type)) {
+                types[slot] = type;
+                counts[slot] = Math.min(count, MAX_INPUT_COUNT);
+            }
         } else {
-            types[slot] = type;
-            counts[slot] = count;
+            // Output: only ever cleared (collecting ingots). Filling it is the
+            // melt loop's job; placing arbitrary items is rejected.
+            if (clearing) {
+                types[slot] = null;
+                counts[slot] = 0;
+            }
         }
     }
 
@@ -296,9 +315,18 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
     // Persistence
     // -----------------------------------------------------------------------
 
+    /**
+     * Payload version for this entity's save format. v1 (current): two slot
+     * records + melt progress + fuel. Anything older (the placeholder era
+     * wrote just a heat float) or unrecognized resets the state to empty
+     * rather than crashing on an existing world.
+     */
+    private static final byte SAVE_VERSION = 1;
+
     @Override
     public void writeTo(DataOutput out) throws IOException {
         super.writeTo(out);
+        out.writeByte(SAVE_VERSION);
         for (int i = 0; i < SLOT_COUNT; i++) {
             out.writeShort(types[i] == null ? 0 : types[i].id);
             out.writeInt(counts[i]);
@@ -310,15 +338,37 @@ public final class SmelteryEntity extends MultiBlockEntity implements StorageCon
     @Override
     public void readFrom(DataInput in) throws IOException {
         super.readFrom(in);
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            int id = in.readUnsignedShort();
-            int count = in.readInt();
-            types[i] = id == 0 || count <= 0 ? null : BlockType.byId(id);
-            counts[i] = types[i] == null ? 0 : count;
+        // Legacy payloads end right here (they carried no version byte), and a
+        // future version would fail its checks below - either way, reset to a
+        // clean state instead of throwing mid-read and corrupting the chunk.
+        try {
+            byte version = in.readByte();
+            if (version != SAVE_VERSION) {
+                clearState();
+                return;
+            }
+            for (int i = 0; i < SLOT_COUNT; i++) {
+                int id = in.readUnsignedShort();
+                int count = in.readInt();
+                types[i] = id == 0 || count <= 0 ? null : BlockType.byId(id);
+                counts[i] = types[i] == null ? 0 : count;
+            }
+            meltProgress = Math.max(0f, in.readFloat());
+            lavaFuel = Math.max(0f, Math.min(MAX_FUEL, in.readFloat()));
+        } catch (java.io.EOFException legacy) {
+            clearState(); // pre-versioning save: nothing usable to restore
         }
-        meltProgress = Math.max(0f, in.readFloat());
-        lavaFuel = Math.max(0f, Math.min(MAX_FUEL, in.readFloat()));
         // Do not restore 'formed' from disk; always start unformed and let MultiBlockManager re-form
         this.formed = false;
+    }
+
+    /** Empties slots, progress and fuel (used when a payload can't be understood). */
+    private void clearState() {
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            types[i] = null;
+            counts[i] = 0;
+        }
+        meltProgress = 0f;
+        lavaFuel = 0f;
     }
 }

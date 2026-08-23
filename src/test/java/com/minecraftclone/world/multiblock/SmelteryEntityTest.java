@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -132,6 +133,37 @@ class SmelteryEntityTest {
     }
 
     @Test
+    void nearDryTankCannotFinishAnItem() {
+        SmelteryEntity e = formed();
+        e.insert(BlockType.GOLD_ORE, 1);
+        // Only half the needed heat: a long tick must burn just that half and
+        // NOT complete the melt (previously dt was spent whole).
+        e.addFuel(SmelteryEntity.MELT_SECONDS / 2f);
+        e.tick(SmelteryEntity.MELT_SECONDS);
+        assertFalse(e.hasOutput());
+        assertEquals(0f, e.lavaFuel(), 0.001f);
+        // The partial progress is kept and finishes with fresh fuel.
+        e.addFuel(SmelteryEntity.MELT_SECONDS);
+        e.tick(SmelteryEntity.MELT_SECONDS / 2f + 0.5f);
+        assertTrue(e.hasOutput());
+    }
+
+    @Test
+    void noFuelBurnedWhileOutputIsBlocked() {
+        SmelteryEntity e = formed();
+        e.insert(BlockType.IRON_ORE, 1);
+        meltFor(e, SmelteryEntity.MELT_SECONDS); // iron ingots sit in output
+        e.addFuel(50f); // advance() doesn't burn fuel; fill for the blocked test
+        float before = e.lavaFuel();
+        // Gold queued while iron occupies the output: blocked, so ticking must
+        // not consume fuel.
+        e.insert(BlockType.GOLD_ORE, 1);
+        e.tick(SmelteryEntity.MELT_SECONDS);
+        assertEquals(before, e.lavaFuel(), 0.01f);
+        assertEquals(BlockType.IRON_INGOT, e.outputType()); // untouched
+    }
+
+    @Test
     void idleSmelteryKeepsItsFuel() {
         SmelteryEntity idle = formed();
         idle.addFuel(50f);
@@ -153,7 +185,7 @@ class SmelteryEntityTest {
         SmelteryEntity e = formed();
         e.insert(BlockType.IRON_ORE, 7);
         e.addFuel(123f);
-        for (float t = 0; t < SmelteryEntity.MELT_SECONDS; t += 1f) e.tick(1f);
+        for (float t = 0; t < SmelteryEntity.MELT_SECONDS; t += 1f) e.advance(1f, true);
         assertTrue(e.hasOutput());
 
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
@@ -166,7 +198,36 @@ class SmelteryEntityTest {
         assertEquals(6, loaded.countOf(SmelteryEntity.SLOT_INPUT));
         assertEquals(BlockType.IRON_INGOT, loaded.typeOf(SmelteryEntity.SLOT_OUTPUT));
         assertEquals(2, loaded.countOf(SmelteryEntity.SLOT_OUTPUT));
-        // Fuel persists too: 123 poured minus 8 burned.
-        assertEquals(115f, loaded.lavaFuel(), 0.5f);
+        // Fuel persists too - advance() is the test path and doesn't burn, so
+        // the full poured amount comes back.
+        assertEquals(123f, loaded.lavaFuel(), 0.5f);
+    }
+
+    @Test
+    void legacyOrCorruptSaveResetsCleanly() throws Exception {
+        // A v1 payload round-trips...
+        SmelteryEntity e = formed();
+        e.insert(BlockType.GOLD_ORE, 3);
+        e.addFuel(40f);
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        e.writeTo(new DataOutputStream(buf));
+        SmelteryEntity loaded = new SmelteryEntity();
+        loaded.readFrom(new DataInputStream(new ByteArrayInputStream(buf.toByteArray())));
+        assertEquals(3, loaded.countOf(SmelteryEntity.SLOT_INPUT));
+        assertEquals(40f, loaded.lavaFuel(), 0.01f);
+
+        // ...while a legacy placeholder payload (just the super's formed flag
+        // + a heat float) hits EOF and resets to a clean, empty state.
+        ByteArrayOutputStream legacy = new ByteArrayOutputStream();
+        DataOutputStream lout = new DataOutputStream(legacy);
+        lout.writeBoolean(false); // MultiBlockEntity super: formed flag
+        lout.writeFloat(42f);     // legacy heatAccum
+        SmelteryEntity old = new SmelteryEntity();
+        old.reform(null);
+        assertDoesNotThrow((org.junit.jupiter.api.function.Executable) () ->
+                old.readFrom(new DataInputStream(new ByteArrayInputStream(legacy.toByteArray()))));
+        assertFalse(old.hasOutput());
+        assertEquals(0, old.pendingCount());
+        assertEquals(0f, old.lavaFuel(), 0.001f);
     }
 }

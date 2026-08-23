@@ -143,6 +143,12 @@ public class GameServer implements AutoCloseable {
     private final java.util.Set<Integer> knownMobIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
     /** Item ids already announced with ITEM_ADD; anything vanishing gets a REMOVE. */
     private final java.util.Set<Integer> knownItemIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /**
+     * Operator actions (kick/ban/unban) queued by the console thread and
+     * drained on the tick thread, so all client-state mutation stays on one
+     * thread as the Client contract requires.
+     */
+    private final ConcurrentLinkedQueue<Runnable> adminCommands = new ConcurrentLinkedQueue<>();
     private long lastTimeSync = System.nanoTime();
 
     /** The authoritative world for a client's current dimension. */
@@ -324,6 +330,7 @@ public class GameServer implements AutoCloseable {
             lastTick = now;
 
             processInbox();
+            runAdminCommands();
 
             // Server-authoritative day/night drives hostile mob spawning.
             dayNightCycle.update(dt);
@@ -734,14 +741,30 @@ public class GameServer implements AutoCloseable {
      * @param name the player name to search for
      * @return {@code true} if a matching player was disconnected, {@code false} otherwise
      */
+    /**
+     * Runs operator actions queued from the console thread on the tick
+     * thread, keeping all client-state mutation single-threaded.
+     */
+    private void runAdminCommands() {
+        Runnable cmd;
+        while ((cmd = adminCommands.poll()) != null) {
+            cmd.run();
+        }
+    }
+
     public boolean kick(String name) {
         for (Client c : clients.values()) {
             if (c.joined && c.name.equalsIgnoreCase(name)) {
-                try {
-                    send(c, Packets.encodeReject("Kicked by operator."));
-                } catch (IOException ignored) {
-                }
-                disconnect(c);
+                // Queue the actual disconnect for the tick thread: Client
+                // state is only written there, and the console thread must
+                // not race it.
+                adminCommands.add(() -> {
+                    try {
+                        send(c, Packets.encodeReject("Kicked by operator."));
+                    } catch (IOException ignored) {
+                    }
+                    disconnect(c);
+                });
                 System.out.println("Kicked " + c.name);
                 return true;
             }
@@ -986,6 +1009,12 @@ public class GameServer implements AutoCloseable {
     private static BlockEntity restoreEntity(World world, int x, int y, int z, String type, byte[] payload)
             throws IOException {
         BlockEntity existing = world.blockEntityAt(x, y, z);
+        // A smeltery entity only exists while its structure is formed - never
+        // create one from the wire at a bare controller block, or a ghost
+        // unformed entity would squat on the position.
+        if (existing == null && com.minecraftclone.world.multiblock.SmelteryEntity.TYPE.equals(type)) {
+            return null;
+        }
         if (existing != null && existing.type().equals(type)) {
             try (DataInputStream in = new DataInputStream(new java.io.ByteArrayInputStream(payload))) {
                 existing.readFrom(in);

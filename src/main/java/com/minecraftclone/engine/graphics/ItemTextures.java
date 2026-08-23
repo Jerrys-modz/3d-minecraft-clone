@@ -355,11 +355,13 @@ public class ItemTextures {
         drawThickLine(img, 7, 2, 11, 2, rim);
         drawThickLine(img, 11, 2, 14, 5, rim);
         if (full) {
-            // Molten surface with two bright swirl tones.
+            // Molten surface with two bright swirl tones, painted over the
+            // bucket's iron interior pixels.
             for (int y = 6; y <= 8; y++) {
                 for (int x = 5; x <= 10; x++) {
-                    if ((img.getRGB(x, y) & 0xFF000000) != 0) continue;
-                    img.setRGB(x, y, 0xFF000000 | ((x + y) % 3 == 0 ? lavaB : lavaA));
+                    if ((img.getRGB(x, y) & 0xFFFFFF) == (iron & 0xFFFFFF)) {
+                        img.setRGB(x, y, 0xFF000000 | ((x + y) % 3 == 0 ? lavaB : lavaA));
+                    }
                 }
             }
         }

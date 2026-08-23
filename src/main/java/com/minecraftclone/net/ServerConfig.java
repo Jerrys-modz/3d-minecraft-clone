@@ -20,10 +20,12 @@ public final class ServerConfig {
 
     public static final String FILE_NAME = "server.properties";
 
-    private int port = 25565;
-    private int maxPlayers = 12;
-    private boolean pvp = true;
-    private String motd = "";
+    // All fields are volatile: the server's accept/tick threads read them
+    // while operators (and tests) mutate the instance from other threads.
+    private volatile int port = 25565;
+    private volatile int maxPlayers = 12;
+    private volatile boolean pvp = true;
+    private volatile String motd = "";
 
     /**
      * Retrieves the configured server port.

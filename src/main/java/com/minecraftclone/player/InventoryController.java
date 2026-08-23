@@ -631,15 +631,16 @@ public class InventoryController {
         StorageContainer target = gui.container();
         if (target == null) return 0;
         int fs = slotId - ContainerGui.CONTAINER_START;
-        int max = t != null && t.isItem ? 1 : Inventory.maxStack(t);
-        if (max < 1) max = 1;
         int current = target.countOf(fs);
         if (target.typeOf(fs) != null && target.typeOf(fs) != t) return 0;
-        int space = Math.max(max, com.minecraftclone.world.multiblock.SmelteryEntity.MAX_INPUT_COUNT) - current;
-        // The smeltery's input holds far more than a normal stack (999).
-        if (gui.kind() == ContainerGui.Kind.SMELTERY && fs == com.minecraftclone.world.multiblock.SmelteryEntity.SLOT_INPUT) {
-            space = com.minecraftclone.world.multiblock.SmelteryEntity.MAX_INPUT_COUNT - current;
-        }
+        // The smeltery's input holds far more than a normal stack (999);
+        // every other container slot keeps its normal stack limit.
+        int capacity = gui.kind() == ContainerGui.Kind.SMELTERY
+                && fs == com.minecraftclone.world.multiblock.SmelteryEntity.SLOT_INPUT
+                ? com.minecraftclone.world.multiblock.SmelteryEntity.MAX_INPUT_COUNT
+                : Inventory.maxStack(t);
+        int space = capacity - current;
+        if (space <= 0) return 0;
         int add = Math.min(space, count);
         target.setSlot(fs, t, current + add);
         return add;
