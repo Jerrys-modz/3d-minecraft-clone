@@ -414,38 +414,26 @@ public class GameServer implements AutoCloseable {
             boxes.add(new AABB(c.x - 0.3f, c.y, c.z - 0.3f, c.x + 0.3f, c.y + 1.8f, c.z + 0.3f));
         }
         if (players.isEmpty()) return;
-        float[] damage = world.updateMobsMulti(dt, positions, boxes, dayNightCycle.isNight(), rnd, settings.getDifficulty());
+        World.MobDamageResult result = world.updateMobsMulti(dt, positions, boxes, dayNightCycle.isNight(), rnd, settings.getDifficulty());
         for (int i = 0; i < players.size(); i++) {
-            if (damage[i] > 0f) {
+            if (result.damage()[i] > 0f) {
                 try {
-                    // Mob hits shove the player away from the mob that landed it.
-                    Vector3f mobPos = world.getMobs().isEmpty() ? null : nearestMobToward(positions.get(i), world);
+                    // Mob hits shove the player away from the mob that actually
+                    // landed the hit (the world sim reports the attacker).
                     float kx = 0f, kz = 0f;
-                    if (mobPos != null) {
-                        float ddx = positions.get(i).x - mobPos.x;
-                        float ddz = positions.get(i).z - mobPos.z;
+                    if (result.srcX()[i] != 0f || result.srcZ()[i] != 0f) {
+                        float ddx = positions.get(i).x - result.srcX()[i];
+                        float ddz = positions.get(i).z - result.srcZ()[i];
                         float len = (float) Math.sqrt(ddx * ddx + ddz * ddz);
                         if (len > 1e-4f) { kx = ddx / len; kz = ddz / len; }
                     }
-                    send(players.get(i), Packets.encodePlayerDamage(new Packets.PlayerDamage(damage[i], kx, kz)));
+                    send(players.get(i), Packets.encodePlayerDamage(
+                            new Packets.PlayerDamage(result.damage()[i], kx, kz)));
                 } catch (IOException e) {
                     disconnect(players.get(i));
                 }
             }
         }
-    }
-
-    /** The closest mob to a player position, for knockback direction. */
-    private Vector3f nearestMobToward(Vector3f playerPos, World world) {
-        Vector3f best = null;
-        float bestSq = Float.MAX_VALUE;
-        for (Mob m : world.getMobs()) {
-            float dx = m.position.x - playerPos.x;
-            float dz = m.position.z - playerPos.z;
-            float sq = dx * dx + dz * dz;
-            if (sq < bestSq) { bestSq = sq; best = m.position; }
-        }
-        return best;
     }
 
     /** Sends every currently-loaded overworld mob's pose to all clients, plus spawn/removal diffs. */

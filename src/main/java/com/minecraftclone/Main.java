@@ -581,8 +581,11 @@ public class Main {
                 client.close();
                 return;
             }
-            netClient = client;
+            // Publish the name first: once netClient is visible, the main loop
+            // can start rendering the Tab list - it must never show a stale
+            // name from a previous session.
             localPlayerName = playerName;
+            netClient = client;
             netError = null;
         } catch (Exception e) {
             if (client != null) client.close();
@@ -3817,8 +3820,11 @@ public class Main {
                 hud.renderFrostOverlay(player.getStats().getColdness());
             }
             hud.renderMessages(messages, window.getAspectRatio());
-            // Tab: online player list (multiplayer only).
-            if (started[0] && netClient != null && input.isKeyDown(GLFW_KEY_TAB)) {
+            // Tab: online player list (multiplayer, gameplay screens only).
+            boolean tabListVisible = started[0] && netClient != null && input.isKeyDown(GLFW_KEY_TAB)
+                    && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && !mapOpen[0] && !chatOpen[0];
+            if (tabListVisible) {
                 List<String> names = new ArrayList<>();
                 names.add(localPlayerName + " (you)");
                 for (RemotePlayer rp : remotePlayers.values()) {

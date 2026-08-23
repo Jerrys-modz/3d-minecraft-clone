@@ -163,6 +163,7 @@ public class Player {
         int surfaceY = world.getSurfaceHeight((int) Math.floor(x), (int) Math.floor(z));
         position.set(x, surfaceY + 2, z);
         velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
         camera.setPosition(x, position.y + getEyeHeight(), z);
         landingArmed = false; // disarm landing detection until the first real ground contact
     }
@@ -171,6 +172,7 @@ public class Player {
     public void teleport(float x, float y, float z) {
         position.set(x, y, z);
         velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
         camera.setPosition(x, y + EYE_HEIGHT, z);
         landingArmed = false;
     }
@@ -224,6 +226,7 @@ public class Player {
         flying = false;
         sleeping = false;
         velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
         lastFallImpactSpeed = 0f;
         onGround = false;
         wasOnGround = true;
@@ -245,6 +248,7 @@ public class Player {
     public void teleportTo(float x, float y, float z) {
         position.set(x, y, z);
         velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
         camera.setPosition(x, y + getEyeHeight(), z);
         onGround = false;
         lastFallImpactSpeed = 0f;
@@ -1009,6 +1013,7 @@ public class Player {
         if (position.y < -32) {
             // Fell out of the world (e.g. into an unloaded chunk) - respawn upward.
             velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
             position.y = 96;
         }
     }

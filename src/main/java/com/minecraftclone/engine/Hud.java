@@ -2658,6 +2658,9 @@ public class Hud {
         lineShader.setUniform("model", hudTransform);
 
         FloatArray quads = new FloatArray(8);
+        // Depth test off: world geometry must never occlude this HUD panel
+        // (drawTextLeft already renders without it).
+        org.lwjgl.opengl.GL11.glDisable(org.lwjgl.opengl.GL11.GL_DEPTH_TEST);
         // Convert logical-square coords to this HUD's aspect-corrected space.
         float lx0 = x0 * aspectRatio, lx1 = x1 * aspectRatio;
         addQuad3(quads, lx0, y0, lx1, y1);
@@ -2668,12 +2671,13 @@ public class Hud {
         // Header + name rows.
         Vector4f header = new Vector4f(0.65f, 0.85f, 1f, 1f);
         Vector4f white = new Vector4f(1f, 1f, 1f, 1f);
-        drawTextLeft("Players (" + names.size() + ")", x1 - panelW + 0.02f, y1 - 0.045f,
+        drawTextLeft("Players (" + names.size() + ")", x0 + 0.02f, y1 - 0.045f,
                 size * 0.9f, header, aspectRatio);
         for (int i = 0; i < names.size(); i++) {
-            drawTextLeft(names.get(i), x1 - panelW + 0.03f, y1 - 0.09f - i * rowStep,
+            drawTextLeft(names.get(i), x0 + 0.03f, y1 - 0.09f - i * rowStep,
                     size, white, aspectRatio);
         }
+        org.lwjgl.opengl.GL11.glEnable(org.lwjgl.opengl.GL11.GL_DEPTH_TEST);
         lineShader.unbind();
     }
 
