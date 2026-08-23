@@ -101,6 +101,33 @@ class CastingEntityTest {
     }
 
     @Test
+    void basinBatchIsCappedByRemainingOutputSpace() {
+        CastingEntity basin = new CastingEntity(BlockType.CASTING_BASIN, true);
+        basin.setPoweredForTesting(true);
+        assertTrue(basin.imprintCast(part(ToolPartType.LARGE_PLATE)));
+        basin.insertMaterial(BlockType.IRON_INGOT, 18);
+
+        tickFor(basin, CastingEntity.CAST_SECONDS * 5f);
+        assertEquals(15, basin.outputCount());
+        assertEquals(3, basin.inputCount());
+        tickFor(basin, CastingEntity.CAST_SECONDS);
+        assertEquals(CastingEntity.BASIN_OUTPUT_CAP, basin.outputCount());
+        assertEquals(2, basin.inputCount());
+    }
+
+    @Test
+    void partialOutputCollectionLeavesUnacceptedPartsStored() {
+        CastingEntity table = new CastingEntity(BlockType.CASTING_TABLE, false);
+        table.setPoweredForTesting(true);
+        assertTrue(table.imprintCast(part(ToolPartType.PICK_HEAD)));
+        table.insertMaterial(BlockType.IRON_INGOT, 4);
+        tickFor(table, CastingEntity.CAST_SECONDS * 4f);
+
+        assertEquals(2, table.takeOutputs(2).size());
+        assertEquals(2, table.outputCount());
+    }
+
+    @Test
     void persistsCastInputsAndOutputs() throws Exception {
         CastingEntity table = new CastingEntity(BlockType.CASTING_TABLE, false);
         table.setPoweredForTesting(true);
@@ -117,5 +144,45 @@ class CastingEntityTest {
         assertEquals(BlockType.IRON_INGOT, loaded.inputType());
         assertEquals(4, loaded.inputCount());
         assertEquals(1, loaded.outputCount());
+    }
+
+    @Test
+    void deserializationRejectsNonMaterialInputAndCapsValidInput() throws Exception {
+        CastingEntity invalid = readState(BlockType.DIRT, 100, 0);
+        assertNull(invalid.inputType());
+        assertEquals(0, invalid.inputCount());
+
+        CastingEntity capped = readState(BlockType.IRON_INGOT, 100, 0);
+        assertEquals(BlockType.IRON_INGOT, capped.inputType());
+        assertEquals(CastingEntity.TABLE_INPUT_CAP, capped.inputCount());
+    }
+
+    @Test
+    void deserializationRejectsOutputCountAboveCapacity() throws Exception {
+        CastingEntity loaded = readState(BlockType.IRON_INGOT, 1,
+                CastingEntity.TABLE_OUTPUT_CAP + 1);
+        assertNull(loaded.castShape());
+        assertEquals(0, loaded.inputCount());
+        assertEquals(0, loaded.outputCount());
+    }
+
+    private static CastingEntity readState(BlockType input, int inputCount, int outputCount) throws Exception {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(1);
+        out.writeBoolean(true);
+        out.writeUTF(ToolPartType.PICK_HEAD.name());
+        out.writeBoolean(true);
+        out.writeShort(input.id);
+        out.writeInt(inputCount);
+        out.writeInt(outputCount);
+        for (int i = 0; i < outputCount; i++) {
+            out.writeUTF(ToolPartType.PICK_HEAD.name());
+            out.writeShort(BlockType.IRON_INGOT.id);
+        }
+        out.writeFloat(0f);
+        CastingEntity loaded = new CastingEntity(BlockType.CASTING_TABLE, false);
+        loaded.readFrom(new DataInputStream(new ByteArrayInputStream(buf.toByteArray())));
+        return loaded;
     }
 }

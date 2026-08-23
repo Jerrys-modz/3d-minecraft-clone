@@ -517,6 +517,8 @@ public class GameServer implements AutoCloseable {
                     handleContainerOpen(client, open);
                 } else if (packet instanceof Packets.ContainerData data) {
                     handleContainerUpdate(client, data);
+                } else if (packet instanceof Packets.CastingOperation operation) {
+                    handleCastingOperation(client, operation);
                 } else if (packet instanceof Packets.ItemSpawn spawn) {
                     handleItemSpawn(client, spawn);
                 } else if (packet instanceof Packets.ItemPickup pickup) {
@@ -1075,6 +1077,9 @@ public class GameServer implements AutoCloseable {
         if (!canReach(client, data.x(), data.y(), data.z())) return;
         World world = worlds[data.dimension()];
         BlockType block = world.getBlock(data.x(), data.y(), data.z());
+        // Casting stations accept operation intents only. A full client-authored
+        // snapshot would bypass their input, output and material validation.
+        if (block == BlockType.CASTING_TABLE || block == BlockType.CASTING_BASIN) return;
         if (!typeMatchesBlock(data.type(), block)) return;
         BlockEntity entity = restoreEntity(world, data.x(), data.y(), data.z(), data.type(), data.payload());
         if (entity == null) return;
@@ -1083,6 +1088,62 @@ public class GameServer implements AutoCloseable {
         world.markChunkModifiedByPlayer(World.worldToChunk(data.x()), World.worldToChunk(data.z()));
         broadcastOthers(client, Packets.encodeContainerData(new Packets.ContainerData(
                 data.dimension(), data.x(), data.y(), data.z(), data.type(), snapshotEntity(entity))));
+    }
+
+    /** Applies one validated casting intent and broadcasts the authoritative result. */
+    private void handleCastingOperation(Client client, Packets.CastingOperation operation) throws IOException {
+        if (!client.joined || operation.dimension() != client.dimension) return;
+        if (operation.dimension() < 0 || operation.dimension() >= worlds.length
+                || operation.y() < 0 || operation.y() >= Chunk.HEIGHT) return;
+        if (!canReach(client, operation.x(), operation.y(), operation.z())) return;
+
+        World world = worlds[operation.dimension()];
+        BlockType block = world.getBlock(operation.x(), operation.y(), operation.z());
+        if (block != BlockType.CASTING_TABLE && block != BlockType.CASTING_BASIN) return;
+        com.minecraftclone.world.CastingEntity casting =
+                world.getOrCreateCasting(operation.x(), operation.y(), operation.z());
+        if (casting == null) return;
+
+        boolean valid = false;
+        boolean changed = false;
+        BlockType material = BlockType.byId(operation.materialId());
+        switch (operation.operation()) {
+            case Packets.CAST_IMPRINT -> {
+                int shape = operation.shapeOrdinal();
+                com.minecraftclone.world.tinkers.ToolPartType[] shapes =
+                        com.minecraftclone.world.tinkers.ToolPartType.values();
+                if (shape >= 0 && shape < shapes.length
+                        && com.minecraftclone.world.tinkers.TinkersRegistry.isMaterial(material)
+                        && operation.count() == 1) {
+                    valid = true;
+                    changed = casting.imprintCast(com.minecraftclone.player.ItemStack.tinkersPart(
+                            new com.minecraftclone.world.tinkers.TinkersItem.Part(shapes[shape], material)));
+                }
+            }
+            case Packets.CAST_INSERT -> {
+                if (com.minecraftclone.world.tinkers.TinkersRegistry.isMaterial(material)
+                        && operation.count() > 0 && operation.count() <= casting.inputCapacity()) {
+                    valid = true;
+                    changed = casting.insertMaterial(material, operation.count()) > 0;
+                }
+            }
+            case Packets.CAST_TAKE_OUTPUTS -> {
+                if (operation.count() > 0 && operation.count() <= casting.outputCapacity()) {
+                    valid = true;
+                    changed = !casting.takeOutputs(operation.count()).isEmpty();
+                }
+            }
+            default -> {
+                return;
+            }
+        }
+        if (!valid) return;
+        if (changed) {
+            world.markChunkModifiedByPlayer(World.worldToChunk(operation.x()), World.worldToChunk(operation.z()));
+        }
+        byte[] snapshot = Packets.encodeContainerData(new Packets.ContainerData(
+                operation.dimension(), operation.x(), operation.y(), operation.z(), casting.type(), snapshotEntity(casting)));
+        broadcastAll(snapshot);
     }
 
     /**

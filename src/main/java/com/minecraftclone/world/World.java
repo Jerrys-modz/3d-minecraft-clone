@@ -373,6 +373,9 @@ public class World implements BlockAccessor {
             for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
                 if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                    if (es.entity() instanceof CastingEntity casting) {
+                        casting.attach(es.x(), es.y(), es.z(), this);
+                    }
                 }
             }
         } else {
@@ -1087,6 +1090,9 @@ public class World implements BlockAccessor {
             for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
                 if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                    if (es.entity() instanceof CastingEntity casting) {
+                        casting.attach(es.x(), es.y(), es.z(), this);
+                    }
                     multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
                 }
             }

@@ -145,6 +145,13 @@ public final class CastingEntity implements BlockEntity {
         return basin ? BASIN_OUTPUT_CAP : TABLE_OUTPUT_CAP;
     }
 
+    /** Remaining space for this material, or zero when it cannot currently be inserted. */
+    public int inputSpaceFor(BlockType type) {
+        if (castShape == null || !TinkersRegistry.isMaterial(type)) return 0;
+        if (inputType != null && inputType != type) return 0;
+        return Math.max(0, inputCapacity() - inputCount);
+    }
+
     // -----------------------------------------------------------------------
     // Player interaction
     // -----------------------------------------------------------------------
@@ -167,21 +174,30 @@ public final class CastingEntity implements BlockEntity {
      * doesn't match what's queued, or it's full).
      */
     public int insertMaterial(BlockType type, int count) {
-        if (castShape == null || !TinkersRegistry.isMaterial(type) || count <= 0) return 0;
-        if (inputType != null && inputType != type) return 0;
-        int space = inputCapacity() - inputCount;
-        int take = Math.min(space, count);
+        if (count <= 0) return 0;
+        int take = Math.min(inputSpaceFor(type), count);
         if (take <= 0) return 0;
         inputType = type;
         inputCount += take;
         return take;
     }
 
-    /** Takes every finished part (caller adds them to their inventory). */
-    public List<ItemStack> takeOutputs() {
-        List<ItemStack> taken = new ArrayList<>(outputs);
-        outputs.clear();
+    /** A stable view of finished parts for capacity checks before collection. */
+    public List<ItemStack> outputsSnapshot() {
+        return List.copyOf(outputs);
+    }
+
+    /** Takes up to {@code maxCount} finished parts, leaving the rest stored. */
+    public List<ItemStack> takeOutputs(int maxCount) {
+        int count = Math.min(Math.max(0, maxCount), outputs.size());
+        List<ItemStack> taken = new ArrayList<>(outputs.subList(0, count));
+        outputs.subList(0, count).clear();
         return taken;
+    }
+
+    /** Takes every finished part. Prefer {@link #takeOutputs(int)} when inventory space is limited. */
+    public List<ItemStack> takeOutputs() {
+        return takeOutputs(outputs.size());
     }
 
     // -----------------------------------------------------------------------
@@ -202,7 +218,8 @@ public final class CastingEntity implements BlockEntity {
         progress += dt;
         while (progress >= CAST_SECONDS && inputCount > 0 && outputs.size() < outputCapacity()) {
             progress -= CAST_SECONDS;
-            int made = Math.min(batchSize(), inputCount);
+            int remainingOutputCapacity = outputCapacity() - outputs.size();
+            int made = Math.min(Math.min(batchSize(), inputCount), remainingOutputCapacity);
             for (int i = 0; i < made; i++) {
                 inputCount--;
                 outputs.add(ItemStack.tinkersPart(new TinkersItem.Part(castShape, inputType)));
@@ -297,17 +314,21 @@ public final class CastingEntity implements BlockEntity {
                 int id = in.readUnsignedShort();
                 int count = in.readInt();
                 BlockType t = BlockType.byId(id);
-                if (t != null && count > 0) {
+                if (TinkersRegistry.isMaterial(t) && count > 0) {
                     inputType = t;
-                    inputCount = count;
+                    inputCount = Math.min(count, inputCapacity());
                 }
             }
             outputs.clear();
             int n = in.readInt();
-            for (int i = 0; i < n && i < outputCapacity(); i++) {
+            if (n < 0 || n > outputCapacity()) {
+                clearState();
+                return;
+            }
+            for (int i = 0; i < n; i++) {
                 ToolPartType shape = ToolPartType.valueOf(in.readUTF());
                 BlockType mat = BlockType.byId(in.readUnsignedShort());
-                if (mat != null) {
+                if (TinkersRegistry.isMaterial(mat)) {
                     outputs.add(ItemStack.tinkersPart(new TinkersItem.Part(shape, mat)));
                 }
             }

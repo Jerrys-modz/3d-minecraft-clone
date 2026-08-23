@@ -71,6 +71,11 @@ public final class Packets {
     public static final byte OP_PLAYER_ATTACK = 36;  // C->S: I swung at another player - server validates, target takes damage
     public static final byte OP_SLEEP_VOTE = 37;     // C->S: I'm in bed - count me toward the night-skip vote
     public static final byte OP_SLEEP_STATE = 38;    // S->C: how many players are in bed (sleeping/total)
+    public static final byte OP_CASTING_OPERATION = 39; // C->S: validated mutation request for a casting station
+
+    public static final byte CAST_IMPRINT = 0;
+    public static final byte CAST_INSERT = 1;
+    public static final byte CAST_TAKE_OUTPUTS = 2;
 
     // ---------------------------------------------------------------
     // Shared encode/decode helpers
@@ -168,8 +173,15 @@ public final class Packets {
      * {@code writeTo} format, shared with the disk save). Sent by the server on
      * open and re-broadcast whenever another client pushes an update; clients
      * send the same packet to publish their changes when they close the GUI.
+     * Casting stations are the exception: clients send {@link CastingOperation}
+     * intents, and only the server publishes their snapshots.
      */
     public record ContainerData(byte dimension, int x, int y, int z, String type, byte[] payload) {
+    }
+
+    /** A requested mutation of a server-owned Casting Table or Casting Basin. */
+    public record CastingOperation(byte dimension, int x, int y, int z, byte operation,
+                                   short materialId, byte shapeOrdinal, int count) {
     }
 
     /** A dropped item now exists on the server (broadcast when spawned). */
@@ -352,6 +364,22 @@ public final class Packets {
         out.writeInt(x);
         out.writeInt(y);
         out.writeInt(z);
+        out.close();
+        return buf.toByteArray();
+    }
+
+    public static byte[] encodeCastingOperation(CastingOperation operation) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(buf);
+        out.writeByte(OP_CASTING_OPERATION);
+        out.writeByte(operation.dimension());
+        out.writeInt(operation.x());
+        out.writeInt(operation.y());
+        out.writeInt(operation.z());
+        out.writeByte(operation.operation());
+        out.writeShort(operation.materialId());
+        out.writeByte(operation.shapeOrdinal());
+        out.writeInt(operation.count());
         out.close();
         return buf.toByteArray();
     }
@@ -741,6 +769,8 @@ public final class Packets {
             case OP_MOB_ATTACK -> new MobAttack(in.readInt(), in.readFloat());
             case OP_PORTAL_USE -> new PortalUse(in.readByte(), in.readShort());
             case OP_CONTAINER_OPEN -> new ContainerOpen(in.readByte(), in.readInt(), in.readInt(), in.readInt());
+            case OP_CASTING_OPERATION -> new CastingOperation(in.readByte(), in.readInt(), in.readInt(), in.readInt(),
+                    in.readByte(), in.readShort(), in.readByte(), in.readInt());
             case OP_CONTAINER_DATA -> {
                 byte dim = in.readByte();
                 int x = in.readInt(), y = in.readInt(), z = in.readInt();

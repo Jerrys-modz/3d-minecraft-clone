@@ -1,6 +1,7 @@
 package com.minecraftclone.net;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.CastingEntity;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.WorldGenSettings;
 import org.junit.jupiter.api.AfterEach;
@@ -280,6 +281,54 @@ class GameServerTest {
             Packets.ContainerData snap = assertInstanceOf(Packets.ContainerData.class,
                     awaitPacketMatching(a, Packets.ContainerData.class, p -> true));
             assertEquals(com.minecraftclone.world.tinkers.ToolStationEntity.TYPE, snap.type());
+        }
+    }
+
+    @Test
+    void castingOperationsProduceAuthoritativeSnapshots() throws Exception {
+        try (NetClient client = new NetClient("127.0.0.1", server.getPort())) {
+            client.sendJoin("Caster");
+            Packets.Welcome welcome = assertInstanceOf(Packets.Welcome.class,
+                    awaitPacket(client, Packets.Welcome.class));
+            int x = (int) Math.floor(welcome.spawnX());
+            int y = Math.round(welcome.spawnY());
+            int z = (int) Math.floor(welcome.spawnZ());
+            client.sendPlaceBlock(new Packets.PlaceBlock(
+                    (byte) 0, x, y, z, BlockType.CASTING_TABLE.id, (byte) 0, false));
+            awaitPacket(client, Packets.BlockChange.class);
+
+            client.sendCastingOperation(new Packets.CastingOperation(
+                    (byte) 0, x, y, z, Packets.CAST_IMPRINT, BlockType.PLANKS.id,
+                    (byte) com.minecraftclone.world.tinkers.ToolPartType.PICK_HEAD.ordinal(), 1));
+            Packets.ContainerData imprinted = assertInstanceOf(Packets.ContainerData.class,
+                    awaitPacketMatching(client, Packets.ContainerData.class,
+                            p -> ((Packets.ContainerData) p).x() == x));
+            com.minecraftclone.world.CastingEntity state = new com.minecraftclone.world.CastingEntity(
+                    BlockType.CASTING_TABLE, false);
+            state.readFrom(new java.io.DataInputStream(new java.io.ByteArrayInputStream(imprinted.payload())));
+            assertEquals(com.minecraftclone.world.tinkers.ToolPartType.PICK_HEAD, state.castShape());
+
+            client.sendCastingOperation(new Packets.CastingOperation(
+                    (byte) 0, x, y, z, Packets.CAST_INSERT, BlockType.IRON_INGOT.id, (byte) -1, 3));
+            Packets.ContainerData inserted = assertInstanceOf(Packets.ContainerData.class,
+                    awaitPacketMatching(client, Packets.ContainerData.class,
+                            p -> ((Packets.ContainerData) p).x() == x));
+            state.readFrom(new java.io.DataInputStream(new java.io.ByteArrayInputStream(inserted.payload())));
+            assertEquals(BlockType.IRON_INGOT, state.inputType());
+            assertEquals(3, state.inputCount());
+
+            // A client-authored full snapshot cannot bypass the operation path.
+            state.insertMaterial(BlockType.IRON_INGOT, CastingEntity.TABLE_INPUT_CAP);
+            java.io.ByteArrayOutputStream forged = new java.io.ByteArrayOutputStream();
+            state.writeTo(new java.io.DataOutputStream(forged));
+            client.sendContainerData(new Packets.ContainerData(
+                    (byte) 0, x, y, z, CastingEntity.TABLE_TYPE, forged.toByteArray()));
+            client.sendContainerOpen((byte) 0, x, y, z);
+            Packets.ContainerData unchanged = assertInstanceOf(Packets.ContainerData.class,
+                    awaitPacketMatching(client, Packets.ContainerData.class,
+                            p -> ((Packets.ContainerData) p).x() == x));
+            state.readFrom(new java.io.DataInputStream(new java.io.ByteArrayInputStream(unchanged.payload())));
+            assertEquals(3, state.inputCount());
         }
     }
 
