@@ -9,6 +9,8 @@ import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.Chunk;
 import com.minecraftclone.world.DimensionType;
 import com.minecraftclone.world.Furnace;
+import com.minecraftclone.world.SteamBoilerEntity;
+import com.minecraftclone.world.SteamFurnaceEntity;
 import com.minecraftclone.world.ItemEntity;
 import com.minecraftclone.world.Mob;
 import com.minecraftclone.world.World;
@@ -993,7 +995,8 @@ public class GameServer implements AutoCloseable {
         return block == BlockType.CHEST || block == BlockType.BARREL || block == BlockType.FURNACE
                 || block == BlockType.PART_BUILDER || block == BlockType.TOOL_STATION
                 || block == BlockType.SMELTERY_CONTROLLER
-                || block == BlockType.CASTING_TABLE || block == BlockType.CASTING_BASIN;
+                || block == BlockType.CASTING_TABLE || block == BlockType.CASTING_BASIN
+                || block == BlockType.STEAM_BOILER || block == BlockType.STEAM_FURNACE;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -1007,6 +1010,8 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
             case com.minecraftclone.world.CastingEntity.TABLE_TYPE -> block == BlockType.CASTING_TABLE;
             case com.minecraftclone.world.CastingEntity.BASIN_TYPE -> block == BlockType.CASTING_BASIN;
+            case SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
+            case SteamFurnaceEntity.TYPE -> block == BlockType.STEAM_FURNACE;
             default -> false;
         };
     }
@@ -1067,6 +1072,8 @@ public class GameServer implements AutoCloseable {
                 yield world.blockEntityAt(open.x(), open.y(), open.z()) instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
             }
             case CASTING_TABLE, CASTING_BASIN -> world.getOrCreateCasting(open.x(), open.y(), open.z());
+            case STEAM_BOILER -> world.getOrCreateSteamBoiler(open.x(), open.y(), open.z());
+            case STEAM_FURNACE -> world.getOrCreateSteamFurnace(open.x(), open.y(), open.z());
             default -> null;
         };
         if (entity == null) return;

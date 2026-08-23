@@ -33,7 +33,7 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
  */
 public class TextureAtlas {
 
-    public static final int GRID = 16;
+    public static final int GRID = 32;
     public static final int TILE_PX = 16;
     public static final int ATLAS_PX = GRID * TILE_PX;
 
@@ -366,10 +366,10 @@ public class TextureAtlas {
         paintToolStation(image, 243, rnd);                // TOOL_STATION
 
         // --- Steam Age machines (244-247) ---
-        paintSteamBoiler(image, 244, rnd, false);         // STEAM_BOILER front (cold)
-        paintSteamBoiler(image, 245, rnd, true);          // STEAM_BOILER front (steaming)
-        paintSteamFurnace(image, 246, rnd, false);        // STEAM_FURNACE sides/top/bottom + front off
-        paintSteamFurnace(image, 247, rnd, true);         // STEAM_FURNACE front (active)
+        paintSteamBoiler(image, 256, rnd, false);         // STEAM_BOILER front (cold)
+        paintSteamBoiler(image, 257, rnd, true);          // STEAM_BOILER front (steaming)
+        paintSteamFurnace(image, 258, rnd, false);        // STEAM_FURNACE sides/top/bottom + front off
+        paintSteamFurnace(image, 259, rnd, true);         // STEAM_FURNACE front (active)
 
         return image;
     }

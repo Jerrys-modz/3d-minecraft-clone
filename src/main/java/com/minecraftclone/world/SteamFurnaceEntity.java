@@ -43,7 +43,8 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
     private int posX, posY, posZ;
     private boolean attached;
     private float boilerCheckTimer;
-    private SteamBoilerEntity boiler;
+    /** The adjacent boiler found on the last scan (or injected by tests). */
+    SteamBoilerEntity boiler;
 
     public SteamFurnaceEntity() {
     }
@@ -132,7 +133,9 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
 
     /** Any of the six face-adjacent blocks is a Steam Boiler entity? */
     private SteamBoilerEntity findBoiler() {
-        if (!attached || world == null) return null;
+        // Without a world context (tests, or an unregistered entity) keep the
+        // injected/cached boiler rather than forcing a re-scan.
+        if (!attached || world == null) return boiler;
         int[][] dirs = {
                 {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
         };

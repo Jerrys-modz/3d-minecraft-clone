@@ -784,13 +784,13 @@ public enum BlockType {
      * Coal-fired steam boiler: right-click to load solid fuel; while burning
      * it builds up a steam buffer that adjacent steam machines consume.
      */
-    STEAM_BOILER(506, true, false, 244, 244, 244, 244, 245, 0, 0),
+    STEAM_BOILER(506, true, false, 256, 256, 256, 256, 257, 0, 0),
 
     /**
      * Steam-powered furnace: furnace GUI and behavior, but its heat comes
      * from an adjacent, steaming boiler instead of fuel in the fuel slot.
      */
-    STEAM_FURNACE(507, true, false, 246, 246, 246, 246, 247, 0, 0);
+    STEAM_FURNACE(507, true, false, 258, 258, 258, 258, 259, 0, 0);
 
     public final short id;
     public final boolean solid;
