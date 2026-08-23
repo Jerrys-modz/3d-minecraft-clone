@@ -159,6 +159,10 @@ public class NetClient implements AutoCloseable {
         send(Packets.encodeContainerData(data));
     }
 
+    public void sendCastingOperation(Packets.CastingOperation operation) throws IOException {
+        send(Packets.encodeCastingOperation(operation));
+    }
+
     public void sendItemSpawn(Packets.ItemSpawn spawn) throws IOException {
         send(Packets.encodeItemSpawn(spawn));
     }

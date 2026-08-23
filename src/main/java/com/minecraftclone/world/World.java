@@ -373,6 +373,9 @@ public class World implements BlockAccessor {
             for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
                 if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                    if (es.entity() instanceof CastingEntity casting) {
+                        casting.attach(es.x(), es.y(), es.z(), this);
+                    }
                 }
             }
         } else {
@@ -649,6 +652,26 @@ public class World implements BlockAccessor {
         com.minecraftclone.world.tinkers.ToolStationEntity ts = new com.minecraftclone.world.tinkers.ToolStationEntity();
         blockEntities.put(blockKey(x, y, z), ts);
         return ts;
+    }
+
+    /**
+     * Returns the Casting Table / Basin entity at a position, creating and
+     * registering it on first use. The block at the cell decides which
+     * variant is built; an incompatible existing entity yields null.
+     */
+    public CastingEntity getOrCreateCasting(int x, int y, int z) {
+        BlockType block = getBlock(x, y, z);
+        boolean basin = block == BlockType.CASTING_BASIN;
+        if (block != BlockType.CASTING_TABLE && !basin) return null;
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof CastingEntity ce) {
+            ce.attach(x, y, z, this);
+            return ce;
+        }
+        CastingEntity ce = new CastingEntity(block, basin);
+        ce.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), ce);
+        return ce;
     }
 
     /** Forgets a block entity - call when its block is mined or removed. */
@@ -1067,6 +1090,9 @@ public class World implements BlockAccessor {
             for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
                 if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                    if (es.entity() instanceof CastingEntity casting) {
+                        casting.attach(es.x(), es.y(), es.z(), this);
+                    }
                     multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
                 }
             }

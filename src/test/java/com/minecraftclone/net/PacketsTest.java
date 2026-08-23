@@ -46,6 +46,7 @@ class PacketsTest {
         else if (packet instanceof Packets.PlayerDamage p) payload = Packets.encodePlayerDamage(p);
         else if (packet instanceof Packets.ContainerOpen p) payload = Packets.encodeContainerOpen(p.dimension(), p.x(), p.y(), p.z());
         else if (packet instanceof Packets.ContainerData p) payload = Packets.encodeContainerData(p);
+        else if (packet instanceof Packets.CastingOperation p) payload = Packets.encodeCastingOperation(p);
         else if (packet instanceof Packets.ItemAdd p) payload = Packets.encodeItemAdd(p);
         else if (packet instanceof Packets.ItemRemove p) payload = Packets.encodeItemRemove(p.id());
         else if (packet instanceof Packets.ItemPickup p) payload = Packets.encodeItemPickup(p.id());
@@ -296,6 +297,14 @@ class PacketsTest {
         assertEquals(7, out.x());
         assertEquals(-3, out.y());
         assertEquals(2, out.z());
+    }
+
+    @Test
+    void castingOperationRoundTrips() throws Exception {
+        Packets.CastingOperation in = new Packets.CastingOperation(
+                (byte) 2, -7, 41, 9, Packets.CAST_INSERT, BlockType.IRON_INGOT.id, (byte) -1, 12);
+        Packets.CastingOperation out = assertInstanceOf(Packets.CastingOperation.class, roundTrip(in));
+        assertEquals(in, out);
     }
 
     @Test

@@ -812,6 +812,8 @@ public class Main {
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
+            case com.minecraftclone.world.CastingEntity.TABLE_TYPE -> block == BlockType.CASTING_TABLE;
+            case com.minecraftclone.world.CastingEntity.BASIN_TYPE -> block == BlockType.CASTING_BASIN;
             default -> false;
         };
     }
@@ -845,6 +847,22 @@ public class Main {
                     (byte) currentDim[0].ordinal(), x, y, z, entity.type(), snapshotBlockEntity(entity)));
         } catch (IOException e) {
             netError = e.getMessage();
+        }
+    }
+
+    /** Sends a casting intent without publishing any client-authored entity state. */
+    private boolean requestCastingOperation(int x, int y, int z, byte operation,
+                                            BlockType material, int shapeOrdinal, int count) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return false;
+        try {
+            client.sendCastingOperation(new Packets.CastingOperation(
+                    (byte) currentDim[0].ordinal(), x, y, z, operation,
+                    material != null ? material.id : BlockType.AIR.id, (byte) shapeOrdinal, count));
+            return true;
+        } catch (IOException e) {
+            netError = e.getMessage();
+            return false;
         }
     }
 
@@ -3382,6 +3400,90 @@ public class Main {
                                 p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
                         byte dim = (byte) currentDim[0].ordinal();
                         sendBlockChange(dim, p.x, p.y, p.z, BlockType.LAVA_SOURCE, (byte) 0, false);
+                    } else if (noMob && targeted == BlockType.CASTING_TABLE || noMob && targeted == BlockType.CASTING_BASIN) {
+                        // Casting station: imprint casts with Tinkers parts,
+                        // feed materials, collect finished metal parts.
+                        com.minecraftclone.world.CastingEntity casting =
+                                world.getOrCreateCasting(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        boolean multiplayerCasting = netClient != null && netClient.isConnected();
+                        boolean castingChanged = false;
+                        if (casting == null) {
+                            showMessage(messages, "Nothing to cast here.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 1.5f);
+                        } else if (!heldStack.isEmpty() && heldStack.isTinkersPart()) {
+                            // Imprint the held part's shape as this table's cast.
+                            var part = heldStack.tinkersPart();
+                            String shapeName = part.shape.name();
+                            boolean imprinted = multiplayerCasting
+                                    ? requestCastingOperation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z,
+                                            Packets.CAST_IMPRINT, part.material, part.shape.ordinal(), 1)
+                                    : casting.imprintCast(heldStack);
+                            if (imprinted) {
+                                player.getInventory().setStack(selectedSlot[0], ItemStack.EMPTY);
+                                showMessage(messages, "Cast imprinted: " + shapeName,
+                                        new Vector4f(0.7f, 0.9f, 1f, 1f), 2.5f);
+                                handRenderer.triggerSwing();
+                                castingChanged = !multiplayerCasting;
+                            }
+                        } else if (!heldStack.isEmpty()
+                                && com.minecraftclone.world.tinkers.TinkersRegistry.isMaterial(heldItem)) {
+                            // Feed material into the buffer.
+                            int accepted = Math.min(casting.inputSpaceFor(heldItem), heldStack.count());
+                            boolean inserted = accepted > 0 && (!multiplayerCasting
+                                    ? casting.insertMaterial(heldItem, accepted) > 0
+                                    : requestCastingOperation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z,
+                                            Packets.CAST_INSERT, heldItem, -1, accepted));
+                            if (inserted) {
+                                player.getInventory().remove(heldItem, accepted);
+                                audio.play(SoundEvent.UI_CLICK);
+                                handRenderer.triggerSwing();
+                                castingChanged = !multiplayerCasting;
+                            } else {
+                                showMessage(messages, "The buffer is full or the type doesn't match.",
+                                        new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else if (heldStack.isEmpty() && casting.outputCount() > 0) {
+                            // Collect finished parts.
+                            List<ItemStack> ready = casting.outputsSnapshot();
+                            int accepted = 0;
+                            if (multiplayerCasting) {
+                                int emptySlots = 0;
+                                for (int i = 0; i < Inventory.SIZE; i++) {
+                                    if (player.getInventory().isEmpty(i)) emptySlots++;
+                                }
+                                accepted = Math.min(emptySlots, ready.size());
+                                if (accepted > 0 && requestCastingOperation(
+                                        hit.blockPos.x, hit.blockPos.y, hit.blockPos.z,
+                                        Packets.CAST_TAKE_OUTPUTS, null, -1, accepted)) {
+                                    for (int i = 0; i < accepted; i++) {
+                                        player.getInventory().addStack(ready.get(i));
+                                    }
+                                } else {
+                                    accepted = 0;
+                                }
+                            } else {
+                                for (ItemStack part : ready) {
+                                    if (!player.getInventory().addStack(part).isEmpty()) break;
+                                    accepted++;
+                                }
+                                if (accepted > 0) {
+                                    casting.takeOutputs(accepted);
+                                    castingChanged = true;
+                                }
+                            }
+                            if (accepted > 0) {
+                                audio.play(SoundEvent.ITEM_PICKUP);
+                                showMessage(messages, "Took cast parts.", new Vector4f(0.7f, 0.9f, 0.5f, 1f), 1.5f);
+                            }
+                        } else if (heldStack.isEmpty()) {
+                            showMessage(messages, casting.castShape() == null
+                                            ? "Right-click with a tool part to imprint a cast."
+                                            : (casting.outputCount() > 0 ? "Parts ready!" : "Feed me materials."),
+                                    new Vector4f(0.8f, 0.8f, 0.8f, 1f), 2f);
+                        }
+                        if (castingChanged) {
+                            world.markChunkModifiedByPlayer(World.worldToChunk(hit.blockPos.x),
+                                    World.worldToChunk(hit.blockPos.z));
+                        }
                     } else if (noMob && targeted.isBed()) {
                         // Right-click a bed: always set spawn in the overworld.
                         // Sleep (and skip to morning) still only happens at night, or
