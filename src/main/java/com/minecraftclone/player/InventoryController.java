@@ -538,7 +538,7 @@ public class InventoryController {
         }
 
         // Prefer the open container: ore/fuel into a furnace, anything into a
-        // chest, items into empty crafting-grid cells.
+        // chest, smeltables into a smeltery, items into empty crafting-grid cells.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
             int target = -1;
             if (Smelting.isSmeltable(t)) {
@@ -547,6 +547,17 @@ public class InventoryController {
                 target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_FUEL;
             }
             if (target >= 0) {
+                int moved = moveToFurnaceSlot(target, t, count);
+                count -= moved;
+                if (count == 0) {
+                    inventory.setSlot(slotId, null, 0);
+                    return;
+                }
+            }
+        } else if (gui.kind() == ContainerGui.Kind.SMELTERY) {
+            // Smeltables go to the input slot; anything else hops as usual.
+            if (Smelting.isSmeltable(t)) {
+                int target = ContainerGui.CONTAINER_START + com.minecraftclone.world.multiblock.SmelteryEntity.SLOT_INPUT;
                 int moved = moveToFurnaceSlot(target, t, count);
                 count -= moved;
                 if (count == 0) {
@@ -617,14 +628,21 @@ public class InventoryController {
 
     /** Moves up to {@code count} of {@code t} into a furnace slot, topping up a same-type stack; returns items moved. */
     private int moveToFurnaceSlot(int slotId, BlockType t, int count) {
-        com.minecraftclone.world.Furnace f = gui.furnace();
+        StorageContainer target = gui.container();
+        if (target == null) return 0;
         int fs = slotId - ContainerGui.CONTAINER_START;
-        int max = Inventory.maxStack(t);
-        int current = f.countOf(fs);
-        if (f.typeOf(fs) != null && f.typeOf(fs) != t) return 0;
-        int space = max - current;
+        int current = target.countOf(fs);
+        if (target.typeOf(fs) != null && target.typeOf(fs) != t) return 0;
+        // The smeltery's input holds far more than a normal stack (999);
+        // every other container slot keeps its normal stack limit.
+        int capacity = gui.kind() == ContainerGui.Kind.SMELTERY
+                && fs == com.minecraftclone.world.multiblock.SmelteryEntity.SLOT_INPUT
+                ? com.minecraftclone.world.multiblock.SmelteryEntity.MAX_INPUT_COUNT
+                : Inventory.maxStack(t);
+        int space = capacity - current;
+        if (space <= 0) return 0;
         int add = Math.min(space, count);
-        f.setSlot(fs, t, current + add);
+        target.setSlot(fs, t, current + add);
         return add;
     }
 

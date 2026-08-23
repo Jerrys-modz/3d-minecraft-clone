@@ -318,8 +318,54 @@ public class ItemTextures {
             case TINKERS_PART -> paintPlaceholder(0x808080);
             case TINKERS_TOOL -> paintPlaceholder(0x404040);
 
+            // Buckets: empty iron pail vs one holding glowing lava.
+            case IRON_BUCKET -> paintBucket(false);
+            case LAVA_BUCKET -> paintBucket(true);
+
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
+    }
+
+    /**
+     * An iron bucket: a tapered pail with a handle. When full, the top is
+     * filled with a glowing lava surface instead of the hollow interior.
+     */
+    private static BufferedImage paintBucket(boolean full) {
+        BufferedImage img = blank();
+        int iron  = 0xD8D8D8;
+        int rim   = shade(iron, 0.65f);
+        int lavaA = 0xE8641E;
+        int lavaB = 0xF8A83C;
+        // Tapered body: narrower at the bottom.
+        for (int y = 5; y <= 13; y++) {
+            int l = y - 2;
+            int r = SIZE - 3 - (y - 5) / 4 + 1;
+            int left  = Math.max(y < 8 ? 5 : 6, 16 - (y - 5) - 4);
+            left = 4 + (y - 5) / 3;
+            r = 15 - (y - 5) / 3;
+            for (int x = left; x <= r; x++) {
+                boolean edge = (y == 13 || x == left || x == r);
+                img.setRGB(x, y, 0xFF000000 | (edge ? rim : iron));
+            }
+        }
+        // Rim across the top.
+        for (int x = 4; x <= 11; x++) img.setRGB(x, 5, 0xFF000000 | rim);
+        // Handle: an arc over the top.
+        drawThickLine(img, 4, 5, 7, 2, rim);
+        drawThickLine(img, 7, 2, 11, 2, rim);
+        drawThickLine(img, 11, 2, 14, 5, rim);
+        if (full) {
+            // Molten surface with two bright swirl tones, painted over the
+            // bucket's iron interior pixels.
+            for (int y = 6; y <= 8; y++) {
+                for (int x = 5; x <= 10; x++) {
+                    if ((img.getRGB(x, y) & 0xFFFFFF) == (iron & 0xFFFFFF)) {
+                        img.setRGB(x, y, 0xFF000000 | ((x + y) % 3 == 0 ? lavaB : lavaA));
+                    }
+                }
+            }
+        }
+        return img;
     }
 
     private static BufferedImage blank() {

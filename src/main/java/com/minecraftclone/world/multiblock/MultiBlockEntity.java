@@ -26,6 +26,8 @@ import java.io.IOException;
 public abstract class MultiBlockEntity implements BlockEntity {
 
     protected MultiBlockInstance instance;
+    /** The world this structure lives in - attached on formation (used by per-tick block scans). */
+    protected com.minecraftclone.world.World world;
     /** True while the multi-block structure is formed. Set to false on deform. */
     protected boolean formed = true;
 
@@ -37,6 +39,11 @@ public abstract class MultiBlockEntity implements BlockEntity {
     public void reform(MultiBlockInstance instance) {
         this.instance = instance;
         this.formed = true;
+    }
+
+    /** Gives the entity a world reference so its tick can scan blocks (called on formation). */
+    public void attachWorld(com.minecraftclone.world.World world) {
+        this.world = world;
     }
 
     /** Which block this entity lives in — the controller block type. */

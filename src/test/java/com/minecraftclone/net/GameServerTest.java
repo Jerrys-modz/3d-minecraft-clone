@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -423,8 +424,106 @@ class GameServerTest {
     }
 
     @Test
-    void sleepVoteSkipsNightWhenEveryoneIsInBed() throws Exception {
-        server.setTimeOfDayForTesting(0f); // midnight - night
+    void serverConfigPersistsAndApplies() throws Exception {
+        Path cfgFile = saveDir.resolve(ServerConfig.FILE_NAME);
+        // Round-trip: save with custom values, load them back.
+        ServerConfig written = new ServerConfig();
+        written.setPort(12345);
+        written.setMaxPlayers(3);
+        written.setPvp(false);
+        written.setMotd("Welcome, traveler");
+        written.save(cfgFile);
+        ServerConfig read = ServerConfig.load(cfgFile);
+        assertEquals(12345, read.getPort());
+        assertEquals(3, read.getMaxPlayers());
+        assertFalse(read.isPvpEnabled());
+        assertEquals("Welcome, traveler", read.getMotd());
+
+        // A missing file yields defaults; a malformed line is ignored.
+        assertEquals(25565, ServerConfig.load(saveDir.resolve("nope.properties")).getPort());
+        Files.writeString(cfgFile, "port=notanumber\npvp=maybe\nmotd=hi");
+        ServerConfig lenient = ServerConfig.load(cfgFile);
+        assertEquals(25565, lenient.getPort()); // bad number -> default
+        assertTrue(lenient.isPvpEnabled());      // unparseable boolean -> default true
+        assertEquals("hi", lenient.getMotd());
+    }
+
+    @Test
+    void dedicatedServerHonorsConfigBansPvpAndMotd() throws Exception {
+        ServerConfig cfg = new ServerConfig();
+        cfg.setPort(0); // ephemeral: never collide with anything on 25565
+        cfg.setMaxPlayers(1);
+        cfg.setPvp(false);
+        cfg.setMotd("Welcome to the test server");
+        try (GameServer configured = new GameServer(cfg, new WorldGenSettings(),
+                new WorldGenSettings().resolveSeed(), Files.createTempDirectory("mcloneserver2"))) {
+            configured.start();
+
+            // MOTD arrives as a chat line from "Server".
+            try (NetClient a = new NetClient("127.0.0.1", configured.getPort())) {
+                a.sendJoin("Alice");
+                assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+                Packets.ChatMsg motd = assertInstanceOf(Packets.ChatMsg.class,
+                        awaitPacketMatching(a, Packets.ChatMsg.class,
+                                p -> ((Packets.ChatMsg) p).name().equals("Server")));
+                assertEquals("Welcome to the test server", motd.text());
+            }
+
+            // max-players=1: the second concurrent join is rejected as full.
+            // (Give the server a beat to process the previous client's disconnect.)
+            Thread.sleep(500);
+            try (NetClient a = new NetClient("127.0.0.1", configured.getPort())) {
+                a.sendJoin("Alice");
+                assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+                try (NetClient b = new NetClient("127.0.0.1", configured.getPort())) {
+                    b.sendJoin("Bob");
+                    Packets.Reject reject = assertInstanceOf(Packets.Reject.class,
+                            awaitPacketMatching(b, Packets.Reject.class, p -> true));
+                    assertTrue(reject.reason().contains("full"));
+                }
+            }
+
+            // Room for more players again - the config is read live per join.
+            cfg.setMaxPlayers(8);
+
+            // PvP off: an in-reach swing relays no damage.
+            try (NetClient a = new NetClient("127.0.0.1", configured.getPort());
+                 NetClient b = new NetClient("127.0.0.1", configured.getPort())) {
+                a.sendJoin("Alice");
+                assertInstanceOf(Packets.Welcome.class, awaitPacket(a, Packets.Welcome.class));
+                b.sendJoin("Bob");
+                assertInstanceOf(Packets.Welcome.class, awaitPacket(b, Packets.Welcome.class));
+                Packets.PlayerJoined bobJoin = assertInstanceOf(Packets.PlayerJoined.class,
+                        awaitPacketMatching(a, Packets.PlayerJoined.class,
+                                p -> ((Packets.PlayerJoined) p).name().equals("Bob")));
+                b.sendMove(new Packets.Move(0.5f, 70f, 0.5f, 0f, 0f, true, false, false));
+                Thread.sleep(200);
+                a.sendPlayerAttack(bobJoin.id(), 5f);
+                long deadline = System.currentTimeMillis() + 1200;
+                while (System.currentTimeMillis() < deadline) {
+                    Object p = b.poll();
+                    if (p instanceof Packets.PlayerDamage d) {
+                        throw new AssertionError("pvp=false still relayed player damage");
+                    }
+                    Thread.sleep(10);
+                }
+            }
+
+            // Bans: persisted, checked at join, liftable.
+            assertTrue(configured.ban("Griefer"));
+            assertFalse(configured.isBanned("Innocent"));
+            try (NetClient g = new NetClient("127.0.0.1", configured.getPort())) {
+                g.sendJoin("Griefer");
+                Packets.Reject banned = assertInstanceOf(Packets.Reject.class,
+                        awaitPacketMatching(g, Packets.Reject.class, p -> true));
+                assertTrue(banned.reason().contains("banned"));
+            }
+            assertTrue(configured.unban("Griefer"));
+        }
+    }
+
+    @Test
+    void sleepVoteSkipsNightWhenEveryoneIsInBed() throws Exception {        server.setTimeOfDayForTesting(0f); // midnight - night
         try (NetClient a = new NetClient("127.0.0.1", server.getPort());
              NetClient b = new NetClient("127.0.0.1", server.getPort())) {
             a.sendJoin("Alice");

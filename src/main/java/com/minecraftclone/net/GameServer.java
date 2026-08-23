@@ -117,7 +117,12 @@ public class GameServer implements AutoCloseable {
     private final World[] worlds;
     private final WorldGenSettings settings;
     private final long seed;
+    private final Path saveDir;
     private final Path playersDir;
+    /** Operator settings (port, player cap, pvp, motd) - dedicated servers load server.properties. */
+    private final ServerConfig config;
+    /** One banned player name per line, persisted next to the worlds. */
+    private final java.util.Set<String> bannedNames = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final float spawnX;
     private final float spawnZ;
 
@@ -138,6 +143,12 @@ public class GameServer implements AutoCloseable {
     private final java.util.Set<Integer> knownMobIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
     /** Item ids already announced with ITEM_ADD; anything vanishing gets a REMOVE. */
     private final java.util.Set<Integer> knownItemIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /**
+     * Operator actions (kick/ban/unban) queued by the console thread and
+     * drained on the tick thread, so all client-state mutation stays on one
+     * thread as the Client contract requires.
+     */
+    private final ConcurrentLinkedQueue<Runnable> adminCommands = new ConcurrentLinkedQueue<>();
     private long lastTimeSync = System.nanoTime();
 
     /** The authoritative world for a client's current dimension. */
@@ -147,10 +158,41 @@ public class GameServer implements AutoCloseable {
         return worlds[dim];
     }
 
+    /**
+     * Creates a game server using the specified listening port and world settings.
+     *
+     * @param port    the TCP port on which the server listens
+     * @param settings the world-generation settings
+     * @param seed    the world seed
+     * @param saveDir the directory for persisted world and server data
+     */
     public GameServer(int port, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
+        this(configForPort(port), settings, seed, saveDir);
+    }
+
+    /** A config carrying just a port (used by the legacy port-based constructor). */
+    private static ServerConfig configForPort(int port) {
+        ServerConfig cfg = new ServerConfig();
+        cfg.setPort(port);
+        return cfg;
+    }
+
+    /**
+     * Initializes the server, its dimension worlds, persisted bans, spawn location, and listening socket.
+     *
+     * @param config  server configuration, including the listening port
+     * @param settings world-generation settings
+     * @param seed    seed used to initialize the worlds
+     * @param saveDir directory containing world and player data
+     * @throws IOException if the server socket cannot be opened
+     */
+    public GameServer(ServerConfig config, WorldGenSettings settings, long seed, Path saveDir) throws IOException {
+        this.config = config;
         this.settings = settings;
         this.seed = seed;
+        this.saveDir = saveDir;
         this.playersDir = saveDir.resolve("players");
+        loadBans();
         this.worlds = new World[DimensionType.values().length];
         for (DimensionType dim : DimensionType.values()) {
             World w = new World(seed, settings, null, saveDir, dim, true);
@@ -168,13 +210,28 @@ public class GameServer implements AutoCloseable {
         float[] spawn = findSpawn();
         this.spawnX = spawn[0];
         this.spawnZ = spawn[1];
-        this.serverSocket = new ServerSocket(port);
+        this.serverSocket = new ServerSocket(config.getPort());
     }
 
+    /**
+     * Gets the local port used by the server socket.
+     *
+     * @return the server's local port
+     */
     public int getPort() {
         return serverSocket.getLocalPort();
     }
 
+    /** The operator config this server was built from (pvp flag, motd, player cap). */
+    public ServerConfig getConfig() {
+        return config;
+    }
+
+    /**
+     * Gets the seed used to generate the server worlds.
+     *
+     * @return the world-generation seed
+     */
     public long getSeed() {
         return seed;
     }
@@ -205,6 +262,12 @@ public class GameServer implements AutoCloseable {
         tickThread.start();
     }
 
+    /**
+     * Accepts incoming client connections and starts their reader threads.
+     *
+     * <p>New connections are subject to the pending-connection limit and join timeout.
+     * Connections exceeding the limit are closed immediately.</p>
+     */
     private void acceptLoop() {
         while (running) {
             try {
@@ -213,7 +276,7 @@ public class GameServer implements AutoCloseable {
                 // A peer that connects but never speaks holds a thread forever
                 // without this; once joined, clients talk every tick anyway.
                 socket.setSoTimeout(JOIN_TIMEOUT_MILLIS);
-                if (pending.size() >= MAX_PENDING_CONNECTIONS) {
+                if (pending.size() >= Math.max(config.getMaxPlayers() * 2, MAX_PENDING_CONNECTIONS)) {
                     // Too many half-open connections: refuse immediately rather
                     // than queueing another thread behind them.
                     socket.close();
@@ -267,6 +330,7 @@ public class GameServer implements AutoCloseable {
             lastTick = now;
 
             processInbox();
+            runAdminCommands();
 
             // Server-authoritative day/night drives hostile mob spawning.
             dayNightCycle.update(dt);
@@ -472,6 +536,14 @@ public class GameServer implements AutoCloseable {
         }
     }
 
+    /**
+     * Accepts a client join request, initializes the player's state, and sends
+     * the player their welcome data and current world state.
+     *
+     * @param client the client requesting to join
+     * @param join   the join request containing the player's requested name
+     * @throws IOException if sending join data fails
+     */
     private void handleJoin(Client client, Packets.Join join) throws IOException {
         if (client.joined) {
             // A second JOIN on the same connection would reassign its id and
@@ -479,7 +551,7 @@ public class GameServer implements AutoCloseable {
             send(client, Packets.encodeReject("Already joined."));
             return;
         }
-        if (getPlayerCount() >= MAX_PLAYERS) {
+        if (getPlayerCount() >= config.getMaxPlayers()) {
             send(client, Packets.encodeReject("Server is full."));
             disconnect(client);
             return;
@@ -488,6 +560,12 @@ public class GameServer implements AutoCloseable {
         client.id = nextId++;
         String name = join.name().trim();
         if (!isSafePlayerName(name)) name = "Player-" + client.id;
+        if (isBanned(name)) {
+            send(client, Packets.encodeReject("You are banned from this server."));
+            System.out.println("Rejected banned player: " + name);
+            disconnect(client);
+            return;
+        }
         client.name = name;
         client.joined = true;
         pending.remove(client);
@@ -553,10 +631,22 @@ public class GameServer implements AutoCloseable {
                 System.err.println("Could not read player file for " + name + ": " + e.getMessage());
             }
         }
+
+        // Message of the day: delivered as a chat line from "Server" so it
+        // lands in the same place every other message does.
+        if (!config.getMotd().isEmpty()) {
+            send(client, Packets.encodeChatMsg(new Packets.ChatMsg(0, "Server", config.getMotd())));
+        }
         System.out.println(name + " joined (" + getPlayerCount() + " online)");
     }
 
-    /** Player names must be filename-safe: letters, digits, underscore and dash only. */
+    /**
+     * Validates whether a player name uses an allowed format.
+     *
+     * @param name the player name to validate
+     * @return {@code true} if the name contains 1 to 16 letters, digits, underscores,
+     *         or dashes; {@code false} otherwise
+     */
     private static boolean isSafePlayerName(String name) {
         if (name.isEmpty() || name.length() > 16) return false;
         for (int i = 0; i < name.length(); i++) {
@@ -564,6 +654,122 @@ public class GameServer implements AutoCloseable {
             if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) return false;
         }
         return true;
+    }
+
+    // ------------------------------------------------------------------
+    // Operator administration (dedicated-server console)
+    /**
+     * Gets the path to the persisted banned-player list.
+     *
+     * @return the path to the banned-player file
+     */
+
+    private Path banFile() {
+        return saveDir.resolve("banned-players.txt");
+    }
+
+    /** Loads the persisted ban list (one name per line); a missing file means nobody is banned. */
+    private void loadBans() {
+        Path file = banFile();
+        if (!java.nio.file.Files.isRegularFile(file)) return;
+        try {
+            for (String line : java.nio.file.Files.readAllLines(file)) {
+                String name = line.trim();
+                if (!name.isEmpty()) bannedNames.add(name.toLowerCase(java.util.Locale.ROOT));
+            }
+        } catch (IOException e) {
+            System.err.println("Could not read banned-players.txt: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Persists the current banned-player names to the server's ban file.
+     */
+    private void saveBans() {
+        try {
+            java.nio.file.Files.createDirectories(saveDir);
+            java.nio.file.Files.write(banFile(),
+                    bannedNames.stream().sorted().toList(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            System.err.println("Could not write banned-players.txt: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Checks whether a player name appears on the ban list.
+     *
+     * @param name the player name to check
+     * @return {@code true} if the name is banned, {@code false} otherwise
+     */
+    public boolean isBanned(String name) {
+        return name != null && bannedNames.contains(name.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /**
+     * Persists a name ban and disconnects the matching online player.
+     *
+     * @return {@code true} if the ban was newly added, {@code false} otherwise
+     */
+    public boolean ban(String name) {
+        if (!isSafePlayerName(name)) return false;
+        boolean added = bannedNames.add(name.toLowerCase(java.util.Locale.ROOT));
+        saveBans();
+        kick(name);
+        return added;
+    }
+
+    /** Lifts a ban; returns true when the name had been banned. */
+    public boolean unban(String name) {
+        boolean removed = name != null && bannedNames.remove(name.toLowerCase(java.util.Locale.ROOT));
+        if (removed) saveBans();
+        return removed;
+    }
+
+    /**
+     * Provides the names of all banned players in sorted order.
+     *
+     * @return a sorted list of banned player names
+     */
+    public List<String> getBannedNames() {
+        return bannedNames.stream().sorted().toList();
+    }
+
+    /**
+     * Disconnects the joined player whose name matches the supplied name,
+     * ignoring letter case.
+     *
+     * @param name the player name to search for
+     * @return {@code true} if a matching player was disconnected, {@code false} otherwise
+     */
+    /**
+     * Runs operator actions queued from the console thread on the tick
+     * thread, keeping all client-state mutation single-threaded.
+     */
+    private void runAdminCommands() {
+        Runnable cmd;
+        while ((cmd = adminCommands.poll()) != null) {
+            cmd.run();
+        }
+    }
+
+    public boolean kick(String name) {
+        for (Client c : clients.values()) {
+            if (c.joined && c.name.equalsIgnoreCase(name)) {
+                // Queue the actual disconnect for the tick thread: Client
+                // state is only written there, and the console thread must
+                // not race it.
+                adminCommands.add(() -> {
+                    try {
+                        send(c, Packets.encodeReject("Kicked by operator."));
+                    } catch (IOException ignored) {
+                    }
+                    disconnect(c);
+                });
+                System.out.println("Kicked " + c.name);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -767,13 +973,14 @@ public class GameServer implements AutoCloseable {
     }
 
     /**
-     * The block-entity types that sync over the wire. The smeltery is a
-     * multi-block structure whose entity is formed by structure detection on
-     * each side - not synced yet.
+     * The block-entity types that sync over the wire. All formed containers
+     * are included; the smeltery's entity only exists while its structure is
+     * intact, so an unformed controller simply has nothing to snapshot.
      */
     private static boolean isSyncedContainer(BlockType block) {
         return block == BlockType.CHEST || block == BlockType.BARREL || block == BlockType.FURNACE
-                || block == BlockType.PART_BUILDER || block == BlockType.TOOL_STATION;
+                || block == BlockType.PART_BUILDER || block == BlockType.TOOL_STATION
+                || block == BlockType.SMELTERY_CONTROLLER;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -784,6 +991,7 @@ public class GameServer implements AutoCloseable {
             case Furnace.TYPE -> block == BlockType.FURNACE;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
+            case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
             default -> false;
         };
     }
@@ -801,6 +1009,12 @@ public class GameServer implements AutoCloseable {
     private static BlockEntity restoreEntity(World world, int x, int y, int z, String type, byte[] payload)
             throws IOException {
         BlockEntity existing = world.blockEntityAt(x, y, z);
+        // A smeltery entity only exists while its structure is formed - never
+        // create one from the wire at a bare controller block, or a ghost
+        // unformed entity would squat on the position.
+        if (existing == null && com.minecraftclone.world.multiblock.SmelteryEntity.TYPE.equals(type)) {
+            return null;
+        }
         if (existing != null && existing.type().equals(type)) {
             try (DataInputStream in = new DataInputStream(new java.io.ByteArrayInputStream(payload))) {
                 existing.readFrom(in);
@@ -832,6 +1046,11 @@ public class GameServer implements AutoCloseable {
             case FURNACE -> world.getOrCreateFurnace(open.x(), open.y(), open.z());
             case PART_BUILDER -> world.getOrCreatePartBuilder(open.x(), open.y(), open.z());
             case TOOL_STATION -> world.getOrCreateToolStation(open.x(), open.y(), open.z());
+            case SMELTERY_CONTROLLER -> {
+                // Formed by structure detection, not getOrCreate - absent when
+                // the shell is broken or hasn't been detected yet.
+                yield world.blockEntityAt(open.x(), open.y(), open.z()) instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+            }
             default -> null;
         };
         if (entity == null) return;
@@ -945,14 +1164,11 @@ public class GameServer implements AutoCloseable {
     private static final float MAX_PICKUP_DISTANCE_SQ = 3f * 3f;
 
     /**
-     * A player swung at another player: validate reach and swing cadence (the
-     * same clamp/cooldown mob attacks get - one client never dictates how much
-     * damage another takes), then relay the hit to the target, whose own
-     * client applies it to its local health. Death/respawn then flows through
-     * the existing server path.
+     * Processes a player attack against another player when PvP and attack validation permit it.
      */
     private void handlePlayerAttack(Client client, Packets.PlayerAttack attack) throws IOException {
         if (!client.joined) return;
+        if (!config.isPvpEnabled()) return; // server.properties: pvp=false
         float damage = attack.damage();
         if (!Float.isFinite(damage) || damage <= 0f) return;
         damage = Math.min(damage, MAX_ATTACK_DAMAGE);

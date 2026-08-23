@@ -212,6 +212,9 @@ public final class Crafting {
         // Tool Station: iron ingots on top, planks frame body
         shaped3x3("III", "PZP", "PPP", BlockType.TOOL_STATION, 1);
 
+        // Iron bucket: three ingots in a V (transports lava for the smeltery)
+        shaped3x3("I.I", ".I.", "...", BlockType.IRON_BUCKET, 1);
+
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.
 

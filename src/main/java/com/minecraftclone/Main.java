@@ -23,6 +23,7 @@ import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.net.GameServer;
 import com.minecraftclone.net.NetClient;
 import com.minecraftclone.net.Packets;
+import com.minecraftclone.net.ServerConfig;
 import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
@@ -810,8 +811,41 @@ public class Main {
             case Furnace.TYPE -> block == BlockType.FURNACE;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
+            case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
             default -> false;
         };
+    }
+
+    /**
+     * The smeltery entity whose structure contains the given cell (e.g. a
+     * Seared Tank shell block), or null when no formed smeltery covers it.
+     */
+    private static com.minecraftclone.world.multiblock.SmelteryEntity smelteryContainingAt(
+            int x, int y, int z, World world) {
+        var instance = world.multiBlockContaining(x, y, z);
+        if (instance == null) return null;
+        return world.blockEntityAt(instance.controllerX, instance.controllerY, instance.controllerZ)
+                instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+    }
+
+    /**
+     * Pushes one cell's block-entity state to the server (multiplayer) so
+     * everyone converges after a local mutation like pouring lava into a tank.
+     */
+    private void pushContainerSnapshot(int x, int y, int z) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        World world = activeWorlds != null && currentDim[0].ordinal() < activeWorlds.length
+                ? activeWorlds[currentDim[0].ordinal()] : null;
+        if (world == null) return;
+        BlockEntity entity = world.blockEntityAt(x, y, z);
+        if (entity == null || !typeMatchesBlock(entity.type(), world.getBlock(x, y, z))) return;
+        try {
+            client.sendContainerData(new Packets.ContainerData(
+                    (byte) currentDim[0].ordinal(), x, y, z, entity.type(), snapshotBlockEntity(entity)));
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
     }
 
     /**
@@ -1366,34 +1400,87 @@ public class Main {
         new Main().run();
     }
 
-    /** Hosts a headless world that clients connect to; runs until interrupted. */
+    /**
+     * Starts a headless multiplayer server and processes operator commands.
+     *
+     * @param args command-line arguments; the second argument, when present, overrides the configured port
+     */
     private static void runDedicatedServer(String[] args) {
-        int port = 25565;
-        if (args.length >= 2) {
-            try {
-                port = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                System.err.println("Bad port '" + args[1] + "', using " + port);
-            }
-        }
         String saveEnv = System.getenv("MCCLONE_SAVE_DIR");
         Path saveRoot = saveEnv != null ? Paths.get(saveEnv).getParent() : Paths.get("saves");
         Path serverSaveDir = saveRoot.resolve("multiplayer_server");
+
+        // server.properties lives next to the worlds; a first run writes one
+        // with defaults so operators have something to edit.
+        ServerConfig config = ServerConfig.load(serverSaveDir.resolve(ServerConfig.FILE_NAME));
+        if (!java.nio.file.Files.isRegularFile(serverSaveDir.resolve(ServerConfig.FILE_NAME))) {
+            config.save(serverSaveDir.resolve(ServerConfig.FILE_NAME));
+        }
+        // The CLI port (if given) wins over the file.
+        if (args.length >= 2) {
+            try {
+                config.setPort(Integer.parseInt(args[1]));
+            } catch (NumberFormatException e) {
+                System.err.println("Bad port '" + args[1] + "', using " + config.getPort());
+            }
+        }
         try {
             WorldGenSettings settings = new WorldGenSettings();
             long seed = settings.resolveSeed();
-            GameServer server = new GameServer(port, settings, seed, serverSaveDir);
+            GameServer server = new GameServer(config, settings, seed, serverSaveDir);
             server.start();
             System.out.println("Multiplayer server running on port " + server.getPort()
                     + " (seed " + seed + ", save dir " + serverSaveDir + ")");
-            System.out.println("Press Ctrl+C to stop.");
-            Thread.currentThread().join(); // block until interrupted
+            System.out.println("Commands: list | kick <name> | ban <name> | unban <name> | banlist | help. Press Ctrl+C to stop.");
+            runServerConsole(server);
         } catch (Exception e) {
             System.err.println("Server failed: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
+    /**
+     * Reads operator commands from the console until EOF: `list`, `kick`,
+     * `ban`, `unban`, `banlist`. Runs on the main thread - the server's own
+     * threads keep the world running regardless. When stdin closes (nohup,
+     * systemd, docker without -i) we park the main thread forever instead of
+     * letting the JVM die now that every other thread is a daemon.
+     */
+    private static void runServerConsole(GameServer server) throws IOException, InterruptedException {
+        java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
+        String line;
+        while ((line = in.readLine()) != null) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            String[] parts = trimmed.split("\\s+", 2);
+            String cmd = parts[0].toLowerCase(java.util.Locale.ROOT);
+            String arg = parts.length > 1 ? parts[1].trim() : "";
+            switch (cmd) {
+                case "list" -> System.out.println("Online (" + server.getPlayerCount() + "): "
+                        + String.join(", ", server.getPlayerNames()));
+                case "kick" -> System.out.println(server.kick(arg) ? "Kicked " + arg
+                        : "No online player named '" + arg + "'");
+                case "ban" -> System.out.println(server.ban(arg) ? "Banned " + arg
+                        : (server.isBanned(arg) ? "'" + arg + "' is already banned" : "Invalid name '" + arg + "'"));
+                case "unban" -> System.out.println(server.unban(arg) ? "Unbanned " + arg
+                        : "'" + arg + "' was not banned");
+                case "banlist" -> System.out.println(server.getBannedNames().isEmpty()
+                        ? "Nobody is banned" : "Banned: " + String.join(", ", server.getBannedNames()));
+                case "help" -> System.out.println("Commands: list | kick <name> | ban <name> | unban <name> | banlist");
+                default -> System.out.println("Unknown command '" + cmd + "'. Try 'help'.");
+            }
+        }
+        // Stdin is closed (or was never interactive): keep serving players and
+        // stop accepting console input rather than exiting the JVM.
+        System.out.println("Console closed - server keeps running (Ctrl+C to stop).");
+        Thread.currentThread().join();
+    }
+
+    /**
+     * Runs the client application, including initialization, input processing, world
+     * simulation, rendering, networking, automated screenshot tests, persistence, and
+     * resource cleanup.
+     */
     private void run() {
         Window window = new Window("3D Minecraft Clone", 1280, 720);
         window.init();
@@ -3219,6 +3306,82 @@ public class Main {
                                 world.getOrCreateToolStation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.SMELTERY_CONTROLLER) {
+                        // Right-click a formed Smeltery controller to open its gui
+                        // (input slot, heat flame, melt arrow, output). An unformed
+                        // structure has no block entity to open.
+                        com.minecraftclone.world.multiblock.SmelteryEntity smeltery =
+                                world.blockEntityAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z)
+                                instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+                        if (smeltery == null) {
+                            showMessage(messages, "The smeltery is not formed yet.",
+                                    new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            activeGui[0] = new ContainerGui(ContainerGui.Kind.SMELTERY, player.getInventory(),
+                                    craftingGrid, smeltery);
+                            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.IRON_BUCKET && targeted.isLava()) {
+                        // Empty bucket on still lava: scoop it up (flowing lava
+                        // can't be picked, Minecraft-style).
+                        if (targeted == BlockType.LAVA_FLOW) {
+                            showMessage(messages, "Only still lava can be scooped.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            player.getInventory().remove(BlockType.IRON_BUCKET, 1);
+                            player.getInventory().add(BlockType.LAVA_BUCKET, 1);
+                            world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                            audio.play(SoundEvent.UI_CLICK);
+                            handRenderer.triggerSwing();
+                            syncBlockToServer((byte) currentDim[0].ordinal(), world,
+                                    hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
+                            showMessage(messages, "Scooped lava.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.LAVA_BUCKET && targeted == BlockType.SEARED_TANK) {
+                        // Full bucket on a Seared Tank: find the formed smeltery
+                        // this tank belongs to and pour the lava in as fuel.
+                        com.minecraftclone.world.multiblock.SmelteryEntity smeltery =
+                                smelteryContainingAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, world);
+                        if (smeltery == null) {
+                            showMessage(messages, "This tank isn't part of a formed smeltery.",
+                                    new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else if (smeltery.lavaFuel() + com.minecraftclone.world.multiblock.SmelteryEntity.LAVA_SECONDS
+                                > com.minecraftclone.world.multiblock.SmelteryEntity.MAX_FUEL) {
+                            // Require room for the WHOLE bucket - a partially
+                            // accepted pour would waste the lava.
+                            showMessage(messages, "The smeltery's tanks are full.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            smeltery.addFuel(com.minecraftclone.world.multiblock.SmelteryEntity.LAVA_SECONDS);
+                            player.getInventory().remove(BlockType.LAVA_BUCKET, 1);
+                            player.getInventory().add(BlockType.IRON_BUCKET, 1);
+                            handRenderer.triggerSwing();
+                            audio.playBlockSound(SoundMaterial.of(BlockType.LAVA), BlockAction.PLACE,
+                                    hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                            // The entity lives at the CONTROLLER, not the tank -
+                            // resolve the structure's controller cell for sync.
+                            var instance = world.multiBlockContaining(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            if (instance != null) {
+                                pushContainerSnapshot(instance.controllerX, instance.controllerY, instance.controllerZ);
+                            }
+                            int cx = World.worldToChunk(hit.blockPos.x);
+                            int cz = World.worldToChunk(hit.blockPos.z);
+                            world.markChunkModifiedByPlayer(cx, cz);
+                            saveOpenWorld(worlds, currentWorldDir[0], player, currentDim[0], selectedSlot[0]);
+                            showMessage(messages, "Poured lava into the smeltery.",
+                                    new Vector4f(0.98f, 0.55f, 0.12f, 1f), 2f);
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.LAVA_BUCKET
+                            && mode.canPlace() && world.getBlock(hit.placePos.x, hit.placePos.y, hit.placePos.z) == BlockType.AIR) {
+                        // Full bucket on open ground: place a lava source.
+                        Vector3i p = hit.placePos;
+                        world.setBlock(p.x, p.y, p.z, BlockType.LAVA_SOURCE);
+                        player.getInventory().remove(BlockType.LAVA_BUCKET, 1);
+                        player.getInventory().add(BlockType.IRON_BUCKET, 1);
+                        handRenderer.triggerSwing();
+                        audio.playBlockSound(SoundMaterial.of(BlockType.LAVA), BlockAction.PLACE,
+                                p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
+                        byte dim = (byte) currentDim[0].ordinal();
+                        sendBlockChange(dim, p.x, p.y, p.z, BlockType.LAVA_SOURCE, (byte) 0, false);
                     } else if (noMob && targeted.isBed()) {
                         // Right-click a bed: always set spawn in the overworld.
                         // Sleep (and skip to morning) still only happens at night, or
