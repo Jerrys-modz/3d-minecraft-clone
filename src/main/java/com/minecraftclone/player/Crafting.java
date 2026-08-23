@@ -90,6 +90,7 @@ public final class Crafting {
         // Steam Age: bronze machinery
         CHARS.put('F', BlockType.FURNACE);            // F = Furnace block
         CHARS.put('E', BlockType.BRONZE_INGOT);       // E = bronzE ingot
+        CHARS.put('Q', BlockType.STEEL_INGOT);        // Q = Steel ingot
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -234,6 +235,13 @@ public final class Crafting {
 
         // Iron Steam Pipe: high-pressure tier, 1.5x throughput.
         shaped3x3(".I.", ".I.", ".I.", BlockType.STEAM_PIPE_IRON, 6);
+
+        // Steel Ingot: 4 iron + 2 coal compressed under extreme heat.
+        // Placeholder until a Blast Furnace machine exists.
+        shaped3x3("ICI", ".C.", "ICI", BlockType.STEEL_INGOT, 1);
+
+        // Steel Steam Pipe: top Steam Age tier, 2x throughput.
+        shaped3x3(".Q.", ".Q.", ".Q.", BlockType.STEAM_PIPE_STEEL, 6);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.

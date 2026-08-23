@@ -144,4 +144,17 @@ class SteamPipeNetworkTest {
         var net = w.pipeNetworks().networkAt(PipeType.STEAM, 0, 64, 2);
         assertEquals(SteamPipeTier.WOOD, net.minTier); // weakest link wins
     }
+
+    @Test
+    void steelPipeRunConnectsAndSmelts() {
+        World w = newWorld();
+        SteamBoilerEntity boiler = placeBoiler(w, 0, 6);
+        for (int z = 5; z >= 1; z--) w.setBlock(0, 64, z, BlockType.STEAM_PIPE_STEEL);
+        SteamFurnaceEntity sf = w.getOrCreateSteamFurnace(0, 64, 0);
+        sf.attach(0, 64, 0, w);
+        sf.setSlot(SteamFurnaceEntity.SLOT_INPUT, BlockType.IRON_ORE, 3);
+        for (int i = 0; i < 120; i++) { boiler.tick(0.25f); sf.tick(0.25f); }
+        assertEquals(3, sf.countOf(SteamFurnaceEntity.SLOT_OUTPUT),
+                "steel pipe run should conduct steam like any other");
+    }
 }

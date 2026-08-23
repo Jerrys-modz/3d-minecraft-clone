@@ -373,6 +373,7 @@ public class TextureAtlas {
         paintSteamPipe(image, 260, rnd, 0xB87333, 0xFF6E4420, 0xB87333);   // STEAM_PIPE_BRONZE
         paintSteamPipe(image, 261, rnd, 0x7B5A2D, 0xFF4A3418, 0x7B5A2D);   // STEAM_PIPE_WOOD
         paintSteamPipe(image, 262, rnd, 0xD8D8D8, 0xFF6A6A6A, 0xA8A8A8);   // STEAM_PIPE_IRON
+        paintSteamPipe(image, 263, rnd, 0xC8C8E8, 0xFF5060A0, 0x8888B8);   // STEAM_PIPE_STEEL
 
         return image;
     }

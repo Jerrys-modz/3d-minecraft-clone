@@ -810,7 +810,16 @@ public enum BlockType {
      * Iron steam pipe: high-pressure tier, conducts at 1.5x rate. Built
      * from iron ingots; the upgrade path past bronze.
      */
-    STEAM_PIPE_IRON(510, true, false, 262, 262, 262);
+    STEAM_PIPE_IRON(510, true, false, 262, 262, 262),
+
+    /** Steel ingot: forged from iron + coal at extreme heat; the gateway to higher-tier machinery. */
+    STEEL_INGOT(511, 0),
+
+    /**
+     * Steel steam pipe: top Steam Age tier, conducts at 2x rate.
+     * Built from steel ingots.
+     */
+    STEAM_PIPE_STEEL(512, true, false, 263, 263, 263);
 
     public final short id;
     public final boolean solid;

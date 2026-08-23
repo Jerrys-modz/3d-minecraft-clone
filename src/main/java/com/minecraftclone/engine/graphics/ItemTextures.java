@@ -321,6 +321,7 @@ public class ItemTextures {
             // Steam Age: bronze material chain.
             case BRONZE_DUST -> paintDustOre(0xCD7F32);
             case BRONZE_INGOT -> paintIngot(0xCD7F32);
+            case STEEL_INGOT -> paintIngot(0xC8C8D8);
 
             // Buckets: empty iron pail vs one holding glowing lava.
             case IRON_BUCKET -> paintBucket(false);
