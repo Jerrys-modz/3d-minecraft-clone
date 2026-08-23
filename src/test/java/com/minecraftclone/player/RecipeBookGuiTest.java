@@ -7,6 +7,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -96,6 +97,18 @@ class RecipeBookGuiTest {
         assertEquals(before, book.index().size());
         assertEquals("", book.query());
         assertEquals(idsBefore.size(), book.bookmarkIds().size());
+    }
+
+    @Test
+    void rebuildIndexFromLiveBookmarksPreservesIds() {
+        String id = book.index().get(5).bookmarkId;
+        assertTrue(book.toggleBookmarkById(id));
+
+        book.rebuildIndex();
+
+        assertEquals(Set.of(id), book.bookmarkIds());
+        assertEquals(id, book.index().get(0).bookmarkId);
+        assertTrue(book.index().get(0).bookmarked);
     }
 
     @Test

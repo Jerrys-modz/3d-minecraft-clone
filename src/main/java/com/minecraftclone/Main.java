@@ -2646,7 +2646,7 @@ public class Main {
                     recipeBook.select(idx);
                     audio.play(SoundEvent.UI_CLICK);
                 }
-                if (input.isKeyJustPressed(GLFW_KEY_B)) {
+                if (typed.isEmpty() && input.isKeyJustPressed(GLFW_KEY_B)) {
                     if (recipeBook.toggleBookmarkOnSelection()) {
                         recipeBook.saveBookmarks(bookmarkFile);
                     }

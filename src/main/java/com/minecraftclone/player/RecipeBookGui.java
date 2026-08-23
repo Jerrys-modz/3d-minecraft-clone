@@ -106,8 +106,11 @@ public final class RecipeBookGui {
 
     /** As {@link #rebuildIndex()}, keeping the given set of bookmarked ids. */
     public void rebuildIndex(Set<String> bookmarkIds) {
+        Set<String> retainedBookmarks = bookmarkIds == null
+                ? Set.of()
+                : new HashSet<>(bookmarkIds);
         bookmarks.clear();
-        if (bookmarkIds != null) bookmarks.addAll(bookmarkIds);
+        bookmarks.addAll(retainedBookmarks);
         index.clear();
         buildCraftingEntries();
         buildFurnaceEntries();
