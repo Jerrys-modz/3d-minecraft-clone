@@ -3,6 +3,7 @@ package com.minecraftclone.player;
 import com.minecraftclone.world.BlockType;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -364,6 +365,37 @@ public final class Crafting {
     }
 
     /**
+     * Every registered recipe across all grid sizes, in registration order
+     * (2x2 first, then 3x3, then 5x5) - the recipe book's index.
+     */
+    public static List<Recipe> allRecipes() {
+        List<Recipe> all = new ArrayList<>(RECIPES_2x2.size() + RECIPES_3x3.size() + RECIPES_5x5.size());
+        all.addAll(RECIPES_2x2);
+        all.addAll(RECIPES_3x3);
+        all.addAll(RECIPES_5x5);
+        return all;
+    }
+
+    /** The grid size a recipe was registered for: 2, 3 or 5. */
+    public static int gridSizeOf(Recipe recipe) {
+        if (RECIPES_2x2.contains(recipe)) return 2;
+        if (RECIPES_5x5.contains(recipe)) return 5;
+        return 3;
+    }
+
+    /**
+     * Every recipe that produces {@code output} across all grid sizes (the
+     * recipe book's detail view). May be empty.
+     */
+    public static List<Recipe> recipesFor(BlockType output) {
+        List<Recipe> matches = new ArrayList<>();
+        for (Recipe recipe : allRecipes()) {
+            if (recipe.output() == output) matches.add(recipe);
+        }
+        return Collections.unmodifiableList(matches);
+    }
+
+    /**
      * Finds the recipe matching the given 2x2 grid (row-major, null = empty), or null.
      * Enforces that the grid is exactly 4 cells (2x2).
      *
@@ -371,8 +403,7 @@ public final class Crafting {
      * @return the matching recipe, or null if no recipe matches
      * @throws IllegalArgumentException if grid.length != 4
      */
-    public static Recipe match(BlockType[] grid) {
-        if (grid == null || grid.length != 4) {
+    public static Recipe match(BlockType[] grid) {        if (grid == null || grid.length != 4) {
             throw new IllegalArgumentException("Grid must be a 2x2 grid (4 cells), got " + (grid == null ? "null" : grid.length));
         }
         return match2x2(grid);

@@ -35,6 +35,7 @@ import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerSave;
 import com.minecraftclone.player.PlayerStats;
+import com.minecraftclone.player.RecipeBookGui;
 import com.minecraftclone.player.StorageContainer;
 import com.minecraftclone.player.OreDrops;
 import com.minecraftclone.util.AABB;
@@ -1594,6 +1595,9 @@ public class Main {
         boolean[] creativeScrollbarDrag = {false};
         StringBuilder creativeSearch = new StringBuilder();
         boolean[] creativeSearchFocused = {false};
+        // JEI-style recipe book screen.
+        boolean[] recipeBookOpen = {false};
+        final RecipeBookGui recipeBook = new RecipeBookGui();
         int[] hoveredSlot = {-1};
         boolean[] mainMenuOpen = {true};
         boolean[] mainSettingsOpen = {false}; // settings page opened from the main menu
@@ -2560,6 +2564,23 @@ public class Main {
             // Suppress gameplay shortcuts (like inventory toggle) when the settings menu
             // is waiting to capture a gamepad button press for a binding.
             if (!(menuOpen[0] && bindingAction[0] >= 0)) {
+                // Recipe book toggle (R by default): opens over gameplay; closes
+                // with R/E/Esc. Blocked while a rebinding capture is in progress
+                // or another fullscreen-ish screen is up.
+                boolean recipeKey = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.RECIPE_BOOK));
+                if (recipeKey && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0] && started[0]) {
+                    if (recipeBookOpen[0]) {
+                        recipeBookOpen[0] = false;
+                        audio.play(SoundEvent.UI_CLOSE);
+                    } else if (!menuOpen[0]) {
+                        recipeBook.rebuildIndex();
+                        recipeBook.setQuery("");
+                        recipeBookOpen[0] = true;
+                        audio.play(SoundEvent.UI_OPEN);
+                    }
+                    window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
+                }
+
                 boolean inventoryKey = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY));
                 if (inventoryKey && !(creativeOpen[0] && creativeSearchFocused[0])) {
                     if (inventoryOpen[0]) {
@@ -2583,6 +2604,34 @@ public class Main {
                     }
                     window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
                     input.resetMouseDelta();
+                }
+            }
+
+            if (recipeBookOpen[0]) {
+                // JEI-style recipe book: type to filter the index, scroll to
+                // browse, click an entry to open/close its detail card.
+                float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+
+                String typed = input.consumeTypedChars();
+                if (!typed.isEmpty()) {
+                    recipeBook.setQuery(recipeBook.query() + typed);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE)) {
+                    String q = recipeBook.query();
+                    if (!q.isEmpty()) recipeBook.setQuery(q.substring(0, q.length() - 1));
+                }
+                double scroll = input.getScrollDelta();
+                if (scroll != 0) {
+                    float next = recipeBook.scroll() - (float) scroll * 0.34f;
+                    int count = recipeBook.entries().size();
+                    recipeBook.setScroll(Math.max(0f, Math.min(next, Math.max(0f,
+                            (int) Math.ceil(count / 9.0) - hud.catalogVisibleRows()))));
+                }
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+                    int idx = hud.recipeBookItemAt(logicalX, logicalY, recipeBook);
+                    recipeBook.select(idx);
+                    audio.play(SoundEvent.UI_CLICK);
                 }
             }
 
@@ -3131,7 +3180,7 @@ public class Main {
 
             // Block selection via number keys / scroll wheel - the hotbar is the
             // first 9 inventory slots (only in gameplay).
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0] && !recipeBookOpen[0]) {
                 for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
                     if (input.isKeyJustPressed(GLFW_KEY_1 + i)) {
                         selectedSlot[0] = i;
@@ -3144,7 +3193,7 @@ public class Main {
             }
 
             if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]
-                    && !hudEditing && !chatOpen[0]) {
+                    && !hudEditing && !chatOpen[0] && !recipeBookOpen[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 // A cell can hold an overlay decoration inside its primary block (e.g.
@@ -3820,6 +3869,12 @@ public class Main {
                 hud.renderFrostOverlay(player.getStats().getColdness());
             }
             hud.renderMessages(messages, window.getAspectRatio());
+            // JEI-style recipe book overlay.
+            if (recipeBookOpen[0]) {
+                float rbLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                float rbLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                hud.renderRecipeBook(recipeBook, atlas, itemTextures, player.getDurability(), window.getAspectRatio(), rbLx, rbLy);
+            }
             // Tab: online player list (multiplayer, gameplay screens only).
             boolean tabListVisible = started[0] && netClient != null && input.isKeyDown(GLFW_KEY_TAB)
                     && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
