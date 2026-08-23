@@ -15,6 +15,7 @@ import com.minecraftclone.engine.gui.ContainerGui;
 import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.CreativeCatalog;
+import com.minecraftclone.player.RecipeBookGui;
 import com.minecraftclone.player.Inventory;
 import com.minecraftclone.player.InventoryController;
 import com.minecraftclone.player.ItemStack;
@@ -2173,7 +2174,7 @@ public class Hud {
     }
 
     /** Center (logical x, y) of catalog item {@code index} (row-major, 9 per row), shifted by {@code scrollRows}. */
-    static float[] catalogItemCenter(int index, float scrollRows) {
+    public static float[] catalogItemCenter(int index, float scrollRows) {
         int r = index / CAT_COLUMNS, c = index % CAT_COLUMNS;
         float gridW = CAT_COLUMNS * CAT_SLOT + (CAT_COLUMNS - 1) * CAT_GAP;
         float left = -gridW / 2f + CAT_SLOT / 2f;
@@ -2185,7 +2186,7 @@ public class Hud {
         return -1f + HOTBAR_BOTTOM_MARGIN + HOTBAR_SLOT_SIZE + HOTBAR_PADDING + CAT_HOTBAR_GAP;
     }
 
-    static int catalogVisibleRows() {
+    public static int catalogVisibleRows() {
         return Math.max(1, (int) Math.floor((CAT_GRID_TOP_Y - catalogClipBottomY()) / CAT_STEP) + 1);
     }
 
@@ -2193,7 +2194,7 @@ public class Hud {
         return (itemCount + CAT_COLUMNS - 1) / CAT_COLUMNS;
     }
 
-    static float catalogMaxScroll(int itemCount) {
+    public static float catalogMaxScroll(int itemCount) {
         return Math.max(0f, catalogRowCount(itemCount) - catalogVisibleRows());
     }
 
@@ -2204,12 +2205,12 @@ public class Hud {
         return scrollRows;
     }
 
-    static boolean catalogItemVisible(int index, float scrollRows) {
+    public static boolean catalogItemVisible(int index, float scrollRows) {
         float y = catalogItemCenter(index, scrollRows)[1];
         return y <= CAT_GRID_TOP_Y + 1e-4f && y >= catalogClipBottomY() - 1e-4f;
     }
 
-    static float catalogGridRightX() {
+    public static float catalogGridRightX() {
         float gridW = CAT_COLUMNS * CAT_SLOT + (CAT_COLUMNS - 1) * CAT_GAP;
         return gridW / 2f;
     }
@@ -2679,6 +2680,195 @@ public class Hud {
         }
         org.lwjgl.opengl.GL11.glEnable(org.lwjgl.opengl.GL11.GL_DEPTH_TEST);
         lineShader.unbind();
+    }
+
+    /**
+     * Draws the JEI-style recipe book: a searchable index of every crafting
+     * and furnace recipe. Left side mirrors the creative catalog's grid;
+     * selecting an entry opens a detail card on the right with its
+     * ingredients layout and the station that crafts it.
+     */
+    public void renderRecipeBook(RecipeBookGui book, TextureAtlas atlas, ItemTextures itemTextures,
+                                 ToolDurability durability, float aspectRatio, float cursorLx, float cursorLy) {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
+
+        // Full-screen dim behind everything.
+        float full = aspectRatio;
+        float[] dim = {
+                -full, -1, 0, full, -1, 0, full, 1, 0,
+                -full, -1, 0, full, 1, 0, -full, 1, 0,
+        };
+        inventoryPanel.upload(dim);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        lineShader.setUniform("color", new Vector4f(0f, 0f, 0f, 0.62f));
+        inventoryPanel.render();
+        lineShader.unbind();
+
+        List<RecipeBookGui.Entry> entries = book.entries();
+
+        // Title + hint.
+        drawCenteredText("Recipe Book", 0f, 0.90f, 0.034f, WHITE);
+        drawCenteredText("Type to search - click an item to see how it's made",
+                0f, 0.855f, 0.024f, new Vector4f(0.65f, 0.65f, 0.7f, 1f));
+
+        // Search box (top center).
+        float sbLeft = -0.28f, sbRight = 0.28f, sbTop = 0.80f, sbBot = 0.755f;
+        slotBgVerts.clear();
+        addQuad3(slotBgVerts, sbLeft, sbBot, sbRight, sbTop);
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        inventorySlotBg.upload(slotBgVerts.toArray());
+        lineShader.setUniform("color", new Vector4f(0.10f, 0.10f, 0.12f, 0.92f));
+        inventorySlotBg.render();
+        lineShader.unbind();
+        String q = book.query();
+        drawTextAt(q.isEmpty() ? "Search recipes..." : q, sbLeft + 0.02f, sbBot + 0.008f, 0.026f,
+                q.isEmpty() ? new Vector4f(0.55f, 0.55f, 0.55f, 1f) : WHITE);
+
+        // Index grid (same geometry as the creative catalog).
+        int itemCount = entries.size();
+        float scroll = clampCatalogScroll(book.scroll(), itemCount);
+        float half = CAT_SLOT / 2f - 0.005f;
+
+        guiVerts.clear();
+        guiInds.clear();
+        for (int i = 0; i < itemCount; i++) {
+            if (!catalogItemVisible(i, scroll)) continue;
+            float[] c = catalogItemCenter(i, scroll);
+            renderGuiSlot(c[0], c[1], half);
+        }
+        flushGuiQuads();
+
+        beginSlotBatch();
+        for (int i = 0; i < itemCount; i++) {
+            if (!catalogItemVisible(i, scroll)) continue;
+            float[] c = catalogItemCenter(i, scroll);
+            addSlotIcon(c[0], c[1], half, entries.get(i).preview, itemTextures, atlas, durability);
+        }
+        flushBlockBatch(atlas);
+        text.render(hudTransform, WHITE);
+
+        // Bookmark stars on bookmarked visible entries (drawn as gold quads).
+        lineShader.bind();
+        lineShader.setUniform("projection", identity);
+        lineShader.setUniform("view", identity);
+        lineShader.setUniform("model", hudTransform);
+        for (int i = 0; i < itemCount; i++) {
+            if (!catalogItemVisible(i, scroll)) continue;
+            if (!entries.get(i).bookmarked) continue;
+            float[] c = catalogItemCenter(i, scroll);
+            float sx = c[0] - half + 0.004f;
+            float sy = c[1] + half - 0.018f;
+            float s = 0.014f;
+            float[] star = {
+                    sx, sy - s * 2f, 0, sx + s, sy - s * 2f, 0, sx + s, sy - s, 0,
+                    sx, sy - s * 2f, 0, sx + s, sy - s, 0, sx, sy - s, 0,
+            };
+            inventorySlotBg.upload(star);
+            lineShader.setUniform("color", new Vector4f(1f, 0.82f, 0.25f, 1f));
+            inventorySlotBg.render();
+        }
+        lineShader.unbind();
+
+        renderCatalogScrollbar(itemCount, scroll);
+
+        if (itemCount == 0) {
+            drawCenteredText("No matching recipes", 0f, CAT_GRID_TOP_Y - 0.01f, 0.028f,
+                    new Vector4f(0.7f, 0.7f, 0.7f, 1f));
+        }
+
+        // Hover highlight over the index grid.
+        int hover = creativeItemAt(cursorLx, cursorLy, itemCount, scroll);
+        if (hover >= 0) {
+            float[] c = catalogItemCenter(hover, scroll);
+            inventoryHover.upload(outlineLines(c[0], c[1], CAT_SLOT / 2f + 0.004f));
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            lineShader.setUniform("color", new Vector4f(1f, 1f, 1f, 0.9f));
+            glLineWidth(2f);
+            inventoryHover.render();
+            lineShader.unbind();
+        }
+
+        // Detail card (right side) for the selected entry.
+        RecipeBookGui.Entry sel = book.selectedEntry();
+        if (sel != null) {
+            float iconHalf = CAT_SLOT / 2f;
+            float step = iconHalf * 2f + 0.02f;
+            int rows = sel.gridCols > 0
+                    ? (sel.ingredients.size() + sel.gridCols - 1) / sel.gridCols : 1;
+            float cardH = Math.max(0.72f, 0.46f + rows * step);
+            float dx0 = catalogGridRightX() + 0.10f;
+            float dx1 = Math.min(aspectRatio * 0.95f, dx0 + 0.85f);
+            float dy1 = CAT_GRID_TOP_Y + 0.30f;
+            float dy0 = dy1 - cardH;
+            slotBgVerts.clear();
+            addQuad3(slotBgVerts, dx0, dy0, dx1, dy1);
+            lineShader.bind();
+            lineShader.setUniform("projection", identity);
+            lineShader.setUniform("view", identity);
+            lineShader.setUniform("model", hudTransform);
+            inventorySlotBg.upload(slotBgVerts.toArray());
+            lineShader.setUniform("color", new Vector4f(0.08f, 0.08f, 0.11f, 0.94f));
+            inventorySlotBg.render();
+            lineShader.unbind();
+
+            float pad = 0.05f;
+            drawTextLeft(sel.title, dx0 + pad, dy1 - 0.06f, 0.030f, WHITE, aspectRatio);
+            drawTextLeft("Made at: " + sel.station, dx0 + pad, dy1 - 0.115f, 0.026f,
+                    new Vector4f(0.65f, 0.85f, 1f, 1f), aspectRatio);
+            drawTextLeft(sel.bookmarked ? "* Bookmarked (B to remove)" : "Press B to bookmark",
+                    dx1 - pad - 0.24f, dy1 - 0.06f, 0.022f,
+                    sel.bookmarked ? new Vector4f(1f, 0.82f, 0.25f, 1f)
+                            : new Vector4f(0.55f, 0.55f, 0.6f, 1f), aspectRatio);
+
+            beginSlotBatch();
+            // Big output preview top-right of the card.
+            addSlotIcon(dx1 - pad - iconHalf * 1.4f, dy1 - 0.16f, iconHalf * 1.4f,
+                    sel.preview, itemTextures, atlas, durability);
+
+            // Ingredients laid out by the entry's preferred layout.
+            float iy = dy1 - 0.30f;
+            drawTextLeft(sel.yieldText.startsWith("Smelt") || sel.yieldText.startsWith("Melt")
+                    ? "Input:" : "Ingredients:", dx0 + pad, iy, 0.024f, WHITE, aspectRatio);
+            for (int i = 0; i < sel.ingredients.size(); i++) {
+                ItemStack ing = sel.ingredients.get(i);
+                if (ing.isEmpty()) continue;
+                float cx = dx0 + pad + iconHalf + (sel.gridCols > 0 ? (i % sel.gridCols) * step : i * step);
+                float cy = iy - 0.09f - (sel.gridCols > 0 ? (i / sel.gridCols) * step : 0f);
+                addSlotIcon(cx, cy, iconHalf, ing, itemTextures, atlas, durability);
+            }
+            flushBlockBatch(atlas);
+            text.render(hudTransform, WHITE);
+
+            // Yield line below the last ingredient row.
+            float lastRow = sel.gridCols > 0 ? (sel.ingredients.size() - 1) / sel.gridCols : 0;
+            drawTextLeft(sel.yieldText, dx0 + pad,
+                    iy - 0.10f - lastRow * step - 0.03f, 0.026f,
+                    new Vector4f(0.7f, 0.9f, 0.5f, 1f), aspectRatio);
+        }
+
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+    }
+
+    /**
+     * Index into the recipe book's visible grid under the given cursor, or -1
+     * (mirrors {@link #creativeItemAt}).
+     */
+    public int recipeBookItemAt(float logicalX, float logicalY, RecipeBookGui book) {
+        int itemCount = book.entries().size();
+        float scroll = clampCatalogScroll(book.scroll(), itemCount);
+        return creativeItemAt(logicalX, logicalY, itemCount, scroll);
     }
 
     /**
