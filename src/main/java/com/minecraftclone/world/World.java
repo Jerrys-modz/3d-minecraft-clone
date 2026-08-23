@@ -375,6 +375,8 @@ public class World implements BlockAccessor {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
                     if (es.entity() instanceof CastingEntity casting) {
                         casting.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamFurnaceEntity furnace) {
+                        furnace.attach(es.x(), es.y(), es.z(), this);
                     }
                 }
             }
@@ -686,7 +688,10 @@ public class World implements BlockAccessor {
     /** Returns the Steam Furnace entity at a position, creating + attaching it on first use. */
     public SteamFurnaceEntity getOrCreateSteamFurnace(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
-        if (existing instanceof SteamFurnaceEntity sf) return sf;
+        if (existing instanceof SteamFurnaceEntity sf) {
+            sf.attach(x, y, z, this);
+            return sf;
+        }
         SteamFurnaceEntity sf = new SteamFurnaceEntity();
         sf.attach(x, y, z, this);
         blockEntities.put(blockKey(x, y, z), sf);
@@ -716,6 +721,9 @@ public class World implements BlockAccessor {
             blockEntities.put(blockKey(x, y, z), entity);
         }
         entity.readFrom(in);
+        if (entity instanceof SteamFurnaceEntity furnace) {
+            furnace.attach(x, y, z, this);
+        }
         return entity;
     }
 
@@ -1111,6 +1119,8 @@ public class World implements BlockAccessor {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
                     if (es.entity() instanceof CastingEntity casting) {
                         casting.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamFurnaceEntity furnace) {
+                        furnace.attach(es.x(), es.y(), es.z(), this);
                     }
                     multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
                 }

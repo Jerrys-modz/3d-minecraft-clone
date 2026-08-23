@@ -92,7 +92,7 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
         BlockType output = Smelting.outputFor(input);
         if (output == null) return false;
         BlockType held = types[SLOT_OUTPUT];
-        return held == null || held == output;
+        return held == null || (held == output && counts[SLOT_OUTPUT] < Inventory.maxStack(output));
     }
 
     @Override
@@ -105,7 +105,10 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
             boiler = findBoiler();
         }
         boolean hot = boiler != null && boiler.steamSeconds() > 0f && canSmelt();
-        if (!hot) return;
+        if (!hot) {
+            lastSteamFraction = 0f;
+            return;
+        }
 
         // Pull exactly the time we need out of the boiler's steam buffer.
         float draw = Math.min(dt, boiler.steamSeconds());

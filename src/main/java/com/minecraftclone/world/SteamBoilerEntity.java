@@ -151,11 +151,11 @@ public final class SteamBoilerEntity implements BlockEntity, StorageContainer, P
     @Override
     public void setSlot(int slot, BlockType type, int count) {
         if (slot != SLOT_FUEL) return;
-        if (!Furnace.isFuel(type)) return; // fuel slot only accepts real fuels
         if (type == null || count <= 0) {
             fuelType = null;
             fuelCount = 0;
         } else {
+            if (!Furnace.isFuel(type)) return; // fuel slot only accepts real fuels
             fuelType = type;
             fuelCount = count;
         }

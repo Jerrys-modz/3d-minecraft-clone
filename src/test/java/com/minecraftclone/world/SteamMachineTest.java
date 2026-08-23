@@ -1,11 +1,14 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.world.gen.WorldGenSettings;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -56,6 +59,17 @@ class SteamMachineTest {
     }
 
     @Test
+    void clearingBoilerFuelSlotRemovesFuel() {
+        SteamBoilerEntity boiler = new SteamBoilerEntity();
+        boiler.setSlot(SteamBoilerEntity.SLOT_FUEL, BlockType.COAL, 4);
+
+        boiler.setSlot(SteamBoilerEntity.SLOT_FUEL, null, 0);
+
+        assertNull(boiler.typeOf(SteamBoilerEntity.SLOT_FUEL));
+        assertEquals(0, boiler.countOf(SteamBoilerEntity.SLOT_FUEL));
+    }
+
+    @Test
     void steamFurnaceSmeltsWhileSteamIsDrawn() {
         SteamBoilerEntity boiler = new SteamBoilerEntity();
         SteamFurnaceEntity sf = new SteamFurnaceEntity();
@@ -88,6 +102,33 @@ class SteamMachineTest {
     }
 
     @Test
+    void fullOutputPreventsSteamSmelting() {
+        SteamFurnaceEntity sf = new SteamFurnaceEntity();
+        sf.setSlot(SteamFurnaceEntity.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        sf.setSlot(SteamFurnaceEntity.SLOT_OUTPUT, BlockType.IRON_INGOT, 64);
+
+        assertFalse(sf.canSmelt());
+    }
+
+    @Test
+    void losingSteamHeatClearsHudGauge() {
+        SteamBoilerEntity boiler = new SteamBoilerEntity();
+        boiler.addFuel(BlockType.COAL, 1);
+        boiler.tick(1f);
+        SteamFurnaceEntity sf = new SteamFurnaceEntity();
+        sf.boiler = boiler;
+        sf.setSlot(SteamFurnaceEntity.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        sf.tick(0.25f);
+        assertTrue(sf.isHot());
+
+        sf.setSlot(SteamFurnaceEntity.SLOT_INPUT, null, 0);
+        sf.tick(0.25f);
+
+        assertFalse(sf.isHot());
+        assertEquals(0f, sf.burnFraction());
+    }
+
+    @Test
     void boilerPersistsFuelAndSteam() throws Exception {
         SteamBoilerEntity b = new SteamBoilerEntity();
         b.addFuel(BlockType.COAL, 9);
@@ -117,5 +158,30 @@ class SteamMachineTest {
         assertEquals(BlockType.IRON_ORE, loaded.typeOf(SteamFurnaceEntity.SLOT_INPUT));
         assertEquals(2, loaded.countOf(SteamFurnaceEntity.SLOT_INPUT));
         assertNull(loaded.typeOf(SteamFurnaceEntity.SLOT_OUTPUT));
+    }
+
+    @Test
+    void reloadedSteamFurnaceFindsBoilerAndResumesSmelting(@TempDir Path saveDir) {
+        WorldGenSettings settings = new WorldGenSettings();
+        World original = new World(123L, settings, null, saveDir, DimensionType.OVERWORLD, true);
+        original.ensureChunk(0, 0);
+        original.setBlock(1, 64, 1, BlockType.STEAM_BOILER);
+        original.setBlock(2, 64, 1, BlockType.STEAM_FURNACE);
+        SteamBoilerEntity boiler = original.getOrCreateSteamBoiler(1, 64, 1);
+        SteamFurnaceEntity furnace = original.getOrCreateSteamFurnace(2, 64, 1);
+        boiler.addFuel(BlockType.COAL, 1);
+        boiler.tick(SteamFurnaceEntity.SMELT_SECONDS + 1f);
+        furnace.setSlot(SteamFurnaceEntity.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        original.saveAllModified();
+        original.destroy();
+
+        World reloaded = new World(123L, settings, null, saveDir, DimensionType.OVERWORLD, true);
+        reloaded.ensureChunk(0, 0);
+        reloaded.tickBlockEntities(SteamFurnaceEntity.SMELT_SECONDS);
+
+        SteamFurnaceEntity loaded = reloaded.getOrCreateSteamFurnace(2, 64, 1);
+        assertEquals(BlockType.IRON_INGOT, loaded.typeOf(SteamFurnaceEntity.SLOT_OUTPUT));
+        assertEquals(1, loaded.countOf(SteamFurnaceEntity.SLOT_OUTPUT));
+        reloaded.destroy();
     }
 }

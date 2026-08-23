@@ -816,6 +816,8 @@ public class Main {
             case Chest.TYPE -> block == BlockType.CHEST;
             case Barrel.TYPE -> block == BlockType.BARREL;
             case Furnace.TYPE -> block == BlockType.FURNACE;
+            case com.minecraftclone.world.SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
+            case com.minecraftclone.world.SteamFurnaceEntity.TYPE -> block == BlockType.STEAM_FURNACE;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
@@ -3379,6 +3381,9 @@ public class Main {
                                 player.getInventory().remove(heldItem, accepted);
                                 audio.play(SoundEvent.UI_CLICK);
                                 handRenderer.triggerSwing();
+                                pushContainerSnapshot(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                                world.markChunkModifiedByPlayer(World.worldToChunk(hit.blockPos.x),
+                                        World.worldToChunk(hit.blockPos.z));
                             } else {
                                 showMessage(messages, "The boiler is full.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
                             }
