@@ -581,6 +581,10 @@ public class Main {
                 client.close();
                 return;
             }
+            // Publish the name first: once netClient is visible, the main loop
+            // can start rendering the Tab list - it must never show a stale
+            // name from a previous session.
+            localPlayerName = playerName;
             netClient = client;
             netError = null;
         } catch (Exception e) {
@@ -784,6 +788,8 @@ public class Main {
     private float netPlayerSyncTimer;
     /** Last shown "players in bed" counts, so identical SLEEP_STATE packets don't re-message. */
     private final int[] lastSleepShown = {-1, -1};
+    /** This client's player name (from the multiplayer connect screen). */
+    private String localPlayerName = "Player";
     /** The active hotbar slot (shared with helpers like snapshot capture). */
     private final int[] selectedSlot = {0};
 
@@ -1199,6 +1205,10 @@ public class Main {
             } else if (packet instanceof Packets.PlayerDamage dmg) {
                 if (world != null && player != null) {
                     player.getStats().damage(dmg.amount());
+                    // Shove the local player away from whoever landed the hit.
+                    if (dmg.knockX() != 0f || dmg.knockZ() != 0f) {
+                        player.knockback(dmg.knockX(), dmg.knockZ(), 9f);
+                    }
                     audio.play(SoundEvent.HURT);
                 }
             }
@@ -3810,6 +3820,18 @@ public class Main {
                 hud.renderFrostOverlay(player.getStats().getColdness());
             }
             hud.renderMessages(messages, window.getAspectRatio());
+            // Tab: online player list (multiplayer, gameplay screens only).
+            boolean tabListVisible = started[0] && netClient != null && input.isKeyDown(GLFW_KEY_TAB)
+                    && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && !mapOpen[0] && !chatOpen[0];
+            if (tabListVisible) {
+                List<String> names = new ArrayList<>();
+                names.add(localPlayerName + " (you)");
+                for (RemotePlayer rp : remotePlayers.values()) {
+                    names.add(rp.name + (rp.dimension == currentDim[0].ordinal() ? "" : " (other dimension)"));
+                }
+                hud.renderPlayerList(names, window.getAspectRatio());
+            }
             // The chat input line, drawn under the messages while typing.
             if (chatOpen[0] && netClient != null) {
                 hud.drawTextLeft("> " + chatText + "_", -0.95f, 0.12f, 0.04f, WHITE, window.getAspectRatio());

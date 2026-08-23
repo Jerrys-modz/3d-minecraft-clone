@@ -414,11 +414,21 @@ public class GameServer implements AutoCloseable {
             boxes.add(new AABB(c.x - 0.3f, c.y, c.z - 0.3f, c.x + 0.3f, c.y + 1.8f, c.z + 0.3f));
         }
         if (players.isEmpty()) return;
-        float[] damage = world.updateMobsMulti(dt, positions, boxes, dayNightCycle.isNight(), rnd, settings.getDifficulty());
+        World.MobDamageResult result = world.updateMobsMulti(dt, positions, boxes, dayNightCycle.isNight(), rnd, settings.getDifficulty());
         for (int i = 0; i < players.size(); i++) {
-            if (damage[i] > 0f) {
+            if (result.damage()[i] > 0f) {
                 try {
-                    send(players.get(i), Packets.encodePlayerDamage(new Packets.PlayerDamage(damage[i])));
+                    // Mob hits shove the player away from the mob that actually
+                    // landed the hit (the world sim reports the attacker).
+                    float kx = 0f, kz = 0f;
+                    if (result.srcX()[i] != 0f || result.srcZ()[i] != 0f) {
+                        float ddx = positions.get(i).x - result.srcX()[i];
+                        float ddz = positions.get(i).z - result.srcZ()[i];
+                        float len = (float) Math.sqrt(ddx * ddx + ddz * ddz);
+                        if (len > 1e-4f) { kx = ddx / len; kz = ddz / len; }
+                    }
+                    send(players.get(i), Packets.encodePlayerDamage(
+                            new Packets.PlayerDamage(result.damage()[i], kx, kz)));
                 } catch (IOException e) {
                     disconnect(players.get(i));
                 }
@@ -1245,7 +1255,11 @@ public class GameServer implements AutoCloseable {
         if (target.dimension != client.dimension) return;
         float dx = target.x - client.x, dy = target.y - client.y, dz = target.z - client.z;
         if (dx * dx + dy * dy + dz * dz > MAX_EDIT_DISTANCE_SQ) return;
-        send(target, Packets.encodePlayerDamage(new Packets.PlayerDamage(damage)));
+        // Knock the target away from the attacker.
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        float kx = len > 1e-4f ? dx / len : 0f;
+        float kz = len > 1e-4f ? dz / len : 0f;
+        send(target, Packets.encodePlayerDamage(new Packets.PlayerDamage(damage, kx, kz)));
         System.out.println(client.name + " hit " + target.name + " for " + damage);
     }
 

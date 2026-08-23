@@ -1724,16 +1724,24 @@ public class World implements BlockAccessor {
         return damage;
     }
 
+    /** Per-player damage result with the position of the mob that dealt it (for knockback direction). */
+    public record MobDamageResult(float[] damage, float[] srcX, float[] srcZ) {
+    }
+
     /**
      * Multiplayer variant of {@link #updateMobs}: advances every mob with the
      * *nearest* of several players as its target, spawns around each player up
      * to the same global caps, and returns the damage each player took (indexed
-     * like {@code playerPositions}) - melee hits, arrow hits, and fallback
-     * damage all routed to the right player. Call once per server tick.
+     * like {@code playerPositions}) along with the position of the mob that
+     * dealt it - melee hits, arrow hits, and fallback damage all routed to the
+     * right player. Arrow hits report no source (zero coordinates). Call once
+     * per server tick.
      */
-    public float[] updateMobsMulti(float dt, List<Vector3f> playerPositions, List<AABB> playerBoxes, boolean night, Random rnd, Difficulty difficulty) {
+    public MobDamageResult updateMobsMulti(float dt, List<Vector3f> playerPositions, List<AABB> playerBoxes, boolean night, Random rnd, Difficulty difficulty) {
         int count = playerPositions.size();
         float[] damage = new float[count];
+        float[] srcX = new float[count];
+        float[] srcZ = new float[count];
         float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
 
         for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
@@ -1748,7 +1756,14 @@ public class World implements BlockAccessor {
                 continue;
             }
             mob.update(dt, this, rnd, target);
-            damage[nearest] += mob.getMeleeRequest();
+            float melee = mob.getMeleeRequest();
+            if (melee > 0f) {
+                damage[nearest] += melee;
+                // Remember who actually landed the hit so knockback pushes
+                // away from the attacker, not whatever happens to be closest.
+                srcX[nearest] = mob.position.x;
+                srcZ[nearest] = mob.position.z;
+            }
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, target, rnd);
             }
@@ -1767,7 +1782,7 @@ public class World implements BlockAccessor {
         for (int i = 0; i < count; i++) {
             damage[i] += arrowDamage[i];
         }
-        return damage;
+        return new MobDamageResult(damage, srcX, srcZ);
     }
 
     /** Index of the closest player to {@code pos} (mob AI targets the nearest, like Minecraft). */

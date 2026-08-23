@@ -271,9 +271,11 @@ class PacketsTest {
 
     @Test
     void playerDamageRoundTrips() throws Exception {
-        Packets.PlayerDamage in = new Packets.PlayerDamage(3.5f);
+        Packets.PlayerDamage in = new Packets.PlayerDamage(3.5f, 0.6f, -0.8f);
         Packets.PlayerDamage out = assertInstanceOf(Packets.PlayerDamage.class, roundTrip(in));
         assertEquals(3.5f, out.amount());
+        assertEquals(0.6f, out.knockX());
+        assertEquals(-0.8f, out.knockZ());
     }
 
     @Test
