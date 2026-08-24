@@ -2482,9 +2482,13 @@ public class Hud {
             lineShader.unbind();
         }
 
-        // Furnace decorations (flame + arrow) behind the slot icons.
-        if (gui.kind() == ContainerGui.Kind.FURNACE) {
+        // Furnace decorations (flame + arrow) behind the slot icons. Steam
+        // machines reuse the same bars via the shared ProgressMachine view.
+        if (gui.kind() == ContainerGui.Kind.FURNACE && gui.furnace() != null) {
             renderFurnaceProgress(gui.furnace());
+        } else if (gui.kind() == ContainerGui.Kind.FURNACE
+                && gui.container() instanceof com.minecraftclone.world.ProgressMachine pm) {
+            renderMachineProgress(pm);
         }
         // Smeltery decorations (heat flame + progress arrow) behind the slot icons.
         if (gui.kind() == ContainerGui.Kind.SMELTERY && gui.smeltery() != null) {
@@ -2880,7 +2884,11 @@ public class Hud {
      * below landed on no program at all and the flame/arrow silently stopped
      * drawing.
      */
-    private void renderFurnaceProgress(Furnace furnace) {
+    private void renderMachineProgress(com.minecraftclone.world.ProgressMachine machine) {
+        renderFurnaceProgress(machine);
+    }
+
+    private void renderFurnaceProgress(com.minecraftclone.world.ProgressMachine machine) {
         lineShader.bind();
         lineShader.setUniform("projection", identity);
         lineShader.setUniform("view", identity);
@@ -2898,7 +2906,7 @@ public class Hud {
 
         // Flame fill rises from the bottom as the fuel burns down.
         furnaceDeco.clear();
-        float flameHeight = (flameTop - flameBottom) * Math.min(1f, Math.max(0f, furnace.burnFraction()));
+        float flameHeight = (flameTop - flameBottom) * Math.min(1f, Math.max(0f, machine.burnFraction()));
         if (flameHeight > 0f) {
             addQuad3(furnaceDeco, FURNACE_FLAME_X - flameHalf, flameBottom, FURNACE_FLAME_X + flameHalf, flameBottom + flameHeight);
             inventoryPanel.upload(furnaceDeco.toArray());
@@ -2916,7 +2924,7 @@ public class Hud {
 
         // Arrow fill grows left to right with smelting progress.
         furnaceDeco.clear();
-        float fill = (FURNACE_ARROW_X1 - FURNACE_ARROW_X0) * Math.min(1f, Math.max(0f, furnace.progressFraction()));
+        float fill = (FURNACE_ARROW_X1 - FURNACE_ARROW_X0) * Math.min(1f, Math.max(0f, machine.progressFraction()));
         if (fill > 0f) {
             addQuad3(furnaceDeco, FURNACE_ARROW_X0, FURNACE_MID_Y - arrowHalf, FURNACE_ARROW_X0 + fill, FURNACE_MID_Y + arrowHalf);
             inventoryPanel.upload(furnaceDeco.toArray());

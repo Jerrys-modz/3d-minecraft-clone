@@ -375,6 +375,8 @@ public class World implements BlockAccessor {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
                     if (es.entity() instanceof CastingEntity casting) {
                         casting.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamFurnaceEntity furnace) {
+                        furnace.attach(es.x(), es.y(), es.z(), this);
                     }
                 }
             }
@@ -470,6 +472,8 @@ public class World implements BlockAccessor {
         // Notify the multi-block manager so smeltery (and future) structures can
         // form or deform when their structural blocks change.
         multiBlockManager.onBlockChanged(this, worldX, worldY, worldZ);
+        // A pipe placed or broken changes network topology: drop stale runs.
+        pipeNetworkManager.onBlockChanged(worldX, worldY, worldZ);
 
         // Placing/removing a light source (e.g. a torch) can change the baked glow
         // in every chunk within its radius, not just literal boundary columns - the
@@ -674,6 +678,28 @@ public class World implements BlockAccessor {
         return ce;
     }
 
+    /** Returns the Steam Boiler entity at a position, creating it on first use. */
+    public SteamBoilerEntity getOrCreateSteamBoiler(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamBoilerEntity b) return b;
+        SteamBoilerEntity b = new SteamBoilerEntity();
+        blockEntities.put(blockKey(x, y, z), b);
+        return b;
+    }
+
+    /** Returns the Steam Furnace entity at a position, creating + attaching it on first use. */
+    public SteamFurnaceEntity getOrCreateSteamFurnace(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamFurnaceEntity sf) {
+            sf.attach(x, y, z, this);
+            return sf;
+        }
+        SteamFurnaceEntity sf = new SteamFurnaceEntity();
+        sf.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), sf);
+        return sf;
+    }
+
     /** Forgets a block entity - call when its block is mined or removed. */
     public void removeBlockEntity(int x, int y, int z) {
         blockEntities.remove(blockKey(x, y, z));
@@ -697,6 +723,9 @@ public class World implements BlockAccessor {
             blockEntities.put(blockKey(x, y, z), entity);
         }
         entity.readFrom(in);
+        if (entity instanceof SteamFurnaceEntity furnace) {
+            furnace.attach(x, y, z, this);
+        }
         return entity;
     }
 
@@ -1092,6 +1121,8 @@ public class World implements BlockAccessor {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
                     if (es.entity() instanceof CastingEntity casting) {
                         casting.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamFurnaceEntity furnace) {
+                        furnace.attach(es.x(), es.y(), es.z(), this);
                     }
                     multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
                 }
@@ -2085,6 +2116,9 @@ public class World implements BlockAccessor {
     /** The multi-block manager — tracks formed structures and drives formation / deformation. */
     private final com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager =
             new com.minecraftclone.world.multiblock.MultiBlockManager();
+    /** Discovers + caches connected pipe networks for every transport type. */
+    private final com.minecraftclone.world.pipes.PipeNetworkManager pipeNetworkManager =
+            new com.minecraftclone.world.pipes.PipeNetworkManager(this);
 
     /**
      * Returns the multi-block manager.  Call {@code manager().register(def)} at startup
@@ -2092,6 +2126,11 @@ public class World implements BlockAccessor {
      */
     public com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager() {
         return multiBlockManager;
+    }
+
+    /** The pipe network cache/discovery manager for this world. */
+    public com.minecraftclone.world.pipes.PipeNetworkManager pipeNetworks() {
+        return pipeNetworkManager;
     }
 
     /**

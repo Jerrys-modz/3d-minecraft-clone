@@ -816,6 +816,8 @@ public class Main {
             case Chest.TYPE -> block == BlockType.CHEST;
             case Barrel.TYPE -> block == BlockType.BARREL;
             case Furnace.TYPE -> block == BlockType.FURNACE;
+            case com.minecraftclone.world.SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
+            case com.minecraftclone.world.SteamFurnaceEntity.TYPE -> block == BlockType.STEAM_FURNACE;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
@@ -3367,6 +3369,37 @@ public class Main {
                         trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         Furnace furnace = world.getOrCreateFurnace(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, furnace);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.STEAM_BOILER) {
+                        // Steam Boiler: right-click with any furnace fuel to load
+                        // it; empty-hand shows the current steam level.
+                        com.minecraftclone.world.SteamBoilerEntity boiler =
+                                world.getOrCreateSteamBoiler(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        if (!heldStack.isEmpty() && com.minecraftclone.world.Furnace.isFuel(heldItem)) {
+                            int accepted = boiler.addFuel(heldItem, heldStack.count());
+                            if (accepted > 0) {
+                                player.getInventory().remove(heldItem, accepted);
+                                audio.play(SoundEvent.UI_CLICK);
+                                handRenderer.triggerSwing();
+                                pushContainerSnapshot(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                                world.markChunkModifiedByPlayer(World.worldToChunk(hit.blockPos.x),
+                                        World.worldToChunk(hit.blockPos.z));
+                            } else {
+                                showMessage(messages, "The boiler is full.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else {
+                            int secs = Math.round(boiler.steamSeconds());
+                            showMessage(messages, boiler.isBurning() ? "Burning - steam: " + secs + "s buffered."
+                                            : "Steam: " + secs + "s. Load fuel to heat the boiler.",
+                                    new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
+                        }
+                    } else if (noMob && targeted == BlockType.STEAM_FURNACE) {
+                        // Steam Furnace: opens the standard furnace GUI; its heat
+                        // comes from an adjacent steaming boiler instead of fuel.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.SteamFurnaceEntity sf = world.getOrCreateSteamFurnace(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, sf);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.

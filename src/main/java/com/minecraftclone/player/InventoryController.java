@@ -540,11 +540,19 @@ public class InventoryController {
         // Prefer the open container: ore/fuel into a furnace, anything into a
         // chest, smeltables into a smeltery, items into empty crafting-grid cells.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
+            boolean steam = gui.furnace() == null && gui.container() instanceof com.minecraftclone.world.SteamFurnaceEntity;
             int target = -1;
-            if (Smelting.isSmeltable(t)) {
-                target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_INPUT;
-            } else if (com.minecraftclone.world.Furnace.isFuel(t)) {
-                target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_FUEL;
+            if (steam) {
+                // Steam furnace: only an input slot (heat comes from a boiler).
+                if (Smelting.isSmeltable(t)) {
+                    target = ContainerGui.CONTAINER_START + com.minecraftclone.world.SteamFurnaceEntity.SLOT_INPUT;
+                }
+            } else {
+                if (Smelting.isSmeltable(t)) {
+                    target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_INPUT;
+                } else if (com.minecraftclone.world.Furnace.isFuel(t)) {
+                    target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_FUEL;
+                }
             }
             if (target >= 0) {
                 int moved = moveToFurnaceSlot(target, t, count);
