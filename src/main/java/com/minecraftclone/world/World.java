@@ -700,6 +700,19 @@ public class World implements BlockAccessor {
         return sf;
     }
 
+    /** Returns the Steam Macerator entity at a position, creating + attaching it on first use. */
+    public SteamMaceratorEntity getOrCreateSteamMacerator(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamMaceratorEntity sm) {
+            sm.attach(x, y, z, this);
+            return sm;
+        }
+        SteamMaceratorEntity sm = new SteamMaceratorEntity();
+        sm.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), sm);
+        return sm;
+    }
+
     /** Forgets a block entity - call when its block is mined or removed. */
     public void removeBlockEntity(int x, int y, int z) {
         blockEntities.remove(blockKey(x, y, z));

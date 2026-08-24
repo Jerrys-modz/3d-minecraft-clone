@@ -819,7 +819,14 @@ public enum BlockType {
      * Steel steam pipe: top Steam Age tier, conducts at 2x rate.
      * Built from steel ingots.
      */
-    STEAM_PIPE_STEEL(512, true, false, 263, 263, 263);
+    STEAM_PIPE_STEEL(512, true, false, 263, 263, 263),
+
+    /**
+     * Steam Macerator: crushes ore into double output using steam power.
+     * The core progression incentive of the Steam Age - build infrastructure,
+     * double your ore yield.
+     */
+    STEAM_MACERATOR(513, true, false, 264, 264, 264);
 
     public final short id;
     public final boolean solid;

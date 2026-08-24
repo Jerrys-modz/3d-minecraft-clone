@@ -39,6 +39,7 @@ public final class BlockEntities {
         // Steam Age machines.
         register(SteamBoilerEntity.TYPE, SteamBoilerEntity::new);
         register(SteamFurnaceEntity.TYPE, SteamFurnaceEntity::new);
+        register(SteamMaceratorEntity.TYPE, SteamMaceratorEntity::new);
     }
 
     private BlockEntities() {
