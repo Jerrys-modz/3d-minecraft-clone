@@ -103,7 +103,8 @@ public class ChunkStorage {
             int orientLen = chunk.getRawOrientations().length;
 
             int entityOffset;
-            if (data.length > 0 && data[0] == SHORT_FORMAT_MAGIC) {
+            if (data.length > 0 && data[0] == SHORT_FORMAT_MAGIC
+                    && data.length >= 1 + nBlocks * 4 + orientLen) {
                 // New format: magic byte + short arrays (2 bytes per cell) + byte orientations
                 DataInputStream d2 = new DataInputStream(new ByteArrayInputStream(data, 1, data.length - 1));
                 short[] blocks = new short[nBlocks];
@@ -144,10 +145,17 @@ public class ChunkStorage {
                 DataInputStream d = new DataInputStream(
                         new ByteArrayInputStream(data, entityOffset, data.length - entityOffset));
                 int count = d.readInt();
+                if (count < 0 || count > nBlocks) throw new IOException("Invalid block entity count: " + count);
                 for (int i = 0; i < count; i++) {
                     String type = d.readUTF();
                     int x = d.readInt(), y = d.readInt(), z = d.readInt();
+                    if (x < 0 || x >= Chunk.SIZE || y < 0 || y >= Chunk.HEIGHT || z < 0 || z >= Chunk.SIZE) {
+                        throw new IOException("Invalid block entity position");
+                    }
                     int payloadLen = d.readInt();
+                    if (payloadLen < 0 || payloadLen > d.available()) {
+                        throw new IOException("Invalid block entity payload length: " + payloadLen);
+                    }
                     // Read exactly payloadLen bytes into an isolated buffer to bound each entity's decoding.
                     byte[] payload = new byte[payloadLen];
                     d.readFully(payload);
@@ -172,7 +180,8 @@ public class ChunkStorage {
 
     public void save(PersistableChunk chunk, List<BlockEntitySave> entities) {
         Path file = fileFor(chunk.getPos());
-        try (OutputStream rawOut = new GZIPOutputStream(Files.newOutputStream(file))) {
+        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
+        try (OutputStream rawOut = new GZIPOutputStream(Files.newOutputStream(temporary))) {
             DataOutputStream out = new DataOutputStream(rawOut);
             out.writeByte(SHORT_FORMAT_MAGIC);
             for (short s : chunk.getRawBlocks()) out.writeShort(s);
@@ -193,7 +202,14 @@ public class ChunkStorage {
                 out.write(bytes);
             }
             out.flush();
+            try {
+                Files.move(temporary, file, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(temporary, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
+            try { Files.deleteIfExists(temporary); } catch (IOException ignored) { }
             System.err.println("Failed to save chunk " + chunk.getPos() + ": " + e.getMessage());
         }
     }

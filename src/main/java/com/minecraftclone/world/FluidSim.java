@@ -71,26 +71,31 @@ public final class FluidSim {
                          Map<Long, Integer> flowLevels, Set<Long> remove) {
     }
 
-    // Coordinates are bounded by the loaded-chunk radius (fluids only flow within
-    // a few blocks of a placed source), so a 12-bit x/z field (+ 2048 offset) and
-    // an 8-bit y field are more than enough - and don't overflow their masks.
-    private static final int OFF = 1 << 11; // 2048
-
-    /** Packs a world coordinate into a long key (for the fill/remove sets). */
+    /** Packs signed world coordinates without a finite world-size limit. */
     public static long key(int x, int y, int z) {
-        return ((long) (x + OFF) << 40) | ((long) y << 32) | ((long) (z + OFF) << 20);
+        // Three signed 21-bit coordinates cover the complete supported block
+        // range while preserving sign during unpacking. Unlike the old offset
+        // packing, out-of-range coordinates cannot alias one another.
+        return ((long) (x & 0x1FFFFF))
+                | ((long) (y & 0x1FFFFF) << 21)
+                | ((long) (z & 0x1FFFFF) << 42);
+    }
+
+    private static int unpackSigned(long value) {
+        int coordinate = (int) (value & 0x1FFFFF);
+        return (coordinate << 11) >> 11;
     }
 
     public static int keyX(long k) {
-        return (int) ((k >>> 40) & 0xFFF) - OFF;
+        return unpackSigned(k);
     }
 
     public static int keyY(long k) {
-        return (int) ((k >>> 32) & 0xFF);
+        return unpackSigned(k >>> 21);
     }
 
     public static int keyZ(long k) {
-        return (int) ((k >>> 20) & 0xFFF) - OFF;
+        return unpackSigned(k >>> 42);
     }
 
     private static final class Node {

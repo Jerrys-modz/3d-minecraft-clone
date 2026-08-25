@@ -66,6 +66,8 @@ public class GameServer implements AutoCloseable {
     private static final int JOIN_TIMEOUT_MILLIS = 30_000;
     /** Max blocks between a player and the cell they edit (a little past REACH_DISTANCE). */
     private static final float MAX_EDIT_DISTANCE_SQ = 8f * 8f;
+    private static final float MAX_MOVE_DISTANCE_PER_TICK = 1.25f;
+    private static final float MAX_WORLD_COORDINATE = 30_000_000f;
     /** How far from their position a client may request/edit chunks (in chunks). */
     private static final int MAX_CHUNK_RADIUS = 12;
     /** Packets handled per tick; the rest wait for the next tick (FIFO, so nobody starves). */
@@ -103,6 +105,8 @@ public class GameServer implements AutoCloseable {
         volatile long lastAttackNanos;
         /** True while this player is in bed voting to skip the night (multiplayer sleep). */
         volatile boolean sleepVoted;
+        float lastAcceptedX, lastAcceptedY, lastAcceptedZ;
+        long lastMoveNanos;
 
         Client(Socket socket, DataOutputStream out) {
             this.socket = socket;
@@ -596,6 +600,10 @@ public class GameServer implements AutoCloseable {
         client.x = spawnX;
         client.y = y;
         client.z = spawnZ;
+        client.lastAcceptedX = spawnX;
+        client.lastAcceptedY = y;
+        client.lastAcceptedZ = spawnZ;
+        client.lastMoveNanos = System.nanoTime();
 
         // Tell the newcomer who they are and about the world.
         Packets.Welcome welcome = new Packets.Welcome(
@@ -813,11 +821,28 @@ public class GameServer implements AutoCloseable {
 
     private void handleMove(Client client, Packets.Move move) {
         if (!client.joined) return;
+        if (!Float.isFinite(move.x()) || !Float.isFinite(move.y()) || !Float.isFinite(move.z())
+                || !Float.isFinite(move.yaw()) || !Float.isFinite(move.pitch())
+                || Math.abs(move.x()) > MAX_WORLD_COORDINATE || Math.abs(move.y()) > MAX_WORLD_COORDINATE
+                || Math.abs(move.z()) > MAX_WORLD_COORDINATE) return;
+
+        long now = System.nanoTime();
+        float elapsed = Math.max(0.001f, (now - client.lastMoveNanos) / 1_000_000_000f);
+        float maxDistance = Math.min(4f, MAX_MOVE_DISTANCE_PER_TICK * Math.max(1f, elapsed / TICK_SECONDS));
+        float dx = move.x() - client.lastAcceptedX;
+        float dy = move.y() - client.lastAcceptedY;
+        float dz = move.z() - client.lastAcceptedZ;
+        if (dx * dx + dy * dy + dz * dz > maxDistance * maxDistance) return;
+
         client.x = move.x();
         client.y = move.y();
         client.z = move.z();
+        client.lastAcceptedX = move.x();
+        client.lastAcceptedY = move.y();
+        client.lastAcceptedZ = move.z();
+        client.lastMoveNanos = now;
         client.yaw = move.yaw();
-        client.pitch = move.pitch();
+        client.pitch = Math.max(-90f, Math.min(90f, move.pitch()));
         client.onGround = move.onGround();
         client.flying = move.flying();
         client.sprinting = move.sprinting();
@@ -850,13 +875,16 @@ public class GameServer implements AutoCloseable {
         if (!canReach(client, place.x(), place.y(), place.z())) return;
         World world = worldOf(client);
         world.ensureChunk(World.worldToChunk(place.x()), World.worldToChunk(place.z()));
+        BlockType existing = world.getBlock(place.x(), place.y(), place.z());
         if (place.overlay()) {
+            if (!type.isSubmersible() || !existing.isFluid() || world.getOverlay(place.x(), place.y(), place.z()) != BlockType.AIR) return;
             world.setOverlay(place.x(), place.y(), place.z(), type);
         } else {
+            if (existing != BlockType.AIR && !existing.isFluid()) return;
+            if (type == BlockType.BED_HEAD || type == BlockType.DOOR_OPEN || type == BlockType.TRAPDOOR_OPEN) return;
+            byte orientation = (byte) (place.orientation() & 3);
             world.setBlock(place.x(), place.y(), place.z(), type);
-            if (place.orientation() != 0) {
-                world.setBlockOrientation(place.x(), place.y(), place.z(), place.orientation());
-            }
+            world.setBlockOrientation(place.x(), place.y(), place.z(), orientation);
         }
         broadcastAll(Packets.encodeBlockChange(new Packets.BlockChange(
                 client.dimension, place.x(), place.y(), place.z(), type.id, place.orientation(), place.overlay())));
@@ -868,6 +896,9 @@ public class GameServer implements AutoCloseable {
         if (!canReach(client, brk.x(), brk.y(), brk.z())) return;
         World world = worldOf(client);
         world.ensureChunk(World.worldToChunk(brk.x()), World.worldToChunk(brk.z()));
+        BlockType target = world.getBlock(brk.x(), brk.y(), brk.z());
+        if (!brk.overlay() && (target == BlockType.BEDROCK || target == BlockType.AIR)) return;
+        if (brk.overlay() && world.getOverlay(brk.x(), brk.y(), brk.z()) == BlockType.AIR) return;
         if (brk.overlay()) {
             world.setOverlay(brk.x(), brk.y(), brk.z(), BlockType.AIR);
         } else {
@@ -922,8 +953,13 @@ public class GameServer implements AutoCloseable {
      */
     private void handlePortalUse(Client client, Packets.PortalUse portal) throws IOException {
         if (!client.joined) return;
-        DimensionType from = DimensionType.values()[portal.dimension() & 0xFF];
+        if (portal.dimension() != client.dimension || portal.dimension() < 0 || portal.dimension() >= worlds.length) return;
+        DimensionType from = DimensionType.values()[portal.dimension()];
         BlockType portalBlock = BlockType.byId(portal.blockId());
+        if (portalBlock == null || !portalBlock.isPortal()) return;
+        if (!canReach(client, portal.x(), portal.y(), portal.z())) return;
+        World source = worldOf(client);
+        if (source.getBlock(portal.x(), portal.y(), portal.z()) != portalBlock) return;
         DimensionType to = DimensionType.portalDestination(portalBlock, from);
         World target = worlds[to.ordinal()];
         Vector3f pos = new Vector3f(client.x, client.y, client.z);
