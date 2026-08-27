@@ -99,8 +99,20 @@ public final class SteamMaceratorEntity implements BlockEntity, StorageContainer
         BlockType output = Smelting.outputFor(input);
         if (output == null) return false;
         BlockType held = types[SLOT_OUTPUT];
-        return held == null || held == output;
+        // Guard against oversized stacks: refuse to crush if adding YIELD_MULTIPLIER
+        // items would push the output count past the normal max-stack limit.
+        return held == null || (held == output
+                && counts[SLOT_OUTPUT] + YIELD_MULTIPLIER <= Inventory.maxStack(output));
     }
+
+    /** The block is "active" (glowing front, emitting light) while crushing. */
+    @Override
+    public boolean isActive() {
+        return progress > 0f && lastSteamFraction > 0f;
+    }
+
+    /** Throughput multiplier from the connecting pipe network; 1 when direct or unknown. */
+    private float drawRate = 1f;
 
     @Override
     public void tick(float dt) {
@@ -109,27 +121,11 @@ public final class SteamMaceratorEntity implements BlockEntity, StorageContainer
         if (boilerCheckTimer <= 0f) {
             boilerCheckTimer = 0.5f;
             if (attached && world != null) {
-                // Scan for a steaming boiler: direct adjacency or through pipes.
+                boiler = findSteamSource();
+                // Throttle to the network's weakest pipe tier (weakest-link principle).
                 com.minecraftclone.world.pipes.PipeNetwork net =
                         world.pipeNetworks().networkAt(com.minecraftclone.world.pipes.PipeType.STEAM, posX, posY, posZ);
-                boiler = null;
-                if (net != null) {
-                    for (long key : net.cells) {
-                        int cx = (int) (key & 0x1FFFFFL) << 21 >> 21;
-                        int cy = (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
-                        int cz = (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
-                        for (int[] d : new int[][]{{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}}) {
-                            BlockEntity e = world.blockEntityAt(cx + d[0], cy + d[1], cz + d[2]);
-                            if (e instanceof SteamBoilerEntity b) { boiler = b; break; }
-                        }
-                        if (boiler != null) break;
-                    }
-                }
-                // Also check direct adjacency (no pipes needed).
-                for (int[] d : new int[][]{{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}}) {
-                    BlockEntity e = world.blockEntityAt(posX + d[0], posY + d[1], posZ + d[2]);
-                    if (e instanceof SteamBoilerEntity b) { boiler = b; break; }
-                }
+                drawRate = net != null && net.minTier != null ? net.minTier.throughput : 1f;
             }
         }
         boolean hot = boiler != null && boiler.steamSeconds() > 0f && canCrush();
@@ -138,11 +134,15 @@ public final class SteamMaceratorEntity implements BlockEntity, StorageContainer
             return;
         }
 
-        float draw = Math.min(dt, boiler.steamSeconds());
+        // Pull time out of the boiler's steam buffer, throttled by the pipe
+        // tier feeding this machine (wood pipes conduct at half rate). With no
+        // pipe tier involved (direct adjacency) there's no cap.
+        float draw = Math.min(dt * drawRate, boiler.steamSeconds());
+        if (draw <= 0f) return;
         boiler.drainSteam(draw);
         lastSteamFraction = Math.min(1f, boiler.steamSeconds() / SteamBoilerEntity.MAX_STEAM_SECONDS);
 
-        progress += dt;
+        progress += draw;
         while (progress >= CRUSH_SECONDS && canCrush()) {
             progress -= CRUSH_SECONDS;
             BlockType result = Smelting.outputFor(types[SLOT_INPUT]);
@@ -155,6 +155,37 @@ public final class SteamMaceratorEntity implements BlockEntity, StorageContainer
                 counts[SLOT_OUTPUT] = YIELD_MULTIPLIER;
             }
         }
+    }
+
+    private static final int[][] FACES = {
+            {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+    };
+
+    /**
+     * Finds a steaming boiler: either face-adjacent directly, or through the
+     * connected steam pipe network. Returns null when nothing feeds this machine.
+     */
+    private SteamBoilerEntity findSteamSource() {
+        if (!attached || world == null) return null;
+        // Direct adjacency first — the common case, zero search cost.
+        for (int[] d : FACES) {
+            BlockEntity e = world.blockEntityAt(posX + d[0], posY + d[1], posZ + d[2]);
+            if (e instanceof SteamBoilerEntity b) return b;
+        }
+        // Otherwise resolve through the pipe network and scan its perimeter.
+        com.minecraftclone.world.pipes.PipeNetwork net =
+                world.pipeNetworks().networkAt(com.minecraftclone.world.pipes.PipeType.STEAM, posX, posY, posZ);
+        if (net == null) return null;
+        for (long key : net.cells) {
+            int cx = (int) (key & 0x1FFFFFL) << 21 >> 21;
+            int cy = (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
+            int cz = (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+            for (int[] d : FACES) {
+                BlockEntity e = world.blockEntityAt(cx + d[0], cy + d[1], cz + d[2]);
+                if (e instanceof SteamBoilerEntity b) return b;
+            }
+        }
+        return null;
     }
 
     // -----------------------------------------------------------------------

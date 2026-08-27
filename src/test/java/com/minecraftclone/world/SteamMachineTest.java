@@ -176,6 +176,41 @@ class SteamMachineTest {
     }
 
     @Test
+    void steamMaceratorCanCrushRejectsWhenOutputFull() {
+        // canCrush() must return false when adding YIELD_MULTIPLIER items would
+        // push the output count past the max-stack limit (prevents oversized stacks).
+        SteamMaceratorEntity mac = new SteamMaceratorEntity();
+        mac.setSlot(SteamMaceratorEntity.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        int maxStack = com.minecraftclone.player.Inventory.maxStack(BlockType.IRON_INGOT);
+        // Fill output to one slot below the cap that would be exceeded.
+        mac.setSlot(SteamMaceratorEntity.SLOT_OUTPUT, BlockType.IRON_INGOT,
+                maxStack - SteamMaceratorEntity.YIELD_MULTIPLIER);
+        assertTrue(mac.canCrush(), "should be able to crush when output has exactly enough room");
+
+        mac.setSlot(SteamMaceratorEntity.SLOT_OUTPUT, BlockType.IRON_INGOT,
+                maxStack - SteamMaceratorEntity.YIELD_MULTIPLIER + 1);
+        assertFalse(mac.canCrush(), "must refuse when output would exceed max stack");
+    }
+
+    @Test
+    void steamMaceratorOutputNeverExceedsMaxStack() {
+        // Even with a large input batch, the output count must stay <= maxStack.
+        SteamBoilerEntity boiler = new SteamBoilerEntity();
+        SteamMaceratorEntity mac = new SteamMaceratorEntity();
+        mac.attach(1, 64, 1, null);
+        mac.boiler = boiler;
+
+        int maxStack = com.minecraftclone.player.Inventory.maxStack(BlockType.IRON_INGOT);
+        mac.setSlot(SteamMaceratorEntity.SLOT_INPUT, BlockType.IRON_ORE, 64);
+        boiler.addFuel(BlockType.COAL, 64);
+
+        for (int i = 0; i < 2000; i++) { boiler.tick(0.25f); mac.tick(0.25f); }
+
+        assertTrue(mac.countOf(SteamMaceratorEntity.SLOT_OUTPUT) <= maxStack,
+                "output count must never exceed maxStack");
+    }
+
+    @Test
     void steamFurnacePersistsSlotsAndProgress() throws Exception {
         SteamFurnaceEntity sf = new SteamFurnaceEntity();
         sf.attach(1, 64, 1, null);

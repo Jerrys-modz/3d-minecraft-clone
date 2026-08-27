@@ -377,6 +377,8 @@ public class World implements BlockAccessor {
                         casting.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof SteamFurnaceEntity furnace) {
                         furnace.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamMaceratorEntity mac) {
+                        mac.attach(es.x(), es.y(), es.z(), this);
                     }
                 }
             }
@@ -738,6 +740,8 @@ public class World implements BlockAccessor {
         entity.readFrom(in);
         if (entity instanceof SteamFurnaceEntity furnace) {
             furnace.attach(x, y, z, this);
+        } else if (entity instanceof SteamMaceratorEntity mac) {
+            mac.attach(x, y, z, this);
         }
         return entity;
     }
@@ -1136,6 +1140,8 @@ public class World implements BlockAccessor {
                         casting.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof SteamFurnaceEntity furnace) {
                         furnace.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamMaceratorEntity mac) {
+                        mac.attach(es.x(), es.y(), es.z(), this);
                     }
                     multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
                 }

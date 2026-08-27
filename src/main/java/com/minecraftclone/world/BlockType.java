@@ -826,7 +826,7 @@ public enum BlockType {
      * The core progression incentive of the Steam Age - build infrastructure,
      * double your ore yield.
      */
-    STEAM_MACERATOR(513, true, false, 264, 264, 264);
+    STEAM_MACERATOR(513, true, false, 264, 264, 264, 264, 265, 0, 0);
 
     public final short id;
     public final boolean solid;
