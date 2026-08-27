@@ -227,6 +227,9 @@ public final class Crafting {
         // instead of fuel in its own slot.
         shaped3x3("EEE", "EFE", "EEE", BlockType.STEAM_FURNACE, 1);
 
+        // Steam Macerator: bronze shell around a diamond grinding element.
+        shaped3x3("EEE", "EDI", "EEE", BlockType.STEAM_MACERATOR, 1);
+
         // Steam Pipe: bronze column - connects machines to a boiler's steam.
         shaped3x3(".E.", ".E.", ".E.", BlockType.STEAM_PIPE_BRONZE, 6);
 

@@ -1,5 +1,6 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.player.Inventory;
 import com.minecraftclone.world.gen.WorldGenSettings;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -142,6 +143,71 @@ class SteamMachineTest {
         assertEquals(BlockType.COAL, loaded.typeOf(SteamBoilerEntity.SLOT_FUEL));
         assertEquals(8, loaded.countOf(SteamBoilerEntity.SLOT_FUEL));
         assertEquals(b.steamSeconds(), loaded.steamSeconds(), 0.01f);
+    }
+
+    @Test
+    void steamMaceratorCrushesOreIntoDoubleOutput() {
+        SteamBoilerEntity boiler = new SteamBoilerEntity();
+        SteamMaceratorEntity mac = new SteamMaceratorEntity();
+        mac.attach(1, 64, 1, null);
+        mac.boiler = boiler;
+
+        mac.setSlot(SteamMaceratorEntity.SLOT_INPUT, BlockType.IRON_ORE, 3);
+        boiler.addFuel(BlockType.COAL, 12);
+
+        for (int i = 0; i < 120; i++) { boiler.tick(0.25f); mac.tick(0.25f); }
+
+        assertEquals(BlockType.IRON_INGOT, mac.typeOf(SteamMaceratorEntity.SLOT_OUTPUT));
+        assertEquals(6, mac.countOf(SteamMaceratorEntity.SLOT_OUTPUT)); // 3 items × 2
+    }
+
+    @Test
+    void steamMaceratorPersistsSlots() throws Exception {
+        SteamMaceratorEntity mac = new SteamMaceratorEntity();
+        mac.setSlot(SteamMaceratorEntity.SLOT_INPUT, BlockType.IRON_ORE, 2);
+
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        mac.writeTo(new DataOutputStream(buf));
+        SteamMaceratorEntity loaded = new SteamMaceratorEntity();
+        loaded.readFrom(new DataInputStream(new ByteArrayInputStream(buf.toByteArray())));
+
+        assertEquals(BlockType.IRON_ORE, loaded.typeOf(SteamMaceratorEntity.SLOT_INPUT));
+        assertEquals(2, loaded.countOf(SteamMaceratorEntity.SLOT_INPUT));
+    }
+
+    @Test
+    void steamMaceratorCanCrushRejectsWhenOutputFull() {
+        // canCrush() must return false when adding YIELD_MULTIPLIER items would
+        // push the output count past the max-stack limit (prevents oversized stacks).
+        SteamMaceratorEntity mac = new SteamMaceratorEntity();
+        mac.setSlot(SteamMaceratorEntity.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        int maxStack = com.minecraftclone.player.Inventory.maxStack(BlockType.IRON_INGOT);
+        // Fill output to one slot below the cap that would be exceeded.
+        mac.setSlot(SteamMaceratorEntity.SLOT_OUTPUT, BlockType.IRON_INGOT,
+                maxStack - SteamMaceratorEntity.YIELD_MULTIPLIER);
+        assertTrue(mac.canCrush(), "should be able to crush when output has exactly enough room");
+
+        mac.setSlot(SteamMaceratorEntity.SLOT_OUTPUT, BlockType.IRON_INGOT,
+                maxStack - SteamMaceratorEntity.YIELD_MULTIPLIER + 1);
+        assertFalse(mac.canCrush(), "must refuse when output would exceed max stack");
+    }
+
+    @Test
+    void steamMaceratorOutputNeverExceedsMaxStack() {
+        // Even with a large input batch, the output count must stay <= maxStack.
+        SteamBoilerEntity boiler = new SteamBoilerEntity();
+        SteamMaceratorEntity mac = new SteamMaceratorEntity();
+        mac.attach(1, 64, 1, null);
+        mac.boiler = boiler;
+
+        int maxStack = com.minecraftclone.player.Inventory.maxStack(BlockType.IRON_INGOT);
+        mac.setSlot(SteamMaceratorEntity.SLOT_INPUT, BlockType.IRON_ORE, 64);
+        boiler.addFuel(BlockType.COAL, 64);
+
+        for (int i = 0; i < 2000; i++) { boiler.tick(0.25f); mac.tick(0.25f); }
+
+        assertTrue(mac.countOf(SteamMaceratorEntity.SLOT_OUTPUT) <= maxStack,
+                "output count must never exceed maxStack");
     }
 
     @Test

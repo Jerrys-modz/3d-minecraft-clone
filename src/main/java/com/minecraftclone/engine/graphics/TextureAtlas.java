@@ -374,6 +374,8 @@ public class TextureAtlas {
         paintSteamPipe(image, 261, rnd, 0x7B5A2D, 0xFF4A3418, 0x7B5A2D);   // STEAM_PIPE_WOOD
         paintSteamPipe(image, 262, rnd, 0xD8D8D8, 0xFF6A6A6A, 0xA8A8A8);   // STEAM_PIPE_IRON
         paintSteamPipe(image, 263, rnd, 0xC8C8E8, 0xFF5060A0, 0x8888B8);   // STEAM_PIPE_STEEL
+        paintSteamMacerator(image, 264, rnd, false);      // STEAM_MACERATOR front (idle)
+        paintSteamMacerator(image, 265, rnd, true);       // STEAM_MACERATOR front (working)
 
         return image;
     }
@@ -2184,6 +2186,30 @@ public class TextureAtlas {
         }
         for (int x = 13; x < TILE_PX; x++) {
             for (int y = 5; y < 11; y++) img.setRGB(ox + x, oy + y, 0xFF000000 | edgeCol);
+        }
+    }
+
+    /**
+     * STEAM_MACERATOR (tiles 264 idle / 265 working): a bronze machine box
+     * with a dark grinding chamber; the chamber glows while crushing.
+     */
+    private void paintSteamMacerator(BufferedImage img, int index, Random rnd, boolean working) {
+        paintBronzeMachineBox(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 4; y < 12; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 4 || y == 11 || x == 3 || x == 12;
+                int color;
+                if (edge) { color = 0xFF3A2A18; }
+                else if (working) {
+                    // Glowing hot chamber with grinding sparks.
+                    int sparkle = rnd.nextInt(8);
+                    color = sparkle < 2 ? 0xFFF0C040 : 0xFF80300A;
+                } else {
+                    color = 0xFF1E1006;
+                }
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
         }
     }
 
