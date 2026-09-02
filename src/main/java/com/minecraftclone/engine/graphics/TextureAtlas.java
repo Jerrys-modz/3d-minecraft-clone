@@ -364,6 +364,7 @@ public class TextureAtlas {
         paintCastingBasin(image, 241, rnd);               // CASTING_BASIN
         paintPartBuilder(image, 242, rnd);                // PART_BUILDER
         paintToolStation(image, 243, rnd);                // TOOL_STATION
+        paintAnvil(image, 254, rnd);                      // ANVIL
 
         return image;
     }
@@ -2234,6 +2235,65 @@ public class TextureAtlas {
         img.setRGB(ox + 3, oy + 3, 0xFF000000 | hColor);
         img.setRGB(ox + 3, oy + 4, 0xFF000000 | hColor);
         img.setRGB(ox + 3, oy + 5, 0xFF000000 | hColor);
+    }
+
+    /**
+     * ANVIL face (tile 254): heavy cast-iron block — very dark iron-grey base
+     * with a slight lighter "flat-top" band in the upper half (the anvil face),
+     * a narrow dark waist indent in the middle, and a solid base band below.
+     * A small hammer-impact mark is painted near the centre of the face.
+     */
+    private void paintAnvil(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int baseColor = 0x606070; // darker iron than tool station
+        // Fill base
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(10) - 5;
+                int r = clamp(((baseColor >> 16) & 0xFF) + noise);
+                int g = clamp(((baseColor >> 8)  & 0xFF) + noise);
+                int b = clamp(( baseColor        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Lighter flat-top face area (top half, inset 1 px)
+        for (int y = 1; y < 7; y++) {
+            for (int x = 1; x < 15; x++) {
+                int v = 0x808090 + (rnd.nextInt(8) - 4);
+                int r = clamp((v >> 16) & 0xFF);
+                int g = clamp((v >> 8)  & 0xFF);
+                int b = clamp( v        & 0xFF);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Waist indent (narrower, rows 7-8)
+        for (int x = 0; x < TILE_PX; x++) {
+            img.setRGB(ox + x, oy + 7, 0xFF383840);
+            img.setRGB(ox + x, oy + 8, 0xFF303038);
+        }
+        // Inner waist slightly lighter (only central 8 px)
+        for (int x = 4; x < 12; x++) {
+            img.setRGB(ox + x, oy + 7, 0xFF505058);
+            img.setRGB(ox + x, oy + 8, 0xFF484850);
+        }
+        // Base block area (rows 9-14, full width)
+        for (int y = 9; y < 15; y++) {
+            for (int x = 1; x < 15; x++) {
+                int v = 0x707078 + (rnd.nextInt(8) - 4);
+                int r = clamp((v >> 16) & 0xFF);
+                int g = clamp((v >> 8)  & 0xFF);
+                int b = clamp( v        & 0xFF);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Impact mark — a small cross/divot near the centre of the face area
+        int mk = 0x404048;
+        img.setRGB(ox + 7, oy + 3, 0xFF000000 | mk);
+        img.setRGB(ox + 8, oy + 3, 0xFF000000 | mk);
+        img.setRGB(ox + 7, oy + 4, 0xFF000000 | mk);
+        img.setRGB(ox + 8, oy + 4, 0xFF000000 | mk);
+        img.setRGB(ox + 6, oy + 4, 0xFF000000 | mk);
+        img.setRGB(ox + 9, oy + 4, 0xFF000000 | mk);
     }
 
     /** Clamp a colour channel to [0, 255]. */

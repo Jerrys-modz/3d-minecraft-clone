@@ -6,6 +6,8 @@ import com.minecraftclone.world.tinkers.PartBuilderGui;
 import com.minecraftclone.world.tinkers.ToolPartType;
 import com.minecraftclone.world.tinkers.TinkersRegistry;
 import com.minecraftclone.world.tinkers.ToolStationGui;
+import com.minecraftclone.player.AnvilGui;
+import com.minecraftclone.player.ToolDurability;
 
 /**
  * Drives the mouse interaction on any container screen, Minecraft-style. It
@@ -35,6 +37,14 @@ public class InventoryController {
     /** The item stack currently "held" by the mouse cursor.  Never {@code null}. */
     private ItemStack cursor = ItemStack.EMPTY;
 
+    /**
+     * Optional durability tracker injected by Main so that anvil repair resets
+     * a tool's wear counter.  May be {@code null}; the repair still succeeds
+     * (the tool returns to the cursor), but durability is not reset until a
+     * tracker is attached.
+     */
+    private ToolDurability toolDurability;
+
     // Click/drag state: a mouse press starts a session that resolves on release -
     // a single touched slot is a plain click, several touched slots is a drag that
     // spreads the cursor stack one item per slot.
@@ -52,6 +62,16 @@ public class InventoryController {
     public InventoryController(ContainerGui gui) {
         this.inventory = gui.inventory();
         this.gui = gui;
+    }
+
+    /**
+     * Injects the player's durability tracker so that anvil repair resets the
+     * repaired tool's wear counter.  Call this once after construction; passing
+     * {@code null} disables the durability-reset (useful in unit tests that
+     * don't need full durability wiring).
+     */
+    public void setToolDurability(ToolDurability td) {
+        this.toolDurability = td;
     }
 
     /** Rebinds the controller to a different open container (inventory/furnace/crafting table). */
@@ -159,6 +179,11 @@ public class InventoryController {
         }
         if (gui.isTsOutputSlot(slotId)) {
             if (shift) assembleToolStationToInventory(); else assembleToolStation();
+            return;
+        }
+        // Anvil: clicking the output slot triggers a repair (moves repaired tool to cursor).
+        if (gui.isAnvilOutputSlot(slotId)) {
+            if (shift) repairAnvilToInventory(); else repairAnvil();
             return;
         }
         // Tinkers GUI: Tool Station input slots only accept Tinkers parts.
@@ -444,6 +469,21 @@ public class InventoryController {
                 if (leftover.isEmpty()) {
                     gui.toolStationGui().setSlot(slotId - ContainerGui.TS_SLOT_0, ItemStack.EMPTY);
                 }
+            }
+            return;
+        }
+        // Anvil: shift-click on output triggers repair + deposit directly into inventory.
+        if (gui.isAnvilOutputSlot(slotId)) {
+            repairAnvilToInventory();
+            return;
+        }
+        // Anvil: shift-click on a writable input slot returns its item to inventory.
+        if (gui.isAnvilInputSlot(slotId)) {
+            BlockType t = gui.typeOf(slotId);
+            int cnt = gui.countOf(slotId);
+            if (t != null) {
+                int leftover = inventory.add(t, cnt);
+                gui.setSlot(slotId, leftover > 0 ? t : null, leftover);
             }
             return;
         }
@@ -737,6 +777,39 @@ public class InventoryController {
         if (inventory.isFull()) return;
         ItemStack result = ts.assemble();
         if (!result.isEmpty()) inventory.addStack(result);
+    }
+
+    /**
+     * Left-click on the Anvil output: consume 1 repair material, reset the
+     * tool's durability via {@link ToolDurability#resetType}, and hand the
+     * repaired tool to the cursor (or push it to the inventory if the cursor is
+     * already occupied).
+     */
+    private void repairAnvil() {
+        AnvilGui anvil = gui.anvilGui();
+        if (anvil == null || !anvil.canRepair()) return;
+        BlockType toolType = anvil.consume();
+        if (toolType == null) return;
+        if (toolDurability != null) toolDurability.resetType(toolType);
+        ItemStack repaired = ItemStack.of(toolType, 1);
+        if (cursor.isEmpty()) {
+            cursor = repaired;
+        } else {
+            inventory.addStack(repaired);
+        }
+    }
+
+    /**
+     * Shift-click on the Anvil output: repair and deposit the tool directly
+     * into the inventory without touching the cursor.
+     */
+    private void repairAnvilToInventory() {
+        AnvilGui anvil = gui.anvilGui();
+        if (anvil == null || !anvil.canRepair()) return;
+        BlockType toolType = anvil.consume();
+        if (toolType == null) return;
+        if (toolDurability != null) toolDurability.resetType(toolType);
+        inventory.addStack(ItemStack.of(toolType, 1));
     }
 
     /** Crafts the current grid match into the cursor (if there's room), consuming the ingredients. */

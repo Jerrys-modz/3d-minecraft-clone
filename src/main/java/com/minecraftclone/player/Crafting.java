@@ -212,6 +212,12 @@ public final class Crafting {
         // Tool Station: iron ingots on top, planks frame body
         shaped3x3("III", "PZP", "PPP", BlockType.TOOL_STATION, 1);
 
+        // Anvil: seven iron ingots in the classic Minecraft anvil silhouette.
+        //   III      <- three across the top (the flat face)
+        //   .I.      <- one ingot at the waist
+        //   III      <- three across the base
+        shaped3x3("III", ".I.", "III", BlockType.ANVIL, 1);
+
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.
 

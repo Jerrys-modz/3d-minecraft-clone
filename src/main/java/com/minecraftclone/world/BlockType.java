@@ -750,7 +750,17 @@ public enum BlockType {
     TINKERS_PART(500, 0),
 
     /** Sentinel for any assembled Tinkers' modular tool; the real data lives in {@code ItemStack.tinkersItem()}. */
-    TINKERS_TOOL(501, 0);
+    TINKERS_TOOL(501, 0),
+
+    // -----------------------------------------------------------------------
+    // Repair station
+    // -----------------------------------------------------------------------
+
+    /**
+     * Anvil — a heavy iron repair station where players restore a tool's
+     * durability by supplying one unit of its base material.  Tile 254.
+     */
+    ANVIL(514, true, false, 254, 254, 254);
 
     public final short id;
     public final boolean solid;

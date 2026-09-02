@@ -90,6 +90,7 @@ public final class Mining {
         put(BlockType.CASTING_BASIN,        2.5f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.PART_BUILDER,         2.5f, ToolKind.AXE,     TIER_HAND);
         put(BlockType.TOOL_STATION,         2.5f, ToolKind.AXE,     TIER_HAND);
+        put(BlockType.ANVIL,                5.0f, ToolKind.HAMMER,  TIER_HAND);
 
         // Farming blocks
         put(BlockType.FARMLAND,     0.6f, ToolKind.SHOVEL, TIER_HAND);
