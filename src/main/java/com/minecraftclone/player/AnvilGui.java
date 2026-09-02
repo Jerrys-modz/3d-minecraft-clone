@@ -88,7 +88,10 @@ public final class AnvilGui {
      * material for that tool's tier.
      */
     public boolean canRepair() {
-        if (toolType == null || toolCount <= 0) return false;
+        // Require exactly one tool: repairing consumes the whole tool slot and returns
+        // exactly one repaired item.  Allowing toolCount > 1 would silently delete the
+        // surplus tools, so we reject that case and require the player to split the stack.
+        if (toolType == null || toolCount != 1) return false;
         if (Mining.toolStats(toolType) == null) return false; // not a repairable tool
         BlockType needed = repairMaterialOf(toolType);
         return needed != null && needed == materialType && materialCount >= 1;

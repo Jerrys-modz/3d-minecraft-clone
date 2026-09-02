@@ -335,4 +335,96 @@ class AnvilRepairTest {
         assertEquals(BlockType.WOOD_AXE, ctrl.cursorType());
         assertEquals(1, anvil.materialCount());
     }
+
+    // -----------------------------------------------------------------------
+    // Regression: surplus tools and full-inventory output loss (CodeRabbit #82)
+    // -----------------------------------------------------------------------
+
+    /**
+     * If two tools are stacked in the tool slot, canRepair() must be false.
+     * Allowing the repair would clear the whole slot (both tools) but only
+     * return one, silently deleting the extra.
+     */
+    @Test
+    void canRepairIsFalseWhenToolCountExceedsOne() {
+        AnvilGui anvil = new AnvilGui();
+        anvil.setTool(BlockType.IRON_PICKAXE, 2);   // two pickaxes — not supported
+        anvil.setMaterial(BlockType.IRON_INGOT, 1);
+        assertFalse(anvil.canRepair(),
+                "repair should be blocked when tool slot holds more than one item");
+    }
+
+    /**
+     * Exactly one tool in the tool slot must still repair normally (the
+     * toolCount == 1 guard should not break the happy path).
+     */
+    @Test
+    void canRepairIsTrueWhenExactlyOneTool() {
+        AnvilGui anvil = new AnvilGui();
+        anvil.setTool(BlockType.IRON_PICKAXE, 1);
+        anvil.setMaterial(BlockType.IRON_INGOT, 1);
+        assertTrue(anvil.canRepair());
+    }
+
+    /**
+     * Left-click on the output must not consume inputs when the cursor is
+     * already held and the inventory is completely full — the repaired tool
+     * would have nowhere to land and would be lost.
+     */
+    @Test
+    void repairAnvilDoesNotConsumeWhenCursorOccupiedAndInventoryFull() {
+        // Fill inventory
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            inventory.setSlot(i, BlockType.STONE, 64);
+        }
+        assertTrue(inventory.isFull());
+
+        AnvilGui anvil = new AnvilGui();
+        anvil.setTool(BlockType.IRON_PICKAXE, 1);
+        anvil.setMaterial(BlockType.IRON_INGOT, 3);
+        ContainerGui gui = ContainerGui.forAnvil(inventory, anvil);
+        InventoryController ctrl = new InventoryController(gui);
+        ctrl.setToolDurability(durability);
+
+        // Give cursor an item so it's occupied
+        inventory.setSlot(0, BlockType.IRON_INGOT, 1);
+        ContainerGui invGui = ContainerGui.forAnvil(inventory, anvil); // share same inventory
+        InventoryController ctrl2 = new InventoryController(invGui);
+        ctrl2.click(0, false, false); // pick up ingot to cursor
+        // Re-fill slot 0 so inventory stays full
+        inventory.setSlot(0, BlockType.STONE, 64);
+
+        // Attempt repair — should be a no-op
+        ctrl2.click(ContainerGui.ANVIL_OUTPUT_SLOT, false, false);
+
+        // Inputs must be unchanged
+        assertEquals(BlockType.IRON_PICKAXE, anvil.toolType(),   "tool slot must not be consumed");
+        assertEquals(3,                      anvil.materialCount(), "material count must be unchanged");
+    }
+
+    /**
+     * Shift-click on the output must not consume inputs when the inventory is
+     * completely full — there is nowhere for the repaired tool to land.
+     */
+    @Test
+    void repairAnvilToInventoryDoesNotConsumeWhenInventoryFull() {
+        // Fill entire inventory
+        for (int i = 0; i < Inventory.SIZE; i++) {
+            inventory.setSlot(i, BlockType.STONE, 64);
+        }
+        assertTrue(inventory.isFull());
+
+        AnvilGui anvil = new AnvilGui();
+        anvil.setTool(BlockType.IRON_PICKAXE, 1);
+        anvil.setMaterial(BlockType.IRON_INGOT, 2);
+        ContainerGui gui = ContainerGui.forAnvil(inventory, anvil);
+        InventoryController ctrl = new InventoryController(gui);
+        ctrl.setToolDurability(durability);
+
+        ctrl.click(ContainerGui.ANVIL_OUTPUT_SLOT, false, true); // shift-click
+
+        // Inputs must be unchanged
+        assertEquals(BlockType.IRON_PICKAXE, anvil.toolType(),   "tool slot must not be consumed");
+        assertEquals(2,                      anvil.materialCount(), "material count must be unchanged");
+    }
 }

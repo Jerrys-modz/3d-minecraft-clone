@@ -788,6 +788,11 @@ public class InventoryController {
     private void repairAnvil() {
         AnvilGui anvil = gui.anvilGui();
         if (anvil == null || !anvil.canRepair()) return;
+        // Pre-check: the repaired tool is a single-item stack that needs a slot to
+        // land in.  If the cursor is already held and the inventory is full there is
+        // nowhere to put the result, so leave everything unchanged rather than
+        // consuming the inputs and losing the output.
+        if (!cursor.isEmpty() && inventory.isFull()) return;
         BlockType toolType = anvil.consume();
         if (toolType == null) return;
         if (toolDurability != null) toolDurability.resetType(toolType);
@@ -806,6 +811,9 @@ public class InventoryController {
     private void repairAnvilToInventory() {
         AnvilGui anvil = gui.anvilGui();
         if (anvil == null || !anvil.canRepair()) return;
+        // Pre-check: avoid consuming inputs when the inventory has no room for the
+        // repaired tool, which would cause the output to be silently discarded.
+        if (inventory.isFull()) return;
         BlockType toolType = anvil.consume();
         if (toolType == null) return;
         if (toolDurability != null) toolDurability.resetType(toolType);

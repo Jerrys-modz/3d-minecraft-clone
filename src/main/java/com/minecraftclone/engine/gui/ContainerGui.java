@@ -489,8 +489,12 @@ public class ContainerGui {
         } else if (isTsInputSlot(slotId)) {
             toolStationGui.setSlot(slotId - TS_SLOT_0, stack);
         } else if (isAnvilToolSlot(slotId)) {
+            // Tinkers stacks carry a payload that type+count cannot represent; reject
+            // them so the source slot is left unchanged rather than silently stripped.
+            if (stack.isTinkers()) return;
             anvilGui.setTool(stack.isEmpty() ? null : stack.type(), stack.count());
         } else if (isAnvilMaterialSlot(slotId)) {
+            if (stack.isTinkers()) return; // same reason as above
             anvilGui.setMaterial(stack.isEmpty() ? null : stack.type(), stack.count());
         } else {
             // Grid, armor, and chest/furnace slots store only BlockType + count.
