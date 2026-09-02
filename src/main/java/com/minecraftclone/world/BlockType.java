@@ -753,6 +753,77 @@ public enum BlockType {
     TINKERS_TOOL(501, 0),
 
     // -----------------------------------------------------------------------
+    // Iron bucket + lava bucket: the lava-transport pair. An empty bucket
+    // right-clicked on a lava source scoops it up (the source becomes air);
+    // a full bucket right-clicked on a Seared Tank pours the lava into the
+    // tank as smeltery fuel and returns the empty bucket.
+    // -----------------------------------------------------------------------
+
+    /** Empty iron bucket: right-click a lava source to fill it. Crafted from 3 iron ingots in a V. */
+    IRON_BUCKET(502, 0),
+
+    /**
+     * Full lava bucket: right-click a Smeltery's Seared Tank to pour the lava
+     * in as fuel (returns the empty bucket). Also placeable as a lava source.
+     */
+    LAVA_BUCKET(503, 0),
+
+    // -----------------------------------------------------------------------
+    // Steam Age (GTNH phase 1): bronze material chain + steam machines.
+    // Bronze = copper + tin alloy; machines burn solid fuel into steam and
+    // run off it, doubling ore and automating smelting before electricity.
+    // -----------------------------------------------------------------------
+
+    /** Crushed bronze blend: shapeless-craft 1 copper + 1 tin dust/ingot pair. Smelts into bronze ingots. */
+    BRONZE_DUST(504, 0),
+
+    /** Bronze ingot: the Steam Age structural metal for machine hulls. */
+    BRONZE_INGOT(505, 0),
+
+    /**
+     * Coal-fired steam boiler: right-click to load solid fuel; while burning
+     * it builds up a steam buffer that adjacent steam machines consume.
+     */
+    STEAM_BOILER(506, true, false, 256, 256, 256, 256, 257, 0, 0),
+
+    /**
+     * Steam-powered furnace: furnace GUI and behavior, but its heat comes
+     * from an adjacent, steaming boiler instead of fuel in the fuel slot.
+     */
+    STEAM_FURNACE(507, true, false, 258, 258, 258, 258, 259, 0, 0),
+
+    /**
+     * Wooden steam pipe: the cheap starter tier. Carries steam, but its
+     * narrow bore throttles flow to half rate. Burns if... it\'s wood.
+     */
+    STEAM_PIPE_WOOD(509, true, false, 261, 261, 261),
+
+    /** Bronze steam pipe: the standard Steam Age tier, full throughput. */
+    STEAM_PIPE_BRONZE(508, true, false, 260, 260, 260),
+
+    /**
+     * Iron steam pipe: high-pressure tier, conducts at 1.5x rate. Built
+     * from iron ingots; the upgrade path past bronze.
+     */
+    STEAM_PIPE_IRON(510, true, false, 262, 262, 262),
+
+    /** Steel ingot: forged from iron + coal at extreme heat; the gateway to higher-tier machinery. */
+    STEEL_INGOT(511, 0),
+
+    /**
+     * Steel steam pipe: top Steam Age tier, conducts at 2x rate.
+     * Built from steel ingots.
+     */
+    STEAM_PIPE_STEEL(512, true, false, 263, 263, 263),
+
+    /**
+     * Steam Macerator: crushes ore into double output using steam power.
+     * The core progression incentive of the Steam Age - build infrastructure,
+     * double your ore yield.
+     */
+    STEAM_MACERATOR(513, true, false, 264, 264, 264, 264, 265, 0, 0),
+
+    // -----------------------------------------------------------------------
     // Repair station
     // -----------------------------------------------------------------------
 

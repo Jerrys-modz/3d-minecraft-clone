@@ -14,11 +14,16 @@ import com.minecraftclone.engine.graphics.ItemRenderer;
 import com.minecraftclone.engine.graphics.ItemTextures;
 import com.minecraftclone.engine.graphics.MobRenderer;
 import com.minecraftclone.engine.graphics.MobTextures;
+import com.minecraftclone.engine.graphics.PlayerRenderer;
 import com.minecraftclone.engine.graphics.SkyRenderer;
 import com.minecraftclone.engine.graphics.TextureAtlas;
 import com.minecraftclone.engine.graphics.WeatherRenderer;
 import com.minecraftclone.engine.MapRenderer;
 import com.minecraftclone.engine.gui.ContainerGui;
+import com.minecraftclone.net.GameServer;
+import com.minecraftclone.net.NetClient;
+import com.minecraftclone.net.Packets;
+import com.minecraftclone.net.ServerConfig;
 import com.minecraftclone.player.Armor;
 import com.minecraftclone.player.CraftingGrid;
 import com.minecraftclone.player.CreativeCatalog;
@@ -30,21 +35,25 @@ import com.minecraftclone.player.MiningController;
 import com.minecraftclone.player.Player;
 import com.minecraftclone.player.PlayerSave;
 import com.minecraftclone.player.PlayerStats;
+import com.minecraftclone.player.RecipeBookGui;
 import com.minecraftclone.player.StorageContainer;
 import com.minecraftclone.player.OreDrops;
 import com.minecraftclone.util.AABB;
 import com.minecraftclone.util.Raycaster;
 import com.minecraftclone.util.ResourceLoader;
 import com.minecraftclone.world.Barrel;
-import com.minecraftclone.world.Chest;
+import com.minecraftclone.world.Bed;
+import com.minecraftclone.world.BlockEntity;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Chunk;
+import com.minecraftclone.world.Chest;
 import com.minecraftclone.world.DimensionType;
 import com.minecraftclone.world.Door;
-import com.minecraftclone.world.Bed;
 import com.minecraftclone.world.Furnace;
+import com.minecraftclone.world.ItemEntity;
 import com.minecraftclone.world.Mining;
 import com.minecraftclone.world.Mob;
+import com.minecraftclone.world.RemotePlayer;
 import com.minecraftclone.world.World;
 import com.minecraftclone.world.gen.TerrainGenerator;
 import com.minecraftclone.world.gen.WorldGenSettings;
@@ -59,8 +68,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -133,6 +145,32 @@ public class Main {
     private static final float NETHER_AMBIENT = 0.7f;   // dim lava/glowstone self-light
     private static final float END_AMBIENT = 0.45f;     // dim, star-lit void
 
+    // --- Multiplayer state (set from the main menu / network thread) ---
+    /** The active server connection, or null when not in a multiplayer session. */
+    private volatile NetClient netClient;
+    /** An embedded server started by "Host & Play" (same process), or null. */
+    private volatile GameServer hostServer;
+    /** The last multiplayer connection error to surface to the user, or null. */
+    private volatile String netError;
+    /**
+     * Bumped every time a connect attempt is cancelled, so a connection thread
+     * that finishes late can detect it was abandoned and never publish its
+     * client (a stale assignment would silently reconnect the user).
+     */
+    private final java.util.concurrent.atomic.AtomicInteger mpConnectGeneration =
+            new java.util.concurrent.atomic.AtomicInteger();
+    /** Remote players seen via the server, keyed by their server-assigned id. */
+    private final Map<Integer, RemotePlayer> remotePlayers = new LinkedHashMap<>();
+    /** Remote mobs seen via the server, keyed by their server-assigned id. */
+    private final Map<Integer, Mob> remoteMobs = new LinkedHashMap<>();
+    /** Draws other players' bodies; created in run() once the GL context exists. */
+    private PlayerRenderer playerRenderer;
+    /** The dimension the local player is currently in (shared with multiplayer helpers). */
+    private final DimensionType[] currentDim = {DimensionType.OVERWORLD};
+    /** The per-dimension mirror worlds created by a multiplayer WELCOME, handed to run(). */
+    private World[] returnMirrorWorlds;
+
+
     /** Queues a transient on-screen message (rendered via {@link Hud#renderMessages}). */
     private static void showMessage(List<Hud.Message> messages, String text, Vector4f color, float duration) {
         messages.add(new Hud.Message(text, color, duration));
@@ -141,7 +179,10 @@ public class Main {
     /** Pushes the current in-memory {@link Settings} into every world/renderer/player/audio. */
     private void applySettings(Settings settings, World[] worlds, Player player, Window window, AudioEngine audio) {
         if (worlds != null) {
+            // In multiplayer only some entries may exist (the mirrors the client
+            // has built so far), so skip nulls instead of assuming a dense array.
             for (World world : worlds) {
+                if (world == null) continue;
                 world.setLeavesTransparent(settings.isLeavesTransparent());
                 world.setRenderDistance(settings.getRenderDistance());
             }
@@ -450,6 +491,9 @@ public class Main {
         controller.returnGridToInventory();
         controller.returnCursorToInventory();
         SoundEvent closeSound = activeGui[0] != null ? activeGui[0].closeSound() : SoundEvent.UI_CLOSE;
+        // Publish whatever the player left in an open multiplayer container
+        // (chest/barrel/furnace) so the server and other clients see it.
+        flushOpenContainer();
         activeGui[0] = inventoryGui;
         controller.setGui(inventoryGui);
         inventoryOpen[0] = false;
@@ -475,6 +519,712 @@ public class Main {
         dayNightCycle.resetDays();
         calendar.reset();
         calendar.setWeeksPerMonth(genSettings.getWeeksPerMonth());
+    }
+
+    // ------------------------------------------------------------------
+    // Multiplayer
+    // ------------------------------------------------------------------
+
+    private static int parsePort(String text) {
+        try {
+            int p = Integer.parseInt(text.trim());
+            return (p >= 1 && p <= 65535) ? p : 25565;
+        } catch (NumberFormatException e) {
+            return 25565;
+        }
+    }
+
+    /** Starts an embedded {@link GameServer} in this process, then connects the local client to it. */
+    private void hostAndPlay(int port, Path saveRoot, String playerName) {
+        final int gen = mpConnectGeneration.get();
+        Thread t = new Thread(() -> {
+            try {
+                WorldGenSettings serverSettings = new WorldGenSettings();
+                long seed = serverSettings.resolveSeed();
+                Path serverSaveDir = saveRoot.resolve("multiplayer_server");
+                GameServer server = new GameServer(port, serverSettings, seed, serverSaveDir);
+                if (gen != mpConnectGeneration.get()) {
+                    // Cancelled while the server was starting: shut it down
+                    // immediately instead of leaving it listening.
+                    server.close();
+                    return;
+                }
+                hostServer = server;
+                server.start();
+                System.out.println("Hosted server on port " + server.getPort() + " (seed " + seed + ")");
+                connectClient("127.0.0.1", server.getPort(), playerName, gen);
+            } catch (Exception e) {
+                netError = "Failed to start server: " + e.getMessage();
+                hostServer = null;
+            }
+        }, "host-and-play");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Connects the local client to an existing server. */
+    private void joinServer(String host, int port, String playerName) {
+        final int gen = mpConnectGeneration.get();
+        Thread t = new Thread(() -> connectClient(host, port, playerName, gen), "join-server");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Connects, sends the join packet, and stashes the client for the main loop to pick up. */
+    private void connectClient(String host, int port, String playerName, int generation) {
+        NetClient client = null;
+        try {
+            client = new NetClient(host, port);
+            client.sendJoin(playerName);
+            if (generation != mpConnectGeneration.get()) {
+                // The user cancelled while this attempt was in flight; never
+                // publish a connection they walked away from.
+                client.close();
+                return;
+            }
+            // Publish the name first: once netClient is visible, the main loop
+            // can start rendering the Tab list - it must never show a stale
+            // name from a previous session.
+            localPlayerName = playerName;
+            netClient = client;
+            netError = null;
+        } catch (Exception e) {
+            if (client != null) client.close();
+            if (generation == mpConnectGeneration.get()) {
+                netError = "Could not connect to " + host + ":" + port + " - " + e.getMessage();
+            }
+            netClient = null;
+        }
+    }
+
+    /** Cancels any in-flight connect attempt and tears down the session. */
+    private void cancelMultiplayerConnect() {
+        mpConnectGeneration.incrementAndGet();
+        leaveMultiplayer();
+    }
+
+    /** Sends the local player's current position/look to the server (throttled by the caller). */
+    private void sendPlayerMove(NetClient client, Player player) {
+        if (client == null || !client.isConnected()) return;
+        Vector3f p = player.getPosition();
+        Camera cam = player.getCamera();
+        try {
+            client.sendMove(new Packets.Move(p.x, p.y, p.z, cam.getYaw(), cam.getPitch(),
+                    player.isOnGround(), player.isFlying(), player.isSprinting()));
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /** Broadcasts a block change to the server (break/place intent). */
+    private void sendBlockChange(byte dimension, int x, int y, int z, BlockType type, byte orientation, boolean overlay) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        try {
+            if (type == BlockType.AIR) {
+                client.sendBreakBlock(new Packets.BreakBlock(dimension, x, y, z, overlay));
+            } else {
+                client.sendPlaceBlock(new Packets.PlaceBlock(dimension, x, y, z, type.id, orientation, overlay));
+            }
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /** Sends a cell's current state to the server (used after local edits like door toggles). */
+    private void syncBlockToServer(byte dimension, World world, int x, int y, int z, boolean force) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        BlockType block = world.getBlock(x, y, z);
+        if (block == BlockType.AIR) {
+            if (force) sendBlockChange(dimension, x, y, z, BlockType.AIR, (byte) 0, false);
+            return;
+        }
+        sendBlockChange(dimension, x, y, z, block, world.getOrientation(x, y, z), false);
+    }
+
+    /** Sends both halves of a door column to the server after a toggle. */
+    private void syncDoorToServer(byte dimension, World world, int x, int y, int z) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        int bottom = Door.bottomHalf(world, x, y, z);
+        for (int yy = bottom; yy <= bottom + 1; yy++) {
+            BlockType block = world.getBlock(x, yy, z);
+            sendBlockChange(dimension, x, yy, z, block, world.getOrientation(x, yy, z), false);
+        }
+    }
+
+    /** How far from their reported position a client may pick an item up (blocks). */
+    private static final float ITEM_PICKUP_RADIUS_SQ = 1.8f * 1.8f;
+    /** How often a pickup may be re-requested for the same item if the server stays silent. */
+    private static final long PICKUP_RETRY_NANOS = 1_000_000_000L;
+
+    /**
+     * Hands every newly-dropped local item to the server: block-break drops and
+     * death loot spawn locally (the client owns drop tables), so the sweep
+     * publishes each one as an ITEM_SPAWN and removes the local copy - the
+     * server's ITEM_ADD echo recreates it with a shared id. Tinkers'-payload
+     * drops stay local-only (their payload isn't on the wire).
+     */
+    private void syncLocalDrops(World world) {
+        byte dim = (byte) currentDim[0].ordinal();
+        NetClient client = netClient;
+        Iterator<ItemEntity> it = world.getItems().iterator();
+        while (it.hasNext()) {
+            ItemEntity e = it.next();
+            if (e.id != 0 || e.syncRequested || e.tinkersItem != null) continue;
+            e.syncRequested = true;
+            try {
+                client.sendItemSpawn(new Packets.ItemSpawn(dim,
+                        e.position.x, e.position.y, e.position.z, e.type.id, Math.min(e.count, 99)));
+            } catch (IOException ex) {
+                netError = ex.getMessage();
+                return;
+            }
+            // The server now owns this drop; its ITEM_ADD echo recreates it
+            // here (and everywhere else) with a shared id.
+            it.remove();
+        }
+    }
+
+    /**
+     * Walk-over pickup for server-owned items: when the player is close enough,
+     * ask the server to grant the stack (it replies with ITEM_GIVE). Re-requests
+     * are throttled per item.
+     */
+    private void requestItemPickups(World world, Vector3f playerPos) {
+        long now = System.nanoTime();
+        NetClient client = netClient;
+        for (ItemEntity e : world.getItems()) {
+            if (e.id <= 0 || !e.canPickup()) continue;
+            float dx = e.position.x - playerPos.x;
+            float dy = e.position.y - (playerPos.y + 0.9f);
+            float dz = e.position.z - playerPos.z;
+            if (dx * dx + dy * dy + dz * dz >= ITEM_PICKUP_RADIUS_SQ) continue;
+            if (now - e.pickupRequestAtNanos < PICKUP_RETRY_NANOS) continue;
+            e.pickupRequestAtNanos = now;
+            try {
+                client.sendItemPickup(e.id);
+            } catch (IOException ex) {
+                netError = ex.getMessage();
+                return;
+            }
+        }
+    }
+
+    /**
+     * Serializes the local player (position, look, dimension, stats, inventory,
+     * armor, durability) with the same {@link PlayerSave} format disk saves
+     * use, and hands it to the server. The server keeps the latest per player
+     * and mirrors it back on the next join.
+     */
+    private void sendPlayerSnapshot(World[] worlds, Player player) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected() || worlds == null) return;
+        World w = worlds[currentDim[0].ordinal()];
+        if (w == null) return;
+        PlayerSave snapshot = PlayerSave.capture(player, currentDim[0], selectedSlot[0]);
+        try {
+            client.sendPlayerSync(String.join("\n", snapshot.toLines()));
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /**
+     * Applies a server-sent snapshot from a previous session: switches to the
+     * saved dimension and teleports + restores inventory/stats via
+     * {@link PlayerSave#applyTo}.
+     */
+    private void applyRestoredPlayerState(String data, World[] worlds, Player player) {
+        PlayerSave save = PlayerSave.fromLines(List.of(data.split("\n")));
+        if (save == null) return;
+        DimensionType dim = save.dimension();
+        World target;
+        if (dim.ordinal() >= 0 && dim.ordinal() < worlds.length && worlds[dim.ordinal()] != null) {
+            target = worlds[dim.ordinal()];
+            currentDim[0] = dim;
+        } else {
+            target = worlds[DimensionType.OVERWORLD.ordinal()];
+            currentDim[0] = DimensionType.OVERWORLD;
+        }
+        if (target == null) return;
+        save.applyTo(player);
+    }
+
+    /** Sends a chat message typed by the local player. */
+    private void sendChat(String text) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        try {
+            client.sendChat(text);
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /** Sends a mob attack to the server (server applies the damage authoritatively). */
+    private void sendMobAttack(Mob mob, float damage) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected() || mob.id <= 0) return;
+        try {
+            client.sendMobAttack(mob.id, damage);
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /**
+     * The container cell currently open in a GUI for multiplayer sync:
+     * {dimension, x, y, z}, or dimension -1 when none is open (or single player).
+     */
+    private final int[] openContainerCell = {-1, 0, 0, 0};
+
+    /**
+     * A snapshot from the server (this player's previous session) waiting to
+     * be applied once the mirror worlds are wired up.
+     */
+    private String pendingPlayerRestore;
+    /** Seconds since the last periodic player-snapshot push to the server. */
+    private float netPlayerSyncTimer;
+    /** Last shown "players in bed" counts, so identical SLEEP_STATE packets don't re-message. */
+    private final int[] lastSleepShown = {-1, -1};
+    /** This client's player name (from the multiplayer connect screen). */
+    private String localPlayerName = "Player";
+    /** The active hotbar slot (shared with helpers like snapshot capture). */
+    private final int[] selectedSlot = {0};
+
+    /**
+     * Mirrors run()'s local dimension-worlds array once per frame so helpers
+     * like {@link #flushOpenContainer()} can reach it without threading it
+     * through every signature.
+     */
+    private World[] activeWorlds;
+
+    /** Serializes a block entity with its own disk-save format (shared with the wire). */
+    private static byte[] snapshotBlockEntity(BlockEntity entity) throws IOException {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream out = new java.io.DataOutputStream(buf);
+        entity.writeTo(out);
+        out.flush();
+        return buf.toByteArray();
+    }
+
+    /** True if the block-entity type name matches the block at the cell. */
+    private static boolean typeMatchesBlock(String type, BlockType block) {
+        return switch (type) {
+            case Chest.TYPE -> block == BlockType.CHEST;
+            case Barrel.TYPE -> block == BlockType.BARREL;
+            case Furnace.TYPE -> block == BlockType.FURNACE;
+            case com.minecraftclone.world.SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
+            case com.minecraftclone.world.SteamFurnaceEntity.TYPE -> block == BlockType.STEAM_FURNACE;
+            case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
+            case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
+            case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
+            case com.minecraftclone.world.CastingEntity.TABLE_TYPE -> block == BlockType.CASTING_TABLE;
+            case com.minecraftclone.world.CastingEntity.BASIN_TYPE -> block == BlockType.CASTING_BASIN;
+            default -> false;
+        };
+    }
+
+    /**
+     * The smeltery entity whose structure contains the given cell (e.g. a
+     * Seared Tank shell block), or null when no formed smeltery covers it.
+     */
+    private static com.minecraftclone.world.multiblock.SmelteryEntity smelteryContainingAt(
+            int x, int y, int z, World world) {
+        var instance = world.multiBlockContaining(x, y, z);
+        if (instance == null) return null;
+        return world.blockEntityAt(instance.controllerX, instance.controllerY, instance.controllerZ)
+                instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+    }
+
+    /**
+     * Pushes one cell's block-entity state to the server (multiplayer) so
+     * everyone converges after a local mutation like pouring lava into a tank.
+     */
+    private void pushContainerSnapshot(int x, int y, int z) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        World world = activeWorlds != null && currentDim[0].ordinal() < activeWorlds.length
+                ? activeWorlds[currentDim[0].ordinal()] : null;
+        if (world == null) return;
+        BlockEntity entity = world.blockEntityAt(x, y, z);
+        if (entity == null || !typeMatchesBlock(entity.type(), world.getBlock(x, y, z))) return;
+        try {
+            client.sendContainerData(new Packets.ContainerData(
+                    (byte) currentDim[0].ordinal(), x, y, z, entity.type(), snapshotBlockEntity(entity)));
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /** Sends a casting intent without publishing any client-authored entity state. */
+    private boolean requestCastingOperation(int x, int y, int z, byte operation,
+                                            BlockType material, int shapeOrdinal, int count) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return false;
+        try {
+            client.sendCastingOperation(new Packets.CastingOperation(
+                    (byte) currentDim[0].ordinal(), x, y, z, operation,
+                    material != null ? material.id : BlockType.AIR.id, (byte) shapeOrdinal, count));
+            return true;
+        } catch (IOException e) {
+            netError = e.getMessage();
+            return false;
+        }
+    }
+
+    /**
+     * Right-clicked a chest/barrel/furnace in multiplayer: remember the cell so
+     * closing the GUI publishes its contents, and ask the server for its
+     * authoritative snapshot (it overwrites the local copy on arrival).
+     */
+    private void trackMultiplayerContainer(int x, int y, int z) {
+        NetClient client = netClient;
+        if (client == null || !client.isConnected()) return;
+        openContainerCell[0] = currentDim[0].ordinal();
+        openContainerCell[1] = x;
+        openContainerCell[2] = y;
+        openContainerCell[3] = z;
+        try {
+            client.sendContainerOpen((byte) currentDim[0].ordinal(), x, y, z);
+        } catch (IOException e) {
+            netError = e.getMessage();
+        }
+    }
+
+    /**
+     * The player closed a container GUI: push every involved entity's state to
+     * the server. A double/quad chest is several entities sharing one view, so
+     * all of its halves are flushed. Last close wins if two players had the
+     * same container open simultaneously.
+     */
+    private void flushOpenContainer() {
+        int dim = openContainerCell[0];
+        openContainerCell[0] = -1;
+        NetClient client = netClient;
+        if (dim < 0 || client == null || !client.isConnected()) return;
+        World world = activeWorlds != null && dim >= 0 && dim < activeWorlds.length ? activeWorlds[dim] : null;
+        if (world == null) return;
+        int x = openContainerCell[1], y = openContainerCell[2], z = openContainerCell[3];
+        BlockType block = world.getBlock(x, y, z);
+        List<int[]> cells = new ArrayList<>();
+        cells.add(new int[]{x, y, z});
+        if (block == BlockType.CHEST) {
+            // Doubles/quads: flush every half that has an entity so the shared
+            // JoinedStorage view stays consistent wherever it was edited.
+            java.util.function.BiPredicate<Integer, Integer> occupied2 =
+                    (cx, cz) -> world.getBlock(cx, y, cz) == BlockType.CHEST;
+            int[] quad = Chest.quadOrigin(x, y, z, (cx, cy, cz) -> occupied2.test(cx, cz));
+            if (quad != null) {
+                cells.add(new int[]{quad[0] + 1, y, quad[1]});
+                cells.add(new int[]{quad[0], y, quad[1] + 1});
+                cells.add(new int[]{quad[0] + 1, y, quad[1] + 1});
+            } else {
+                Chest.Partner partner = Chest.doublePartner(x, y, z, (cx, cy, cz) -> occupied2.test(cx, cz));
+                if (partner != null) cells.add(new int[]{partner.x(), y, partner.z()});
+            }
+        }
+        for (int[] c : cells) {
+            BlockEntity entity = world.blockEntityAt(c[0], c[1], c[2]);
+            if (entity == null || !typeMatchesBlock(entity.type(), world.getBlock(c[0], c[1], c[2]))) continue;
+            try {
+                client.sendContainerData(new Packets.ContainerData(
+                        (byte) dim, c[0], c[1], c[2], entity.type(), snapshotBlockEntity(entity)));
+            } catch (IOException e) {
+                netError = e.getMessage();
+                return;
+            }
+        }
+    }
+
+    /** The mob the crosshair is aimed at: local mobs, or remote players' mobs in multiplayer. */
+    private Mob raycastTargetMob(Player player, World world) {
+        Vector3f eye = player.getEyePosition();
+        Vector3f front = player.getCamera().getFront();
+        if (netClient != null && netClient.isConnected()) {
+            return raycastRemoteMobs(eye, front);
+        }
+        return world.raycastMob(eye, front, REACH_DISTANCE);
+    }
+
+    /** Raycasts against the server-relayed mob list (multiplayer) using {@code Mob.rayIntersects}. */
+    private Mob raycastRemoteMobs(Vector3f eye, Vector3f front) {
+        Mob best = null;
+        float bestT = REACH_DISTANCE;
+        for (Mob m : remoteMobs.values()) {
+            float t = Mob.rayIntersects(eye, front, bestT, m.getAABB());
+            if (t >= 0f) {
+                bestT = t;
+                best = m;
+            }
+        }
+        return best;
+    }
+
+    /** The remote player the crosshair is aimed at (same dimension), or null - PvP targeting. */
+    private RemotePlayer raycastTargetRemotePlayer(Player player) {
+        if (netClient == null || !netClient.isConnected()) return null;
+        Vector3f eye = player.getEyePosition();
+        Vector3f front = player.getCamera().getFront();
+        byte myDim = (byte) currentDim[0].ordinal();
+        RemotePlayer best = null;
+        float bestT = REACH_DISTANCE;
+        for (RemotePlayer rp : remotePlayers.values()) {
+            if (rp.dimension != myDim) continue;
+            AABB box = new AABB(rp.position.x - 0.3f, rp.position.y, rp.position.z - 0.3f,
+                    rp.position.x + 0.3f, rp.position.y + 1.8f, rp.position.z + 0.3f);
+            float t = Mob.rayIntersects(eye, front, bestT, box);
+            if (t >= 0f) {
+                bestT = t;
+                best = rp;
+            }
+        }
+        return best;
+    }
+
+    /** Tears down the multiplayer session and returns to the main menu. */
+    private void leaveMultiplayer() {
+        if (hostServer != null) {
+            hostServer.close();
+            hostServer = null;
+        }
+        if (netClient != null) {
+            netClient.close();
+            netClient = null;
+        }
+        remotePlayers.clear();
+        remoteMobs.clear();
+        netError = null;
+    }
+
+    /**
+     * Drains every pending server packet and applies it to the local client
+     * state. Returns a newly-created {@link World} if a WELCOME packet set one
+     * up this frame (the caller assigns it to its {@code world} variable),
+     * otherwise null. Runs entirely on the main thread.
+     */
+    private World processNetPackets(NetClient client, World world, World[] worlds, Player player, TextureAtlas atlas,
+                                    Settings settings, Path saveRoot,
+                                    WorldGenSettings genSettings,
+                                    DayNightCycle dayNightCycle, Calendar calendar, boolean[] started,
+                                    boolean[] mainMenuOpen, boolean[] multiplayerOpen, boolean[] mpConnecting,
+                                    Window window, Input input, List<Hud.Message> messages, AudioEngine audio) {
+        World created = null;
+        Object packet;
+        while ((packet = client.poll()) != null) {
+            if (packet instanceof Packets.Welcome welcome) {
+                // Server accepted us: build the client world from its seed + settings.
+                WorldGenSettings remoteSettings = new WorldGenSettings();
+                remoteSettings.setSeedText(Long.toString(welcome.seed()));
+                remoteSettings.setWorldType(welcome.worldType());
+                remoteSettings.setStructures(welcome.structures());
+                remoteSettings.setSeaLevelIndex(welcome.seaLevelIndex());
+                remoteSettings.setTerrainSizeIndex(welcome.terrainSizeIndex());
+                remoteSettings.setWeeksPerMonthIndex(welcome.weeksPerMonth());
+                // The client's world is a live mirror of the server's: unmodified
+                // chunks regenerate from the seed, modified ones arrive over the
+                // wire. A throwaway save dir keeps a previous session's stale
+                // chunks from ever being loaded instead.
+                Path clientSaveDir;
+                try {
+                    clientSaveDir = java.nio.file.Files.createTempDirectory("mclonemp");
+                } catch (IOException e) {
+                    clientSaveDir = saveRoot.getParent() != null
+                            ? saveRoot.resolve("multiplayer_client").resolve(Long.toString(System.nanoTime()))
+                            : Paths.get("multiplayer_client");
+                }
+                // The client mirrors every dimension the server hosts (Overworld /
+                // Nether / End), each regenerated from the seed and synced over the wire.
+                World[] mirrorWorlds = new World[DimensionType.values().length];
+                for (DimensionType dim : DimensionType.values()) {
+                    World w = new World(welcome.seed(), remoteSettings, atlas, clientSaveDir, dim);
+                    w.setRenderDistance(settings.getRenderDistance());
+                    w.setLeavesTransparent(settings.isLeavesTransparent());
+                    byte dimId = (byte) dim.ordinal();
+                    // When the client generates a chunk from the seed, ask the server
+                    // whether a player has edited it; the server replies with full data
+                    // or a vanilla ack.
+                    w.setChunkListener((cx, cz) -> {
+                        // Async: this fires from inside World's generation loop,
+                        // where a blocking socket write would stall streaming.
+                        if (netClient != null && netClient.isConnected()) {
+                            netClient.sendChunkRequestAsync(dimId, cx, cz);
+                        }
+                    });
+                    mirrorWorlds[dim.ordinal()] = w;
+                }
+                World w = mirrorWorlds[DimensionType.OVERWORLD.ordinal()];
+                for (int i = 0; i < 200; i++) w.update(0, 0);
+                player.teleport(welcome.spawnX(), welcome.spawnY(), welcome.spawnZ());
+                for (int i = 0; i < 80; i++) w.update(player.getPosition().x, player.getPosition().z);
+                startCalendar(dayNightCycle, calendar, remoteSettings);
+                System.out.println("Joined server (seed " + welcome.seed() + ", spawn " + welcome.spawnX() + "," + welcome.spawnY() + "," + welcome.spawnZ() + ")");
+                created = w;
+                world = w;
+                currentDim[0] = DimensionType.OVERWORLD;
+                // Hand the mirror worlds back to the caller so the dimension array and
+                // the game loop's world switching stay consistent.
+                returnMirrorWorlds = mirrorWorlds;
+                try {
+                    client.sendReady();
+                } catch (IOException e) {
+                    netError = e.getMessage();
+                }
+            } else if (packet instanceof Packets.PlayerJoined joined) {
+                RemotePlayer rp = new RemotePlayer(joined.id(), joined.name());
+                rp.update(joined.dimension(), joined.x(), joined.y(), joined.z(), joined.yaw(), joined.pitch(), false, false, false);
+                rp.tick(1f); // snap the render pose to the join position
+                remotePlayers.put(joined.id(), rp);
+                showMessage(messages, joined.name() + " joined", new Vector4f(0.7f, 0.9f, 0.7f, 1f), 3f);
+            } else if (packet instanceof Packets.PlayerLeft left) {
+                RemotePlayer gone = remotePlayers.remove(left.id());
+                if (gone != null) {
+                    showMessage(messages, gone.name + " left", new Vector4f(0.9f, 0.7f, 0.7f, 1f), 3f);
+                }
+            } else if (packet instanceof Packets.PlayerState state) {
+                RemotePlayer rp = remotePlayers.get(state.id());
+                if (rp != null) {
+                    rp.update(state.dimension(), state.x(), state.y(), state.z(), state.yaw(), state.pitch(),
+                            state.onGround(), state.flying(), state.sprinting());
+                }
+            } else if (packet instanceof Packets.BlockChange change) {
+                World target = (worlds != null && change.dimension() >= 0 && change.dimension() < worlds.length)
+                        ? worlds[change.dimension()] : world;
+                if (target != null) {
+                    if (change.overlay()) {
+                        target.setOverlay(change.x(), change.y(), change.z(), BlockType.byId(change.blockId()));
+                    } else {
+                        target.setBlock(change.x(), change.y(), change.z(), BlockType.byId(change.blockId()));
+                        target.setBlockOrientation(change.x(), change.y(), change.z(), change.orientation());
+                    }
+                }
+            } else if (packet instanceof Packets.ChunkData data) {
+                World target = (worlds != null && data.dimension() >= 0 && data.dimension() < worlds.length)
+                        ? worlds[data.dimension()] : world;
+                if (target != null) {
+                    target.applyRemoteChunkData(data.cx(), data.cz(), data.blocks(), data.overlays(), data.orientations());
+                }
+            } else if (packet instanceof Packets.ChunkAck ack) {
+                // Chunk matches the seed - the client's own generation already has it.
+            } else if (packet instanceof Packets.ContainerData data) {
+                // A container snapshot (requested on open, or another player's
+                // update): restore it into the local mirror. Reusing the same
+                // entity instance means an open GUI refreshes in place.
+                World target = (worlds != null && data.dimension() >= 0 && data.dimension() < worlds.length)
+                        ? worlds[data.dimension()] : world;
+                if (target != null && data.y() >= 0 && data.y() < Chunk.HEIGHT
+                        && typeMatchesBlock(data.type(), target.getBlock(data.x(), data.y(), data.z()))) {
+                    try (java.io.DataInputStream in = new java.io.DataInputStream(
+                            new java.io.ByteArrayInputStream(data.payload()))) {
+                        target.restoreBlockEntity(data.x(), data.y(), data.z(), data.type(), in);
+                    } catch (IOException e) {
+                        // Corrupt payload - ignore this snapshot rather than desync.
+                    }
+                }
+            } else if (packet instanceof Packets.ChatMsg msg) {
+                showMessage(messages, "<" + msg.name() + "> " + msg.text(), new Vector4f(0.92f, 0.92f, 0.92f, 1f), 5f);
+            } else if (packet instanceof Packets.Reject reject) {
+                showMessage(messages, reject.reason(), new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
+                netError = reject.reason();
+            } else if (packet instanceof Packets.DimensionChange change) {
+                // Server moved us to another dimension - switch the active world.
+                if (worlds != null && change.dimension() >= 0 && change.dimension() < worlds.length) {
+                    currentDim[0] = DimensionType.values()[change.dimension()];
+                    player.teleport(change.x(), change.y(), change.z());
+                    World target = worlds[currentDim[0].ordinal()];
+                    if (target == null) target = world;
+                    if (target != null) {
+                        for (int i = 0; i < 80; i++) target.update(player.getPosition().x, player.getPosition().z);
+                    }
+                    world = target;
+                    showMessage(messages, "Welcome to " + currentDim[0].displayName(),
+                            new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
+                }
+            } else if (packet instanceof Packets.TimeSync sync) {
+                dayNightCycle.setTime(sync.timeOfDay());
+            } else if (packet instanceof Packets.PlayerDeath death) {
+                RemotePlayer dead = remotePlayers.get(death.id());
+                showMessage(messages, (dead != null ? dead.name : "A player") + " died",
+                        new Vector4f(0.9f, 0.3f, 0.3f, 1f), 3f);
+            } else if (packet instanceof Packets.MobSpawn spawn) {
+                if (world != null && remoteMobs != null && !remoteMobs.containsKey(spawn.mobId())) {
+                    Mob.Type type = spawn.typeId() >= 0 && spawn.typeId() < Mob.Type.values().length
+                            ? Mob.Type.values()[spawn.typeId()] : Mob.Type.PIG;
+                    Mob mob = new Mob(type, spawn.x(), spawn.y(), spawn.z());
+                    mob.id = spawn.mobId();
+                    mob.yaw = spawn.yaw();
+                    mob.target.set(spawn.x(), spawn.y(), spawn.z());
+                    mob.targetYaw = spawn.yaw();
+                    remoteMobs.put(spawn.mobId(), mob);
+                }
+            } else if (packet instanceof Packets.MobState state) {
+                if (world != null && remoteMobs != null) {
+                    Mob mob = remoteMobs.get(state.mobId());
+                    if (mob != null) {
+                        mob.target.set(state.x(), state.y(), state.z());
+                        mob.targetYaw = state.yaw();
+                    }
+                }
+            } else if (packet instanceof Packets.MobRemove remove) {
+                if (remoteMobs != null) {
+                    Mob gone = remoteMobs.remove(remove.mobId());
+                    // Loot is spawned server-side and arrives as ITEM_ADD -
+                    // nothing to do here beyond forgetting the mob.
+                }
+            } else if (packet instanceof Packets.ItemAdd add) {
+                World target = (worlds != null && add.dimension() >= 0 && add.dimension() < worlds.length)
+                        ? worlds[add.dimension()] : world;
+                BlockType type = add.blockId() > 0 ? BlockType.byId(add.blockId()) : null;
+                if (target != null && type != null && add.count() > 0 && add.count() <= 99
+                        && Float.isFinite(add.x()) && Float.isFinite(add.y()) && Float.isFinite(add.z())) {
+                    target.spawnSyncedItem(add.id(), type, add.count(), add.x(), add.y(), add.z());
+                }
+            } else if (packet instanceof Packets.ItemRemove remove) {
+                if (world != null) world.removeItemById(remove.id());
+            } else if (packet instanceof Packets.ItemGive give) {
+                // The server granted OUR pickup: add it to the inventory locally.
+                BlockType type = give.blockId() > 0 ? BlockType.byId(give.blockId()) : null;
+                if (type != null && world != null) {
+                    world.removeItemById(give.id());
+                    player.getInventory().add(type, give.count());
+                    audio.play(SoundEvent.ITEM_PICKUP);
+                }
+            } else if (packet instanceof Packets.PlayerRestore restore) {
+                // Applied after this drain, once the mirror worlds are wired up.
+                pendingPlayerRestore = restore.data();
+            } else if (packet instanceof Packets.SleepState sleep) {
+                // "x/y in bed" notice - only re-show when the counts change.
+                if (sleep.sleeping() != lastSleepShown[0] || sleep.total() != lastSleepShown[1]) {
+                    lastSleepShown[0] = sleep.sleeping();
+                    lastSleepShown[1] = sleep.total();
+                    if (sleep.total() > 1) {
+                        showMessage(messages, "Players in bed: " + sleep.sleeping() + " / " + sleep.total()
+                                        + (sleep.sleeping() == sleep.total() ? " - Good morning!" : ""),
+                                new Vector4f(0.7f, 0.8f, 1f, 1f), 3f);
+                    }
+                }
+            } else if (packet instanceof Packets.PlayerDamage dmg) {
+                if (world != null && player != null) {
+                    player.getStats().damage(dmg.amount());
+                    // Shove the local player away from whoever landed the hit.
+                    if (dmg.knockX() != 0f || dmg.knockZ() != 0f) {
+                        player.knockback(dmg.knockX(), dmg.knockZ(), 9f);
+                    }
+                    audio.play(SoundEvent.HURT);
+                }
+            }
+        }
+        if (created != null) {
+            started[0] = true;
+            mainMenuOpen[0] = false;
+            multiplayerOpen[0] = false;
+            mpConnecting[0] = false;
+            window.setCursorCaptured(true);
+            input.resetMouseDelta();
+        }
+        return created;
     }
 
     /**
@@ -505,6 +1255,21 @@ public class Main {
             world.setOverlay(bx, by, bz, BlockType.AIR);
         } else {
             world.setBlock(bx, by, bz, BlockType.AIR);
+        }
+
+        // Tell the server about the change so other players see it too (a door
+        // clears both halves; an overlay clears only the decoration).
+        if (netClient != null && netClient.isConnected()) {
+            byte dim = (byte) currentDim[0].ordinal();
+            if (Door.isDoor(targetType)) {
+                int bottom = Door.bottomHalf(world, bx, by, bz);
+                sendBlockChange(dim, bx, bottom, bz, BlockType.AIR, (byte) 0, false);
+                sendBlockChange(dim, bx, bottom + 1, bz, BlockType.AIR, (byte) 0, false);
+            } else if (targetingOverlay) {
+                sendBlockChange(dim, bx, by, bz, BlockType.AIR, (byte) 0, true);
+            } else {
+                sendBlockChange(dim, bx, by, bz, BlockType.AIR, (byte) 0, false);
+            }
         }
 
         if (!mode.isCreative()) {
@@ -656,9 +1421,97 @@ public class Main {
     }
 
     public static void main(String[] args) {
+        // Dedicated headless server: `--server [port]` (default 25565) hosts a
+        // world with no window or GL at all. Clients join it with "Multiplayer"
+        // -> "Join Server".
+        if (args.length >= 1 && args[0].equals("--server")) {
+            runDedicatedServer(args);
+            return;
+        }
         new Main().run();
     }
 
+    /**
+     * Starts a headless multiplayer server and processes operator commands.
+     *
+     * @param args command-line arguments; the second argument, when present, overrides the configured port
+     */
+    private static void runDedicatedServer(String[] args) {
+        String saveEnv = System.getenv("MCCLONE_SAVE_DIR");
+        Path saveRoot = saveEnv != null ? Paths.get(saveEnv).getParent() : Paths.get("saves");
+        Path serverSaveDir = saveRoot.resolve("multiplayer_server");
+
+        // server.properties lives next to the worlds; a first run writes one
+        // with defaults so operators have something to edit.
+        ServerConfig config = ServerConfig.load(serverSaveDir.resolve(ServerConfig.FILE_NAME));
+        if (!java.nio.file.Files.isRegularFile(serverSaveDir.resolve(ServerConfig.FILE_NAME))) {
+            config.save(serverSaveDir.resolve(ServerConfig.FILE_NAME));
+        }
+        // The CLI port (if given) wins over the file.
+        if (args.length >= 2) {
+            try {
+                config.setPort(Integer.parseInt(args[1]));
+            } catch (NumberFormatException e) {
+                System.err.println("Bad port '" + args[1] + "', using " + config.getPort());
+            }
+        }
+        try {
+            WorldGenSettings settings = new WorldGenSettings();
+            long seed = settings.resolveSeed();
+            GameServer server = new GameServer(config, settings, seed, serverSaveDir);
+            server.start();
+            System.out.println("Multiplayer server running on port " + server.getPort()
+                    + " (seed " + seed + ", save dir " + serverSaveDir + ")");
+            System.out.println("Commands: list | kick <name> | ban <name> | unban <name> | banlist | help. Press Ctrl+C to stop.");
+            runServerConsole(server);
+        } catch (Exception e) {
+            System.err.println("Server failed: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Reads operator commands from the console until EOF: `list`, `kick`,
+     * `ban`, `unban`, `banlist`. Runs on the main thread - the server's own
+     * threads keep the world running regardless. When stdin closes (nohup,
+     * systemd, docker without -i) we park the main thread forever instead of
+     * letting the JVM die now that every other thread is a daemon.
+     */
+    private static void runServerConsole(GameServer server) throws IOException, InterruptedException {
+        java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
+        String line;
+        while ((line = in.readLine()) != null) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            String[] parts = trimmed.split("\\s+", 2);
+            String cmd = parts[0].toLowerCase(java.util.Locale.ROOT);
+            String arg = parts.length > 1 ? parts[1].trim() : "";
+            switch (cmd) {
+                case "list" -> System.out.println("Online (" + server.getPlayerCount() + "): "
+                        + String.join(", ", server.getPlayerNames()));
+                case "kick" -> System.out.println(server.kick(arg) ? "Kicked " + arg
+                        : "No online player named '" + arg + "'");
+                case "ban" -> System.out.println(server.ban(arg) ? "Banned " + arg
+                        : (server.isBanned(arg) ? "'" + arg + "' is already banned" : "Invalid name '" + arg + "'"));
+                case "unban" -> System.out.println(server.unban(arg) ? "Unbanned " + arg
+                        : "'" + arg + "' was not banned");
+                case "banlist" -> System.out.println(server.getBannedNames().isEmpty()
+                        ? "Nobody is banned" : "Banned: " + String.join(", ", server.getBannedNames()));
+                case "help" -> System.out.println("Commands: list | kick <name> | ban <name> | unban <name> | banlist");
+                default -> System.out.println("Unknown command '" + cmd + "'. Try 'help'.");
+            }
+        }
+        // Stdin is closed (or was never interactive): keep serving players and
+        // stop accepting console input rather than exiting the JVM.
+        System.out.println("Console closed - server keeps running (Ctrl+C to stop).");
+        Thread.currentThread().join();
+    }
+
+    /**
+     * Runs the client application, including initialization, input processing, world
+     * simulation, rendering, networking, automated screenshot tests, persistence, and
+     * resource cleanup.
+     */
     private void run() {
         Window window = new Window("3D Minecraft Clone", 1280, 720);
         window.init();
@@ -708,7 +1561,7 @@ public class Main {
         // The world is created lazily when the player picks a world or creates one.
         World world = null;
         World[] worlds = null;
-        DimensionType[] currentDim = {DimensionType.OVERWORLD};
+        currentDim[0] = DimensionType.OVERWORLD;
         boolean[] started = {false};
         List<String> worldNames = new ArrayList<>();
 
@@ -718,6 +1571,7 @@ public class Main {
         HandRenderer handRenderer = new HandRenderer();
         BreakOverlayRenderer breakOverlay = new BreakOverlayRenderer();
         MobRenderer mobRenderer = new MobRenderer();
+        playerRenderer = new PlayerRenderer();
         WeatherParticles weatherParticles = new WeatherParticles();
         WeatherRenderer weatherRenderer = new WeatherRenderer();
         List<LightningBolt> bolts = new ArrayList<>();
@@ -743,22 +1597,38 @@ public class Main {
         boolean[] creativeScrollbarDrag = {false};
         StringBuilder creativeSearch = new StringBuilder();
         boolean[] creativeSearchFocused = {false};
+        // JEI-style recipe book screen.
+        boolean[] recipeBookOpen = {false};
+        final RecipeBookGui recipeBook = new RecipeBookGui();
+        Path bookmarkFile = saveRoot.resolve("recipe_bookmarks.txt");
+        recipeBook.loadBookmarks(bookmarkFile);
         int[] hoveredSlot = {-1};
         boolean[] mainMenuOpen = {true};
         boolean[] mainSettingsOpen = {false}; // settings page opened from the main menu
         boolean[] worldSelectOpen = {false};
         boolean[] worldGenOpen = {false};
+        boolean[] multiplayerOpen = {false}; // multiplayer connect screen
         int[] mainMenuSelection = {Hud.MENU_PLAY};
         int[] worldSelectSelection = {0};
         int[] worldGenSelection = {0};
         int[] editingRow = {-1};
+        // Multiplayer connect screen state.
+        int[] mpSelection = {0};
+        int[] mpEditingRow = {-1};
+        String[] mpName = {"Player"};
+        String[] mpHost = {"127.0.0.1"};
+        String[] mpPort = {"25565"};
+        boolean[] mpConnecting = {false};
+        float[] mpConnectingElapsed = {0f};
+        float[] netMoveTimer = {0f}; // time since the last player-state packet was sent
+        boolean[] chatOpen = {false};
+        StringBuilder chatText = new StringBuilder();
 
         window.setCursorCaptured(false); // free cursor in the main menu
 
         // Ensure the renderer/player/window/audio all match the loaded settings.
         applySettings(settings, worlds, player, window, audio);
 
-        int[] selectedSlot = {0};
         Random loot = new Random();
         DayNightCycle dayNightCycle = new DayNightCycle();
         Calendar calendar = new Calendar(); // in-game calendar: days, seasons, years
@@ -1309,9 +2179,85 @@ public class Main {
             }
             animTime[0] += dt;
             attackCooldown[0] -= dt;
+            activeWorlds = worlds;
             Raycaster.Hit hit = null;
             float breakFraction = 0f;
             boolean screenshotRequested = false;
+
+            // --- Multiplayer: surface connection errors, drain server packets, send local state. ---
+            if (mpConnecting[0] && netError != null) {
+                showMessage(messages, netError, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
+                leaveMultiplayer();
+                mpConnecting[0] = false;
+                multiplayerOpen[0] = false;
+                mainMenuOpen[0] = true;
+            }
+            if (netClient != null) {
+                if (netClient.isDisconnected()) {
+                    String reason = netClient.getDisconnectReason();
+                    if (started[0]) {
+                        showMessage(messages, "Disconnected: " + reason, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
+                        started[0] = false;
+                        // The worlds were throwaway multiplayer mirrors - release their
+                        // chunks (and GL meshes) rather than leaving them resident.
+                        if (worlds != null) {
+                            for (World w : worlds) {
+                                if (w != null) {
+                                    w.saveAllModified();
+                                    w.destroy();
+                                }
+                            }
+                            for (int i = 0; i < worlds.length; i++) {
+                                worlds[i] = null;
+                            }
+                        }
+                        if (world != null) {
+                            world = null;
+                        }
+                        returnMirrorWorlds = null;
+                    } else if (mpConnecting[0]) {
+                        showMessage(messages, "Could not connect: " + reason, new Vector4f(0.9f, 0.3f, 0.3f, 1f), 5f);
+                    }
+                    leaveMultiplayer();
+                    mpConnecting[0] = false;
+                    multiplayerOpen[0] = false;
+                    mainMenuOpen[0] = true;
+                    window.setCursorCaptured(false);
+                    input.resetMouseDelta();
+                } else {
+                    World newWorld = processNetPackets(netClient, world, worlds, player, atlas, settings, saveRoot,
+                            genSettings, dayNightCycle, calendar, started, mainMenuOpen, multiplayerOpen,
+                            mpConnecting, window, input, messages, audio);
+                    if (newWorld != null) {
+                        world = newWorld;
+                        // Multiplayer mirrors every dimension the server hosts - the
+                        // WELCOME handler built them all; wire them into the dimension
+                        // array so sky/portals/block-change routing stay consistent.
+                        worlds = returnMirrorWorlds;
+                        currentDim[0] = DimensionType.OVERWORLD;
+                    }
+                    // A saved snapshot from a previous session (sent right after
+                    // WELCOME): apply it once the dimension worlds exist.
+                    if (pendingPlayerRestore != null && worlds != null && started[0]) {
+                        applyRestoredPlayerState(pendingPlayerRestore, worlds, player);
+                        pendingPlayerRestore = null;
+                    }
+                    // Send the local player's pose to the server at ~20 Hz.
+                    if (started[0] && netMoveTimer[0] >= 0.05f) {
+                        netMoveTimer[0] = 0f;
+                        sendPlayerMove(netClient, player);
+                    } else {
+                        netMoveTimer[0] += dt;
+                    }
+                    // Push a full snapshot (position/inventory/stats) every few
+                    // seconds so the server can restore us after a reconnect.
+                    netPlayerSyncTimer += dt;
+                    if (started[0] && netPlayerSyncTimer >= 5f) {
+                        netPlayerSyncTimer = 0f;
+                        sendPlayerSnapshot(worlds, player);
+                    }
+                }
+            }
 
             // Main menu / world select / world-gen page input (before a world starts).
             if (!started[0]) {
@@ -1477,6 +2423,78 @@ public class Main {
                         worldSelectOpen[0] = false;
                         mainMenuOpen[0] = true;
                     }
+                } else if (multiplayerOpen[0]) {
+                    // Multiplayer connect screen: name/host/port fields + host & play / join / back.
+                    if (mpEditingRow[0] >= 0) {
+                        String typed = input.consumeTypedChars();
+                        StringBuilder sb = new StringBuilder(switch (mpEditingRow[0]) {
+                            case Hud.MP_ROW_NAME -> mpName[0];
+                            case Hud.MP_ROW_HOST -> mpHost[0];
+                            default -> mpPort[0];
+                        });
+                        for (int i = 0; i < typed.length(); i++) {
+                            char ch = typed.charAt(i);
+                            if (Character.isLetterOrDigit(ch) || ch == '-' || ch == '.' || ch == '_' || ch == ' ') {
+                                if (mpEditingRow[0] == Hud.MP_ROW_PORT && !Character.isDigit(ch)) continue;
+                                sb.append(ch);
+                            }
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE)) {
+                            if (sb.length() > 0) sb.deleteCharAt(sb.length() - 1);
+                        }
+                        switch (mpEditingRow[0]) {
+                            case Hud.MP_ROW_NAME -> mpName[0] = sb.toString();
+                            case Hud.MP_ROW_HOST -> mpHost[0] = sb.toString();
+                            default -> mpPort[0] = sb.toString();
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                            mpEditingRow[0] = -1;
+                        }
+                    } else {
+                        if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
+                            mpSelection[0] = Math.floorMod(mpSelection[0] - 1, Hud.MP_ROW_COUNT);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_DOWN) || input.isKeyJustPressed(GLFW_KEY_S)) {
+                            mpSelection[0] = Math.floorMod(mpSelection[0] + 1, Hud.MP_ROW_COUNT);
+                        }
+                        boolean clickedMp = false;
+                        float mpLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                        float mpLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                        int hoverMp = hud.multiplayerRowAt(mpLx, mpLy);
+                        if (hoverMp >= 0) {
+                            mpSelection[0] = hoverMp;
+                            clickedMp = input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT);
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ENTER) || input.isKeyJustPressed(GLFW_KEY_SPACE) || clickedMp) {
+                            if (mpSelection[0] <= Hud.MP_ROW_PORT) {
+                                mpEditingRow[0] = mpSelection[0];
+                                input.consumeTypedChars();
+                            } else if (mpSelection[0] == Hud.MP_ROW_HOST_SERVER) {
+                                int port = parsePort(mpPort[0]);
+                                hostAndPlay(port, saveRoot, mpName[0]);
+                                mpConnecting[0] = true;
+                                mpConnectingElapsed[0] = 0f;
+                                window.setCursorCaptured(false);
+                            } else if (mpSelection[0] == Hud.MP_ROW_CONNECT) {
+                                int port = parsePort(mpPort[0]);
+                                joinServer(mpHost[0], port, mpName[0]);
+                                mpConnecting[0] = true;
+                                mpConnectingElapsed[0] = 0f;
+                                window.setCursorCaptured(false);
+                            } else {
+                                multiplayerOpen[0] = false;
+                                mainMenuOpen[0] = true;
+                                mpConnecting[0] = false;
+                                cancelMultiplayerConnect();
+                            }
+                        }
+                        if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                            multiplayerOpen[0] = false;
+                            mainMenuOpen[0] = true;
+                            mpConnecting[0] = false;
+                            cancelMultiplayerConnect();
+                        }
+                    }
                 } else {
                     // Main menu: navigate with arrows/WASD, or hover + click with the mouse.
                     if (input.isKeyJustPressed(GLFW_KEY_UP) || input.isKeyJustPressed(GLFW_KEY_W)) {
@@ -1498,6 +2516,11 @@ public class Main {
                             worldNames = listWorlds(saveRoot);
                             worldSelectOpen[0] = true;
                             worldSelectSelection[0] = 0;
+                        } else if (mainMenuSelection[0] == Hud.MENU_MULTIPLAYER) {
+                            multiplayerOpen[0] = true;
+                            mpSelection[0] = 0;
+                            mpEditingRow[0] = -1;
+                            mpConnecting[0] = false;
                         } else if (mainMenuSelection[0] == Hud.MENU_SETTINGS) {
                             mainSettingsOpen[0] = true;
                             settingsTab[0] = Settings.TAB_GRAPHICS;
@@ -1516,6 +2539,10 @@ public class Main {
             if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
                 if (bindingAction[0] >= 0) {
                     bindingAction[0] = -1; // Esc cancels a keybind capture
+                } else if (recipeBookOpen[0]) {
+                    recipeBookOpen[0] = false; // Esc closes the recipe book first
+                    window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
+                    input.resetMouseDelta();
                 } else if (mapOpen[0]) {
                     mapOpen[0] = false;
                     hud.renderFullMap(null, -1); // clear GL texture cache
@@ -1545,8 +2572,32 @@ public class Main {
             // Suppress gameplay shortcuts (like inventory toggle) when the settings menu
             // is waiting to capture a gamepad button press for a binding.
             if (!(menuOpen[0] && bindingAction[0] >= 0)) {
+                // Recipe book toggle (R by default): opens over gameplay; closes
+                // with R/E/Esc. Blocked while a rebinding capture is in progress
+                // or another fullscreen-ish screen is up.
+                boolean recipeKey = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.RECIPE_BOOK));
+                if (recipeKey && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0] && started[0]) {
+                    if (recipeBookOpen[0]) {
+                        recipeBookOpen[0] = false;
+                        audio.play(SoundEvent.UI_CLOSE);
+                    } else if (!menuOpen[0]) {
+                        recipeBook.rebuildIndex();
+                        recipeBook.setQuery("");
+                        recipeBookOpen[0] = true;
+                        audio.play(SoundEvent.UI_OPEN);
+                    }
+                    // The book needs a free cursor for hover/click selection -
+                    // the shared predicate doesn't know about it, so set it directly.
+                    window.setCursorCaptured(recipeBookOpen[0]);
+                }
+
                 boolean inventoryKey = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.INVENTORY));
-                if (inventoryKey && !(creativeOpen[0] && creativeSearchFocused[0])) {
+                if (inventoryKey && recipeBookOpen[0]) {
+                    // E closes the book instead of stacking the inventory on top.
+                    recipeBookOpen[0] = false;
+                    audio.play(SoundEvent.UI_CLOSE);
+                    window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
+                } else if (inventoryKey && !(creativeOpen[0] && creativeSearchFocused[0])) {
                     if (inventoryOpen[0]) {
                         closeInventory(inventoryController, activeGui, inventoryGui, inventoryOpen, audio);
                     } else if (creativeOpen[0]) {
@@ -1568,6 +2619,39 @@ public class Main {
                     }
                     window.setCursorCaptured(shouldCaptureCursor(input, mapOpen[0], menuOpen[0], inventoryOpen[0], creativeOpen[0]));
                     input.resetMouseDelta();
+                }
+            }
+
+            if (recipeBookOpen[0]) {
+                // JEI-style recipe book: type to filter the index, scroll to
+                // browse, click an entry to open/close its detail card.
+                float logicalX = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                float logicalY = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+
+                String typed = input.consumeTypedChars();
+                if (!typed.isEmpty()) {
+                    recipeBook.setQuery(recipeBook.query() + typed);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE)) {
+                    String q = recipeBook.query();
+                    if (!q.isEmpty()) recipeBook.setQuery(q.substring(0, q.length() - 1));
+                }
+                double scroll = input.getScrollDelta();
+                if (scroll != 0) {
+                    float next = recipeBook.scroll() - (float) scroll * 0.34f;
+                    int count = recipeBook.entries().size();
+                    recipeBook.setScroll(Math.max(0f, Math.min(next, Math.max(0f,
+                            (int) Math.ceil(count / 9.0) - hud.catalogVisibleRows()))));
+                }
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+                    int idx = hud.recipeBookItemAt(logicalX, logicalY, recipeBook);
+                    recipeBook.select(idx);
+                    audio.play(SoundEvent.UI_CLICK);
+                }
+                if (typed.isEmpty() && input.isKeyJustPressed(GLFW_KEY_B)) {
+                    if (recipeBook.toggleBookmarkOnSelection()) {
+                        recipeBook.saveBookmarks(bookmarkFile);
+                    }
                 }
             }
 
@@ -1790,6 +2874,35 @@ public class Main {
             }
             screenshotRequested = input.isKeyJustPressed(settings.getKeyBinds().get(KeyBindings.SCREENSHOT));
 
+            // Chat: T opens the line (multiplayer only), Enter sends, Esc cancels.
+            // The toggle only fires while the line is closed, so typing a "t"
+            // into a message edits the message instead of closing the chat.
+            if (netClient != null && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && !chatOpen[0] && input.isKeyJustPressed(GLFW_KEY_T)) {
+                chatOpen[0] = true;
+                chatText.setLength(0);
+                input.consumeTypedChars();
+            }
+            if (chatOpen[0]) {
+                String typed = input.consumeTypedChars();
+                for (int i = 0; i < typed.length() && chatText.length() < 200; i++) {
+                    char ch = typed.charAt(i);
+                    if (ch == '\n' || ch == '\r') continue;
+                    chatText.append(ch);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_BACKSPACE) && chatText.length() > 0) {
+                    chatText.deleteCharAt(chatText.length() - 1);
+                }
+                if (input.isKeyJustPressed(GLFW_KEY_ENTER)) {
+                    if (chatText.length() > 0) {
+                        sendChat(chatText.toString());
+                    }
+                    chatOpen[0] = false;
+                } else if (input.isKeyJustPressed(GLFW_KEY_ESCAPE)) {
+                    chatOpen[0] = false;
+                }
+            }
+
             // Full-screen map controls: grab-and-drag (JourneyMap-style), WASD /
             // arrows, scroll zoom, R reset. Shift speeds up keyboard pan.
             if (mapOpen[0] && mapRenderer[0] != null) {
@@ -1828,7 +2941,8 @@ public class Main {
             boolean hudEditing = updateMiniMapEdit(input, window, settings, settingsFile, gameplayHud,
                     hudEdit, miniMapDrag, miniMapDragOffX, miniMapDragOffY);
 
-            if (started[0] && world != null && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
+            if (started[0] && world != null && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && !mapOpen[0] && !chatOpen[0]) {
                 // Cold exposure factor, driven by the LOCAL temperature at the
                 // player's position (which already folds in the biome, season,
                 // night, weather, altitude and underground depth - so a deep cave
@@ -1845,9 +2959,21 @@ public class Main {
                 float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
                 player.update(dt, input, world, coldFactor, settings.getDifficulty());
 
+
+                // Advance remote players' smoothed poses toward their server targets.
+                for (RemotePlayer rp : remotePlayers.values()) {
+                    rp.tick(dt);
+                }
+                // Same for remote mobs.
+                for (Mob rm : remoteMobs.values()) {
+                    rm.tickRemote(dt);
+                }
+
                 // Dimension portals: walking into a NETHER_PORTAL or END_PORTAL block
                 // teleports the player to the linked dimension (with a short cooldown
-                // so they don't instantly bounce back through the arrival portal).
+                // so they don't instantly bounce back through the arrival portal). In
+                // multiplayer the server is authoritative and sends a DimensionChange
+                // back; single player teleports locally.
                 teleportCooldown[0] = Math.max(0f, teleportCooldown[0] - dt);
                 if (teleportCooldown[0] <= 0f) {
                     Vector3f p = player.getPosition();
@@ -1856,14 +2982,23 @@ public class Main {
                         portal = world.getBlock((int) Math.floor(p.x), (int) Math.floor(p.y + 1.5f), (int) Math.floor(p.z));
                     }
                     if (portal.isPortal()) {
-                        teleportThroughPortal(player, worlds, currentDim, portal);
-                        world = worlds[currentDim[0].ordinal()];
-                        mapRenderer[0] = new MapRenderer(world.getMapData());
+                        if (netClient != null && netClient.isConnected()) {
+                            try {
+                                netClient.sendPortalUse((byte) currentDim[0].ordinal(), portal.id);
+                            } catch (IOException e) {
+                                netError = e.getMessage();
+                            }
+                        } else {
+                            teleportThroughPortal(player, worlds, currentDim, portal);
+                            world = worlds[currentDim[0].ordinal()];
+                            mapRenderer[0] = new MapRenderer(world.getMapData());
+                            showMessage(messages, "Welcome to " + currentDim[0].displayName(),
+                                    new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
+                        }
                         teleportCooldown[0] = PORTAL_COOLDOWN_SECONDS;
-                        showMessage(messages, "Welcome to " + currentDim[0].displayName(),
-                                new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
                     }
                 }
+
 
                 if (player.hasJustJumped()) audio.play(SoundEvent.JUMP);
                 if (player.hasJustLanded()) audio.play(SoundEvent.LAND);
@@ -1970,23 +3105,40 @@ public class Main {
                 player.getInventory().clear();
                 player.getInventory().clearArmor();
                 player.getDurability().reset();
-                // Respawn back in the overworld, at the bed if it's still there.
-                if (currentDim[0] != DimensionType.OVERWORLD) {
-                    currentDim[0] = DimensionType.OVERWORLD;
-                    world = worlds[currentDim[0].ordinal()];
-                    mapRenderer[0] = new MapRenderer(world.getMapData());
-                    for (int i = 0; i < 80; i++) {
-                        world.update(0, 0);
+                if (netClient != null && netClient.isConnected()) {
+                    // Server-authoritative respawn: it moves us to overworld spawn and
+                    // replies with a DimensionChange that switches world + position.
+                    try {
+                        netClient.sendRespawn();
+                    } catch (IOException e) {
+                        netError = e.getMessage();
                     }
+                } else {
+                    // Respawn back in the overworld, at the bed if it's still there.
+                    if (currentDim[0] != DimensionType.OVERWORLD) {
+                        currentDim[0] = DimensionType.OVERWORLD;
+                        world = worlds[currentDim[0].ordinal()];
+                        mapRenderer[0] = new MapRenderer(world.getMapData());
+                        for (int i = 0; i < 80; i++) {
+                            world.update(0, 0);
+                        }
+                    }
+                    respawnPlayer(world, player, messages);
                 }
-                respawnPlayer(world, player, messages);
             }
 
             // Item-entity physics + pickup. Frozen while the pause menu is open,
-            // same as Minecraft's Game Menu.
+            // same as Minecraft's Game Menu. In multiplayer, server-identified
+            // items are granted via ITEM_GIVE rather than collected locally -
+            // only local-only drops (Tinkers' payloads) pick up here.
             if (!menuOpen[0]) {
-            if (world.updateItems(dt, player.getPosition(), player.getInventory())) {
+            boolean mp = netClient != null && netClient.isConnected();
+            if (world.updateItems(dt, player.getPosition(), player.getInventory(), mp)) {
                 audio.play(SoundEvent.ITEM_PICKUP);
+            }
+            if (mp) {
+                syncLocalDrops(world);
+                requestItemPickups(world, player.getPosition());
             }
 
             // Furnaces (and any other block entities) work in the background,
@@ -2002,18 +3154,22 @@ public class Main {
             // to the player's health, where the existing death/respawn handling picks
             // it up. Use takeDamage (not getStats().damage) so mob damage routes through
             // the same armor-mitigation and armor-wear path as environmental hazards.
+            // In multiplayer, mobs are simulated server-side, so the local client skips
+            // this (shared mob damage arrives via PLAYER_DAMAGE packets instead).
             Vector3f playerPos = player.getPosition();
-            AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
-                    playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
-            // Creative/spectator are invulnerable (see GameMode#isInvulnerable) - mobs
-            // couldn't land a hit either way, so don't have them chase/attack a player
-            // they can never actually hurt; they just wander like passives instead.
-            boolean playerTargetable = !settings.getGameMode().isInvulnerable();
-            float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot,
-                    playerTargetable, settings.getDifficulty());
-            if (mobDamage > 0f) {
-                player.takeDamage(mobDamage);
-                audio.play(SoundEvent.HURT);
+            if (netClient == null) {
+                AABB playerBox = new AABB(playerPos.x - 0.3f, playerPos.y, playerPos.z - 0.3f,
+                        playerPos.x + 0.3f, playerPos.y + 1.8f, playerPos.z + 0.3f);
+                // Creative/spectator are invulnerable (see GameMode#isInvulnerable) - mobs
+                // couldn't land a hit either way, so don't have them chase/attack a player
+                // they can never actually hurt; they just wander like passives instead.
+                boolean playerTargetable = !settings.getGameMode().isInvulnerable();
+                float mobDamage = world.updateMobs(dt, playerPos, playerBox, dayNightCycle.isNight(), loot,
+                        playerTargetable, settings.getDifficulty());
+                if (mobDamage > 0f) {
+                    player.takeDamage(mobDamage);
+                    audio.play(SoundEvent.HURT);
+                }
             }
             }
             // Every damage source for this frame (environmental hazards inside
@@ -2044,7 +3200,7 @@ public class Main {
 
             // Block selection via number keys / scroll wheel - the hotbar is the
             // first 9 inventory slots (only in gameplay).
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0] && !recipeBookOpen[0]) {
                 for (int i = 0; i < Inventory.HOTBAR_SIZE; i++) {
                     if (input.isKeyJustPressed(GLFW_KEY_1 + i)) {
                         selectedSlot[0] = i;
@@ -2056,7 +3212,8 @@ public class Main {
                 }
             }
 
-            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0] && !hudEditing) {
+            if (!menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0] && !mapOpen[0]
+                    && !hudEditing && !chatOpen[0] && !recipeBookOpen[0]) {
                 hit = Raycaster.cast(world, player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
 
                 // A cell can hold an overlay decoration inside its primary block (e.g.
@@ -2071,21 +3228,44 @@ public class Main {
                 BlockType heldItem = heldStack.isEmpty() ? null : heldStack.type();
                 GameMode mode = settings.getGameMode();
 
-                // What the crosshair is aimed at: a mob takes priority over the block
-                // behind it, so swinging at a pig doesn't dig up the ground behind it.
-                Mob targetedMob = world.raycastMob(player.getEyePosition(), player.getCamera().getFront(), REACH_DISTANCE);
+                // What the crosshair is aimed at: a remote player beats a mob beats
+                // the block behind them, so swinging at someone doesn't dig up
+                // whatever happens to be behind their back.
+                RemotePlayer targetedPlayer = raycastTargetRemotePlayer(player);
+                Mob targetedMob = targetedPlayer == null ? raycastTargetMob(player, world) : null;
                 targetedMobRef[0] = targetedMob;
 
-                // Attacking: holding left-click hits the targeted mob on a short cooldown
-                // (mobs can't be hurt in spectator - no interaction).
-                if (targetedMob != null && !mode.isSpectator()
+                // Attacking: holding left-click hits the targeted mob (or, in
+                // multiplayer, another player) on a short cooldown (mobs and
+                // players can't be hurt in spectator - no interaction).
+                if (!mode.isSpectator()
                         && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT) && attackCooldown[0] <= 0f) {
-                    // Creative kills in one hit; survival/adventure deal tool damage
-                    // (a sword hits harder than a bare-handed punch).
-                    float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldStack);
-                    boolean killed = world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
-                    audio.playAt(killed ? SoundEvent.MOB_DEATH : SoundEvent.ATTACK,
-                            targetedMob.position.x, targetedMob.position.y, targetedMob.position.z, 1f);
+                    if (targetedPlayer != null) {
+                        // PvP: the server validates reach/cadence and relays the hit;
+                        // the target's own client applies it to their health.
+                        float pvpDamage = mode.isCreative() ? 100f : Mining.attackDamage(heldStack);
+                        NetClient client = netClient;
+                        try {
+                            client.sendPlayerAttack(targetedPlayer.id, pvpDamage);
+                            audio.play(SoundEvent.ATTACK);
+                            handRenderer.triggerSwing();
+                        } catch (IOException e) {
+                            netError = e.getMessage();
+                        }
+                    } else if (targetedMob != null) {
+                        // Creative kills in one hit; survival/adventure deal tool damage
+                        // (a sword hits harder than a bare-handed punch).
+                        float damage = mode.isCreative() ? targetedMob.getMaxHealth() : Mining.attackDamage(heldStack);
+                        if (netClient != null && netClient.isConnected()) {
+                            // Server-authoritative: send the swing; the server applies
+                            // damage and broadcasts death/loot.
+                            sendMobAttack(targetedMob, damage);
+                        } else {
+                            boolean killed = world.damageMob(targetedMob, damage, player.getPosition().x, player.getPosition().z, loot);
+                            audio.playAt(killed ? SoundEvent.MOB_DEATH : SoundEvent.ATTACK,
+                                    targetedMob.position.x, targetedMob.position.y, targetedMob.position.z, 1f);
+                        }
+                    }
                     attackCooldown[0] = 0.45f;
                     // Swords wear out with use (creative tools never break).
                     if (!mode.isCreative() && Mining.isSword(heldStack)) {
@@ -2175,17 +3355,58 @@ public class Main {
                             Door.toggle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                             audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
                             handRenderer.triggerSwing();
+                            syncDoorToServer((byte) currentDim[0].ordinal(), world, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         }
                     } else if (Door.isTrapdoor(targeted)) {
                         if (noMob && mode.canPlace()) {
                             Door.toggleSingle(world, world::setBlock, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                             audio.playAt(SoundEvent.DOOR, hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
                             handRenderer.triggerSwing();
+                            syncBlockToServer((byte) currentDim[0].ordinal(), world, hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
                         }
                     } else if (noMob && targeted == BlockType.FURNACE) {
                         // Right-click a furnace to open its smelting gui.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         Furnace furnace = world.getOrCreateFurnace(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, furnace);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.STEAM_BOILER) {
+                        // Steam Boiler: right-click with any furnace fuel to load
+                        // it; empty-hand shows the current steam level.
+                        com.minecraftclone.world.SteamBoilerEntity boiler =
+                                world.getOrCreateSteamBoiler(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        if (!heldStack.isEmpty() && com.minecraftclone.world.Furnace.isFuel(heldItem)) {
+                            int accepted = boiler.addFuel(heldItem, heldStack.count());
+                            if (accepted > 0) {
+                                player.getInventory().remove(heldItem, accepted);
+                                audio.play(SoundEvent.UI_CLICK);
+                                handRenderer.triggerSwing();
+                                pushContainerSnapshot(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                                world.markChunkModifiedByPlayer(World.worldToChunk(hit.blockPos.x),
+                                        World.worldToChunk(hit.blockPos.z));
+                            } else {
+                                showMessage(messages, "The boiler is full.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else {
+                            int secs = Math.round(boiler.steamSeconds());
+                            showMessage(messages, boiler.isBurning() ? "Burning - steam: " + secs + "s buffered."
+                                            : "Steam: " + secs + "s. Load fuel to heat the boiler.",
+                                    new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
+                        }
+                    } else if (noMob && targeted == BlockType.STEAM_FURNACE) {
+                        // Steam Furnace: opens the standard furnace GUI; its heat
+                        // comes from an adjacent steaming boiler instead of fuel.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.SteamFurnaceEntity sf = world.getOrCreateSteamFurnace(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, sf);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.STEAM_MACERATOR) {
+                        // Steam Macerator: doubles ore output using steam power.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.SteamMaceratorEntity sm = world.getOrCreateSteamMacerator(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, sm);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.
@@ -2194,28 +3415,192 @@ public class Main {
                     } else if (noMob && targeted == BlockType.CHEST) {
                         // Right-click a chest to open its storage gui; an adjacent
                         // chest on any horizontal axis merges into a 54-slot double.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         world.getOrCreateChest(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.chestContainerAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.BARREL) {
                         // Right-click a barrel to open its storage gui.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         world.getOrCreateBarrel(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CHEST, player.getInventory(), craftingGrid,
                                 world.barrelAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z));
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.PART_BUILDER) {
                         // Right-click a Part Builder to open the Tinkers' part-crafting gui.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.tinkers.PartBuilderEntity pbEntity =
                                 world.getOrCreatePartBuilder(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forPartBuilder(player.getInventory(), pbEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.TOOL_STATION) {
                         // Right-click a Tool Station to open the Tinkers' assembly gui.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.tinkers.ToolStationEntity tsEntity =
                                 world.getOrCreateToolStation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.SMELTERY_CONTROLLER) {
+                        // Right-click a formed Smeltery controller to open its gui
+                        // (input slot, heat flame, melt arrow, output). An unformed
+                        // structure has no block entity to open.
+                        com.minecraftclone.world.multiblock.SmelteryEntity smeltery =
+                                world.blockEntityAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z)
+                                instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
+                        if (smeltery == null) {
+                            showMessage(messages, "The smeltery is not formed yet.",
+                                    new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            activeGui[0] = new ContainerGui(ContainerGui.Kind.SMELTERY, player.getInventory(),
+                                    craftingGrid, smeltery);
+                            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.IRON_BUCKET && targeted.isLava()) {
+                        // Empty bucket on still lava: scoop it up (flowing lava
+                        // can't be picked, Minecraft-style).
+                        if (targeted == BlockType.LAVA_FLOW) {
+                            showMessage(messages, "Only still lava can be scooped.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            player.getInventory().remove(BlockType.IRON_BUCKET, 1);
+                            player.getInventory().add(BlockType.LAVA_BUCKET, 1);
+                            world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                            audio.play(SoundEvent.UI_CLICK);
+                            handRenderer.triggerSwing();
+                            syncBlockToServer((byte) currentDim[0].ordinal(), world,
+                                    hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
+                            showMessage(messages, "Scooped lava.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.LAVA_BUCKET && targeted == BlockType.SEARED_TANK) {
+                        // Full bucket on a Seared Tank: find the formed smeltery
+                        // this tank belongs to and pour the lava in as fuel.
+                        com.minecraftclone.world.multiblock.SmelteryEntity smeltery =
+                                smelteryContainingAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, world);
+                        if (smeltery == null) {
+                            showMessage(messages, "This tank isn't part of a formed smeltery.",
+                                    new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else if (smeltery.lavaFuel() + com.minecraftclone.world.multiblock.SmelteryEntity.LAVA_SECONDS
+                                > com.minecraftclone.world.multiblock.SmelteryEntity.MAX_FUEL) {
+                            // Require room for the WHOLE bucket - a partially
+                            // accepted pour would waste the lava.
+                            showMessage(messages, "The smeltery's tanks are full.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            smeltery.addFuel(com.minecraftclone.world.multiblock.SmelteryEntity.LAVA_SECONDS);
+                            player.getInventory().remove(BlockType.LAVA_BUCKET, 1);
+                            player.getInventory().add(BlockType.IRON_BUCKET, 1);
+                            handRenderer.triggerSwing();
+                            audio.playBlockSound(SoundMaterial.of(BlockType.LAVA), BlockAction.PLACE,
+                                    hit.blockPos.x + 0.5f, hit.blockPos.y + 0.5f, hit.blockPos.z + 0.5f, 1f);
+                            // The entity lives at the CONTROLLER, not the tank -
+                            // resolve the structure's controller cell for sync.
+                            var instance = world.multiBlockContaining(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            if (instance != null) {
+                                pushContainerSnapshot(instance.controllerX, instance.controllerY, instance.controllerZ);
+                            }
+                            int cx = World.worldToChunk(hit.blockPos.x);
+                            int cz = World.worldToChunk(hit.blockPos.z);
+                            world.markChunkModifiedByPlayer(cx, cz);
+                            saveOpenWorld(worlds, currentWorldDir[0], player, currentDim[0], selectedSlot[0]);
+                            showMessage(messages, "Poured lava into the smeltery.",
+                                    new Vector4f(0.98f, 0.55f, 0.12f, 1f), 2f);
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.LAVA_BUCKET
+                            && mode.canPlace() && world.getBlock(hit.placePos.x, hit.placePos.y, hit.placePos.z) == BlockType.AIR) {
+                        // Full bucket on open ground: place a lava source.
+                        Vector3i p = hit.placePos;
+                        world.setBlock(p.x, p.y, p.z, BlockType.LAVA_SOURCE);
+                        player.getInventory().remove(BlockType.LAVA_BUCKET, 1);
+                        player.getInventory().add(BlockType.IRON_BUCKET, 1);
+                        handRenderer.triggerSwing();
+                        audio.playBlockSound(SoundMaterial.of(BlockType.LAVA), BlockAction.PLACE,
+                                p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
+                        byte dim = (byte) currentDim[0].ordinal();
+                        sendBlockChange(dim, p.x, p.y, p.z, BlockType.LAVA_SOURCE, (byte) 0, false);
+                    } else if (noMob && targeted == BlockType.CASTING_TABLE || noMob && targeted == BlockType.CASTING_BASIN) {
+                        // Casting station: imprint casts with Tinkers parts,
+                        // feed materials, collect finished metal parts.
+                        com.minecraftclone.world.CastingEntity casting =
+                                world.getOrCreateCasting(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        boolean multiplayerCasting = netClient != null && netClient.isConnected();
+                        boolean castingChanged = false;
+                        if (casting == null) {
+                            showMessage(messages, "Nothing to cast here.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 1.5f);
+                        } else if (!heldStack.isEmpty() && heldStack.isTinkersPart()) {
+                            // Imprint the held part's shape as this table's cast.
+                            var part = heldStack.tinkersPart();
+                            String shapeName = part.shape.name();
+                            boolean imprinted = multiplayerCasting
+                                    ? requestCastingOperation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z,
+                                            Packets.CAST_IMPRINT, part.material, part.shape.ordinal(), 1)
+                                    : casting.imprintCast(heldStack);
+                            if (imprinted) {
+                                player.getInventory().setStack(selectedSlot[0], ItemStack.EMPTY);
+                                showMessage(messages, "Cast imprinted: " + shapeName,
+                                        new Vector4f(0.7f, 0.9f, 1f, 1f), 2.5f);
+                                handRenderer.triggerSwing();
+                                castingChanged = !multiplayerCasting;
+                            }
+                        } else if (!heldStack.isEmpty()
+                                && com.minecraftclone.world.tinkers.TinkersRegistry.isMaterial(heldItem)) {
+                            // Feed material into the buffer.
+                            int accepted = Math.min(casting.inputSpaceFor(heldItem), heldStack.count());
+                            boolean inserted = accepted > 0 && (!multiplayerCasting
+                                    ? casting.insertMaterial(heldItem, accepted) > 0
+                                    : requestCastingOperation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z,
+                                            Packets.CAST_INSERT, heldItem, -1, accepted));
+                            if (inserted) {
+                                player.getInventory().remove(heldItem, accepted);
+                                audio.play(SoundEvent.UI_CLICK);
+                                handRenderer.triggerSwing();
+                                castingChanged = !multiplayerCasting;
+                            } else {
+                                showMessage(messages, "The buffer is full or the type doesn't match.",
+                                        new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else if (heldStack.isEmpty() && casting.outputCount() > 0) {
+                            // Collect finished parts.
+                            List<ItemStack> ready = casting.outputsSnapshot();
+                            int accepted = 0;
+                            if (multiplayerCasting) {
+                                int emptySlots = 0;
+                                for (int i = 0; i < Inventory.SIZE; i++) {
+                                    if (player.getInventory().isEmpty(i)) emptySlots++;
+                                }
+                                accepted = Math.min(emptySlots, ready.size());
+                                if (accepted > 0 && requestCastingOperation(
+                                        hit.blockPos.x, hit.blockPos.y, hit.blockPos.z,
+                                        Packets.CAST_TAKE_OUTPUTS, null, -1, accepted)) {
+                                    for (int i = 0; i < accepted; i++) {
+                                        player.getInventory().addStack(ready.get(i));
+                                    }
+                                } else {
+                                    accepted = 0;
+                                }
+                            } else {
+                                for (ItemStack part : ready) {
+                                    if (!player.getInventory().addStack(part).isEmpty()) break;
+                                    accepted++;
+                                }
+                                if (accepted > 0) {
+                                    casting.takeOutputs(accepted);
+                                    castingChanged = true;
+                                }
+                            }
+                            if (accepted > 0) {
+                                audio.play(SoundEvent.ITEM_PICKUP);
+                                showMessage(messages, "Took cast parts.", new Vector4f(0.7f, 0.9f, 0.5f, 1f), 1.5f);
+                            }
+                        } else if (heldStack.isEmpty()) {
+                            showMessage(messages, casting.castShape() == null
+                                            ? "Right-click with a tool part to imprint a cast."
+                                            : (casting.outputCount() > 0 ? "Parts ready!" : "Feed me materials."),
+                                    new Vector4f(0.8f, 0.8f, 0.8f, 1f), 2f);
+                        }
+                        if (castingChanged) {
+                            world.markChunkModifiedByPlayer(World.worldToChunk(hit.blockPos.x),
+                                    World.worldToChunk(hit.blockPos.z));
+                        }
                     } else if (noMob && targeted.isBed()) {
                         // Right-click a bed: always set spawn in the overworld.
                         // Sleep (and skip to morning) still only happens at night, or
@@ -2226,7 +3611,21 @@ public class Main {
                                 int[] foot = Bed.footPos(world, bx, by, bz);
                                 player.setSpawnPoint(foot[0], foot[1], foot[2]);
                                 showMessage(messages, "Respawn point set", new Vector4f(0.7f, 0.9f, 1f, 1f), 2f);
-                                if (dayNightCycle.isNight() || mode.isCreative()) {
+                                boolean mp = netClient != null && netClient.isConnected();
+                                if (mp) {
+                                    // Multiplayer: sleeping is a vote - the server skips
+                                    // the night once EVERY connected player is in bed.
+                                    handRenderer.triggerSwing();
+                                    if (dayNightCycle.isNight()) {
+                                        try {
+                                            netClient.sendSleepVote();
+                                            showMessage(messages, "You are in bed...",
+                                                    new Vector4f(0.8f, 0.8f, 0.9f, 1f), 2.5f);
+                                        } catch (IOException e) {
+                                            netError = e.getMessage();
+                                        }
+                                    }
+                                } else if (dayNightCycle.isNight() || mode.isCreative()) {
                                     if (!player.isSleeping()) {
                                         player.setSleeping(true);
                                         showMessage(messages, "Sleeping...", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1f);
@@ -2423,7 +3822,20 @@ public class Main {
                 breakOverlay.render(chunkShader, atlas, hit.blockPos, overlayHeight, breakFraction);
             }
             itemRenderer.render(chunkShader, atlas, itemTextures, world.getItems(), player.getCamera());
-            mobRenderer.render(mobTextures, world.getMobs(), world.getArrows());
+            List<Mob> renderMobs = new ArrayList<>(world.getMobs());
+            renderMobs.addAll(remoteMobs.values());
+            mobRenderer.render(mobTextures, renderMobs, world.getArrows());
+            if (!remotePlayers.isEmpty()) {
+                // Only players in the same dimension are visible, like Minecraft.
+                List<RemotePlayer> visible = new ArrayList<>();
+                byte myDim = (byte) currentDim[0].ordinal();
+                for (RemotePlayer rp : remotePlayers.values()) {
+                    if (rp.dimension == myDim) visible.add(rp);
+                }
+                if (!visible.isEmpty()) {
+                    playerRenderer.render(mobTextures, visible);
+                }
+            }
             // Water after entities: the surface covers submerged bodies instead
             // of the whole mob drawing on top of the lake (water doesn't write depth).
             atlas.bind();
@@ -2515,6 +3927,28 @@ public class Main {
                 hud.renderFrostOverlay(player.getStats().getColdness());
             }
             hud.renderMessages(messages, window.getAspectRatio());
+            // JEI-style recipe book overlay.
+            if (recipeBookOpen[0]) {
+                float rbLx = ((float) input.getMouseX() / window.getWidth() * 2f - 1f) * window.getAspectRatio();
+                float rbLy = 1f - (float) input.getMouseY() / window.getHeight() * 2f;
+                hud.renderRecipeBook(recipeBook, atlas, itemTextures, player.getDurability(), window.getAspectRatio(), rbLx, rbLy);
+            }
+            // Tab: online player list (multiplayer, gameplay screens only).
+            boolean tabListVisible = started[0] && netClient != null && input.isKeyDown(GLFW_KEY_TAB)
+                    && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]
+                    && !mapOpen[0] && !chatOpen[0];
+            if (tabListVisible) {
+                List<String> names = new ArrayList<>();
+                names.add(localPlayerName + " (you)");
+                for (RemotePlayer rp : remotePlayers.values()) {
+                    names.add(rp.name + (rp.dimension == currentDim[0].ordinal() ? "" : " (other dimension)"));
+                }
+                hud.renderPlayerList(names, window.getAspectRatio());
+            }
+            // The chat input line, drawn under the messages while typing.
+            if (chatOpen[0] && netClient != null) {
+                hud.drawTextLeft("> " + chatText + "_", -0.95f, 0.12f, 0.04f, WHITE, window.getAspectRatio());
+            }
             if (started[0] && forecastOpen[0] && !menuOpen[0] && !inventoryOpen[0] && !creativeOpen[0]) {
                 hud.renderForecast(climate, calendar, window.getAspectRatio());
             }
@@ -2596,8 +4030,13 @@ public class Main {
                 hud.drawTextLeft("Game mode: " + settings.getGameMode()
                                 + "   Difficulty: " + settings.getDifficulty(),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
-                hud.drawTextLeft(String.format(Locale.ROOT, "Entities: %d mobs, %d items", world.getMobs().size(), world.getItems().size()),
+                hud.drawTextLeft(String.format(Locale.ROOT, "Entities: %d mobs, %d items",
+                                world.getMobs().size() + remoteMobs.size(), world.getItems().size()),
                         -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                if (netClient != null) {
+                    hud.drawTextLeft("Multiplayer: " + remotePlayers.size() + " other player(s), " + remoteMobs.size() + " shared mob(s)",
+                            -0.95f, y - (line++) * step, textSize, WHITE, aspect);
+                }
                 Runtime rt = Runtime.getRuntime();
                 long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
                 long maxMb = rt.maxMemory() / (1024 * 1024);
@@ -2652,6 +4091,8 @@ public class Main {
                     hud.renderWorldGenMenu(genSettings, worldGenSelection[0], editingRow[0], window.getAspectRatio());
                 } else if (worldSelectOpen[0]) {
                     hud.renderWorldSelectMenu(worldNames, worldSelectSelection[0], window.getAspectRatio());
+                } else if (multiplayerOpen[0]) {
+                    hud.renderMultiplayerMenu(mpName[0], mpHost[0], mpPort[0], mpSelection[0], mpEditingRow[0], window.getAspectRatio());
                 } else {
                     hud.renderMainMenu(mainMenuSelection[0], window.getAspectRatio());
                 }
@@ -2694,6 +4135,7 @@ public class Main {
             }
         }
         settings.save(settingsFile);
+        leaveMultiplayer(); // close any embedded server and client connection
 
         hud.destroy();
         guiTextures.destroy();
@@ -2701,6 +4143,7 @@ public class Main {
         handRenderer.destroy();
         breakOverlay.destroy();
         mobRenderer.destroy();
+        playerRenderer.destroy();
         weatherRenderer.destroy();
         chunkShader.destroy();
         lineShader.destroy();
@@ -2725,12 +4168,17 @@ public class Main {
     private static void saveOpenWorld(World[] worlds, Path worldDir, Player player,
                                       DimensionType dim, int selectedSlot) {
         if (worlds == null) return;
+        // Multiplayer mirrors may leave entries null (a dimension the client
+        // hasn't built yet), so iterate null-safely.
         for (World w : worlds) {
+            if (w == null) continue;
             w.saveAllModified();
         }
         if (worldDir != null) {
             for (DimensionType d : DimensionType.values()) {
-                worlds[d.ordinal()].getMapData().saveTo(
+                World w = worlds[d.ordinal()];
+                if (w == null) continue;
+                w.getMapData().saveTo(
                         worldDir.resolve(d.saveFolder()).resolve("map.dat"));
             }
             if (player != null) {
@@ -2743,6 +4191,7 @@ public class Main {
     private static void destroyOpenWorld(World[] worlds) {
         if (worlds == null) return;
         for (World w : worlds) {
+            if (w == null) continue;
             w.destroy();
         }
     }
@@ -3036,6 +4485,8 @@ public class Main {
             }
             if (!blocked && !intersectsPlayer(player, p)) {
                 boolean placed = mode.isCreative() || player.getInventory().remove(heldItem, 1);
+                int bedHeadX = -1, bedHeadZ = -1;
+                boolean bedHeadPlaced = false;
                 if (placed) {
                     handRenderer.triggerSwing();
                     if (intoFluid) {
@@ -3076,8 +4527,26 @@ public class Main {
                                 if (world.getBlock(headX, p.y, headZ) == BlockType.AIR && !intersectsPlayer(player, new Vector3i(headX, p.y, headZ))) {
                                     world.setBlock(headX, p.y, headZ, BlockType.BED_HEAD);
                                     world.setBlockOrientation(headX, p.y, headZ, facing);
+                                    bedHeadX = headX;
+                                    bedHeadZ = headZ;
+                                    bedHeadPlaced = true;
                                 }
                             }
+                        }
+                    }
+                    // Tell the server so every other client sees the placement too.
+                    if (netClient != null && netClient.isConnected()) {
+                        byte dim = (byte) currentDim[0].ordinal();
+                        sendBlockChange(dim, p.x, p.y, p.z,
+                                intoFluid ? world.getOverlay(p.x, p.y, p.z) : heldItem,
+                                intoFluid ? (byte) 0 : world.getBlockOrientation(p.x, p.y, p.z), intoFluid);
+                        if (heldItem == BlockType.DOOR && world.getBlock(p.x, p.y + 1, p.z) == BlockType.DOOR) {
+                            sendBlockChange(dim, p.x, p.y + 1, p.z, BlockType.DOOR,
+                                    world.getBlockOrientation(p.x, p.y + 1, p.z), false);
+                        }
+                        if (bedHeadPlaced) {
+                            sendBlockChange(dim, bedHeadX, p.y, bedHeadZ, BlockType.BED_HEAD,
+                                    world.getBlockOrientation(bedHeadX, p.y, bedHeadZ), false);
                         }
                     }
                 }

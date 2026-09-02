@@ -59,8 +59,31 @@ public class World implements BlockAccessor {
     private final DimensionType dimension;
     private final MapData mapData = new MapData();
 
+    /** Called whenever a chunk is generated or loaded, with its grid coords - lets a client know to request it. */
+    private java.util.function.BiConsumer<Integer, Integer> chunkListener;
+
+    public void setChunkListener(java.util.function.BiConsumer<Integer, Integer> listener) {
+        this.chunkListener = listener;
+    }
+
+    private void notifyChunkLoaded(int cx, int cz) {
+        if (chunkListener != null) chunkListener.accept(cx, cz);
+    }
+
     private int renderDistance = 6;
     private boolean leavesTransparent = false;
+    /**
+     * True for a headless (server) world: chunks are generated but never meshed.
+     * {@link #atlas} is null in that case; update() skips the remesh pass.
+     */
+    private final boolean headless;
+    /**
+     * When true the streaming loop never unloads chunks - the whole generated
+     * area stays in memory. Used by the server, where chunks are shared across
+     * many players scattered around the map (each player's position streams its
+     * own neighborhood, and unloading around one player would evict another's).
+     */
+    private boolean keepChunks = false;
     // Generation and meshing used to be budgeted by a fixed chunk *count* per
     // frame (generate/mesh up to N, however long that takes). That has the
     // same flaw the fluid-tick throttle below already learned the hard way:
@@ -141,6 +164,8 @@ public class World implements BlockAccessor {
 
     // Passive animals wandering the surface. Transient - not saved.
     private final List<Mob> mobs = new ArrayList<>();
+    /** Next id for a newly spawned mob - lets a multiplayer server address mobs by id. */
+    private int nextMobId = 1;
     private static final int MAX_MOBS = 32;                    // loaded at once
     private static final float MOB_SPAWN_RADIUS = 40f;         // spawn within this many blocks
     private static final float MOB_DESPAWN_RADIUS = 72f;       // despawn beyond this
@@ -157,6 +182,14 @@ public class World implements BlockAccessor {
     private final List<ArrowEntity> arrows = new ArrayList<>();
 
     public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir, DimensionType dimension) {
+        this(seed, genSettings, atlas, saveDir, dimension, false);
+    }
+
+    /**
+     * @param headless true to run without an OpenGL context (a dedicated server):
+     *                 {@code atlas} must be null then and meshing is skipped.
+     */
+    public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir, DimensionType dimension, boolean headless) {
         this.dimension = dimension;
         this.generator = switch (dimension) {
             case NETHER -> new NetherGenerator(seed);
@@ -164,6 +197,7 @@ public class World implements BlockAccessor {
             default -> new TerrainGenerator(seed, genSettings);
         };
         this.atlas = atlas;
+        this.headless = headless;
         // Edited chunks for each dimension live in their own subdirectory, so
         // coordinates never collide across dimensions.
         this.storage = new ChunkStorage(saveDir.resolve(dimension.saveFolder()));
@@ -188,6 +222,15 @@ public class World implements BlockAccessor {
 
     public void setRenderDistance(int renderDistance) {
         this.renderDistance = renderDistance;
+    }
+
+    /** Prevents the streaming loop from unloading chunks (see {@link #keepChunks}). */
+    public void setKeepChunks(boolean keepChunks) {
+        this.keepChunks = keepChunks;
+    }
+
+    public boolean isHeadless() {
+        return headless;
     }
 
     public int getRenderDistance() {
@@ -268,6 +311,85 @@ public class World implements BlockAccessor {
 
     private Chunk getChunk(int chunkX, int chunkZ) {
         return chunks.get(key(chunkX, chunkZ));
+    }
+
+    /** True if the chunk at grid coordinate {@code (cx, cz)} is loaded/generated. */
+    public boolean isChunkLoaded(int cx, int cz) {
+        return chunks.containsKey(key(cx, cz));
+    }
+
+    /** The stored facing hint for a door block at a world position (0:+Z, 1:-Z, 2:+X, 3:-X). */
+    public byte getOrientation(int worldX, int worldY, int worldZ) {
+        if (worldY < 0 || worldY >= Chunk.HEIGHT) return 0;
+        Chunk chunk = getChunk(worldToChunk(worldX), worldToChunk(worldZ));
+        if (chunk == null) return 0;
+        return chunk.getOrientation(Math.floorMod(worldX, Chunk.SIZE), worldY, Math.floorMod(worldZ, Chunk.SIZE));
+    }
+
+    /** True if a loaded chunk has been edited by a player (differs from seed regeneration). */
+    public boolean isChunkModifiedByPlayer(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        return chunk != null && chunk.isModifiedByPlayer();
+    }
+
+    /** Returns the chunk's raw block-id array for sending to a client, or null if it isn't loaded. */
+    public short[] getChunkRawBlocks(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        return chunk == null ? null : chunk.getRawBlocks();
+    }
+
+    /** Returns the chunk's raw overlay-id array for sending to a client, or null if it isn't loaded. */
+    public short[] getChunkRawOverlays(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        return chunk == null ? null : chunk.getRawOverlays();
+    }
+
+    /** Returns the chunk's raw orientation array for sending to a client, or null if it isn't loaded. */
+    public byte[] getChunkRawOrientations(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        return chunk == null ? null : chunk.getRawOrientations();
+    }
+
+    /** Applies server-provided raw chunk data to a loaded chunk (the multiplayer client path). */
+    public void applyRemoteChunkData(int cx, int cz, short[] blocks, short[] overlays, byte[] orientations) {
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk == null) return;
+        // The arrays come straight off the wire: a length mismatch would throw
+        // IllegalArgumentException deep in mesh prep and crash the client, so
+        // malformed data is dropped instead of applied.
+        int volume = Chunk.SIZE * Chunk.HEIGHT * Chunk.SIZE;
+        if (blocks != null && blocks.length == volume) chunk.setRawBlocks(blocks);
+        if (overlays != null && overlays.length == volume) chunk.setRawOverlays(overlays);
+        if (orientations != null && orientations.length == volume) chunk.setRawOrientations(orientations);
+        chunk.markGenerated();
+    }
+
+    /** Loads (from disk) or generates the chunk at grid coordinate {@code (cx, cz)} if it isn't already loaded. */
+    public void ensureChunk(int cx, int cz) {
+        if (chunks.containsKey(key(cx, cz))) return;
+        Chunk chunk = new Chunk(new ChunkPos(cx, cz));
+        chunks.put(key(cx, cz), chunk);
+        if (storage.hasSavedChunk(chunk.getPos())) {
+            for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
+                if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
+                    blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                    if (es.entity() instanceof CastingEntity casting) {
+                        casting.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamFurnaceEntity furnace) {
+                        furnace.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamMaceratorEntity mac) {
+                        mac.attach(es.x(), es.y(), es.z(), this);
+                    }
+                }
+            }
+        } else {
+            generator.generate(chunk);
+        }
+        markNeighborDirty(cx - 1, cz);
+        markNeighborDirty(cx + 1, cz);
+        markNeighborDirty(cx, cz - 1);
+        markNeighborDirty(cx, cz + 1);
+        notifyChunkLoaded(cx, cz);
     }
 
     @Override
@@ -352,6 +474,8 @@ public class World implements BlockAccessor {
         // Notify the multi-block manager so smeltery (and future) structures can
         // form or deform when their structural blocks change.
         multiBlockManager.onBlockChanged(this, worldX, worldY, worldZ);
+        // A pipe placed or broken changes network topology: drop stale runs.
+        pipeNetworkManager.onBlockChanged(worldX, worldY, worldZ);
 
         // Placing/removing a light source (e.g. a torch) can change the baked glow
         // in every chunk within its radius, not just literal boundary columns - the
@@ -536,9 +660,96 @@ public class World implements BlockAccessor {
         return ts;
     }
 
+    /**
+     * Returns the Casting Table / Basin entity at a position, creating and
+     * registering it on first use. The block at the cell decides which
+     * variant is built; an incompatible existing entity yields null.
+     */
+    public CastingEntity getOrCreateCasting(int x, int y, int z) {
+        BlockType block = getBlock(x, y, z);
+        boolean basin = block == BlockType.CASTING_BASIN;
+        if (block != BlockType.CASTING_TABLE && !basin) return null;
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof CastingEntity ce) {
+            ce.attach(x, y, z, this);
+            return ce;
+        }
+        CastingEntity ce = new CastingEntity(block, basin);
+        ce.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), ce);
+        return ce;
+    }
+
+    /** Returns the Steam Boiler entity at a position, creating it on first use. */
+    public SteamBoilerEntity getOrCreateSteamBoiler(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamBoilerEntity b) return b;
+        SteamBoilerEntity b = new SteamBoilerEntity();
+        blockEntities.put(blockKey(x, y, z), b);
+        return b;
+    }
+
+    /** Returns the Steam Furnace entity at a position, creating + attaching it on first use. */
+    public SteamFurnaceEntity getOrCreateSteamFurnace(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamFurnaceEntity sf) {
+            sf.attach(x, y, z, this);
+            return sf;
+        }
+        SteamFurnaceEntity sf = new SteamFurnaceEntity();
+        sf.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), sf);
+        return sf;
+    }
+
+    /** Returns the Steam Macerator entity at a position, creating + attaching it on first use. */
+    public SteamMaceratorEntity getOrCreateSteamMacerator(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamMaceratorEntity sm) {
+            sm.attach(x, y, z, this);
+            return sm;
+        }
+        SteamMaceratorEntity sm = new SteamMaceratorEntity();
+        sm.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), sm);
+        return sm;
+    }
+
     /** Forgets a block entity - call when its block is mined or removed. */
     public void removeBlockEntity(int x, int y, int z) {
         blockEntities.remove(blockKey(x, y, z));
+    }
+
+    /**
+     * Creates (or reuses) the block entity of the given registered type at a
+     * cell and restores its state from {@code in} - the multiplayer path for
+     * server-sent container snapshots (the payload format is exactly the
+     * entity's own {@link BlockEntity#readFrom}). Reusing an existing instance
+     * of the same type matters: an open container GUI reads that object live,
+     * so overwriting its fields refreshes the UI in place. Returns the entity,
+     * or null if the type isn't registered or the block there isn't a match.
+     */
+    public BlockEntity restoreBlockEntity(int x, int y, int z, String type, java.io.DataInput in) throws java.io.IOException {
+        BlockEntity entity = blockEntityAt(x, y, z);
+        if (entity == null || !entity.type().equals(type)) {
+            BlockType existing = getBlock(x, y, z);
+            entity = BlockEntities.create(type);
+            if (entity == null || existing != entity.blockType()) return null;
+            blockEntities.put(blockKey(x, y, z), entity);
+        }
+        entity.readFrom(in);
+        if (entity instanceof SteamFurnaceEntity furnace) {
+            furnace.attach(x, y, z, this);
+        } else if (entity instanceof SteamMaceratorEntity mac) {
+            mac.attach(x, y, z, this);
+        }
+        return entity;
+    }
+
+    /** Flags a loaded chunk as player-modified so autosave persists it (used for remote container edits). */
+    public void markChunkModifiedByPlayer(int cx, int cz) {
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk != null) chunk.markModifiedByPlayer();
     }
 
     /**
@@ -841,16 +1052,18 @@ public class World implements BlockAccessor {
             if (chunks.containsKey(key(cx, cz))) return true;
             if (generated[0] > 0 && System.nanoTime() >= generateDeadline) return false;
             loadOrGenerateChunk(cx, cz);
+            notifyChunkLoaded(cx, cz);
             generated[0]++;
             return true;
         });
 
         // Unload far chunks. Most frames unload nothing, so the removal list
-        // is only allocated once something actually needs to go.
+        // is only allocated once something actually needs to go. A headless
+        // server with keepChunks set never unloads (chunks are shared).
         int unloadRadius = renderDistance + 2;
         List<Chunk> toRemove = null;
         for (Chunk c : chunks.values()) {
-            if (c.getPos().distanceSq(pcx, pcz) > (double) unloadRadius * unloadRadius) {
+            if (!keepChunks && c.getPos().distanceSq(pcx, pcz) > (double) unloadRadius * unloadRadius) {
                 if (toRemove == null) toRemove = new ArrayList<>();
                 toRemove.add(c);
             }
@@ -880,22 +1093,26 @@ public class World implements BlockAccessor {
             updateFluids();
         }
 
-        // Remesh: first-time meshes beat neighbor-seam remeshes (otherwise a
-        // flying player keeps re-dirtying nearby chunks and the new ones at
-        // the rim never get a mesh until you punch them). Then nearest-first.
-        // Budgeted by wall-clock time (see MESH_BUDGET_SECONDS).
-        List<Chunk> dirty = new ArrayList<>();
-        for (Chunk c : chunks.values()) {
-            if (c.needsMesh()) dirty.add(c);
-        }
-        dirty.sort((a, b) -> compareMeshQueue(
-                a.needsFirstMesh(), a.getPos().distanceSq(pcx, pcz),
-                b.needsFirstMesh(), b.getPos().distanceSq(pcx, pcz)));
-        long meshDeadline = System.nanoTime() + (long) (MESH_BUDGET_SECONDS * 1e9);
-        for (int i = 0; i < dirty.size(); i++) {
-            if (i > 0 && System.nanoTime() >= meshDeadline) break;
-            Chunk c = dirty.get(i);
-            c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
+        // Remesh dirty chunks nearest-first, budgeted by wall-clock time (see
+        // MESH_BUDGET_SECONDS above) rather than a fixed count per tick. Skipped
+        // entirely on a headless server (no GL context, chunks never meshed).
+        // First-time meshes beat neighbor-seam remeshes (otherwise a flying
+        // player keeps re-dirtying nearby chunks and the new ones at the rim
+        // never get a mesh until you punch them).
+        if (!headless) {
+            List<Chunk> dirty = new ArrayList<>();
+            for (Chunk c : chunks.values()) {
+                if (c.needsMesh()) dirty.add(c);
+            }
+            dirty.sort((a, b) -> compareMeshQueue(
+                    a.needsFirstMesh(), a.getPos().distanceSq(pcx, pcz),
+                    b.needsFirstMesh(), b.getPos().distanceSq(pcx, pcz)));
+            long meshDeadline = System.nanoTime() + (long) (MESH_BUDGET_SECONDS * 1e9);
+            for (int i = 0; i < dirty.size(); i++) {
+                if (i > 0 && System.nanoTime() >= meshDeadline) break;
+                Chunk c = dirty.get(i);
+                c.rebuildMesh(this, atlas, collectNearbyLights(c.getPos()), leavesTransparent);
+            }
         }
     }
 
@@ -919,6 +1136,13 @@ public class World implements BlockAccessor {
             for (ChunkStorage.BlockEntitySave es : storage.load(chunk)) {
                 if (getBlock(es.x(), es.y(), es.z()) == es.entity().blockType()) {
                     blockEntities.put(blockKey(es.x(), es.y(), es.z()), es.entity());
+                    if (es.entity() instanceof CastingEntity casting) {
+                        casting.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamFurnaceEntity furnace) {
+                        furnace.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamMaceratorEntity mac) {
+                        mac.attach(es.x(), es.y(), es.z(), this);
+                    }
                     multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
                 }
             }
@@ -1340,13 +1564,51 @@ public class World implements BlockAccessor {
         return items;
     }
 
+    private int nextItemId = 1;
+
+    /** The next server-side item identity (multiplayer; clients never call this). */
+    public int allocateItemId() {
+        return nextItemId++;
+    }
+
+    /** The dropped item with the given server id, or null (multiplayer pickup references items by id). */
+    public ItemEntity itemById(int id) {
+        for (ItemEntity e : items) {
+            if (e.id == id) return e;
+        }
+        return null;
+    }
+
+    /** Removes the dropped item with the given server id; returns true if it existed. */
+    public boolean removeItemById(int id) {
+        for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
+            if (it.next().id == id) {
+                it.remove();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Spawns a server-identified dropped item at an exact position (the multiplayer ADD path). */
+    public void spawnSyncedItem(int id, BlockType type, int count, float x, float y, float z) {
+        ItemEntity e = new ItemEntity(type, count, x, y, z);
+        e.id = id;
+        items.add(e);
+    }
+
     /**
      * Advances item physics (gravity, resting on blocks) and collects any item
      * the player is close enough to pick up into {@code inventory}. Call once
      * per frame from the main thread. Returns true if at least one item was
      * picked up this frame (for a pickup sound - see Main).
+     * <p>
+     * Pass {@code skipSyncedPickup} true on a multiplayer client: server-identified
+     * items ({@code id > 0}) may only be collected via the server's explicit
+     * GIVE, so they're skipped here - local-only drops (Tinkers' payloads)
+     * still pick up normally.
      */
-    public boolean updateItems(float dt, Vector3f playerPos, Inventory inventory) {
+    public boolean updateItems(float dt, Vector3f playerPos, Inventory inventory, boolean skipSyncedPickup) {
         boolean pickedUp = false;
         for (Iterator<ItemEntity> it = items.iterator(); it.hasNext(); ) {
             ItemEntity e = it.next();
@@ -1376,7 +1638,9 @@ public class World implements BlockAccessor {
                 e.velocity.y = 0f;
             }
 
-            if (e.canPickup()) {
+            boolean pickable = playerPos != null && inventory != null && e.canPickup()
+                    && !(skipSyncedPickup && e.id > 0);
+            if (pickable) {
                 float dx = e.position.x - playerPos.x;
                 float dy = e.position.y - (playerPos.y + 0.9f);
                 float dz = e.position.z - playerPos.z;
@@ -1402,6 +1666,14 @@ public class World implements BlockAccessor {
             }
         }
         return pickedUp;
+    }
+
+    /**
+     * Advances item physics and picks up into {@code inventory} - the
+     * single-player form, where every drop may be collected locally.
+     */
+    public boolean updateItems(float dt, Vector3f playerPos, Inventory inventory) {
+        return updateItems(dt, playerPos, inventory, false);
     }
 
     public int getLoadedChunkCount() {
@@ -1502,6 +1774,128 @@ public class World implements BlockAccessor {
         return damage;
     }
 
+    /** Per-player damage result with the position of the mob that dealt it (for knockback direction). */
+    public record MobDamageResult(float[] damage, float[] srcX, float[] srcZ) {
+    }
+
+    /**
+     * Multiplayer variant of {@link #updateMobs}: advances every mob with the
+     * *nearest* of several players as its target, spawns around each player up
+     * to the same global caps, and returns the damage each player took (indexed
+     * like {@code playerPositions}) along with the position of the mob that
+     * dealt it - melee hits, arrow hits, and fallback damage all routed to the
+     * right player. Arrow hits report no source (zero coordinates). Call once
+     * per server tick.
+     */
+    public MobDamageResult updateMobsMulti(float dt, List<Vector3f> playerPositions, List<AABB> playerBoxes, boolean night, Random rnd, Difficulty difficulty) {
+        int count = playerPositions.size();
+        float[] damage = new float[count];
+        float[] srcX = new float[count];
+        float[] srcZ = new float[count];
+        float despawnSq = MOB_DESPAWN_RADIUS * MOB_DESPAWN_RADIUS;
+
+        for (Iterator<Mob> it = mobs.iterator(); it.hasNext(); ) {
+            Mob mob = it.next();
+            int nearest = nearestPlayerIndex(mob.position, playerPositions);
+            Vector3f target = playerPositions.get(nearest);
+            float dx = mob.position.x - target.x;
+            float dz = mob.position.z - target.z;
+            boolean gone = mob.isHostile() && !night;
+            if (gone || dx * dx + dz * dz > despawnSq || mob.position.y < -64f) {
+                it.remove();
+                continue;
+            }
+            mob.update(dt, this, rnd, target);
+            float melee = mob.getMeleeRequest();
+            if (melee > 0f) {
+                damage[nearest] += melee;
+                // Remember who actually landed the hit so knockback pushes
+                // away from the attacker, not whatever happens to be closest.
+                srcX[nearest] = mob.position.x;
+                srcZ[nearest] = mob.position.z;
+            }
+            if (mob.wantsToShoot()) {
+                spawnArrow(mob, target, rnd);
+            }
+        }
+
+        if (night && difficulty.allowsHostileMobs() && hostileCount() < MAX_HOSTILES && rnd.nextInt(HOSTILE_SPAWN_ODDS) == 0) {
+            int p = rnd.nextInt(count);
+            trySpawnHostile(rnd, playerPositions.get(p).x, playerPositions.get(p).z);
+        }
+        if (mobs.size() < MAX_MOBS && rnd.nextInt(MOB_SPAWN_ODDS) == 0) {
+            int p = rnd.nextInt(count);
+            trySpawnMob(rnd, playerPositions.get(p).x, playerPositions.get(p).z, difficulty);
+        }
+
+        float[] arrowDamage = updateArrowsMulti(dt, playerBoxes);
+        for (int i = 0; i < count; i++) {
+            damage[i] += arrowDamage[i];
+        }
+        return new MobDamageResult(damage, srcX, srcZ);
+    }
+
+    /** Index of the closest player to {@code pos} (mob AI targets the nearest, like Minecraft). */
+    private static int nearestPlayerIndex(Vector3f pos, List<Vector3f> playerPositions) {
+        int best = 0;
+        float bestSq = Float.MAX_VALUE;
+        for (int i = 0; i < playerPositions.size(); i++) {
+            Vector3f p = playerPositions.get(i);
+            float dx = pos.x - p.x, dz = pos.z - p.z;
+            float sq = dx * dx + dz * dz;
+            if (sq < bestSq) {
+                bestSq = sq;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /** Advances arrows against several players, returning per-player damage (indexed like {@code boxes}). */
+    private float[] updateArrowsMulti(float dt, List<AABB> playerBoxes) {
+        float[] damage = new float[playerBoxes.size()];
+        for (Iterator<ArrowEntity> it = arrows.iterator(); it.hasNext(); ) {
+            ArrowEntity a = it.next();
+            a.age += dt;
+            if (a.age > ArrowEntity.LIFETIME || a.position.y < -32f || a.stuck) {
+                it.remove();
+                continue;
+            }
+            a.velocity.y -= 20f * dt;
+
+            float speed = (float) Math.sqrt(a.velocity.x * a.velocity.x + a.velocity.y * a.velocity.y + a.velocity.z * a.velocity.z);
+            float move = speed * dt;
+            if (move <= 0f) continue;
+            int steps = Math.max(1, (int) Math.ceil(move / 0.2f));
+            float sub = dt / steps;
+            boolean consumed = false;
+            for (int s = 0; s < steps && !consumed; s++) {
+                a.position.x += a.velocity.x * sub;
+                a.position.y += a.velocity.y * sub;
+                a.position.z += a.velocity.z * sub;
+
+                AABB arrowBox = new AABB(a.position.x - 0.1f, a.position.y - 0.1f, a.position.z - 0.1f,
+                        a.position.x + 0.1f, a.position.y + 0.1f, a.position.z + 0.1f);
+                for (int i = 0; i < playerBoxes.size(); i++) {
+                    if (playerBoxes.get(i).intersects(arrowBox)) {
+                        damage[i] += ARROW_DAMAGE;
+                        consumed = true;
+                        break;
+                    }
+                }
+                if (getBlock((int) Math.floor(a.position.x), (int) Math.floor(a.position.y),
+                        (int) Math.floor(a.position.z)).isCollidable()) {
+                    a.stuck = true;
+                    break;
+                }
+            }
+            if (consumed) {
+                it.remove();
+            }
+        }
+        return damage;
+    }
+
     /** Advances skeleton arrows (gravity, block/player collisions) and returns player damage taken. */
     private float updateArrows(float dt, AABB playerBox) {
         float damage = 0f;
@@ -1586,7 +1980,7 @@ public class World implements BlockAccessor {
             if (!getBlock(x, y, z).isCollidable()) continue;
             if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
             Mob.Type type = rnd.nextBoolean() ? Mob.Type.ZOMBIE : Mob.Type.SKELETON;
-            mobs.add(new Mob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
+            mobs.add(newMob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
             return;
         }
     }
@@ -1620,9 +2014,24 @@ public class World implements BlockAccessor {
             if (getBlock(x, y + 1, z) != BlockType.AIR) continue;
             Mob.Type type = pickSurfaceMobType(rnd, getBiome(x, z), difficulty);
             if (type.hostile && !difficulty.allowsHostileMobs()) continue;
-            mobs.add(new Mob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
+            mobs.add(newMob(type, x + 0.5f, y + 1f + type.height / 2f, z + 0.5f));
             return;
         }
+    }
+
+    /** Creates a mob with the next server id, ready to be added to {@link #mobs}. */
+    private Mob newMob(Mob.Type type, float x, float y, float z) {
+        Mob mob = new Mob(type, x, y, z);
+        mob.id = nextMobId++;
+        return mob;
+    }
+
+    /** The mob with the given id, or null (multiplayer attacks reference mobs by id). */
+    public Mob mobById(int id) {
+        for (Mob m : mobs) {
+            if (m.id == id) return m;
+        }
+        return null;
     }
 
     /**
@@ -1726,6 +2135,9 @@ public class World implements BlockAccessor {
     /** The multi-block manager — tracks formed structures and drives formation / deformation. */
     private final com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager =
             new com.minecraftclone.world.multiblock.MultiBlockManager();
+    /** Discovers + caches connected pipe networks for every transport type. */
+    private final com.minecraftclone.world.pipes.PipeNetworkManager pipeNetworkManager =
+            new com.minecraftclone.world.pipes.PipeNetworkManager(this);
 
     /**
      * Returns the multi-block manager.  Call {@code manager().register(def)} at startup
@@ -1733,6 +2145,11 @@ public class World implements BlockAccessor {
      */
     public com.minecraftclone.world.multiblock.MultiBlockManager multiBlockManager() {
         return multiBlockManager;
+    }
+
+    /** The pipe network cache/discovery manager for this world. */
+    public com.minecraftclone.world.pipes.PipeNetworkManager pipeNetworks() {
+        return pipeNetworkManager;
     }
 
     /**

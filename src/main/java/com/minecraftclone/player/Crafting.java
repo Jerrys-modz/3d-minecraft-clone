@@ -3,6 +3,7 @@ package com.minecraftclone.player;
 import com.minecraftclone.world.BlockType;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -86,6 +87,10 @@ public final class Crafting {
         CHARS.put('H', BlockType.WHEAT);        // H = wHeat
         // Phase 0.5: Tinkers' Construct ingredient shortcuts
         CHARS.put('Z', BlockType.SEARED_BRICK);       // Z = seared/sintered (kiln)
+        // Steam Age: bronze machinery
+        CHARS.put('F', BlockType.FURNACE);            // F = Furnace block
+        CHARS.put('E', BlockType.BRONZE_INGOT);       // E = bronzE ingot
+        CHARS.put('Q', BlockType.STEEL_INGOT);        // Q = Steel ingot
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -144,16 +149,9 @@ public final class Crafting {
         armor('V', BlockType.WOLF_HELMET, BlockType.WOLF_CHESTPLATE, BlockType.WOLF_LEGGINGS, BlockType.WOLF_BOOTS);
         armor('B', BlockType.BEAR_HELMET, BlockType.BEAR_CHESTPLATE, BlockType.BEAR_LEGGINGS, BlockType.BEAR_BOOTS);
 
-        // Stairs (wedge pattern: K.. / KK. / KKK)
-        shaped3x3("K..", "KK.", "KKK", BlockType.STONE_STAIRS, 4);                       // 6 stone -> 4 stairs
-        shaped3x3("P..", "PP.", "PPP", BlockType.PLANKS_STAIRS, 4);                      // 6 planks -> 4 stairs
-
-        // Door and trapdoor
-        shaped3x3("PP.", "PP.", "PP.", BlockType.DOOR, 1);                               // 6 planks -> door
+        // Stairs and doors are registered earlier (see "3x3 recipes from
+        // crafting table"); trapdoor is new here.
         shaped3x3("PPP", "PPP", "...", BlockType.TRAPDOOR, 2);                           // 6 planks -> 2 trapdoors
-
-        // Fence
-        shaped3x3("PSP", "PSP", "...", BlockType.WOODEN_FENCE, 3);                       // 4 planks + 2 sticks -> 3 fence
 
         // --- Farming recipes ---
         // Hoes: two material on top, column of two sticks below (vanilla, mirrors for left-hand).
@@ -217,6 +215,42 @@ public final class Crafting {
         //   .I.      <- one ingot at the waist
         //   III      <- three across the base
         shaped3x3("III", ".I.", "III", BlockType.ANVIL, 1);
+
+        // Iron bucket: three ingots in a V (transports lava for the smeltery)
+        shaped3x3("I.I", ".I.", "...", BlockType.IRON_BUCKET, 1);
+
+        // --- Steam Age: bronze alloy + machines ---
+        // Bronze blend: 1 copper + 1 tin (dust or ingot forms), smelts to bronze.
+        shapeless2x2(BlockType.BRONZE_DUST, 1, BlockType.COPPER_DUST, BlockType.TIN_DUST);
+        shapeless3x3(BlockType.BRONZE_DUST, 1, BlockType.COPPER_DUST, BlockType.TIN_DUST);
+        shapeless3x3(BlockType.BRONZE_DUST, 2, BlockType.COPPER_INGOT, BlockType.TIN_INGOT);
+
+        // Steam Boiler: bronze ring, hollow center. Loads solid fuel,
+        // builds steam while burning; adjacent steam machines draw from it.
+        shaped3x3("EEE", "E.E", "EEE", BlockType.STEAM_BOILER, 1);
+
+        // Steam Furnace: bronze shell around a furnace; runs off boiler steam
+        // instead of fuel in its own slot.
+        shaped3x3("EEE", "EFE", "EEE", BlockType.STEAM_FURNACE, 1);
+
+        // Steam Macerator: bronze shell around a diamond grinding element.
+        shaped3x3("EEE", "EDI", "EEE", BlockType.STEAM_MACERATOR, 1);
+
+        // Steam Pipe: bronze column - connects machines to a boiler's steam.
+        shaped3x3(".E.", ".E.", ".E.", BlockType.STEAM_PIPE_BRONZE, 6);
+
+        // Wooden Steam Pipe: cheap starter tier, throttles flow to half rate.
+        shaped3x3(".P.", ".P.", ".P.", BlockType.STEAM_PIPE_WOOD, 8);
+
+        // Iron Steam Pipe: high-pressure tier, 1.5x throughput.
+        shaped3x3(".I.", ".I.", ".I.", BlockType.STEAM_PIPE_IRON, 6);
+
+        // Steel Ingot: 4 iron + 2 coal compressed under extreme heat.
+        // Placeholder until a Blast Furnace machine exists.
+        shaped3x3("ICI", ".C.", "ICI", BlockType.STEEL_INGOT, 1);
+
+        // Steel Steam Pipe: top Steam Age tier, 2x throughput.
+        shaped3x3(".Q.", ".Q.", ".Q.", BlockType.STEAM_PIPE_STEEL, 6);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.
@@ -367,6 +401,37 @@ public final class Crafting {
     }
 
     /**
+     * Every registered recipe across all grid sizes, in registration order
+     * (2x2 first, then 3x3, then 5x5) - the recipe book's index.
+     */
+    public static List<Recipe> allRecipes() {
+        List<Recipe> all = new ArrayList<>(RECIPES_2x2.size() + RECIPES_3x3.size() + RECIPES_5x5.size());
+        all.addAll(RECIPES_2x2);
+        all.addAll(RECIPES_3x3);
+        all.addAll(RECIPES_5x5);
+        return all;
+    }
+
+    /** The grid size a recipe was registered for: 2, 3 or 5. */
+    public static int gridSizeOf(Recipe recipe) {
+        if (RECIPES_2x2.contains(recipe)) return 2;
+        if (RECIPES_5x5.contains(recipe)) return 5;
+        return 3;
+    }
+
+    /**
+     * Every recipe that produces {@code output} across all grid sizes (the
+     * recipe book's detail view). May be empty.
+     */
+    public static List<Recipe> recipesFor(BlockType output) {
+        List<Recipe> matches = new ArrayList<>();
+        for (Recipe recipe : allRecipes()) {
+            if (recipe.output() == output) matches.add(recipe);
+        }
+        return Collections.unmodifiableList(matches);
+    }
+
+    /**
      * Finds the recipe matching the given 2x2 grid (row-major, null = empty), or null.
      * Enforces that the grid is exactly 4 cells (2x2).
      *
@@ -374,8 +439,7 @@ public final class Crafting {
      * @return the matching recipe, or null if no recipe matches
      * @throws IllegalArgumentException if grid.length != 4
      */
-    public static Recipe match(BlockType[] grid) {
-        if (grid == null || grid.length != 4) {
+    public static Recipe match(BlockType[] grid) {        if (grid == null || grid.length != 4) {
             throw new IllegalArgumentException("Grid must be a 2x2 grid (4 cells), got " + (grid == null ? "null" : grid.length));
         }
         return match2x2(grid);

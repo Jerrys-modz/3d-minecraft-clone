@@ -2,7 +2,9 @@ package com.minecraftclone.player;
 
 import com.minecraftclone.world.BlockType;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,6 +22,7 @@ public final class Smelting {
     static {
         // Add a smelting recipe with one line: ore -> refined output.
         smelt(BlockType.IRON_ORE, BlockType.IRON_INGOT);
+        smelt(BlockType.BRONZE_DUST, BlockType.BRONZE_INGOT);
         smelt(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);
         smelt(BlockType.DIAMOND_ORE, BlockType.DIAMOND);
         smelt(BlockType.COAL_ORE, BlockType.COAL);
@@ -142,5 +145,18 @@ public final class Smelting {
     /** The block an ore smelts into, or null if it isn't smeltable. */
     public static BlockType outputFor(BlockType ore) {
         return OUTPUTS.get(ore);
+    }
+
+    /** Every furnace recipe as (input → output) pairs, in registration order. */
+    public static List<SmeltingRecipe> allSmelting() {
+        List<SmeltingRecipe> all = new ArrayList<>();
+        for (Map.Entry<BlockType, BlockType> e : OUTPUTS.entrySet()) {
+            all.add(new SmeltingRecipe(e.getKey(), e.getValue()));
+        }
+        return all;
+    }
+
+    /** One furnace recipe: an input item and what it smelts into. */
+    public record SmeltingRecipe(BlockType input, BlockType output) {
     }
 }

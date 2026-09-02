@@ -51,7 +51,8 @@ public class ContainerGui {
         CHEST("Chest"),
         PART_BUILDER("Part Builder"),
         TOOL_STATION("Tool Station"),
-        ANVIL("Anvil");
+        ANVIL("Anvil"),
+        SMELTERY("Smeltery");
 
         private final String title;
 
@@ -81,6 +82,8 @@ public class ContainerGui {
     public static final int FURNACE_SLOT_COUNT = Furnace.SLOT_COUNT;
     /** Number of slots a chest contributes. */
     public static final int CHEST_SLOT_COUNT = com.minecraftclone.world.Chest.SLOT_COUNT;
+    /** Number of slots a smeltery controller's GUI contributes (input + output). */
+    public static final int SMELTERY_SLOT_COUNT = com.minecraftclone.world.multiblock.SmelteryEntity.SLOT_COUNT;
 
     // -----------------------------------------------------------------------
     // Part Builder slot IDs  (PART_BUILDER kind only)
@@ -138,7 +141,7 @@ public class ContainerGui {
         this.playerGrid = grid;
         this.tableGrid = new CraftingTableGrid();
         this.advancedGrid = new AdvancedCraftingTableGrid();
-        this.container = (kind == Kind.FURNACE || kind == Kind.CHEST) ? container : null;
+        this.container = (kind == Kind.FURNACE || kind == Kind.CHEST || kind == Kind.SMELTERY) ? container : null;
         this.partBuilderGui = null;
         this.toolStationGui = null;
         this.anvilGui = null;
@@ -214,7 +217,7 @@ public class ContainerGui {
     }
 
     public boolean hasContainer() {
-        return kind == Kind.FURNACE || kind == Kind.CHEST;
+        return kind == Kind.FURNACE || kind == Kind.CHEST || kind == Kind.SMELTERY;
     }
 
     public Inventory inventory() {
@@ -263,6 +266,11 @@ public class ContainerGui {
     /** The placed furnace, if this is a furnace gui (for the flame/arrow rendering); null otherwise. */
     public Furnace furnace() {
         return container instanceof Furnace furnace ? furnace : null;
+    }
+
+    /** The placed smeltery, if this is a smeltery gui (for the heat/arrow rendering); null otherwise. */
+    public com.minecraftclone.world.multiblock.SmelteryEntity smeltery() {
+        return container instanceof com.minecraftclone.world.multiblock.SmelteryEntity smeltery ? smeltery : null;
     }
 
     /** The Part Builder gui model; non-null only for {@link Kind#PART_BUILDER}. */
@@ -322,6 +330,11 @@ public class ContainerGui {
     /** True if {@code slotId} is a furnace slot (subset of {@link #isContainerSlot}). */
     public boolean isFurnaceSlot(int slotId) {
         return kind == Kind.FURNACE && slotId >= CONTAINER_START && slotId < CONTAINER_START + FURNACE_SLOT_COUNT;
+    }
+
+    /** True if {@code slotId} is one of the smeltery controller's slots (input, output). */
+    public boolean isSmelterySlot(int slotId) {
+        return kind == Kind.SMELTERY && slotId >= CONTAINER_START && slotId < CONTAINER_START + SMELTERY_SLOT_COUNT;
     }
 
     // -----------------------------------------------------------------------

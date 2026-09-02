@@ -83,6 +83,21 @@ public class Player {
     /** Feet position: bottom-center of the player's bounding box. */
     private final Vector3f position = new Vector3f();
     private final Vector3f velocity = new Vector3f();
+    /** External shove from hits; decays quickly and rides on top of input movement. */
+    private final Vector3f knockbackImpulse = new Vector3f();
+
+    /**
+     * Adds a horizontal knockback shove (direction = away from the attacker)
+     * plus a small upward pop, Minecraft-style. Call on the client that owns
+     * this player when it receives a damage packet.
+     */
+    public void knockback(float dx, float dz, float strength) {
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        if (len < 1e-4f) return;
+        knockbackImpulse.x += dx / len * strength;
+        knockbackImpulse.z += dz / len * strength;
+        velocity.y = Math.max(velocity.y, 4.5f);
+    }
     private final Vector3f eyePosition = new Vector3f();
     private final Camera camera = new Camera();
     private final Inventory inventory = new Inventory();
@@ -109,6 +124,7 @@ public class Player {
     private boolean onGround = false;
     private boolean flying = false;
     private boolean movingOnGround = false; // moving horizontally while grounded (drives view bob)
+    private boolean sprinting = false; // currently sprinting and actually moving (exposed for remote-player sync)
     private boolean swimmingAndMoving = false; // moving horizontally while swimming (drives the stroke sound)
     private float lastFallImpactSpeed = 0f;
     private final DoubleTapDetector wTapDetector = new DoubleTapDetector(DOUBLE_TAP_WINDOW);
@@ -147,8 +163,18 @@ public class Player {
         int surfaceY = world.getSurfaceHeight((int) Math.floor(x), (int) Math.floor(z));
         position.set(x, surfaceY + 2, z);
         velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
         camera.setPosition(x, position.y + getEyeHeight(), z);
         landingArmed = false; // disarm landing detection until the first real ground contact
+    }
+
+    /** Places the player at an exact server-provided position (multiplayer spawn), feet at {@code y}. */
+    public void teleport(float x, float y, float z) {
+        position.set(x, y, z);
+        velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
+        camera.setPosition(x, y + EYE_HEIGHT, z);
+        landingArmed = false;
     }
 
     /** Full respawn: stats and position reset, as if starting over (used after death). */
@@ -200,6 +226,7 @@ public class Player {
         flying = false;
         sleeping = false;
         velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
         lastFallImpactSpeed = 0f;
         onGround = false;
         wasOnGround = true;
@@ -221,6 +248,7 @@ public class Player {
     public void teleportTo(float x, float y, float z) {
         position.set(x, y, z);
         velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
         camera.setPosition(x, y + getEyeHeight(), z);
         onGround = false;
         lastFallImpactSpeed = 0f;
@@ -253,6 +281,16 @@ public class Player {
 
     public boolean isFlying() {
         return flying;
+    }
+
+    /** Whether the player is standing on solid ground this frame (drives remote-player pose sync). */
+    public boolean isOnGround() {
+        return onGround;
+    }
+
+    /** Whether the player is currently sprinting (and actually moving) - sent to remote players. */
+    public boolean isSprinting() {
+        return sprinting;
     }
 
     /** Restores flight from a save. Creative/spectator keep it; survival ignores it. */
@@ -790,6 +828,7 @@ public class Player {
         swimming = computeSwimming(flying, gameMode.isSpectator(), onGround, inWater);
 
         boolean sprinting = (input.isKeyDown(keyBinds.get(KeyBindings.SPRINT)) || sprintLatched) && stats.canSprint();
+        this.sprinting = sprinting && moving;
         float speed;
         if (flying) {
             speed = sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
@@ -801,6 +840,14 @@ public class Player {
 
         velocity.x = moveX * speed;
         velocity.z = moveZ * speed;
+
+        // External shoves (PvP/mob hits) ride on top of input movement and
+        // decay fast, so a hit shoves you without fighting the controls.
+        velocity.x += knockbackImpulse.x;
+        velocity.z += knockbackImpulse.z;
+        float kbDecay = Math.max(0f, 1f - 6f * dt);
+        knockbackImpulse.x *= kbDecay;
+        knockbackImpulse.z *= kbDecay;
 
         if (flying) {
             float vy = 0;
@@ -966,6 +1013,7 @@ public class Player {
         if (position.y < -32) {
             // Fell out of the world (e.g. into an unloaded chunk) - respawn upward.
             velocity.set(0, 0, 0);
+        knockbackImpulse.set(0, 0, 0);
             position.y = 96;
         }
     }

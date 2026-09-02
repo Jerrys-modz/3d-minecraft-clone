@@ -30,7 +30,7 @@ import java.util.Map;
  * are saved alongside its chunk (see {@link ChunkStorage}) and restored when
  * the chunk reloads, so a furnace keeps working across a restart.
  */
-public class Furnace implements BlockEntity, StorageContainer {
+public class Furnace implements BlockEntity, StorageContainer, ProgressMachine {
 
     public static final String TYPE = "furnace";
 

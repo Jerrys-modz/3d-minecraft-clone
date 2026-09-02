@@ -276,10 +276,12 @@ public final class MultiBlockManager {
         BlockEntity existing = world.blockEntityAt(instance.controllerX, instance.controllerY, instance.controllerZ);
         if (existing instanceof MultiBlockEntity mbe) {
             mbe.reform(instance);
+            mbe.attachWorld(world);
             world.registerMultiBlockEntity(instance.controllerX, instance.controllerY, instance.controllerZ, mbe);
         } else {
             MultiBlockEntity entity = def.createEntity(instance);
             if (entity != null) {
+                entity.attachWorld(world);
                 world.registerMultiBlockEntity(instance.controllerX, instance.controllerY, instance.controllerZ, entity);
             }
         }
