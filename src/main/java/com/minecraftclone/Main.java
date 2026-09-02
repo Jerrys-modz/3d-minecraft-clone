@@ -1648,6 +1648,8 @@ public class Main {
         float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
         boolean[] wasInWater = {false}; // last frame's Player#isInWater(), to fire a splash sound only on the change
         float[] splashCooldown = {0f}; // time until another splash sound is allowed - see SPLASH_COOLDOWN_SECONDS
+        // Boat the player is currently riding; null when on foot.
+        com.minecraftclone.world.BoatEntity[] mountedBoat = {null};
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
         System.out.println("          F to fly (double-tap W also takes off in creative and boosts speed");
@@ -2959,6 +2961,29 @@ public class Main {
                 float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
                 player.update(dt, input, world, coldFactor, settings.getDifficulty());
 
+                // --- Boat: steer mounted boat and glue player to it -------
+                if (mountedBoat[0] != null) {
+                    com.minecraftclone.world.BoatEntity boat = mountedBoat[0];
+                    boolean shift = input.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+                                 || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT);
+                    if (shift) {
+                        // Dismount: release the boat and let the player walk.
+                        boat.setMounted(false);
+                        mountedBoat[0] = null;
+                        showMessage(messages, "Left the boat.", new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1.5f);
+                    } else {
+                        // Steer using the camera's horizontal forward vector.
+                        org.joml.Vector3f front = player.getCamera().getFrontFlat();
+                        boolean fwd   = input.isKeyDown(GLFW_KEY_W) || input.isKeyDown(GLFW_KEY_UP);
+                        boolean back  = input.isKeyDown(GLFW_KEY_S) || input.isKeyDown(GLFW_KEY_DOWN);
+                        boolean lft   = input.isKeyDown(GLFW_KEY_A);
+                        boolean rgt   = input.isKeyDown(GLFW_KEY_D);
+                        boat.tick(dt, fwd, back, lft, rgt, front.x, front.z, world);
+                        // Keep the player seated on the boat (override player physics).
+                        org.joml.Vector3f bp = boat.getPosition();
+                        player.teleportTo(bp.x, bp.y + boat.mountYOffset(), bp.z);
+                    }
+                }
 
                 // Advance remote players' smoothed poses toward their server targets.
                 for (RemotePlayer rp : remotePlayers.values()) {
@@ -2992,6 +3017,11 @@ public class Main {
                             teleportThroughPortal(player, worlds, currentDim, portal);
                             world = worlds[currentDim[0].ordinal()];
                             mapRenderer[0] = new MapRenderer(world.getMapData());
+                            // Leaving a dimension auto-dismounts any boat.
+                            if (mountedBoat[0] != null) {
+                                mountedBoat[0].setMounted(false);
+                                mountedBoat[0] = null;
+                            }
                             showMessage(messages, "Welcome to " + currentDim[0].displayName(),
                                     new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
                         }
@@ -3124,6 +3154,11 @@ public class Main {
                         }
                     }
                     respawnPlayer(world, player, messages);
+                    // Dismount any boat on death (it stays in the world).
+                    if (mountedBoat[0] != null) {
+                        mountedBoat[0].setMounted(false);
+                        mountedBoat[0] = null;
+                    }
                 }
             }
 
@@ -3144,6 +3179,11 @@ public class Main {
             // Furnaces (and any other block entities) work in the background,
             // ticking forward with world time.
             world.tickBlockEntities(dt);
+
+            // Boats: float un-mounted boats passively on the water surface.
+            // The mounted boat (if any) is already ticked with steering input
+            // in the player-update block above.
+            world.tickBoats(dt, mountedBoat[0]);
 
             // Farming: Minecraft-style random tick across all loaded chunks.
             com.minecraftclone.player.Farming.tickCrops(world, dt, loot,
@@ -3348,6 +3388,22 @@ public class Main {
                     handRenderer.triggerSwing();
                     audio.play(SoundEvent.EAT);
                     showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
+                } else if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
+                        && noMob && mountedBoat[0] == null && heldStack.isEmpty()) {
+                    // Board a nearby unmounted boat when right-clicking empty-handed
+                    // (no block target required — proximity within 3 blocks suffices).
+                    org.joml.Vector3f pp2 = player.getPosition();
+                    com.minecraftclone.world.BoatEntity nearBoat =
+                            world.findNearestBoat(pp2.x, pp2.y, pp2.z, 3f);
+                    if (nearBoat != null && !nearBoat.isMounted()) {
+                        nearBoat.setMounted(true);
+                        mountedBoat[0] = nearBoat;
+                        org.joml.Vector3f bp2 = nearBoat.getPosition();
+                        player.teleportTo(bp2.x, bp2.y + nearBoat.mountYOffset(), bp2.z);
+                        handRenderer.triggerSwing();
+                        showMessage(messages, "Riding boat. Hold Shift to dismount.",
+                                new Vector4f(0.7f, 0.9f, 1f, 1f), 2.5f);
+                    }
                 } else if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && hit != null) {
                     BlockType targeted = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                     if (Door.isDoor(targeted)) {
@@ -3517,6 +3573,17 @@ public class Main {
                                 p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
                         byte dim = (byte) currentDim[0].ordinal();
                         sendBlockChange(dim, p.x, p.y, p.z, BlockType.LAVA_SOURCE, (byte) 0, false);
+                    } else if (noMob && heldItem == BlockType.OAK_BOAT && targeted.isFluid()) {
+                        // Place an oak boat on the water surface.
+                        float bx = hit.blockPos.x + 0.5f;
+                        float bz = hit.blockPos.z + 0.5f;
+                        float by = hit.blockPos.y + 1.05f; // just above the water top face
+                        world.spawnBoat(bx, by, bz);
+                        if (!mode.isCreative()) player.getInventory().remove(BlockType.OAK_BOAT, 1);
+                        handRenderer.triggerSwing();
+                        audio.play(SoundEvent.SPLASH);
+                        showMessage(messages, "Placed boat. Right-click to board.",
+                                new Vector4f(0.7f, 0.9f, 1f, 1f), 2f);
                     } else if (noMob && targeted == BlockType.CASTING_TABLE || noMob && targeted == BlockType.CASTING_BASIN) {
                         // Casting station: imprint casts with Tinkers parts,
                         // feed materials, collect finished metal parts.

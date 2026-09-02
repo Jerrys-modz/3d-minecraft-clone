@@ -181,6 +181,9 @@ public class World implements BlockAccessor {
     // Skeleton arrows. Transient - not saved.
     private final List<ArrowEntity> arrows = new ArrayList<>();
 
+    // Placed boats.  Transient - not saved (like dropped items).
+    private final List<BoatEntity> boats = new ArrayList<>();
+
     public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir, DimensionType dimension) {
         this(seed, genSettings, atlas, saveDir, dimension, false);
     }
@@ -1701,6 +1704,68 @@ public class World implements BlockAccessor {
     /** All currently-flying skeleton arrows (read-only; rendered by the caller). */
     public List<ArrowEntity> getArrows() {
         return arrows;
+    }
+
+    // -----------------------------------------------------------------------
+    // Boats
+    // -----------------------------------------------------------------------
+
+    /** All currently-placed boats (read-only snapshot for rendering). */
+    public List<BoatEntity> getBoats() {
+        return boats;
+    }
+
+    /**
+     * Creates a new boat at the given position and adds it to the world.
+     * The caller is responsible for consuming the OAK_BOAT item from the
+     * player's inventory.
+     */
+    public BoatEntity spawnBoat(float x, float y, float z) {
+        BoatEntity boat = new BoatEntity(x, y, z);
+        boats.add(boat);
+        return boat;
+    }
+
+    /** Removes a boat from the world (e.g. after the player breaks it). */
+    public void removeBoat(BoatEntity boat) {
+        boats.remove(boat);
+    }
+
+    /**
+     * Returns the nearest boat to {@code (x, y, z)} within {@code maxDist}
+     * blocks (Euclidean, using the hull centre), or {@code null} if none is
+     * close enough.
+     */
+    public BoatEntity findNearestBoat(float x, float y, float z, float maxDist) {
+        BoatEntity nearest = null;
+        float nearestDistSq = maxDist * maxDist;
+        for (BoatEntity b : boats) {
+            float dx = b.position.x - x;
+            float dy = b.position.y - y;
+            float dz = b.position.z - z;
+            float distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq < nearestDistSq) {
+                nearestDistSq = distSq;
+                nearest = b;
+            }
+        }
+        return nearest;
+    }
+
+    /**
+     * Advances all <em>un-mounted</em> boats by {@code dt} seconds (they
+     * float passively on the water surface).  The currently-mounted boat, if
+     * any, is ticked separately by the main loop with steering input.
+     *
+     * @param dt          frame time in seconds
+     * @param mountedBoat the boat currently ridden by the player, or {@code null}
+     */
+    public void tickBoats(float dt, BoatEntity mountedBoat) {
+        for (BoatEntity b : boats) {
+            if (b != mountedBoat) {
+                b.tick(dt, (BlockAccessor) this);
+            }
+        }
     }
 
     /**
