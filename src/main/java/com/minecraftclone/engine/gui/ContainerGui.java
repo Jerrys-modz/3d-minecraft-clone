@@ -11,15 +11,16 @@ import com.minecraftclone.player.ItemStack;
 import com.minecraftclone.player.StorageContainer;
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.Furnace;
+import com.minecraftclone.player.AnvilGui;
 import com.minecraftclone.world.tinkers.PartBuilderGui;
 import com.minecraftclone.world.tinkers.ToolPartType;
 import com.minecraftclone.world.tinkers.ToolStationGui;
 
 /**
  * The model behind every full-screen container GUI: the plain inventory screen,
- * a placed furnace, a placed crafting table, a placed chest, a Part Builder, or
- * a Tool Station. A gui is a fixed slot space built from the player's inventory
- * plus, depending on {@link Kind}, additional specialized slots.
+ * a placed furnace, a placed crafting table, a placed chest, a Part Builder,
+ * a Tool Station, or an Anvil. A gui is a fixed slot space built from the
+ * player's inventory plus, depending on {@link Kind}, additional specialized slots.
  * <p>
  * Slot numbering is one contiguous space so the mouse/controller logic never
  * has to branch on where an item lives. Which ranges exist depends on the kind:
@@ -34,6 +35,9 @@ import com.minecraftclone.world.tinkers.ToolStationGui;
  *   38 .. 45               Part Builder shape-selection buttons (8 shapes)
  *   36 .. 40               Tool Station input slots (head, rod, 3 extras)
  *   41                     Tool Station output slot
+ *   36                     Anvil tool input slot
+ *   37                     Anvil material input slot
+ *   38                     Anvil repaired-tool output slot (read-only)
  * </pre>
  */
 public class ContainerGui {
@@ -47,6 +51,7 @@ public class ContainerGui {
         CHEST("Chest"),
         PART_BUILDER("Part Builder"),
         TOOL_STATION("Tool Station"),
+        ANVIL("Anvil"),
         SMELTERY("Smeltery");
 
         private final String title;
@@ -102,6 +107,17 @@ public class ContainerGui {
     /** Output slot for the Tool Station (read-only; shows assembled tool). */
     public static final int TS_OUTPUT_SLOT = GRID_START + ToolStationGui.INPUT_SLOTS; // 41
 
+    // -----------------------------------------------------------------------
+    // Anvil slot IDs  (ANVIL kind only)
+    // -----------------------------------------------------------------------
+
+    /** Tool-input slot for the Anvil (the damaged tool to repair). */
+    public static final int ANVIL_TOOL_SLOT     = GRID_START;      // 36
+    /** Material-input slot for the Anvil (one unit of the repair material). */
+    public static final int ANVIL_MATERIAL_SLOT = GRID_START + 1;  // 37
+    /** Output slot for the Anvil (read-only; shows the repaired tool when inputs match). */
+    public static final int ANVIL_OUTPUT_SLOT   = GRID_START + 2;  // 38
+
     private final Kind kind;
     private final Inventory inventory;
     private final CraftingGrid playerGrid;
@@ -110,6 +126,7 @@ public class ContainerGui {
     private final StorageContainer container;
     private final PartBuilderGui partBuilderGui;
     private final ToolStationGui toolStationGui;
+    private final AnvilGui anvilGui;
 
     /**
      * @param kind       which container this gui shows
@@ -127,6 +144,7 @@ public class ContainerGui {
         this.container = (kind == Kind.FURNACE || kind == Kind.CHEST || kind == Kind.SMELTERY) ? container : null;
         this.partBuilderGui = null;
         this.toolStationGui = null;
+        this.anvilGui = null;
     }
 
     /** Private constructor used by the static Tinkers factory methods. */
@@ -139,6 +157,20 @@ public class ContainerGui {
         this.container = null;
         this.partBuilderGui = pbGui;
         this.toolStationGui = tsGui;
+        this.anvilGui = null;
+    }
+
+    /** Private constructor used by {@link #forAnvil}. */
+    private ContainerGui(Kind kind, Inventory inventory, AnvilGui anvilGui) {
+        this.kind = kind;
+        this.inventory = inventory;
+        this.playerGrid = null;
+        this.tableGrid  = null;
+        this.advancedGrid = null;
+        this.container = null;
+        this.partBuilderGui = null;
+        this.toolStationGui = null;
+        this.anvilGui = anvilGui;
     }
 
     /** Opens a Part Builder screen backed by the given gui model. */
@@ -149,6 +181,11 @@ public class ContainerGui {
     /** Opens a Tool Station screen backed by the given gui model. */
     public static ContainerGui forToolStation(Inventory inventory, ToolStationGui tsGui) {
         return new ContainerGui(Kind.TOOL_STATION, inventory, null, tsGui);
+    }
+
+    /** Opens an Anvil screen backed by the given gui model. */
+    public static ContainerGui forAnvil(Inventory inventory, AnvilGui anvilGui) {
+        return new ContainerGui(Kind.ANVIL, inventory, anvilGui);
     }
 
     public Kind kind() {
@@ -246,6 +283,11 @@ public class ContainerGui {
         return toolStationGui;
     }
 
+    /** The Anvil gui model; non-null only for {@link Kind#ANVIL}. */
+    public AnvilGui anvilGui() {
+        return anvilGui;
+    }
+
     /** Total number of interactive slots in the gui. */
     public int slotCount() {
         int count = Inventory.SIZE;
@@ -254,6 +296,7 @@ public class ContainerGui {
         if (hasContainer()) count += container.size();
         if (kind == Kind.PART_BUILDER) count += 2 + PB_SHAPE_COUNT;  // material + output + 8 shape buttons
         if (kind == Kind.TOOL_STATION) count += ToolStationGui.INPUT_SLOTS + 1; // 5 inputs + output
+        if (kind == Kind.ANVIL) count += 3; // tool input + material input + output
         return count;
     }
 
@@ -331,6 +374,30 @@ public class ContainerGui {
         return kind == Kind.TOOL_STATION && slotId == TS_OUTPUT_SLOT;
     }
 
+    // -----------------------------------------------------------------------
+    // Anvil slot predicates
+    // -----------------------------------------------------------------------
+
+    /** True if {@code slotId} is the Anvil's tool-input slot. */
+    public boolean isAnvilToolSlot(int slotId) {
+        return kind == Kind.ANVIL && slotId == ANVIL_TOOL_SLOT;
+    }
+
+    /** True if {@code slotId} is the Anvil's material-input slot. */
+    public boolean isAnvilMaterialSlot(int slotId) {
+        return kind == Kind.ANVIL && slotId == ANVIL_MATERIAL_SLOT;
+    }
+
+    /** True if {@code slotId} is either of the Anvil's two writable input slots. */
+    public boolean isAnvilInputSlot(int slotId) {
+        return kind == Kind.ANVIL && (slotId == ANVIL_TOOL_SLOT || slotId == ANVIL_MATERIAL_SLOT);
+    }
+
+    /** True if {@code slotId} is the Anvil's repaired-tool output slot (read-only). */
+    public boolean isAnvilOutputSlot(int slotId) {
+        return kind == Kind.ANVIL && slotId == ANVIL_OUTPUT_SLOT;
+    }
+
     /** The type held in a slot (null if empty); the output slot derives from the recipe. */
     public BlockType typeOf(int slotId) {
         if (isPlayerSlot(slotId)) return inventory.typeOf(slotId);
@@ -351,6 +418,9 @@ public class ContainerGui {
             ItemStack out = toolStationGui.currentOutput();
             return out.isEmpty() ? null : out.type();
         }
+        if (isAnvilToolSlot(slotId))     return anvilGui.toolType();
+        if (isAnvilMaterialSlot(slotId)) return anvilGui.materialType();
+        if (isAnvilOutputSlot(slotId))   return anvilGui.outputType();
         return null;
     }
 
@@ -368,6 +438,9 @@ public class ContainerGui {
             return s.isEmpty() ? 0 : 1;
         }
         if (isTsOutputSlot(slotId)) return toolStationGui.currentOutput().isEmpty() ? 0 : 1;
+        if (isAnvilToolSlot(slotId))     return anvilGui.toolCount();
+        if (isAnvilMaterialSlot(slotId)) return anvilGui.materialCount();
+        if (isAnvilOutputSlot(slotId))   return anvilGui.canRepair() ? 1 : 0;
         return 0;
     }
 
@@ -399,6 +472,18 @@ public class ContainerGui {
         if (isPbShapeSlot(slotId))    return ItemStack.EMPTY;
         if (isTsInputSlot(slotId))    return toolStationGui.slot(slotId - TS_SLOT_0);
         if (isTsOutputSlot(slotId))   return toolStationGui.currentOutput();
+        if (isAnvilToolSlot(slotId)) {
+            BlockType t = anvilGui.toolType();
+            return t == null ? ItemStack.EMPTY : ItemStack.of(t, anvilGui.toolCount());
+        }
+        if (isAnvilMaterialSlot(slotId)) {
+            BlockType t = anvilGui.materialType();
+            return t == null ? ItemStack.EMPTY : ItemStack.of(t, anvilGui.materialCount());
+        }
+        if (isAnvilOutputSlot(slotId)) {
+            BlockType t = anvilGui.outputType();
+            return t == null ? ItemStack.EMPTY : ItemStack.of(t, 1);
+        }
         return ItemStack.EMPTY;
     }
 
@@ -416,6 +501,14 @@ public class ContainerGui {
             partBuilderGui.setMaterial(stack);
         } else if (isTsInputSlot(slotId)) {
             toolStationGui.setSlot(slotId - TS_SLOT_0, stack);
+        } else if (isAnvilToolSlot(slotId)) {
+            // Tinkers stacks carry a payload that type+count cannot represent; reject
+            // them so the source slot is left unchanged rather than silently stripped.
+            if (stack.isTinkers()) return;
+            anvilGui.setTool(stack.isEmpty() ? null : stack.type(), stack.count());
+        } else if (isAnvilMaterialSlot(slotId)) {
+            if (stack.isTinkers()) return; // same reason as above
+            anvilGui.setMaterial(stack.isEmpty() ? null : stack.type(), stack.count());
         } else {
             // Grid, armor, and chest/furnace slots store only BlockType + count.
             // Refuse Tinkers payloads rather than stripping them to a sentinel.
@@ -442,8 +535,12 @@ public class ContainerGui {
             if (type == null || count <= 0) {
                 toolStationGui.setSlot(slotId - TS_SLOT_0, ItemStack.EMPTY);
             }
+        } else if (isAnvilToolSlot(slotId)) {
+            anvilGui.setTool(type, count);
+        } else if (isAnvilMaterialSlot(slotId)) {
+            anvilGui.setMaterial(type, count);
         }
-        // PB output, PB shape buttons, TS output — read-only, silently ignored
+        // PB output, PB shape buttons, TS output, anvil output — read-only, silently ignored
     }
 
     /** The recipe the current grid contents produce, or null. */

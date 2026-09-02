@@ -69,6 +69,15 @@ public final class ToolDurability {
         return remaining(type) / (float) max;
     }
 
+    /**
+     * Restores full durability for a single {@code type}: removes the stored "uses left"
+     * entry so the next call to {@link #remaining(BlockType)} returns the full max again.
+     * Called by the Anvil when a player repairs a tool without changing inventory counts.
+     */
+    public void resetType(BlockType type) {
+        remaining.remove(type);
+    }
+
     /** Clears all tracked wear, as if every item were freshly acquired - used on death, alongside the inventory wipe. */
     public void reset() {
         remaining.clear();

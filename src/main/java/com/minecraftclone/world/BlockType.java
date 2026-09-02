@@ -793,13 +793,8 @@ public enum BlockType {
     STEAM_FURNACE(507, true, false, 258, 258, 258, 258, 259, 0, 0),
 
     /**
-     * Steam pipe: connects steam machines to a boiler over a distance.
-     * A chain of pipes conducts the boiler's steam buffer to any steam
-     * machine touching either end (or any pipe along the run).
-     */
-    /**
      * Wooden steam pipe: the cheap starter tier. Carries steam, but its
-     * narrow bore throttles flow to half rate. Burns if... it's wood.
+     * narrow bore throttles flow to half rate. Burns if... it\'s wood.
      */
     STEAM_PIPE_WOOD(509, true, false, 261, 261, 261),
 
@@ -826,7 +821,17 @@ public enum BlockType {
      * The core progression incentive of the Steam Age - build infrastructure,
      * double your ore yield.
      */
-    STEAM_MACERATOR(513, true, false, 264, 264, 264, 264, 265, 0, 0);
+    STEAM_MACERATOR(513, true, false, 264, 264, 264, 264, 265, 0, 0),
+
+    // -----------------------------------------------------------------------
+    // Repair station
+    // -----------------------------------------------------------------------
+
+    /**
+     * Anvil — a heavy iron repair station where players restore a tool's
+     * durability by supplying one unit of its base material.  Tile 254.
+     */
+    ANVIL(514, true, false, 254, 254, 254);
 
     public final short id;
     public final boolean solid;
