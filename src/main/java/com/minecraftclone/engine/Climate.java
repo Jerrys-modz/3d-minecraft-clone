@@ -504,6 +504,21 @@ public class Climate {
     }
 
     /**
+     * Converts a local temperature in °C to a 0..1 cold-exposure factor.
+     *
+     * <ul>
+     *   <li>≥ 2 °C → 0.0 (fully warm)</li>
+     *   <li>−20 °C → 1.0 (maximum cold, clamped)</li>
+     * </ul>
+     *
+     * <p>This is the single source of truth for the formula used in the game
+     * loop and in tests.
+     */
+    public static float coldFactor(float temperatureCelsius) {
+        return Math.max(0f, Math.min(1f, (2f - temperatureCelsius) / 22f));
+    }
+
+    /**
      * Current humidity 0..1 at {@code biome}: its base, lifted toward wet by
      * rain and drained back during dry weather.
      */

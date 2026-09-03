@@ -277,7 +277,7 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 **Not yet, roughly in the order they'd naturally build on what exists:**
 - **Horse/animal riding** ✅ implemented — see Features.
 - **Electricity** ✅ implemented — see Electric Age above.
-- **Temperature effects**.
+- **Temperature effects** ✅ implemented — see the **Weather & climate** section in Features above for the full picture. The short version: local temperature (biome × season × altitude × depth) drives a 0..1 cold-exposure factor; shelter (sealed room + heat source), nearby fire, and **warm armor** (fur > wood > iron > diamond) all cut it down. Cold drains hunger faster, and once food runs out it eats your health. A **frost-blue HUD bar** appears above the other status bars whenever the player is getting cold, complementing the existing screen-wide frost vignette. Covered by 17 dedicated unit tests in `TemperatureEffectsTest` (cold-factor formula, biome/altitude/cave stability, armor insulation tiers, and the full PlayerStats cold-damage pipeline).
 - A real **recipe book / on-screen UI** now that a text renderer exists - the crafting grid, message logs, death/damage messaging, the world map, and debug info are in-game (see Features), but there's no scrollable/laid-out recipe book beyond the hotbar and crafting grid.
 - **Multiplayer depth**: the basics are in (players see each other, a shared authoritative world with synced blocks, mobs, chat, containers *and* item drops - see [Multiplayer](#multiplayer)), but inventories and health/hunger are still per-player rather than shared. Syncing those is the natural next step.
 
