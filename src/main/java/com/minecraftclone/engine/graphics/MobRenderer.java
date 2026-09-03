@@ -120,6 +120,14 @@ public class MobRenderer {
                     new Part(0.08f, 0.22f, 0.08f, -0.10f, 0.22f, 0.12f, LEG_FACES),
                     new Part(0.08f, 0.22f, 0.08f, 0.10f, 0.22f, 0.12f, LEG_FACES),
             };
+            case HORSE -> new Part[]{ // tall quadruped — large body, elongated head, long legs
+                    new Part(0.52f, 0.28f, 0.36f, 0f, 0.60f, 0f, BODY_FACES),   // body
+                    new Part(0.22f, 0.24f, 0.22f, 0f, 0.94f, 0.38f, HEAD_FACES), // head + neck
+                    new Part(0.10f, 0.30f, 0.10f, -0.30f, 0.30f, -0.22f, LEG_FACES), // front-left
+                    new Part(0.10f, 0.30f, 0.10f,  0.30f, 0.30f, -0.22f, LEG_FACES), // front-right
+                    new Part(0.10f, 0.30f, 0.10f, -0.30f, 0.30f,  0.22f, LEG_FACES), // rear-left
+                    new Part(0.10f, 0.30f, 0.10f,  0.30f, 0.30f,  0.22f, LEG_FACES), // rear-right
+            };
         };
     }
 

@@ -330,6 +330,9 @@ public class ItemTextures {
             // Oak boat: a U-shaped hull viewed from a slight isometric angle.
             case OAK_BOAT -> paintBoat();
 
+            // Saddle: leather seat with side skirts and an iron-buckle stripe.
+            case SADDLE -> paintSaddle();
+
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
     }
@@ -399,6 +402,35 @@ public class ItemTextures {
         for (int x = 2; x <= 13; x++) img.setRGB(x, 4, 0xFF000000 | rim);
         // Seat plank across the middle.
         for (int x = 4; x <= 11; x++) img.setRGB(x, 8, 0xFF000000 | hull);
+        return img;
+    }
+
+    /**
+     * Saddle icon: a rounded leather seat (warm brown), side skirts below it,
+     * and a lighter iron-buckle stripe across the middle.
+     */
+    private static BufferedImage paintSaddle() {
+        BufferedImage img = blank();
+        int seat   = 0x8B4513; // saddle-brown leather
+        int skirt  = shade(seat, 0.75f);  // darker side flaps
+        int buckle = 0xC8C8C8;            // iron buckle highlight
+
+        // Seat — a wide rounded rectangle across the middle of the icon.
+        for (int y = 5; y <= 9; y++) {
+            int x0 = (y == 5 || y == 9) ? 4 : 3;
+            int x1 = (y == 5 || y == 9) ? 11 : 12;
+            for (int x = x0; x <= x1; x++) {
+                img.setRGB(x, y, 0xFF000000 | seat);
+            }
+        }
+        // Buckle stripe across the seat.
+        for (int x = 5; x <= 10; x++) img.setRGB(x, 7, 0xFF000000 | buckle);
+
+        // Side skirts hanging below the seat.
+        for (int y = 10; y <= 13; y++) {
+            for (int x = 3; x <= 5; x++)  img.setRGB(x, y, 0xFF000000 | skirt); // left
+            for (int x = 10; x <= 12; x++) img.setRGB(x, y, 0xFF000000 | skirt); // right
+        }
         return img;
     }
 

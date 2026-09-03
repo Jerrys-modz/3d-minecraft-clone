@@ -1655,6 +1655,8 @@ public class Main {
         float[] splashCooldown = {0f}; // time until another splash sound is allowed - see SPLASH_COOLDOWN_SECONDS
         // Boat the player is currently riding; null when on foot.
         com.minecraftclone.world.BoatEntity[] mountedBoat = {null};
+        // Horse (or other rideable mob) the player is currently riding; null when on foot.
+        com.minecraftclone.world.Mob[] mountedMob = {null};
 
         System.out.println("Controls: WASD move, mouse look, Space jump, Left-Ctrl or double-tap W to sprint,");
         System.out.println("          F to fly (double-tap W also takes off in creative and boosts speed");
@@ -2255,6 +2257,10 @@ public class Main {
                             if (mountedBoat[0] != null) {
                                 mountedBoat[0].setMounted(false);
                                 mountedBoat[0] = null;
+                            }
+                            if (mountedMob[0] != null) {
+                                mountedMob[0].setMounted(false);
+                                mountedMob[0] = null;
                             }
                         }
                     }
@@ -2981,6 +2987,35 @@ public class Main {
                 float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
                 player.update(dt, input, world, coldFactor, settings.getDifficulty());
 
+                // --- Horse: steer mounted horse and glue player to its back --
+                if (mountedMob[0] != null) {
+                    com.minecraftclone.world.Mob horse = mountedMob[0];
+                    boolean shift = input.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+                                 || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT);
+                    if (shift || horse.isDead()) {
+                        horse.setMounted(false);
+                        mountedMob[0] = null;
+                        if (horse.isDead()) {
+                            showMessage(messages, "Your horse died!",
+                                    new Vector4f(0.9f, 0.4f, 0.4f, 1f), 2.5f);
+                        } else {
+                            showMessage(messages, "Dismounted the horse.",
+                                    new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1.5f);
+                        }
+                    } else {
+                        org.joml.Vector3f front = player.getCamera().getFrontFlat();
+                        boolean fwd  = input.isKeyDown(GLFW_KEY_W) || input.isKeyDown(GLFW_KEY_UP);
+                        boolean back = input.isKeyDown(GLFW_KEY_S) || input.isKeyDown(GLFW_KEY_DOWN);
+                        boolean lft  = input.isKeyDown(GLFW_KEY_A);
+                        boolean rgt  = input.isKeyDown(GLFW_KEY_D);
+                        horse.rideTick(dt, fwd, back, lft, rgt, front.x, front.z, world);
+                        // Seat the player on the horse's back (overrides player physics).
+                        player.teleportTo(horse.position.x,
+                                horse.position.y + horse.mountYOffset(),
+                                horse.position.z);
+                    }
+                }
+
                 // --- Boat: steer mounted boat and glue player to it -------
                 if (mountedBoat[0] != null) {
                     com.minecraftclone.world.BoatEntity boat = mountedBoat[0];
@@ -3037,10 +3072,14 @@ public class Main {
                             teleportThroughPortal(player, worlds, currentDim, portal);
                             world = worlds[currentDim[0].ordinal()];
                             mapRenderer[0] = new MapRenderer(world.getMapData());
-                            // Leaving a dimension auto-dismounts any boat.
+                            // Leaving a dimension auto-dismounts any boat or horse.
                             if (mountedBoat[0] != null) {
                                 mountedBoat[0].setMounted(false);
                                 mountedBoat[0] = null;
+                            }
+                            if (mountedMob[0] != null) {
+                                mountedMob[0].setMounted(false);
+                                mountedMob[0] = null;
                             }
                             showMessage(messages, "Welcome to " + currentDim[0].displayName(),
                                     new Vector4f(0.7f, 0.5f, 0.9f, 1f), 2.5f);
@@ -3174,10 +3213,14 @@ public class Main {
                         }
                     }
                     respawnPlayer(world, player, messages);
-                    // Dismount any boat on death (it stays in the world).
+                    // Dismount any boat or horse on death.
                     if (mountedBoat[0] != null) {
                         mountedBoat[0].setMounted(false);
                         mountedBoat[0] = null;
+                    }
+                    if (mountedMob[0] != null) {
+                        mountedMob[0].setMounted(false);
+                        mountedMob[0] = null;
                     }
                 }
             }
@@ -3394,6 +3437,39 @@ public class Main {
                 // Right-click: toggle a door/trapdoor, place a block, or eat food.
                 // (Never interact through a mob - check targetedMobRef first.)
                 boolean noMob = targetedMobRef[0] == null;
+
+                // Right-click a horse: saddle it (if holding a saddle and not
+                // yet saddled), or mount a saddled horse (when empty-handed and
+                // not already riding something else).
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
+                        && targetedMob != null
+                        && targetedMob.type == com.minecraftclone.world.Mob.Type.HORSE) {
+                    if (!targetedMob.isSaddled() && heldItem == BlockType.SADDLE) {
+                        // Place the saddle on the horse and consume one from inventory.
+                        targetedMob.setSaddled(true);
+                        if (!mode.isCreative()) player.getInventory().remove(BlockType.SADDLE, 1);
+                        handRenderer.triggerSwing();
+                        audio.play(SoundEvent.UI_CLICK);
+                        showMessage(messages, "Saddled the horse. Right-click to mount.",
+                                new Vector4f(0.8f, 0.9f, 0.6f, 1f), 2f);
+                    } else if (targetedMob.isSaddled()
+                            && !targetedMob.isMounted()
+                            && mountedMob[0] == null
+                            && mountedBoat[0] == null) {
+                        // Board the horse.
+                        targetedMob.setMounted(true);
+                        mountedMob[0] = targetedMob;
+                        player.teleportTo(targetedMob.position.x,
+                                targetedMob.position.y + targetedMob.mountYOffset(),
+                                targetedMob.position.z);
+                        handRenderer.triggerSwing();
+                        showMessage(messages, "Riding horse. Hold Shift to dismount.",
+                                new Vector4f(0.8f, 0.9f, 0.6f, 1f), 2.5f);
+                    } else if (!targetedMob.isSaddled()) {
+                        showMessage(messages, "This horse needs a saddle to ride.",
+                                new Vector4f(0.8f, 0.8f, 0.5f, 1f), 1.5f);
+                    }
+                }
 
                 // Full canteen can be drunk when not targeting a block or mob
                 // (hit == null ensures the player isn't facing a block they might

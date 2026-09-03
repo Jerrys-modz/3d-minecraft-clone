@@ -46,7 +46,10 @@ public class Mob {
         // a Creeper explodes on close contact; explosion support is a planned
         // future feature.  dawnDespawns=true so it fades at sunrise rather than
         // lingering in daylight.
-        CREEPER(0.6f, 1.8f, 1.6f, 20f, true, 10f, true);
+        CREEPER(0.6f, 1.8f, 1.6f, 20f, true, 10f, true),
+        // Passive rideable: a horse that wanders plains and can be saddled and
+        // steered at high speed.  Not hostile, doesn't despawn at dawn.
+        HORSE(1.2f, 1.6f, 4.5f, 15f, false, 0f, false);
 
         public final float width;     // x/z footprint
         public final float height;    // full body height
@@ -75,6 +78,8 @@ public class Mob {
     private static final int MAX_PATH_NODES = 800;     // A* budget per route search
     private static final float PANIC_TIME = 4f;        // how long a hit passive runs away for
     private static final float PANIC_SPEED_MULT = 1.6f; // flee faster than it walks
+    /** Horizontal speed (blocks/second) applied while a player is riding this mob. */
+    private static final float RIDE_SPEED = 10f;
 
     // Swimming/drowning: a mob submerged in water floats and paddles instead of
     // sinking under full gravity, and drowns if it stays fully underwater too
@@ -123,6 +128,8 @@ public class Mob {
     private boolean shootRequest; // true: fire a projectile at the player this frame (skeletons)
     private float submergedTime; // how long the mob's body has been fully under water (drowning)
     private boolean swimming;    // this frame: in water and not standing on the bottom
+    private boolean saddled;     // a player has placed a saddle on this mob (horses only)
+    private boolean mounted;     // a player is currently riding this mob
 
     public Mob(Type type, float x, float y, float z) {
         this.type = type;
@@ -172,7 +179,90 @@ public class Mob {
             case POLAR_BEAR -> BlockType.BEAR_HIDE;
             case SPIDER -> BlockType.COAL;        // spiders drop string in vanilla; coal is the closest available item
             case CREEPER -> BlockType.COAL;       // creepers drop gunpowder; coal is the placeholder
+            case HORSE -> BlockType.RAW_BEEF;     // placeholder; horses drop leather in vanilla
         };
+    }
+
+    // -----------------------------------------------------------------------
+    // Horse-riding API
+    // -----------------------------------------------------------------------
+
+    /** True if a saddle has been placed on this mob (horses only). */
+    public boolean isSaddled() { return saddled; }
+
+    /** Places or removes the saddle on this mob. */
+    public void setSaddled(boolean s) { saddled = s; }
+
+    /** True while a player is riding this mob. */
+    public boolean isMounted() { return mounted; }
+
+    /** Marks this mob as ridden (true) or free (false). */
+    public void setMounted(boolean m) { mounted = m; }
+
+    /**
+     * Y offset from this mob's body-centre {@link #position} to where the
+     * rider's feet rest.  Only meaningful for rideable mobs (currently
+     * {@link Type#HORSE}).
+     */
+    public float mountYOffset() { return type.height * 0.4f; }
+
+    /**
+     * Tick used <em>in place of</em> {@link #update} while a player rides this
+     * mob.  Applies rider-directed horizontal movement, gravity, and block
+     * collision — the normal AI pathfinder is fully bypassed.
+     *
+     * @param dt      frame time in seconds
+     * @param fwd     W key held
+     * @param back    S key held
+     * @param left    A key held
+     * @param right   D key held
+     * @param frontX  X component of the camera's horizontal forward vector
+     * @param frontZ  Z component of the camera's horizontal forward vector
+     * @param world   block accessor for collision and ground detection
+     */
+    public void rideTick(float dt,
+                         boolean fwd, boolean back, boolean left, boolean right,
+                         float frontX, float frontZ,
+                         BlockAccessor world) {
+        // Normalise the camera-forward horizontal vector.
+        float flen = (float) Math.sqrt(frontX * frontX + frontZ * frontZ);
+        if (flen < 1e-4f) flen = 1f;
+        float fx = frontX / flen;
+        float fz = frontZ / flen;
+
+        // Right is the 90°-clockwise perpendicular in the XZ-plane.
+        float rx = -fz, rz = fx;
+
+        float ax = 0f, az = 0f;
+        if (fwd)   { ax += fx; az += fz; }
+        if (back)  { ax -= fx; az -= fz; }
+        if (right) { ax += rx; az += rz; }
+        if (left)  { ax -= rx; az -= rz; }
+
+        // Normalise diagonal input so it doesn't run faster than cardinal.
+        float alen = (float) Math.sqrt(ax * ax + az * az);
+        if (alen > 1f) { ax /= alen; az /= alen; }
+
+        velocity.x = ax * RIDE_SPEED;
+        velocity.z = az * RIDE_SPEED;
+
+        // Gravity — same as the normal update path (no swimming check for
+        // simplicity; a ridden horse that enters water just keeps moving).
+        if (onGround) {
+            velocity.y = Math.max(0f, velocity.y);
+        } else {
+            velocity.y -= GRAVITY * dt;
+            if (velocity.y < TERMINAL_VELOCITY) velocity.y = TERMINAL_VELOCITY;
+        }
+
+        moveAndCollide(world, velocity.x * dt, velocity.y * dt, velocity.z * dt);
+
+        // Smooth the facing yaw toward the direction of travel.
+        float hSpeed = (float) Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+        if (hSpeed > 0.05f) {
+            float target = (float) Math.atan2(velocity.x, velocity.z);
+            yaw = turnToward(yaw, target, 16f * dt);
+        }
     }
 
     /** Damage the player should take from this mob this frame (0 = none), for hostiles' melee hits. */

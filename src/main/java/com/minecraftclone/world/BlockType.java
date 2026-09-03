@@ -837,7 +837,15 @@ public enum BlockType {
      * Oak Boat — a craftable item that spawns a rideable {@link BoatEntity}
      * when right-clicked on water.  Item-only (no atlas tile).
      */
-    OAK_BOAT(515, 0);
+    OAK_BOAT(515, 0),
+
+    /**
+     * Saddle — placed on a {@link com.minecraftclone.world.Mob.Type#HORSE} by
+     * right-clicking it.  Once saddled, right-click the horse again (empty hand)
+     * to mount and ride it.  Craft: three wool across the top, two wool on the
+     * sides, one iron ingot at the bottom centre.  Item-only (no atlas tile).
+     */
+    SADDLE(516, 0);
 
     public final short id;
     public final boolean solid;
