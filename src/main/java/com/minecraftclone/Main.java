@@ -2243,6 +2243,21 @@ public class Main {
                         worlds = returnMirrorWorlds;
                         currentDim[0] = DimensionType.OVERWORLD;
                     }
+                    // A DimensionChange packet may have updated currentDim[0]; sync the
+                    // game-loop world variable to match.  Clear any mounted boat so the
+                    // old world's boat is never ticked in the new world (mirrors what the
+                    // local portal path does at line 3028).
+                    if (worlds != null) {
+                        World expected = worlds[currentDim[0].ordinal()];
+                        if (expected != null && expected != world) {
+                            world = expected;
+                            mapRenderer[0] = new MapRenderer(world.getMapData());
+                            if (mountedBoat[0] != null) {
+                                mountedBoat[0].setMounted(false);
+                                mountedBoat[0] = null;
+                            }
+                        }
+                    }
                     // A saved snapshot from a previous session (sent right after
                     // WELCOME): apply it once the dimension worlds exist.
                     if (pendingPlayerRestore != null && worlds != null && started[0]) {
@@ -3579,9 +3594,14 @@ public class Main {
                         byte dim = (byte) currentDim[0].ordinal();
                         sendBlockChange(dim, p.x, p.y, p.z, BlockType.LAVA_SOURCE, (byte) 0, false);
                     } else if (noMob && heldItem == BlockType.OAK_BOAT && targeted.isWater()) {
-                        // Boats have no replicated multiplayer state yet, so only a
-                        // standalone world may create one and consume the held item.
-                        if (netClient == null || !netClient.isConnected()) {
+                        // Boats are client-side entities: not replicated to the server.
+                        // Disallow placement while connected to multiplayer to avoid
+                        // silent desync between the local mirror and the server world.
+                        if (netClient != null && netClient.isConnected()) {
+                            showMessage(messages, "Boats are not available in multiplayer.",
+                                    new Vector4f(0.9f, 0.5f, 0.3f, 1f), 2.5f);
+                        } else {
+                            // Place an oak boat on the water surface.
                             float bx = hit.blockPos.x + 0.5f;
                             float bz = hit.blockPos.z + 0.5f;
                             float by = hit.blockPos.y + 1.05f; // just above the water top face

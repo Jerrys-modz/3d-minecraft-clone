@@ -152,26 +152,37 @@ public class BoatEntity {
         }
 
         // --- Integrate position, resolving each axis against block collision ---
-        float dx = vx * dt;
-        if (collidesAt(blocks, aabb().offset(dx, 0f, 0f))) {
-            vx = 0f;
-        } else {
-            position.x += dx;
+        float newX = position.x + vx * dt;
+
+        // Test X movement.
+        AABB atX = new AABB(newX - HALF_W, position.y, position.z - HALF_W,
+                            newX + HALF_W, position.y + HEIGHT, position.z + HALF_W);
+        if (collidesHorizontally(blocks, atX)) {
+            newX = position.x;
+            vx   = 0f;
         }
 
-        float dy = vy * dt;
-        if (collidesAt(blocks, aabb().offset(0f, dy, 0f))) {
-            vy = 0f;
-        } else {
-            position.y += dy;
+        float newZ = position.z + vz * dt;
+        // Test Z movement (using the possibly-adjusted X).
+        AABB atZ = new AABB(newX - HALF_W, position.y, newZ - HALF_W,
+                            newX + HALF_W, position.y + HEIGHT, newZ + HALF_W);
+        if (collidesHorizontally(blocks, atZ)) {
+            newZ = position.z;
+            vz   = 0f;
         }
 
-        float dz = vz * dt;
-        if (collidesAt(blocks, aabb().offset(0f, 0f, dz))) {
-            vz = 0f;
-        } else {
-            position.z += dz;
+        float newY = position.y + vy * dt;
+        // Test Y movement (using adjusted X and Z positions).
+        AABB atY = new AABB(newX - HALF_W, newY, newZ - HALF_W,
+                            newX + HALF_W, newY + HEIGHT, newZ + HALF_W);
+        if (collidesHorizontally(blocks, atY)) {
+            newY = position.y;
+            vy   = 0f;
         }
+
+        position.x = newX;
+        position.y = newY;
+        position.z = newZ;
 
         // Hard floor at Y = 0 (bedrock).
         if (position.y < 0f) { position.y = 0f; vy = 0f; }
@@ -197,7 +208,7 @@ public class BoatEntity {
      * above that water block's top face).
      *
      * <p>Returns {@code -1f} if no water is found within {@link #WATER_SCAN_DEPTH}
-     * blocks, if a non-water block is encountered first, or if
+     * blocks, if a solid non-fluid block is encountered first, or if
      * {@code blocks} is {@code null}.
      *
      * @param blocks block accessor for the column scan
@@ -216,6 +227,7 @@ public class BoatEntity {
             BlockType b = blocks.getBlock(bx, by, bz);
             if (b.isWater()) {
                 // Hull bottom floats at the top face of this water block.
+                // Lava is intentionally excluded: oak boats cannot float on lava.
                 return by + 1.0f;
             }
             if (b != BlockType.AIR) {
@@ -226,9 +238,16 @@ public class BoatEntity {
         return -1f; // scan exhausted without finding water
     }
 
-    private static boolean collidesAt(BlockAccessor blocks, AABB box) {
+    /**
+     * Returns {@code true} if {@code box} overlaps any collidable block reachable
+     * via {@code blocks}.  Returns {@code false} when {@code blocks} is
+     * {@code null} (e.g. in unit tests that only exercise vertical physics).
+     *
+     * <p>Mirrors the logic in {@code Mob.collidesAt} so boats and mobs share the
+     * same solid-block contract.
+     */
+    private static boolean collidesHorizontally(BlockAccessor blocks, AABB box) {
         if (blocks == null) return false;
-
         int minX = (int) Math.floor(box.minX);
         int maxX = (int) Math.floor(box.maxX - 1e-4f);
         int minY = (int) Math.floor(box.minY);
@@ -236,24 +255,17 @@ public class BoatEntity {
         int minZ = (int) Math.floor(box.minZ);
         int maxZ = (int) Math.floor(box.maxZ - 1e-4f);
 
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    if (blockCollides(blocks, box, x, y, z)
-                            || blockCollides(blocks, box, x, y - 1, z)) {
-                        return true;
+        for (int bx = minX; bx <= maxX; bx++) {
+            for (int by = minY; by <= maxY; by++) {
+                for (int bz = minZ; bz <= maxZ; bz++) {
+                    BlockType t = blocks.getBlock(bx, by, bz);
+                    if (!t.isCollidable()) continue;
+                    for (AABB blockBox : t.collisionBoxes(bx, by, bz,
+                            blocks.getBlockOrientation(bx, by, bz))) {
+                        if (box.intersects(blockBox)) return true;
                     }
                 }
             }
-        }
-        return false;
-    }
-
-    private static boolean blockCollides(BlockAccessor blocks, AABB box, int x, int y, int z) {
-        BlockType block = blocks.getBlock(x, y, z);
-        if (!block.isCollidable()) return false;
-        for (AABB blockBox : block.collisionBoxes(x, y, z, blocks.getBlockOrientation(x, y, z))) {
-            if (box.intersects(blockBox)) return true;
         }
         return false;
     }
