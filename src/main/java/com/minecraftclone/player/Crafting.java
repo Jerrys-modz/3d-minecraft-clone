@@ -91,6 +91,9 @@ public final class Crafting {
         CHARS.put('F', BlockType.FURNACE);            // F = Furnace block
         CHARS.put('E', BlockType.BRONZE_INGOT);       // E = bronzE ingot
         CHARS.put('Q', BlockType.STEEL_INGOT);        // Q = Steel ingot
+        // Electric Age: copper/gold wiring
+        CHARS.put('X', BlockType.COPPER_INGOT);       // X = copper ingot (cross-section of wire)
+        CHARS.put('A', BlockType.GOLD_INGOT);         // A = gold ingot (Au)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -263,6 +266,18 @@ public final class Crafting {
 
         // Steel Steam Pipe: top Steam Age tier, 2x throughput.
         shaped3x3(".Q.", ".Q.", ".Q.", BlockType.STEAM_PIPE_STEEL, 6);
+
+        // ---- Electric Age -----------------------------------------------
+        // Coal Generator: iron ring around a furnace.
+        shaped3x3("IFI", "IFI", "IFI", BlockType.COAL_GENERATOR, 1);
+        // Copper Cable: three vertical copper ingots -> 6 cables (same pattern as steam pipes).
+        shaped3x3(".X.", ".X.", ".X.", BlockType.COPPER_CABLE, 6);
+        // Gold Cable: three vertical gold ingots -> 6 gold cables.
+        shaped3x3(".A.", ".A.", ".A.", BlockType.GOLD_CABLE, 6);
+        // Electric Furnace: iron ring around a copper-wrapped furnace.
+        shaped3x3("IXI", "XFX", "IXI", BlockType.ELECTRIC_FURNACE, 1);
+        // Battery Block: alternating copper ingots and iron in a 3x3.
+        shaped3x3("XIX", "IXI", "XIX", BlockType.BATTERY_BLOCK, 1);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.

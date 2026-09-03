@@ -845,7 +845,46 @@ public enum BlockType {
      * to mount and ride it.  Craft: three wool across the top, two wool on the
      * sides, one iron ingot at the bottom centre.  Item-only (no atlas tile).
      */
-    SADDLE(516, 0);
+    SADDLE(516, 0),
+
+    // -----------------------------------------------------------------------
+    // Electric Age (GTNH-style EU tier, built on top of the Steam Age)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Coal Generator — burns solid fuel (coal, wood, etc.) and produces EU,
+     * which is stored in an internal buffer and drawn by adjacent machines
+     * or through copper/gold cables.  Directional front face: tile 267 when
+     * cold, tile 268 when burning.  Tile 266 for all other faces.
+     */
+    COAL_GENERATOR(517, true, false, 266, 266, 266, 267, 268, 0, 0),
+
+    /**
+     * Copper Cable — low-voltage EU conductor (1× throughput).  Connects
+     * {@link CoalGeneratorEntity} and {@link BatteryBlockEntity} to machines.
+     * Six cables per recipe from copper ingots.  Tile 269.
+     */
+    COPPER_CABLE(518, true, false, 269, 269, 269),
+
+    /**
+     * Gold Cable — medium-voltage EU conductor (2× throughput).  Doubles the
+     * EU/s the network can carry versus copper.  Tile 270.
+     */
+    GOLD_CABLE(519, true, false, 270, 270, 270),
+
+    /**
+     * Electric Furnace — smelts items at 2× the speed of a plain furnace by
+     * drawing EU from the cable network.  Directional front face: tile 272
+     * (idle) / 273 (active).  Tile 271 for all other faces.
+     */
+    ELECTRIC_FURNACE(520, true, false, 271, 271, 271, 272, 273, 0, 0),
+
+    /**
+     * Battery Block — stores up to 5 000 EU, letting generators run ahead
+     * and burst-powering machines when demand exceeds generator output.
+     * Passively accepts EU from an adjacent or networked generator.  Tile 274.
+     */
+    BATTERY_BLOCK(521, true, false, 274, 274, 274);
 
     public final short id;
     public final boolean solid;

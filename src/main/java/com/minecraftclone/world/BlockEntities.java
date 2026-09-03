@@ -40,6 +40,11 @@ public final class BlockEntities {
         register(SteamBoilerEntity.TYPE, SteamBoilerEntity::new);
         register(SteamFurnaceEntity.TYPE, SteamFurnaceEntity::new);
         register(SteamMaceratorEntity.TYPE, SteamMaceratorEntity::new);
+
+        // Electric Age machines.
+        register(CoalGeneratorEntity.TYPE, CoalGeneratorEntity::new);
+        register(ElectricFurnaceEntity.TYPE, ElectricFurnaceEntity::new);
+        register(BatteryBlockEntity.TYPE, BatteryBlockEntity::new);
     }
 
     private BlockEntities() {

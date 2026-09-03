@@ -382,6 +382,10 @@ public class World implements BlockAccessor {
                         furnace.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof SteamMaceratorEntity mac) {
                         mac.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
+                        ef.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof BatteryBlockEntity bat) {
+                        bat.attach(es.x(), es.y(), es.z(), this);
                     }
                 }
             }
@@ -718,6 +722,45 @@ public class World implements BlockAccessor {
         return sm;
     }
 
+    // ------------------------------------------------------------------
+    // Electric Age machine helpers
+    // ------------------------------------------------------------------
+
+    /** Returns the Coal Generator entity at a position, creating it on first use. */
+    public CoalGeneratorEntity getOrCreateCoalGenerator(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof CoalGeneratorEntity g) return g;
+        CoalGeneratorEntity g = new CoalGeneratorEntity();
+        blockEntities.put(blockKey(x, y, z), g);
+        return g;
+    }
+
+    /** Returns the Electric Furnace entity at a position, creating + attaching it on first use. */
+    public ElectricFurnaceEntity getOrCreateElectricFurnace(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof ElectricFurnaceEntity ef) {
+            ef.attach(x, y, z, this);
+            return ef;
+        }
+        ElectricFurnaceEntity ef = new ElectricFurnaceEntity();
+        ef.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), ef);
+        return ef;
+    }
+
+    /** Returns the Battery Block entity at a position, creating + attaching it on first use. */
+    public BatteryBlockEntity getOrCreateBatteryBlock(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof BatteryBlockEntity b) {
+            b.attach(x, y, z, this);
+            return b;
+        }
+        BatteryBlockEntity b = new BatteryBlockEntity();
+        b.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), b);
+        return b;
+    }
+
     /** Forgets a block entity - call when its block is mined or removed. */
     public void removeBlockEntity(int x, int y, int z) {
         blockEntities.remove(blockKey(x, y, z));
@@ -745,6 +788,10 @@ public class World implements BlockAccessor {
             furnace.attach(x, y, z, this);
         } else if (entity instanceof SteamMaceratorEntity mac) {
             mac.attach(x, y, z, this);
+        } else if (entity instanceof ElectricFurnaceEntity ef) {
+            ef.attach(x, y, z, this);
+        } else if (entity instanceof BatteryBlockEntity bat) {
+            bat.attach(x, y, z, this);
         }
         return entity;
     }
@@ -1145,6 +1192,10 @@ public class World implements BlockAccessor {
                         furnace.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof SteamMaceratorEntity mac) {
                         mac.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
+                        ef.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof BatteryBlockEntity bat) {
+                        bat.attach(es.x(), es.y(), es.z(), this);
                     }
                     multiBlockManager.tryFormAt(this, es.x(), es.y(), es.z());
                 }

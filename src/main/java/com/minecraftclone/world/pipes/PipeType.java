@@ -1,6 +1,7 @@
 package com.minecraftclone.world.pipes;
 
 import com.minecraftclone.world.BlockType;
+import com.minecraftclone.world.CableTier;
 import com.minecraftclone.world.SteamPipeTier;
 
 /**
@@ -25,8 +26,13 @@ public enum PipeType {
     /** Items between inventories and machines - planned. */
     ITEM(null),
 
-    /** Energy (EU) between generators and machines - planned. */
-    ENERGY(null),
+    /** Energy (EU) between generators and machines — copper and gold cable tiers. */
+    ENERGY(BlockType.COPPER_CABLE) {
+        @Override
+        public boolean matches(BlockType block) {
+            return CableTier.isCable(block);
+        }
+    },
 
     /** Gases - planned. */
     GAS(null);
