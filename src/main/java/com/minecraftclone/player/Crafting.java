@@ -219,6 +219,12 @@ public final class Crafting {
         // Iron bucket: three ingots in a V (transports lava for the smeltery)
         shaped3x3("I.I", ".I.", "...", BlockType.IRON_BUCKET, 1);
 
+        // Oak Boat: five planks in a U — two sides plus a floor.
+        //   P.P   <- hull sides
+        //   PPP   <- hull floor
+        //   ...
+        shaped3x3("P.P", "PPP", "...", BlockType.OAK_BOAT, 1);
+
         // --- Steam Age: bronze alloy + machines ---
         // Bronze blend: 1 copper + 1 tin (dust or ingot forms), smelts to bronze.
         shapeless2x2(BlockType.BRONZE_DUST, 1, BlockType.COPPER_DUST, BlockType.TIN_DUST);

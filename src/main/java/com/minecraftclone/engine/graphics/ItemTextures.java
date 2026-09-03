@@ -327,6 +327,9 @@ public class ItemTextures {
             case IRON_BUCKET -> paintBucket(false);
             case LAVA_BUCKET -> paintBucket(true);
 
+            // Oak boat: a U-shaped hull viewed from a slight isometric angle.
+            case OAK_BOAT -> paintBoat();
+
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
     }
@@ -370,6 +373,32 @@ public class ItemTextures {
                 }
             }
         }
+        return img;
+    }
+
+    /**
+     * An oak boat seen from a slight overhead-isometric angle: a brown U-shaped
+     * hull with darker planks on the rim and a lighter deck interior.
+     */
+    private static BufferedImage paintBoat() {
+        BufferedImage img = blank();
+        int hull  = 0x8B5E3C; // medium oak-plank brown
+        int rim   = shade(hull, 0.60f); // darker edge planks
+        int deck  = shade(hull, 1.30f); // lighter inner floor
+        // Hull outline — a wide U:  rows 5-12, columns 2-13.
+        for (int y = 5; y <= 12; y++) {
+            int left  = (y <= 9) ? 2 : 3 + (y - 9);
+            int right = (y <= 9) ? 13 : 12 - (y - 9);
+            if (left > right) continue;
+            for (int x = left; x <= right; x++) {
+                boolean isRim = (x == left || x == right || y == 5 || y == 12);
+                img.setRGB(x, y, 0xFF000000 | (isRim ? rim : deck));
+            }
+        }
+        // Top rim bar (prow).
+        for (int x = 2; x <= 13; x++) img.setRGB(x, 4, 0xFF000000 | rim);
+        // Seat plank across the middle.
+        for (int x = 4; x <= 11; x++) img.setRGB(x, 8, 0xFF000000 | hull);
         return img;
     }
 

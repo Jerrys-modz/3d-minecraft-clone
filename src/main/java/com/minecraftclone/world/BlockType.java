@@ -831,7 +831,13 @@ public enum BlockType {
      * Anvil — a heavy iron repair station where players restore a tool's
      * durability by supplying one unit of its base material.  Tile 254.
      */
-    ANVIL(514, true, false, 254, 254, 254);
+    ANVIL(514, true, false, 254, 254, 254),
+
+    /**
+     * Oak Boat — a craftable item that spawns a rideable {@link BoatEntity}
+     * when right-clicked on water.  Item-only (no atlas tile).
+     */
+    OAK_BOAT(515, 0);
 
     public final short id;
     public final boolean solid;
