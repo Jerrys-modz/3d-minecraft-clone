@@ -151,10 +151,27 @@ public class BoatEntity {
             vy -= GRAVITY * dt;
         }
 
-        // --- Integrate position ---
-        position.x += vx * dt;
-        position.z += vz * dt;
-        position.y += vy * dt;
+        // --- Integrate position, resolving each axis against block collision ---
+        float dx = vx * dt;
+        if (collidesAt(blocks, aabb().offset(dx, 0f, 0f))) {
+            vx = 0f;
+        } else {
+            position.x += dx;
+        }
+
+        float dy = vy * dt;
+        if (collidesAt(blocks, aabb().offset(0f, dy, 0f))) {
+            vy = 0f;
+        } else {
+            position.y += dy;
+        }
+
+        float dz = vz * dt;
+        if (collidesAt(blocks, aabb().offset(0f, 0f, dz))) {
+            vz = 0f;
+        } else {
+            position.z += dz;
+        }
 
         // Hard floor at Y = 0 (bedrock).
         if (position.y < 0f) { position.y = 0f; vy = 0f; }
@@ -180,7 +197,7 @@ public class BoatEntity {
      * above that water block's top face).
      *
      * <p>Returns {@code -1f} if no water is found within {@link #WATER_SCAN_DEPTH}
-     * blocks, if a solid non-fluid block is encountered first, or if
+     * blocks, if a non-water block is encountered first, or if
      * {@code blocks} is {@code null}.
      *
      * @param blocks block accessor for the column scan
@@ -197,7 +214,7 @@ public class BoatEntity {
 
         for (int by = startY; by >= endY; by--) {
             BlockType b = blocks.getBlock(bx, by, bz);
-            if (b.isFluid()) {
+            if (b.isWater()) {
                 // Hull bottom floats at the top face of this water block.
                 return by + 1.0f;
             }
@@ -207,5 +224,37 @@ public class BoatEntity {
             }
         }
         return -1f; // scan exhausted without finding water
+    }
+
+    private static boolean collidesAt(BlockAccessor blocks, AABB box) {
+        if (blocks == null) return false;
+
+        int minX = (int) Math.floor(box.minX);
+        int maxX = (int) Math.floor(box.maxX - 1e-4f);
+        int minY = (int) Math.floor(box.minY);
+        int maxY = (int) Math.floor(box.maxY - 1e-4f);
+        int minZ = (int) Math.floor(box.minZ);
+        int maxZ = (int) Math.floor(box.maxZ - 1e-4f);
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    if (blockCollides(blocks, box, x, y, z)
+                            || blockCollides(blocks, box, x, y - 1, z)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean blockCollides(BlockAccessor blocks, AABB box, int x, int y, int z) {
+        BlockType block = blocks.getBlock(x, y, z);
+        if (!block.isCollidable()) return false;
+        for (AABB blockBox : block.collisionBoxes(x, y, z, blocks.getBlockOrientation(x, y, z))) {
+            if (box.intersects(blockBox)) return true;
+        }
+        return false;
     }
 }

@@ -1005,7 +1005,8 @@ public class Main {
      * up this frame (the caller assigns it to its {@code world} variable),
      * otherwise null. Runs entirely on the main thread.
      */
-    private World processNetPackets(NetClient client, World world, World[] worlds, Player player, TextureAtlas atlas,
+    private World processNetPackets(NetClient client, World world, World[] worlds, Player player,
+                                    com.minecraftclone.world.BoatEntity[] mountedBoat, TextureAtlas atlas,
                                     Settings settings, Path saveRoot,
                                     WorldGenSettings genSettings,
                                     DayNightCycle dayNightCycle, Calendar calendar, boolean[] started,
@@ -1131,6 +1132,10 @@ public class Main {
             } else if (packet instanceof Packets.DimensionChange change) {
                 // Server moved us to another dimension - switch the active world.
                 if (worlds != null && change.dimension() >= 0 && change.dimension() < worlds.length) {
+                    if (mountedBoat[0] != null) {
+                        mountedBoat[0].setMounted(false);
+                        mountedBoat[0] = null;
+                    }
                     currentDim[0] = DimensionType.values()[change.dimension()];
                     player.teleport(change.x(), change.y(), change.z());
                     World target = worlds[currentDim[0].ordinal()];
@@ -2227,7 +2232,7 @@ public class Main {
                     window.setCursorCaptured(false);
                     input.resetMouseDelta();
                 } else {
-                    World newWorld = processNetPackets(netClient, world, worlds, player, atlas, settings, saveRoot,
+                    World newWorld = processNetPackets(netClient, world, worlds, player, mountedBoat, atlas, settings, saveRoot,
                             genSettings, dayNightCycle, calendar, started, mainMenuOpen, multiplayerOpen,
                             mpConnecting, window, input, messages, audio);
                     if (newWorld != null) {
@@ -3573,17 +3578,20 @@ public class Main {
                                 p.x + 0.5f, p.y + 0.5f, p.z + 0.5f, 1f);
                         byte dim = (byte) currentDim[0].ordinal();
                         sendBlockChange(dim, p.x, p.y, p.z, BlockType.LAVA_SOURCE, (byte) 0, false);
-                    } else if (noMob && heldItem == BlockType.OAK_BOAT && targeted.isFluid()) {
-                        // Place an oak boat on the water surface.
-                        float bx = hit.blockPos.x + 0.5f;
-                        float bz = hit.blockPos.z + 0.5f;
-                        float by = hit.blockPos.y + 1.05f; // just above the water top face
-                        world.spawnBoat(bx, by, bz);
-                        if (!mode.isCreative()) player.getInventory().remove(BlockType.OAK_BOAT, 1);
-                        handRenderer.triggerSwing();
-                        audio.play(SoundEvent.SPLASH);
-                        showMessage(messages, "Placed boat. Right-click to board.",
-                                new Vector4f(0.7f, 0.9f, 1f, 1f), 2f);
+                    } else if (noMob && heldItem == BlockType.OAK_BOAT && targeted.isWater()) {
+                        // Boats have no replicated multiplayer state yet, so only a
+                        // standalone world may create one and consume the held item.
+                        if (netClient == null || !netClient.isConnected()) {
+                            float bx = hit.blockPos.x + 0.5f;
+                            float bz = hit.blockPos.z + 0.5f;
+                            float by = hit.blockPos.y + 1.05f; // just above the water top face
+                            world.spawnBoat(bx, by, bz);
+                            if (!mode.isCreative()) player.getInventory().remove(BlockType.OAK_BOAT, 1);
+                            handRenderer.triggerSwing();
+                            audio.play(SoundEvent.SPLASH);
+                            showMessage(messages, "Placed boat. Right-click to board.",
+                                    new Vector4f(0.7f, 0.9f, 1f, 1f), 2f);
+                        }
                     } else if (noMob && targeted == BlockType.CASTING_TABLE || noMob && targeted == BlockType.CASTING_BASIN) {
                         // Casting station: imprint casts with Tinkers parts,
                         // feed materials, collect finished metal parts.

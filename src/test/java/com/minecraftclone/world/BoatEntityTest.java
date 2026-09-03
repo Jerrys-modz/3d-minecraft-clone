@@ -130,6 +130,62 @@ class BoatEntityTest {
                 "Boat dropped from above should settle on the water surface");
     }
 
+    @Test
+    void boatDoesNotFloatOnLava() {
+        BlockAccessor lava = (x, y, z) -> (y == 63) ? BlockType.LAVA_SOURCE : BlockType.AIR;
+        BoatEntity boat = new BoatEntity(0f, 64f, 0f);
+
+        boat.tick(0.05f, lava);
+
+        assertTrue(boat.getPosition().y < 64f, "Lava must not act as a flotation surface");
+    }
+
+    // ------------------------------------------------------------------
+    // Block collision
+    // ------------------------------------------------------------------
+
+    @Test
+    void boatStopsAtWallAlongXWithoutBlockingZ() {
+        BlockAccessor blocks = (x, y, z) -> {
+            if (x == 1 && y == 64) return BlockType.STONE;
+            return y == 63 ? BlockType.WATER_SOURCE : BlockType.AIR;
+        };
+        BoatEntity boat = new BoatEntity(0f, 64f, 0f);
+
+        for (int i = 0; i < 80; i++) {
+            boat.tick(0.05f, true, false, false, true, 1f, 0f, blocks);
+        }
+
+        assertTrue(boat.aabb().maxX <= 1.0001f, "Boat must not enter the wall on X");
+        assertTrue(boat.getPosition().z > 0.5f, "Unblocked Z movement should be preserved");
+    }
+
+    @Test
+    void boatStopsAtWallAlongZ() {
+        BlockAccessor blocks = (x, y, z) -> {
+            if (z == 1 && y == 64) return BlockType.STONE;
+            return y == 63 ? BlockType.WATER_SOURCE : BlockType.AIR;
+        };
+        BoatEntity boat = new BoatEntity(0f, 64f, 0f);
+
+        for (int i = 0; i < 80; i++) {
+            boat.tick(0.05f, true, false, false, false, 0f, 1f, blocks);
+        }
+
+        assertTrue(boat.aabb().maxZ <= 1.0001f, "Boat must not enter the wall on Z");
+    }
+
+    @Test
+    void boatStopsOnSolidGroundAlongY() {
+        BlockAccessor ground = (x, y, z) -> y == 0 ? BlockType.STONE : BlockType.AIR;
+        BoatEntity boat = new BoatEntity(0f, 1f, 0f);
+
+        for (int i = 0; i < 20; i++) boat.tick(0.05f, ground);
+
+        assertEquals(1f, boat.getPosition().y, 1e-5f,
+                "Boat hull should stop at the ground's top surface");
+    }
+
     // ------------------------------------------------------------------
     // Steering mechanics
     // ------------------------------------------------------------------
