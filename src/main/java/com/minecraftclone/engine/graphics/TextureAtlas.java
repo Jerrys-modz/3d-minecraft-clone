@@ -378,6 +378,17 @@ public class TextureAtlas {
         paintSteamMacerator(image, 264, rnd, false);      // STEAM_MACERATOR front (idle)
         paintSteamMacerator(image, 265, rnd, true);       // STEAM_MACERATOR front (working)
 
+        // Electric Age tiles (266-274).
+        paintCoalGenerator(image, 266, rnd, false);       // COAL_GENERATOR body (all sides)
+        paintCoalGenerator(image, 267, rnd, false);       // COAL_GENERATOR front (cold)
+        paintCoalGenerator(image, 268, rnd, true);        // COAL_GENERATOR front (burning)
+        paintCopperCable(image, 269, rnd);                // COPPER_CABLE
+        paintGoldCable(image, 270, rnd);                  // GOLD_CABLE
+        paintElectricFurnace(image, 271, rnd, false);     // ELECTRIC_FURNACE body
+        paintElectricFurnace(image, 272, rnd, false);     // ELECTRIC_FURNACE front (idle)
+        paintElectricFurnace(image, 273, rnd, true);      // ELECTRIC_FURNACE front (active)
+        paintBatteryBlock(image, 274, rnd);               // BATTERY_BLOCK
+
         return image;
     }
 
@@ -2226,6 +2237,144 @@ public class TextureAtlas {
                 boolean edge = y == 5 || y == 11 || x == 4 || x == 11;
                 int color = edge ? 0xFF3A2A18 : (active ? 0xFFC84810 : 0xFF140A04);
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Electric Age tile painters (tiles 266-274)
+    // ------------------------------------------------------------------
+
+    /**
+     * COAL_GENERATOR body / front (tiles 266-268): a dark iron machine box
+     * with ember glow when burning.
+     */
+    private void paintCoalGenerator(BufferedImage img, int index, Random rnd, boolean burning) {
+        // Iron-grey hull.
+        paintMachineBox(img, index, rnd, 0x6E7078, 0x404248, 0x9EA0A8);
+        if (burning) {
+            // Burning front: small ember window in the lower-centre.
+            int ox = tileX(index), oy = tileY(index);
+            for (int y = 9; y < 14; y++) {
+                for (int x = 4; x < 12; x++) {
+                    boolean edge = y == 9 || y == 13 || x == 4 || x == 11;
+                    int color = edge ? 0xFF2A2020 : (rnd.nextInt(4) == 0 ? 0xFFE08020 : 0xFFC05010);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+                }
+            }
+        } else {
+            // Cold front: dark ash grate.
+            int ox = tileX(index), oy = tileY(index);
+            for (int y = 9; y < 14; y++) {
+                for (int x = 4; x < 12; x++) {
+                    boolean edge = y == 9 || y == 13 || x == 4 || x == 11;
+                    img.setRGB(ox + x, oy + y, edge ? 0xFF252525 : 0xFF101010);
+                }
+            }
+        }
+    }
+
+    /**
+     * COPPER_CABLE (tile 269): terracotta-orange wire cross-section, with a
+     * thin darker sheathing ring around a copper core.
+     */
+    private void paintCopperCable(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int sheath = 0xFF5C3010;
+        int core   = 0xFFB87333;
+        int bright = 0xFFDCA05A;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                int dx = x - 8, dy = y - 8;
+                int dist2 = dx * dx + dy * dy;
+                int base;
+                if (dist2 > 42) base = sheath;
+                else if (dist2 > 20) base = core;
+                else base = bright;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * GOLD_CABLE (tile 270): golden yellow wire — same cross-section geometry
+     * as copper cable but in a gold palette.
+     */
+    private void paintGoldCable(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int sheath = 0xFF604800;
+        int core   = 0xFFD4A800;
+        int bright = 0xFFFFD850;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                int dx = x - 8, dy = y - 8;
+                int dist2 = dx * dx + dy * dy;
+                int base;
+                if (dist2 > 42) base = sheath;
+                else if (dist2 > 20) base = core;
+                else base = bright;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * ELECTRIC_FURNACE body / front (tiles 271-273): an iron hull with a
+     * blue-tinged coil window; coils glow amber-white when active.
+     */
+    private void paintElectricFurnace(BufferedImage img, int index, Random rnd, boolean active) {
+        paintMachineBox(img, index, rnd, 0x6E7078, 0x404248, 0x9EA0A8);
+        int ox = tileX(index), oy = tileY(index);
+        // Central coil window.
+        for (int y = 4; y < 12; y++) {
+            for (int x = 4; x < 12; x++) {
+                boolean edge = y == 4 || y == 11 || x == 4 || x == 11;
+                int color;
+                if (edge) {
+                    color = 0xFF303040;
+                } else if (active) {
+                    // Glowing electric blue-to-white heating element.
+                    color = (rnd.nextInt(3) == 0) ? 0xFFFFFFB0 : 0xFF6080FF;
+                } else {
+                    color = 0xFF202030;
+                }
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * BATTERY_BLOCK (tile 274): dark charcoal-grey block with blue charge
+     * indicator stripes — visually distinct from cables and generators.
+     */
+    private void paintBatteryBlock(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int body  = 0xFF2A2A30;
+        int stripe = 0xFF2040A0;
+        int rivet  = 0xFF5060B0;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                boolean isStripe = (x >= 2 && x <= 4) || (x >= 11 && x <= 13);
+                int base = isStripe ? stripe : body;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Corner terminal rivets.
+        for (int ry = 1; ry <= 14; ry += 13) {
+            for (int rx = 1; rx <= 14; rx += 13) {
+                img.setRGB(ox + rx, oy + ry, 0xFF000000 | rivet);
             }
         }
     }
