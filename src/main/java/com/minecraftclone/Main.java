@@ -2863,6 +2863,16 @@ public class Main {
                             if (currentWorldDir[0] != null) {
                                 saveWorldGenSettings(currentWorldDir[0], genSettings);
                             }
+                            // Release any active mounts before the world is torn down so
+                            // subsequent sessions do not inherit a stale Mob/Boat reference.
+                            if (mountedMob[0] != null) {
+                                mountedMob[0].setMounted(false);
+                                mountedMob[0] = null;
+                            }
+                            if (mountedBoat[0] != null) {
+                                mountedBoat[0].setMounted(false);
+                                mountedBoat[0] = null;
+                            }
                             destroyOpenWorld(worlds);
                             player.resetSession();
                             worlds = null;
@@ -3195,6 +3205,16 @@ public class Main {
                 player.getInventory().clearArmor();
                 player.getDurability().reset();
                 if (netClient != null && netClient.isConnected()) {
+                    // Release mounts before the server repositions us; otherwise the
+                    // next rideTick fires against the stale Mob from the previous life.
+                    if (mountedMob[0] != null) {
+                        mountedMob[0].setMounted(false);
+                        mountedMob[0] = null;
+                    }
+                    if (mountedBoat[0] != null) {
+                        mountedBoat[0].setMounted(false);
+                        mountedBoat[0] = null;
+                    }
                     // Server-authoritative respawn: it moves us to overworld spawn and
                     // replies with a DimensionChange that switches world + position.
                     try {

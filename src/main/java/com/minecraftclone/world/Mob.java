@@ -246,10 +246,19 @@ public class Mob {
         velocity.x = ax * RIDE_SPEED;
         velocity.z = az * RIDE_SPEED;
 
-        // Gravity — same as the normal update path (no swimming check for
-        // simplicity; a ridden horse that enters water just keeps moving).
+        // Vertical physics — mirrors the normal update() path so the horse
+        // receives buoyancy in water instead of sinking through it.
+        boolean inWater = !onGround && overlapsWater(world, box());
         if (onGround) {
             velocity.y = Math.max(0f, velocity.y);
+        } else if (inWater) {
+            if (fullySubmerged(world, box())) {
+                // Fully submerged: accelerate up toward the surface.
+                velocity.y = Math.min(velocity.y + SWIM_RISE_ACCEL * dt, SWIM_SURFACE_SPEED);
+            } else {
+                // Partially submerged / at surface: gentle buoyant sink.
+                velocity.y = Math.max(velocity.y - WATER_GRAVITY * dt, WATER_SINK_SPEED);
+            }
         } else {
             velocity.y -= GRAVITY * dt;
             if (velocity.y < TERMINAL_VELOCITY) velocity.y = TERMINAL_VELOCITY;

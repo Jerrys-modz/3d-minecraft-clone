@@ -289,4 +289,34 @@ class HorseRidingTest {
         assertEquals(BlockType.SADDLE, result.output(), "Recipe output must be SADDLE");
         assertEquals(1, result.outputAmount(), "Recipe should yield exactly 1 saddle");
     }
+
+    // ------------------------------------------------------------------
+    // Water buoyancy while ridden (rideTick must honour swimming physics)
+    // ------------------------------------------------------------------
+
+    @Test
+    void riddenHorseDoesNotSinkThroughWater() {
+        // A pool of water (y=1..4) over a stone floor (y=0).
+        StubWorld w = new StubWorld();
+        for (int x = -10; x <= 10; x++) {
+            for (int z = -10; z <= 10; z++) {
+                w.set(x, 0, z, BlockType.STONE);
+                for (int y = 1; y <= 4; y++) {
+                    w.set(x, y, z, BlockType.WATER);
+                }
+            }
+        }
+        // Drop the horse into the middle of the pool.
+        Mob horse = new Mob(Mob.Type.HORSE, 0f, 2.5f, 0f);
+
+        // Ride for 3 seconds with no directional input — buoyancy should keep it
+        // well above the stone floor (feet above y=1).
+        for (int i = 0; i < 90; i++) {
+            horse.rideTick(DT, false, false, false, false, 1f, 0f, w);
+        }
+
+        float feet = horse.position.y - Mob.Type.HORSE.height / 2f;
+        assertTrue(feet > 1.5f,
+                "Ridden horse should float in water, not sink to the floor: feet=" + feet);
+    }
 }
