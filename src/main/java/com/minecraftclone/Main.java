@@ -4107,6 +4107,7 @@ public class Main {
                             player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
                             player.getStats().getBreath(),  PlayerStats.MAX_BREATH,
                             player.isSubmerged(),
+                            player.getStats().getColdness(),
                             Inventory.HOTBAR_SIZE, window.getAspectRatio());
                 }
                 // A blue tint washes over the screen while your eyes are

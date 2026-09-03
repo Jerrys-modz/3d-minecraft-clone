@@ -866,14 +866,19 @@ public class Hud {
 
     /**
      * Health (red), hunger (orange), thirst (cyan-blue) and stamina (yellow) bars,
-     * stacked above the hotbar - plus a breath (cyan) bar on top, Minecraft-bubbles-style,
+     * stacked above the hotbar — plus a breath (cyan) bar on top, Minecraft-bubbles-style,
      * but only while {@code submerged}: it's meaningless (and always full) on dry land, so
      * showing it constantly would just be visual noise for a bar that never moves.
+     *
+     * <p>When {@code coldness} is above zero a frost-blue cold-exposure bar is appended
+     * at the top of the stack. The bar reaches full width at maximum cold exposure (1.0).
+     * It disappears completely once the player is warm again (coldness == 0).
      */
     public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
                                   float thirst, float maxThirst,
                                   float stamina, float maxStamina, float breath, float maxBreath,
-                                  boolean submerged, int hotbarSlotCount, float aspectRatio) {
+                                  boolean submerged, float coldness,
+                                  int hotbarSlotCount, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
 
@@ -887,15 +892,20 @@ public class Hud {
         float maxX = width / 2f;
         float y = hotbarPanelTopY() + STAT_BAR_STACK_MARGIN;
 
-        // Bottom to top: stamina, thirst (cyan-blue), hunger, health, (breath).
+        // Bottom to top: stamina, thirst (cyan-blue), hunger, health, (breath), (cold).
         // Thirst sits between hunger and stamina so the blue bar is easy to spot
-        // without dominating; breath still appears above health when submerged.
+        // without dominating; breath still appears above health when submerged;
+        // the frost-blue cold-exposure bar is topmost and only visible when cold.
         y = renderStatBar(minX, maxX, y, stamina / maxStamina, new Vector4f(0.92f, 0.80f, 0.15f, 0.95f));
         y = renderStatBar(minX, maxX, y, thirst  / maxThirst,  new Vector4f(0.20f, 0.60f, 0.90f, 0.95f));
         y = renderStatBar(minX, maxX, y, hunger  / maxHunger,  new Vector4f(0.85f, 0.55f, 0.15f, 0.95f));
         y = renderStatBar(minX, maxX, y, health  / maxHealth,  new Vector4f(0.82f, 0.15f, 0.15f, 0.95f));
         if (submerged) {
-            renderStatBar(minX, maxX, y, breath / maxBreath, new Vector4f(0.25f, 0.65f, 0.85f, 0.95f));
+            y = renderStatBar(minX, maxX, y, breath / maxBreath, new Vector4f(0.25f, 0.65f, 0.85f, 0.95f));
+        }
+        if (coldness > 0f) {
+            // Frost-blue cold-exposure bar: pale at low exposure, deeper blue-white at max.
+            renderStatBar(minX, maxX, y, Math.min(1f, coldness), new Vector4f(0.60f, 0.88f, 1.00f, 0.95f));
         }
 
         lineShader.unbind();
