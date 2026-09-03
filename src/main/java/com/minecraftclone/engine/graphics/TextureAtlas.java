@@ -379,14 +379,14 @@ public class TextureAtlas {
         paintSteamMacerator(image, 265, rnd, true);       // STEAM_MACERATOR front (working)
 
         // Electric Age tiles (266-274).
-        paintCoalGenerator(image, 266, rnd, false);       // COAL_GENERATOR body (all sides)
-        paintCoalGenerator(image, 267, rnd, false);       // COAL_GENERATOR front (cold)
-        paintCoalGenerator(image, 268, rnd, true);        // COAL_GENERATOR front (burning)
+        paintCoalGenerator(image, 266, rnd, false, false); // COAL_GENERATOR body (all sides)
+        paintCoalGenerator(image, 267, rnd, true, false);  // COAL_GENERATOR front (cold)
+        paintCoalGenerator(image, 268, rnd, true, true);   // COAL_GENERATOR front (burning)
         paintCopperCable(image, 269, rnd);                // COPPER_CABLE
         paintGoldCable(image, 270, rnd);                  // GOLD_CABLE
-        paintElectricFurnace(image, 271, rnd, false);     // ELECTRIC_FURNACE body
-        paintElectricFurnace(image, 272, rnd, false);     // ELECTRIC_FURNACE front (idle)
-        paintElectricFurnace(image, 273, rnd, true);      // ELECTRIC_FURNACE front (active)
+        paintElectricFurnace(image, 271, rnd, false, false); // ELECTRIC_FURNACE body
+        paintElectricFurnace(image, 272, rnd, true, false);  // ELECTRIC_FURNACE front (idle)
+        paintElectricFurnace(image, 273, rnd, true, true);   // ELECTRIC_FURNACE front (active)
         paintBatteryBlock(image, 274, rnd);               // BATTERY_BLOCK
 
         return image;
@@ -2249,9 +2249,11 @@ public class TextureAtlas {
      * COAL_GENERATOR body / front (tiles 266-268): a dark iron machine box
      * with ember glow when burning.
      */
-    private void paintCoalGenerator(BufferedImage img, int index, Random rnd, boolean burning) {
+    private void paintCoalGenerator(BufferedImage img, int index, Random rnd,
+                                    boolean front, boolean burning) {
         // Iron-grey hull.
         paintMachineBox(img, index, rnd, 0x6E7078, 0x404248, 0x9EA0A8);
+        if (!front) return;
         if (burning) {
             // Burning front: small ember window in the lower-centre.
             int ox = tileX(index), oy = tileY(index);
@@ -2330,8 +2332,10 @@ public class TextureAtlas {
      * ELECTRIC_FURNACE body / front (tiles 271-273): an iron hull with a
      * blue-tinged coil window; coils glow amber-white when active.
      */
-    private void paintElectricFurnace(BufferedImage img, int index, Random rnd, boolean active) {
+    private void paintElectricFurnace(BufferedImage img, int index, Random rnd,
+                                      boolean front, boolean active) {
         paintMachineBox(img, index, rnd, 0x6E7078, 0x404248, 0x9EA0A8);
+        if (!front) return;
         int ox = tileX(index), oy = tileY(index);
         // Central coil window.
         for (int y = 4; y < 12; y++) {

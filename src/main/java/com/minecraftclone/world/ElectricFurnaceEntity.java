@@ -131,11 +131,9 @@ public final class ElectricFurnaceEntity implements BlockEntity, StorageContaine
         com.minecraftclone.world.pipes.PipeNetwork net =
                 world.pipeNetworks().networkAt(
                         com.minecraftclone.world.pipes.PipeType.ENERGY, posX, posY, posZ);
-        if (net == null || net.minTier == null) return 1f;
-        // minTier is a SteamPipeTier in the network snapshot; for ENERGY networks
-        // the PipeNetworkManager uses CableTier throughput instead via the
-        // overridden minTierThroughput stored in the snapshot.
-        // Until the generic tier field lands, read the block directly:
+        if (net == null) return 1f;
+        // minTier describes steam pipes and is null for ENERGY networks, so
+        // determine the cable network's weakest link from its member blocks.
         CableTier weakest = null;
         for (long key : net.cells) {
             int cx = (int)(key & 0x1FFFFFL) << 21 >> 21;
@@ -157,33 +155,46 @@ public final class ElectricFurnaceEntity implements BlockEntity, StorageContaine
      */
     private EuSource findEuSource() {
         if (!attached || world == null) return null;
-        // Direct adjacency — prefer generators over batteries.
+        CoalGeneratorEntity emptyGenerator = null;
+        BatteryBlockEntity chargedBattery = null;
+        BatteryBlockEntity emptyBattery = null;
+
+        // Direct adjacency — prefer charged generators over batteries.
         for (int[] d : FACES) {
             BlockEntity e = world.blockEntityAt(posX+d[0], posY+d[1], posZ+d[2]);
-            if (e instanceof CoalGeneratorEntity g) return g;
-        }
-        for (int[] d : FACES) {
-            BlockEntity e = world.blockEntityAt(posX+d[0], posY+d[1], posZ+d[2]);
-            if (e instanceof BatteryBlockEntity b) return b;
+            if (e instanceof CoalGeneratorEntity g) {
+                if (g.euStored() > 0f) return g;
+                if (emptyGenerator == null) emptyGenerator = g;
+            } else if (e instanceof BatteryBlockEntity b) {
+                if (b.euStored() > 0f) {
+                    if (chargedBattery == null) chargedBattery = b;
+                } else if (emptyBattery == null) emptyBattery = b;
+            }
         }
         // Through cable network.
         com.minecraftclone.world.pipes.PipeNetwork net =
                 world.pipeNetworks().networkAt(
                         com.minecraftclone.world.pipes.PipeType.ENERGY, posX, posY, posZ);
-        if (net == null) return null;
-        CoalGeneratorEntity gen = null;
-        BatteryBlockEntity  bat = null;
-        for (long key : net.cells) {
-            int cx = (int)(key & 0x1FFFFFL) << 21 >> 21;
-            int cy = (int)((key >> 21) & 0x1FFFFFL) << 21 >> 21;
-            int cz = (int)((key >> 42) & 0x1FFFFFL) << 21 >> 21;
-            for (int[] d : FACES) {
-                BlockEntity e = world.blockEntityAt(cx+d[0], cy+d[1], cz+d[2]);
-                if (e instanceof CoalGeneratorEntity g && gen == null) gen = g;
-                if (e instanceof BatteryBlockEntity  b && bat == null) bat = b;
+        if (net != null) {
+            for (long key : net.cells) {
+                int cx = (int)(key & 0x1FFFFFL) << 21 >> 21;
+                int cy = (int)((key >> 21) & 0x1FFFFFL) << 21 >> 21;
+                int cz = (int)((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+                for (int[] d : FACES) {
+                    BlockEntity e = world.blockEntityAt(cx+d[0], cy+d[1], cz+d[2]);
+                    if (e instanceof CoalGeneratorEntity g) {
+                        if (g.euStored() > 0f) return g;
+                        if (emptyGenerator == null) emptyGenerator = g;
+                    } else if (e instanceof BatteryBlockEntity b) {
+                        if (b.euStored() > 0f) {
+                            if (chargedBattery == null) chargedBattery = b;
+                        } else if (emptyBattery == null) emptyBattery = b;
+                    }
+                }
             }
         }
-        return gen != null ? gen : bat;
+        if (chargedBattery != null) return chargedBattery;
+        return emptyGenerator != null ? emptyGenerator : emptyBattery;
     }
 
     private void advance(float dt) {

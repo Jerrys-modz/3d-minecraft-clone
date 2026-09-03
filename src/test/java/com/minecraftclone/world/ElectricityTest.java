@@ -2,7 +2,11 @@ package com.minecraftclone.world;
 
 import com.minecraftclone.player.Crafting;
 import com.minecraftclone.player.ItemStack;
+import com.minecraftclone.world.gen.WorldGenSettings;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -15,6 +19,16 @@ import static org.junit.jupiter.api.Assertions.*;
 class ElectricityTest {
 
     private static final float DT = 0.05f; // 20 ticks per second
+
+    @TempDir
+    Path dir;
+
+    private World newWorld() {
+        World world = new World(42, new WorldGenSettings(), null,
+                dir.resolve("w" + System.nanoTime()), DimensionType.OVERWORLD, true);
+        world.ensureChunk(0, 0);
+        return world;
+    }
 
     // ------------------------------------------------------------------
     // BlockType registration
@@ -134,6 +148,20 @@ class ElectricityTest {
         // Run for 1 second.
         for (int i = 0; i < 20; i++) gen.tick(DT);
         assertTrue(gen.euStored() > 0f, "Generator must produce EU while burning coal");
+    }
+
+    @Test
+    void generatorIsActiveOnlyWhileBurning() {
+        CoalGeneratorEntity gen = new CoalGeneratorEntity();
+        assertFalse(gen.isActive());
+
+        gen.insert(0, BlockType.COAL, 1);
+        gen.tick(DT);
+        assertTrue(gen.isActive());
+
+        gen.tick(Furnace.COAL_BURN_TIME);
+        assertTrue(gen.euStored() > 0f);
+        assertFalse(gen.isActive(), "Stored EU alone must not light the generator front");
     }
 
     @Test
@@ -305,6 +333,45 @@ class ElectricityTest {
 
         assertNotNull(ef.typeOf(ElectricFurnaceEntity.SLOT_OUTPUT),
                 "Electric furnace must smelt when powered by a battery");
+    }
+
+    @Test
+    void goldCableAppliesItsThroughputWhenNetworkHasNoSteamTier() {
+        World world = newWorld();
+        world.setBlock(0, 64, 1, BlockType.GOLD_CABLE);
+        world.setBlock(0, 64, 2, BlockType.BATTERY_BLOCK);
+        BatteryBlockEntity battery = world.getOrCreateBatteryBlock(0, 64, 2);
+        battery.chargeEU(1000f);
+
+        ElectricFurnaceEntity furnace = world.getOrCreateElectricFurnace(0, 64, 0);
+        furnace.setSlot(ElectricFurnaceEntity.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        float before = battery.euStored();
+        furnace.tick(1f);
+
+        float baseEuPerSecond = ElectricFurnaceEntity.EU_PER_SMELT
+                / ElectricFurnaceEntity.SMELT_SECONDS;
+        assertEquals(baseEuPerSecond * CableTier.GOLD.throughput,
+                before - battery.euStored(), 0.01f);
+    }
+
+    @Test
+    void emptyAdjacentGeneratorDoesNotHideChargedNetworkBattery() {
+        World world = newWorld();
+        world.setBlock(1, 64, 0, BlockType.COAL_GENERATOR);
+        CoalGeneratorEntity generator = world.getOrCreateCoalGenerator(1, 64, 0);
+
+        world.setBlock(0, 64, 1, BlockType.COPPER_CABLE);
+        world.setBlock(0, 64, 2, BlockType.BATTERY_BLOCK);
+        BatteryBlockEntity battery = world.getOrCreateBatteryBlock(0, 64, 2);
+        battery.chargeEU(1000f);
+
+        ElectricFurnaceEntity furnace = world.getOrCreateElectricFurnace(0, 64, 0);
+        furnace.setSlot(ElectricFurnaceEntity.SLOT_INPUT, BlockType.IRON_ORE, 1);
+        furnace.tick(1f);
+
+        assertEquals(0f, generator.euStored(), 0.01f);
+        assertTrue(battery.euStored() < 1000f);
+        assertTrue(furnace.progressFraction() > 0f);
     }
 
     @Test

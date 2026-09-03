@@ -91,9 +91,9 @@ public final class CoalGeneratorEntity implements BlockEntity, StorageContainer,
         return MAX_EU > 0 ? Math.min(1f, eu / MAX_EU) : 0f;
     }
 
-    /** True while the buffer isn't full (so the generator has reason to run). */
+    /** True while the generator is actively burning fuel. */
     @Override
-    public boolean isActive() { return eu < MAX_EU || burnTime > 0f; }
+    public boolean isActive() { return burnTime > 0f; }
 
     // ------------------------------------------------------------------
     // Simulation

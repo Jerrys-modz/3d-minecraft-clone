@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -36,6 +37,20 @@ class TextureAtlasTest {
         BufferedImage image = atlas();
         assertEquals(TextureAtlas.ATLAS_PX, image.getWidth());
         assertEquals(TextureAtlas.ATLAS_PX, image.getHeight());
+    }
+
+    @Test
+    void electricMachineBodyTilesOmitFrontPanels() {
+        BufferedImage image = atlas();
+        BufferedImage generatorBody = tile(image, 266);
+        BufferedImage generatorFront = tile(image, 267);
+        BufferedImage furnaceBody = tile(image, 271);
+        BufferedImage furnaceFront = tile(image, 272);
+
+        assertEquals(0x101010, generatorFront.getRGB(6, 11) & 0xFFFFFF);
+        assertNotEquals(0x101010, generatorBody.getRGB(6, 11) & 0xFFFFFF);
+        assertEquals(0x202030, furnaceFront.getRGB(6, 6) & 0xFFFFFF);
+        assertNotEquals(0x202030, furnaceBody.getRGB(6, 6) & 0xFFFFFF);
     }
 
     /**
