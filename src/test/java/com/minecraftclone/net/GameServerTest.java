@@ -99,7 +99,7 @@ class GameServerTest {
             b.sendJoin("Bob");
             assertInstanceOf(Packets.Welcome.class, awaitPacket(b, Packets.Welcome.class));
             // Alice moves; Bob should receive her state.
-            a.sendMove(new Packets.Move(100f, 70f, 200f, 45f, -10f, true, false, true));
+            a.sendMove(new Packets.Move(100f, 70f, 200f, 45f, -10f, true, false, true, 20f, 20f, (short) 0));
             Packets.PlayerState state = assertInstanceOf(Packets.PlayerState.class,
                     awaitPacketMatching(b, Packets.PlayerState.class, p -> ((Packets.PlayerState) p).x() == 100f));
             assertEquals(100f, state.x());
@@ -434,7 +434,7 @@ class GameServerTest {
             }
 
             // Bob stands on the item and picks it up: he gets GIVE, Alice gets REMOVE.
-            b.sendMove(new Packets.Move(ix, iy, iz, 0f, 0f, true, false, false));
+            b.sendMove(new Packets.Move(ix, iy, iz, 0f, 0f, true, false, false, 20f, 20f, (short) 0));
             b.sendItemPickup(addB.id());
             Packets.ItemGive give = assertInstanceOf(Packets.ItemGive.class,
                     awaitPacketMatching(b, Packets.ItemGive.class, p -> true));
@@ -545,7 +545,7 @@ class GameServerTest {
                 Packets.PlayerJoined bobJoin = assertInstanceOf(Packets.PlayerJoined.class,
                         awaitPacketMatching(a, Packets.PlayerJoined.class,
                                 p -> ((Packets.PlayerJoined) p).name().equals("Bob")));
-                b.sendMove(new Packets.Move(0.5f, 70f, 0.5f, 0f, 0f, true, false, false));
+                b.sendMove(new Packets.Move(0.5f, 70f, 0.5f, 0f, 0f, true, false, false, 20f, 20f, (short) 0));
                 Thread.sleep(200);
                 a.sendPlayerAttack(bobJoin.id(), 5f);
                 long deadline = System.currentTimeMillis() + 1200;
@@ -615,7 +615,7 @@ class GameServerTest {
             Packets.PlayerJoined bobJoin = assertInstanceOf(Packets.PlayerJoined.class,
                     awaitPacketMatching(a, Packets.PlayerJoined.class, p -> ((Packets.PlayerJoined) p).name().equals("Bob")));
             // ...and Bob stands next to her so the reach check passes.
-            b.sendMove(new Packets.Move(welcomeA.spawnX(), welcomeA.spawnY(), welcomeA.spawnZ(), 0f, 0f, true, false, false));
+            b.sendMove(new Packets.Move(welcomeA.spawnX(), welcomeA.spawnY(), welcomeA.spawnZ(), 0f, 0f, true, false, false, 20f, 20f, (short) 0));
 
             a.sendPlayerAttack(bobJoin.id(), 2f);
             Packets.PlayerDamage hit = assertInstanceOf(Packets.PlayerDamage.class,
@@ -638,7 +638,7 @@ class GameServerTest {
             // distinctive amount across more than one cooldown window. Nothing
             // should EVER be relayed - the move travels on Bob's socket, so
             // give it a beat to land before the first swing.
-            b.sendMove(new Packets.Move(welcomeA.spawnX() + 100f, welcomeA.spawnY(), welcomeA.spawnZ(), 0f, 0f, true, false, false));
+            b.sendMove(new Packets.Move(welcomeA.spawnX() + 100f, welcomeA.spawnY(), welcomeA.spawnZ(), 0f, 0f, true, false, false, 20f, 20f, (short) 0));
             Thread.sleep(300);
             long rejectWindowEnd = System.currentTimeMillis() + 2500;
             long nextSwing = System.currentTimeMillis();

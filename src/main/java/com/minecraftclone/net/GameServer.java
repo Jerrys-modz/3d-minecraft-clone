@@ -103,6 +103,12 @@ public class GameServer implements AutoCloseable {
         volatile long lastAttackNanos;
         /** True while this player is in bed voting to skip the night (multiplayer sleep). */
         volatile boolean sleepVoted;
+        /** Current health reported by the client's last Move packet (relayed to other players). */
+        volatile float health = 20f;
+        /** Current hunger reported by the client's last Move packet (relayed to other players). */
+        volatile float hunger = 20f;
+        /** BlockType id of the item the client is currently holding (relayed to other players). */
+        volatile short heldItemId = 0;
 
         Client(Socket socket, DataOutputStream out) {
             this.socket = socket;
@@ -821,6 +827,11 @@ public class GameServer implements AutoCloseable {
         client.onGround = move.onGround();
         client.flying = move.flying();
         client.sprinting = move.sprinting();
+        // Clamp to sane ranges; a malicious client can't push illegal values
+        // past the server, but we still relay them verbatim to other clients.
+        client.health = Math.max(0f, Math.min(100f, move.health()));
+        client.hunger = Math.max(0f, Math.min(100f, move.hunger()));
+        client.heldItemId = move.heldItemId();
     }
 
     /**
@@ -1362,7 +1373,8 @@ public class GameServer implements AutoCloseable {
             if (!c.joined) continue;
             try {
                 broadcastOthers(c, Packets.encodePlayerState(new Packets.PlayerState(
-                        c.id, c.dimension, c.x, c.y, c.z, c.yaw, c.pitch, c.onGround, c.flying, c.sprinting)));
+                        c.id, c.dimension, c.x, c.y, c.z, c.yaw, c.pitch, c.onGround, c.flying, c.sprinting,
+                        c.health, c.hunger, c.heldItemId)));
             } catch (IOException e) {
                 disconnect(c);
             }

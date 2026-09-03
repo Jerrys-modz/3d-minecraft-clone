@@ -76,7 +76,7 @@ class PacketsTest {
 
     @Test
     void moveRoundTrips() throws Exception {
-        Packets.Move in = new Packets.Move(1.5f, 64.25f, -3f, 90f, -30f, true, false, true);
+        Packets.Move in = new Packets.Move(1.5f, 64.25f, -3f, 90f, -30f, true, false, true, 18.5f, 16f, (short) 7);
         Packets.Move out = assertInstanceOf(Packets.Move.class, roundTrip(in));
         assertEquals(in.x(), out.x());
         assertEquals(in.y(), out.y());
@@ -86,6 +86,9 @@ class PacketsTest {
         assertEquals(in.onGround(), out.onGround());
         assertEquals(in.flying(), out.flying());
         assertEquals(in.sprinting(), out.sprinting());
+        assertEquals(in.health(), out.health());
+        assertEquals(in.hunger(), out.hunger());
+        assertEquals(in.heldItemId(), out.heldItemId());
     }
 
     @Test
@@ -163,7 +166,7 @@ class PacketsTest {
 
     @Test
     void playerStateRoundTrips() throws Exception {
-        Packets.PlayerState in = new Packets.PlayerState(3, (byte) 0, 10f, 70f, 20f, -90f, 0f, true, false, false);
+        Packets.PlayerState in = new Packets.PlayerState(3, (byte) 0, 10f, 70f, 20f, -90f, 0f, true, false, false, 14f, 20f, (short) 3);
         Packets.PlayerState out = assertInstanceOf(Packets.PlayerState.class, roundTrip(in));
         assertEquals(in.id(), out.id());
         assertEquals(in.x(), out.x());
@@ -174,6 +177,9 @@ class PacketsTest {
         assertEquals(in.onGround(), out.onGround());
         assertEquals(in.flying(), out.flying());
         assertEquals(in.sprinting(), out.sprinting());
+        assertEquals(in.health(), out.health());
+        assertEquals(in.hunger(), out.hunger());
+        assertEquals(in.heldItemId(), out.heldItemId());
     }
 
     @Test

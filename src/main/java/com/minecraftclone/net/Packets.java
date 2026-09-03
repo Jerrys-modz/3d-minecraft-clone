@@ -130,7 +130,14 @@ public final class Packets {
     public record Join(String name) {
     }
 
-    public record Move(float x, float y, float z, float yaw, float pitch, boolean onGround, boolean flying, boolean sprinting) {
+    /**
+     * C→S player movement intent. Carries position/look and the player's live
+     * survival stats (health, hunger) plus held item id so other clients can
+     * display a health bar and held-item indicator above this player's figure.
+     */
+    public record Move(float x, float y, float z, float yaw, float pitch,
+                       boolean onGround, boolean flying, boolean sprinting,
+                       float health, float hunger, short heldItemId) {
     }
 
     public record PlaceBlock(byte dimension, int x, int y, int z, short blockId, byte orientation, boolean overlay) {
@@ -248,8 +255,14 @@ public final class Packets {
     public record PlayerLeft(int id) {
     }
 
+    /**
+     * S→C relayed player state. Extends the basic position/look snapshot with the
+     * sender's survival stats and held item so recipients can render a health bar
+     * and held-item indicator above the remote figure.
+     */
     public record PlayerState(int id, byte dimension, float x, float y, float z, float yaw, float pitch,
-                              boolean onGround, boolean flying, boolean sprinting) {
+                              boolean onGround, boolean flying, boolean sprinting,
+                              float health, float hunger, short heldItemId) {
     }
 
     public record BlockChange(byte dimension, int x, int y, int z, short blockId, byte orientation, boolean overlay) {
@@ -298,6 +311,9 @@ public final class Packets {
         out.writeBoolean(move.onGround());
         out.writeBoolean(move.flying());
         out.writeBoolean(move.sprinting());
+        out.writeFloat(move.health());
+        out.writeFloat(move.hunger());
+        out.writeShort(move.heldItemId());
         out.close();
         return buf.toByteArray();
     }
@@ -601,6 +617,9 @@ public final class Packets {
         out.writeBoolean(state.onGround());
         out.writeBoolean(state.flying());
         out.writeBoolean(state.sprinting());
+        out.writeFloat(state.health());
+        out.writeFloat(state.hunger());
+        out.writeShort(state.heldItemId());
         out.close();
         return buf.toByteArray();
     }
@@ -767,7 +786,8 @@ public final class Packets {
         return switch (op) {
             case OP_JOIN -> new Join(in.readUTF());
             case OP_MOVE -> new Move(in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(), in.readFloat(),
-                    in.readBoolean(), in.readBoolean(), in.readBoolean());
+                    in.readBoolean(), in.readBoolean(), in.readBoolean(),
+                    in.readFloat(), in.readFloat(), in.readShort());
             case OP_PLACE_BLOCK -> new PlaceBlock(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readShort(), in.readByte(), in.readBoolean());
             case OP_BREAK_BLOCK -> new BreakBlock(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readBoolean());
             case OP_CHAT -> new Chat(in.readUTF());
@@ -811,7 +831,8 @@ public final class Packets {
                     in.readFloat(), in.readFloat(), in.readFloat());
             case OP_PLAYER_LEFT -> new PlayerLeft(in.readInt());
             case OP_PLAYER_STATE -> new PlayerState(in.readInt(), in.readByte(), in.readFloat(), in.readFloat(), in.readFloat(),
-                    in.readFloat(), in.readFloat(), in.readBoolean(), in.readBoolean(), in.readBoolean());
+                    in.readFloat(), in.readFloat(), in.readBoolean(), in.readBoolean(), in.readBoolean(),
+                    in.readFloat(), in.readFloat(), in.readShort());
             case OP_BLOCK_CHANGE -> new BlockChange(in.readByte(), in.readInt(), in.readInt(), in.readInt(), in.readShort(), in.readByte(), in.readBoolean());
             case OP_CHUNK_DATA -> {
                 byte dim = in.readByte();
