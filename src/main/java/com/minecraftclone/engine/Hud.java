@@ -683,12 +683,13 @@ public class Hud {
     }
 
     /**
-     * Bottom Y of the held-item name: sits above the four status bars so it
-     * doesn't draw through health/hunger.
+     * Bottom Y of the held-item name: sits above the maximum status-bar stack
+     * (stamina, thirst, hunger, health, breath, coldness — 6 bars) so it never
+     * draws through any bar, even when both optional bars are visible.
      */
     public static float hotbarHeldNameY() {
         float panelTop = -1f + HOTBAR_BOTTOM_MARGIN + HOTBAR_SLOT_SIZE + HOTBAR_PADDING;
-        return panelTop + STAT_BAR_STACK_MARGIN + 4f * (STAT_BAR_HEIGHT + STAT_BAR_GAP);
+        return panelTop + STAT_BAR_STACK_MARGIN + 6f * (STAT_BAR_HEIGHT + STAT_BAR_GAP);
     }
 
     public static String titleFromEnum(String name) {

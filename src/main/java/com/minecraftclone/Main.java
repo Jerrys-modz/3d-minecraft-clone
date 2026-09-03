@@ -2994,7 +2994,7 @@ public class Main {
                 float playerY = player.getPosition().y;
                 TerrainGenerator.Biome pBiome = world.getBiome((int) Math.floor(px), (int) Math.floor(pz));
                 float localTemp = climate.temperatureFor(pBiome, playerY, world.getTerrainHeight((int) Math.floor(px), (int) Math.floor(pz)));
-                float coldFactor = Math.max(0f, Math.min(1f, (2f - localTemp) / 22f));
+                float coldFactor = Climate.coldFactor(localTemp);
                 player.update(dt, input, world, coldFactor, settings.getDifficulty());
 
                 // --- Horse: steer mounted horse and glue player to its back --

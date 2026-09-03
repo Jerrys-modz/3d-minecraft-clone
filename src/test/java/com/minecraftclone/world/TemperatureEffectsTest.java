@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TemperatureEffectsTest {
 
     // ------------------------------------------------------------------
-    // Cold-factor formula  (from Main.java)
+    // Cold-factor formula  (Climate.coldFactor)
     //   coldFactor = clamp(0, 1,  (2 - localTemp) / 22)
     //
     //   localTemp =  2°C  →  coldFactor = 0.0  (threshold: exactly warm enough)
@@ -35,29 +35,25 @@ class TemperatureEffectsTest {
     //   localTemp = 20°C  →  coldFactor = 0.0  (clamped, positive temperatures are warm)
     // ------------------------------------------------------------------
 
-    private static float coldFactor(float localTempCelsius) {
-        return Math.max(0f, Math.min(1f, (2f - localTempCelsius) / 22f));
-    }
-
     @Test
     void warmTemperatureProducesNoColdFactor() {
-        assertEquals(0f, coldFactor(20f),  0.001f, "20°C (plains summer) must be fully warm");
-        assertEquals(0f, coldFactor(34f),  0.001f, "34°C (desert) must be fully warm");
-        assertEquals(0f, coldFactor(2f),   0.001f, "2°C is the exact warm threshold");
+        assertEquals(0f, Climate.coldFactor(20f),  0.001f, "20°C (plains summer) must be fully warm");
+        assertEquals(0f, Climate.coldFactor(34f),  0.001f, "34°C (desert) must be fully warm");
+        assertEquals(0f, Climate.coldFactor(2f),   0.001f, "2°C is the exact warm threshold");
     }
 
     @Test
     void freezingTemperatureProducesMaxColdFactor() {
-        assertEquals(1f, coldFactor(-20f), 0.001f, "-20°C must hit the cold cap");
-        assertEquals(1f, coldFactor(-50f), 0.001f, "-50°C is clamped to 1");
+        assertEquals(1f, Climate.coldFactor(-20f), 0.001f, "-20°C must hit the cold cap");
+        assertEquals(1f, Climate.coldFactor(-50f), 0.001f, "-50°C is clamped to 1");
     }
 
     @Test
     void coldFactorScalesLinearlyBetweenThresholds() {
         // 2°C → 0, -20°C → 1. Midpoint -9°C → 0.5.
-        assertEquals(0.5f, coldFactor(-9f), 0.001f, "-9°C should give 50% cold factor");
+        assertEquals(0.5f, Climate.coldFactor(-9f), 0.001f, "-9°C should give 50% cold factor");
         // 2°C → 0, so -8°C is 10/22 ≈ 0.4545
-        assertEquals((2f - (-8f)) / 22f, coldFactor(-8f), 0.001f);
+        assertEquals((2f - (-8f)) / 22f, Climate.coldFactor(-8f), 0.001f);
     }
 
     // ------------------------------------------------------------------
@@ -72,8 +68,8 @@ class TemperatureEffectsTest {
         Climate climate = new Climate(new Calendar(), cycle);
         float desertTemp  = climate.temperatureFor(Biome.DESERT);
         float savannaTemp = climate.temperatureFor(Biome.SAVANNA);
-        assertEquals(0f, coldFactor(desertTemp),  0.001f, "Desert is never cold");
-        assertEquals(0f, coldFactor(savannaTemp), 0.001f, "Savanna is never cold");
+        assertEquals(0f, Climate.coldFactor(desertTemp),  0.001f, "Desert is never cold");
+        assertEquals(0f, Climate.coldFactor(savannaTemp), 0.001f, "Savanna is never cold");
     }
 
     @Test
@@ -83,9 +79,9 @@ class TemperatureEffectsTest {
         Climate climate = new Climate(new Calendar(), cycle);
         float tundraTemp = climate.temperatureFor(Biome.TUNDRA);   // base -10°C
         float snowyTemp  = climate.temperatureFor(Biome.SNOWY);    // base  -4°C
-        assertTrue(coldFactor(tundraTemp) > 0.3f,
+        assertTrue(Climate.coldFactor(tundraTemp) > 0.3f,
                 "Tundra should be meaningfully cold at noon: temp=" + tundraTemp);
-        assertTrue(coldFactor(snowyTemp) > 0f,
+        assertTrue(Climate.coldFactor(snowyTemp) > 0f,
                 "Snowy biome should register some cold at noon: temp=" + snowyTemp);
     }
 
@@ -102,7 +98,7 @@ class TemperatureEffectsTest {
         float seaLevel = climate.temperatureFor(Biome.MOUNTAIN, 42f, 42f);
         float summit   = climate.temperatureFor(Biome.MOUNTAIN, 100f, 100f);
         assertTrue(summit < seaLevel, "Summit must be colder than the base");
-        assertTrue(coldFactor(summit) >= coldFactor(seaLevel),
+        assertTrue(Climate.coldFactor(summit) >= Climate.coldFactor(seaLevel),
                 "Summit cold factor must be at least as high as base");
     }
 
@@ -127,7 +123,7 @@ class TemperatureEffectsTest {
                 "A snowy surface in mid-winter should be below freezing: " + surface);
         assertTrue(cave > surface,
                 "Cave must be warmer than surface (" + surface + "C) in winter");
-        assertTrue(coldFactor(cave) < coldFactor(surface),
+        assertTrue(Climate.coldFactor(cave) < Climate.coldFactor(surface),
                 "Cave cold factor must be lower than surface cold factor in winter");
     }
 
