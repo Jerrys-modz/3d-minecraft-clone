@@ -1812,7 +1812,11 @@ public class World implements BlockAccessor {
                 it.remove();
                 continue;
             }
-            mob.update(dt, this, rnd, targetPos);
+            // Mounted mobs (horses the player is riding) skip their AI update;
+            // the game loop calls rideTick() for them instead.
+            if (!mob.isMounted()) {
+                mob.update(dt, this, rnd, targetPos);
+            }
             // Remove dead mobs immediately after update completes, using the same
             // removal path as combat deaths, so a mob killed by drowning doesn't
             // continue rendering or attacking on subsequent frames.
@@ -1870,7 +1874,9 @@ public class World implements BlockAccessor {
                 it.remove();
                 continue;
             }
-            mob.update(dt, this, rnd, target);
+            if (!mob.isMounted()) {
+                mob.update(dt, this, rnd, target);
+            }
             float melee = mob.getMeleeRequest();
             if (melee > 0f) {
                 damage[nearest] += melee;
@@ -2112,16 +2118,19 @@ public class World implements BlockAccessor {
 
     static Mob.Type pickSurfaceMobType(Random rnd, TerrainGenerator.Biome biome, Difficulty difficulty) {
         if (difficulty != null && !difficulty.allowsHostileMobs()) {
-            Mob.Type[] passives = {Mob.Type.PIG, Mob.Type.COW, Mob.Type.SHEEP};
+            Mob.Type[] passives = {Mob.Type.PIG, Mob.Type.COW, Mob.Type.SHEEP, Mob.Type.HORSE};
             return passives[rnd.nextInt(passives.length)];
         }
         float roll = rnd.nextFloat();
+        boolean plains = biome == TerrainGenerator.Biome.PLAINS || biome == TerrainGenerator.Biome.SAVANNA;
         boolean woods = biome == TerrainGenerator.Biome.FOREST || biome == TerrainGenerator.Biome.TAIGA
                 || biome == TerrainGenerator.Biome.CHERRY_GROVE || biome == TerrainGenerator.Biome.FLOWER_MEADOW;
         boolean frozen = biome == TerrainGenerator.Biome.SNOWY || biome == TerrainGenerator.Biome.TUNDRA
                 || biome == TerrainGenerator.Biome.FROZEN_OCEAN || biome == TerrainGenerator.Biome.MOUNTAIN;
         if (frozen && roll < 0.04f) return Mob.Type.POLAR_BEAR; // rare, and dangerous
         if (woods && roll < 0.14f) return Mob.Type.WOLF;        // uncommon
+        // Horses spawn more commonly on open plains and savannas.
+        if (plains && roll < 0.40f) return Mob.Type.HORSE;
         Mob.Type[] common = {Mob.Type.PIG, Mob.Type.COW, Mob.Type.SHEEP,
                 Mob.Type.ZOMBIE, Mob.Type.SKELETON};
         return common[rnd.nextInt(common.length)];

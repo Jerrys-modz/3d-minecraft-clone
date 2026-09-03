@@ -225,6 +225,12 @@ public final class Crafting {
         //   ...
         shaped3x3("P.P", "PPP", "...", BlockType.OAK_BOAT, 1);
 
+        // Saddle: wool for the seat, side flaps, and an iron buckle.
+        //   U.U   <- seat sides  (U = wool)
+        //   UUU   <- girth
+        //   .I.   <- iron buckle (I = iron ingot)
+        shaped3x3("U.U", "UUU", ".I.", BlockType.SADDLE, 1);
+
         // --- Steam Age: bronze alloy + machines ---
         // Bronze blend: 1 copper + 1 tin (dust or ingot forms), smelts to bronze.
         shapeless2x2(BlockType.BRONZE_DUST, 1, BlockType.COPPER_DUST, BlockType.TIN_DUST);
