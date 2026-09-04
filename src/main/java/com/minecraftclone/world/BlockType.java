@@ -740,6 +740,55 @@ public enum BlockType {
     BONE_MEAL(455, 0),
 
     // -----------------------------------------------------------------------
+    // Fishing: string from spiders → fishing rod → raw/cooked fish.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Spider silk string — dropped by spiders when killed.  Used primarily to
+     * craft a {@link #FISHING_ROD}.
+     */
+    STRING(456, 0),
+
+    /**
+     * Raw fish caught by fishing.  Restores 2 hunger; smelt it into
+     * {@link #COOKED_FISH} for 4 hunger.
+     */
+    RAW_FISH(457, 2),
+
+    /**
+     * Cooked fish smelted from {@link #RAW_FISH}.  Restores 4 hunger —
+     * a better food source than its raw form.
+     */
+    COOKED_FISH(458, 4),
+
+    /**
+     * Fishing rod — right-click open water to cast a bobber; right-click
+     * again to reel it in.  When the bobber bobs (fish on the line) you catch
+     * one {@link #RAW_FISH}.  Crafted at a crafting table: three sticks in a
+     * diagonal plus two string.
+     */
+    FISHING_ROD(459, 0),
+
+    // -----------------------------------------------------------------------
+    // Explosives and blast loot
+    // -----------------------------------------------------------------------
+
+    /**
+     * Gunpowder — dropped by creepers when killed by a player (not when they
+     * explode on their own).  The primary ingredient for {@link #TNT}.
+     */
+    GUNPOWDER(522, 0),
+
+    /**
+     * TNT — a placeable, craftable explosive block (5 gunpowder + 4 sand in a
+     * checkerboard at a crafting table).  Right-click a placed TNT to ignite
+     * it; it explodes immediately, carving a roughly 4-block-radius crater and
+     * dealing heavy damage to nearby entities.  TNT caught in another blast
+     * chain-detonates.
+     */
+    TNT(523, true, false, 275, 275, 275),
+
+    // -----------------------------------------------------------------------
     // Tinkers' Construct sentinels: two inventory-item slots that carry the
     // real part/tool data in a TinkersItem payload inside ItemStack.
     // All materials are supported dynamically via TinkersRegistry — no per-
@@ -1277,6 +1326,11 @@ public enum BlockType {
     /** True for either variant of tilled farmland (dry or hydrated). */
     public boolean isFarmland() {
         return this == FARMLAND || this == FARMLAND_WET;
+    }
+
+    /** True for a fishing rod (right-click water to cast; right-click again to reel in). */
+    public boolean isFishingRod() {
+        return this == FISHING_ROD;
     }
 
     // -----------------------------------------------------------------------

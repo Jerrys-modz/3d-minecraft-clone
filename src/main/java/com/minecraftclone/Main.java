@@ -3502,7 +3502,11 @@ public class Main {
 
                 // Right-click a breedable passive mob (pig/cow/sheep) with the right food to
                 // start love mode.  The food item is consumed from the hotbar (except in Creative).
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
+                // Single-player only: in multiplayer targetedMob is a remoteMobs mirror and feeding
+                // it locally would not notify the server.  A dedicated feed packet is needed before
+                // enabling this in multiplayer.
+                if (netClient == null
+                        && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
                         && targetedMob != null
                         && com.minecraftclone.world.Mob.isBreedable(targetedMob.type)) {
                     if (targetedMob.isBreedingCapable() && targetedMob.feed(heldItem)) {
@@ -3519,6 +3523,38 @@ public class Main {
                                 + targetedMob.type.name().substring(1).toLowerCase();
                         showMessage(messages, mobName + " is already in love mode!",
                                 new Vector4f(1f, 0.5f, 0.8f, 1f), 1.5f);
+                    }
+                }
+
+                // Fishing rod: right-click to cast a bobber, right-click again to reel in.
+                // Only in single-player (netClient == null); multiplayer needs a server packet.
+                if (netClient == null && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
+                        && heldItem != null && heldItem.isFishingRod()) {
+                    if (world.getActiveBobber() != null) {
+                        // Reel in an existing bobber.
+                        BlockType fishCatch = world.reelIn(loot);
+                        handRenderer.triggerSwing();
+                        if (fishCatch != null) {
+                            player.getInventory().add(fishCatch, 1);
+                            String itemName = fishCatch.name().charAt(0)
+                                    + fishCatch.name().substring(1).replace('_', ' ').toLowerCase();
+                            showMessage(messages, "Caught: " + itemName + "!",
+                                    new Vector4f(0.4f, 0.9f, 1f, 1f), 2f);
+                        } else {
+                            showMessage(messages, "Nothing on the line.",
+                                    new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1f);
+                        }
+                    } else {
+                        // Cast a new bobber in the direction the player is looking.
+                        org.joml.Vector3f eye   = player.getEyePosition();
+                        org.joml.Vector3f front = player.getCamera().getFront();
+                        float speed = 18f;
+                        world.castBobber(
+                                eye.x, eye.y, eye.z,
+                                front.x * speed, front.y * speed + 4f, front.z * speed);
+                        handRenderer.triggerSwing();
+                        showMessage(messages, "Bobber cast — wait for a bite!",
+                                new Vector4f(0.4f, 0.9f, 1f, 1f), 1.5f);
                     }
                 }
 
@@ -3934,6 +3970,25 @@ public class Main {
                         handRenderer.triggerSwing();
                         audio.play(SoundEvent.EAT);
                         showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
+                    } else if (netClient == null && !mode.isSpectator() && noMob && targeted == BlockType.TNT) {
+                        // Right-click a placed TNT block to ignite it immediately.
+                        // Spectator mode is non-interactive, so guard here as well.
+                        // The block is removed first so it cannot be caught in the
+                        // blast as a solid cell (which would suppress the explosion).
+                        int tx = hit.blockPos.x, ty = hit.blockPos.y, tz = hit.blockPos.z;
+                        world.setBlock(tx, ty, tz, BlockType.AIR);
+                        org.joml.Vector3f pp = player.getPosition();
+                        float expDmg = world.triggerExplosion(
+                                tx + 0.5f, ty + 0.5f, tz + 0.5f,
+                                com.minecraftclone.world.Explosion.TNT_RADIUS,
+                                com.minecraftclone.world.Explosion.TNT_CENTER_DAMAGE,
+                                pp.x, pp.y, pp.z, loot);
+                        if (expDmg > 0f) {
+                            // Apply the same difficulty multiplier used for creeper damage.
+                            player.takeDamage(expDmg * settings.getDifficulty().mobDamageMultiplier());
+                        }
+                        handRenderer.triggerSwing();
+                        showMessage(messages, "BOOM!", new Vector4f(1f, 0.7f, 0.1f, 1f), 1.5f);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         // Don't place if clicking on a bed (sleep instead) or if placement spot is a bed
                         BlockType placeTarget = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);

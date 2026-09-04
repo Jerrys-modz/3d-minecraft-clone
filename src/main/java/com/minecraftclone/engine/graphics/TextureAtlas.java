@@ -389,6 +389,9 @@ public class TextureAtlas {
         paintElectricFurnace(image, 273, rnd, true, true);   // ELECTRIC_FURNACE front (active)
         paintBatteryBlock(image, 274, rnd);               // BATTERY_BLOCK
 
+        // Explosives (275).
+        paintTnt(image, 275, rnd);                        // TNT
+
         return image;
     }
 
@@ -2594,6 +2597,68 @@ public class TextureAtlas {
         img.setRGB(ox + 8, oy + 4, 0xFF000000 | mk);
         img.setRGB(ox + 6, oy + 4, 0xFF000000 | mk);
         img.setRGB(ox + 9, oy + 4, 0xFF000000 | mk);
+    }
+
+    /**
+     * TNT (tile 275): iconic red block with white horizontal bands on top and
+     * bottom and a central "TNT" label band — purely procedural, no image files.
+     * The tile is used for all faces (the look is symmetric enough to work).
+     */
+    private void paintTnt(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        // Background: vivid red body.
+        int red = 0xC83020;
+        // White top band (rows 0-2), red body (rows 3-12), white bottom band (rows 13-15).
+        for (int y = 0; y < TILE_PX; y++) {
+            boolean band = (y <= 2 || y >= 13);
+            int base = band ? 0xE8E8E8 : red;
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(12) - 6;
+                int r = clamp(((base >> 16) & 0xFF) + (band ? 0 : noise));
+                int g = clamp(((base >>  8) & 0xFF) + (band ? 0 : noise));
+                int b = clamp(( base        & 0xFF) + (band ? 0 : noise));
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Draw "TNT" in dark charcoal across the middle band (rows 6-10, centred).
+        // Each letter is a 3×5 pixel stroke; we paint T-N-T spaced by 1 blank column.
+        // T letter at x=1
+        drawPixelLetter(img, ox + 1, oy + 5, 'T', 0xFF1A1A1A);
+        // N letter at x=5
+        drawPixelLetter(img, ox + 5, oy + 5, 'N', 0xFF1A1A1A);
+        // T letter at x=10
+        drawPixelLetter(img, ox + 10, oy + 5, 'T', 0xFF1A1A1A);
+    }
+
+    /**
+     * Paints a single 3×5 pixel letter ({@code T} or {@code N}) into the image
+     * with the given top-left corner and colour.  Only T and N are supported —
+     * the full pixel-font lives in {@code FontAtlas}.  Used exclusively by
+     * {@link #paintTnt}.
+     */
+    private static void drawPixelLetter(BufferedImage img, int ox, int oy, char c, int argb) {
+        boolean[][] t = {
+            {true,  true,  true},
+            {false, true,  false},
+            {false, true,  false},
+            {false, true,  false},
+            {false, true,  false},
+        };
+        boolean[][] n = {
+            {true,  false, true},
+            {true,  true,  true},
+            {true,  true,  true},
+            {true,  false, true},
+            {true,  false, true},
+        };
+        boolean[][] glyph = (c == 'T') ? t : n;
+        for (int row = 0; row < glyph.length; row++) {
+            for (int col = 0; col < glyph[row].length; col++) {
+                if (glyph[row][col]) {
+                    img.setRGB(ox + col, oy + row, argb);
+                }
+            }
+        }
     }
 
     /** Clamp a colour channel to [0, 255]. */

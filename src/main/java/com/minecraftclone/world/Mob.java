@@ -121,6 +121,21 @@ public class Mob {
     private static final float MELEE_COOLDOWN = 1f;        // seconds between hits
     private static final float SHOOT_COOLDOWN = 1.5f;      // seconds between arrows
 
+    // -----------------------------------------------------------------------
+    // Creeper fuse constants (package-private so tests can reference them)
+    // -----------------------------------------------------------------------
+    /**
+     * How close (blocks, horizontal) a creeper must be to the player before
+     * it ignites its fuse.  Slightly wider than melee reach so the player
+     * has a narrow window to back away.
+     */
+    static final float CREEPER_FUSE_RANGE = 2.5f;
+    /**
+     * Seconds the fuse burns before the creeper explodes.  Vanilla uses
+     * 1.5 s; we match that.
+     */
+    static final float CREEPER_FUSE_TIME  = 1.5f;
+
     public final Type type;
     /** Body center of the mob. */
     public final Vector3f position = new Vector3f();
@@ -158,6 +173,12 @@ public class Mob {
     private float breedingCooldown = 0f; // > 0: recently bred; locked out of love mode
     private boolean baby         = false; // true: this is a baby that hasn't grown up yet
     private float growthTimer    = 0f;  // counts up; at BABY_GROW_TIME the baby becomes an adult
+
+    // --- Creeper fuse state ---
+    /** Remaining seconds on the fuse (> 0 while burning, 0 normally). */
+    private float fuseTimer      = 0f;
+    /** Set true for exactly one tick when the fuse reaches zero; World reads and clears this. */
+    private boolean explodeRequest = false;
 
     public Mob(Type type, float x, float y, float z) {
         this.type = type;
@@ -205,8 +226,8 @@ public class Mob {
             case SKELETON -> BlockType.BONES;
             case WOLF -> BlockType.WOLF_PELT;
             case POLAR_BEAR -> BlockType.BEAR_HIDE;
-            case SPIDER -> BlockType.COAL;        // spiders drop string in vanilla; coal is the closest available item
-            case CREEPER -> BlockType.COAL;       // creepers drop gunpowder; coal is the placeholder
+            case SPIDER -> BlockType.STRING;       // spider silk string, used to craft fishing rods
+            case CREEPER -> BlockType.GUNPOWDER;  // dropped when killed by a player (not when self-exploding)
             case HORSE -> BlockType.RAW_BEEF;     // placeholder; horses drop leather in vanilla
         };
     }
@@ -402,6 +423,34 @@ public class Mob {
     /** True if this mob wants to fire a projectile at the player this frame (skeletons). */
     public boolean wantsToShoot() {
         return shootRequest;
+    }
+
+    /**
+     * True for exactly one tick when this creeper's fuse reaches zero:
+     * {@link com.minecraftclone.world.World} reads this flag and triggers
+     * {@link Explosion#blastBlocks} at the creeper's position.
+     * The flag is cleared automatically after each tick cycle.
+     */
+    public boolean wantsToExplode() {
+        return explodeRequest;
+    }
+
+    /**
+     * True while the creeper's fuse is actively burning (between ignition
+     * and detonation).  The renderer can use this to flash the creeper white.
+     */
+    public boolean isFuseLit() {
+        return fuseTimer > 0f && !explodeRequest;
+    }
+
+    /**
+     * How far along the creeper's fuse has burned, in the range [0, 1].
+     * 0 = just ignited, 1 = about to explode.
+     * Returns 0 for non-creeper mobs or when the fuse is not lit.
+     */
+    public float getFuseProgress() {
+        if (type != Type.CREEPER || fuseTimer <= 0f) return 0f;
+        return 1f - (fuseTimer / CREEPER_FUSE_TIME);
     }
 
     /**
@@ -661,6 +710,25 @@ public class Mob {
         repathTimer -= dt;
         meleeRequest = 0f;
         shootRequest = false;
+        explodeRequest = false;
+
+        // Creeper fuse: check range first (player may have backed away), then
+        // burn down while lit; detonate when the timer reaches zero.
+        if (type == Type.CREEPER && fuseTimer > 0f) {
+            float fuseDist = playerPos == null ? Float.MAX_VALUE
+                    : (float) Math.hypot(playerPos.x - position.x, playerPos.z - position.z);
+            if (fuseDist > CREEPER_FUSE_RANGE) {
+                // Player backed away or vanished — extinguish the fuse.
+                fuseTimer = 0f;
+            } else {
+                fuseTimer -= dt;
+                if (fuseTimer <= 0f) {
+                    fuseTimer = 0f;
+                    explodeRequest = true;
+                    return; // don't do any other AI this tick
+                }
+            }
+        }
 
         boolean hasTarget = playerPos != null
                 && Math.hypot(playerPos.x - position.x, playerPos.z - position.z) <= HOSTILE_DETECT_RANGE;
@@ -690,8 +758,17 @@ public class Mob {
         followPath();
 
         // Attack: melee once in reach; skeletons prefer shooting from mid range.
+        // Creepers ignite their fuse instead of punching.
         float dist = (float) Math.hypot(playerPos.x - position.x, playerPos.z - position.z);
-        if (dist <= HOSTILE_MELEE_REACH && attackCooldown <= 0f) {
+        if (type == Type.CREEPER) {
+            if (dist <= CREEPER_FUSE_RANGE && fuseTimer <= 0f) {
+                // Player walked into fuse range — ignite.
+                fuseTimer = CREEPER_FUSE_TIME;
+            } else if (dist > CREEPER_FUSE_RANGE && fuseTimer > 0f) {
+                // Player backed away before explosion — extinguish fuse.
+                fuseTimer = 0f;
+            }
+        } else if (dist <= HOSTILE_MELEE_REACH && attackCooldown <= 0f) {
             meleeRequest = type.attackDamage;
             attackCooldown = MELEE_COOLDOWN;
         } else if (type == Type.SKELETON && dist >= SKELETON_MIN_SHOOT && dist <= SKELETON_MAX_SHOOT
@@ -847,9 +924,10 @@ public class Mob {
     }
 
     private AABB box() {
-        float hw = type.width / 2f;
-        float y0 = position.y - type.height / 2f;
-        float y1 = position.y + type.height / 2f;
+        float scale = baby ? BABY_SCALE : 1f;
+        float hw = type.width / 2f * scale;
+        float y0 = position.y - type.height / 2f * scale;
+        float y1 = position.y + type.height / 2f * scale;
         return new AABB(position.x - hw, y0, position.z - hw, position.x + hw, y1, position.z + hw);
     }
 }

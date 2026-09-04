@@ -184,6 +184,9 @@ public class World implements BlockAccessor {
     // Placed boats.  Transient - not saved (like dropped items).
     private final List<BoatEntity> boats = new ArrayList<>();
 
+    // Active fishing bobber (single-player: at most one at a time). Transient.
+    private FishingBobber activeBobber;
+
     public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir, DimensionType dimension) {
         this(seed, genSettings, atlas, saveDir, dimension, false);
     }
@@ -1819,6 +1822,52 @@ public class World implements BlockAccessor {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Explosion API
+    // -----------------------------------------------------------------------
+
+    /**
+     * Triggers an explosion at ({@code cx}, {@code cy}, {@code cz}): destroys
+     * blocks in a sphere of {@code radius} blocks (see {@link Explosion}),
+     * damages the player if they are within {@code radius × 1.5} blocks, and
+     * damages nearby mobs with the same falloff.  Returns the player damage
+     * (already scaled by the falloff formula — the caller applies any
+     * difficulty multiplier on top).
+     *
+     * <p>Call this from {@link #updateMobs} when a creeper detonates, or
+     * from {@link com.minecraftclone.Main} when a TNT block is ignited.
+     *
+     * @param cx          explosion centre X
+     * @param cy          explosion centre Y
+     * @param cz          explosion centre Z
+     * @param radius      blast sphere radius (blocks)
+     * @param maxDamage   maximum damage at the explosion centre
+     * @param playerX     player position X (for damage falloff)
+     * @param playerY     player position Y
+     * @param playerZ     player position Z
+     * @param rnd         random source (used for block-drop rolls)
+     * @return            player damage from this explosion (≥ 0)
+     */
+    public float triggerExplosion(float cx, float cy, float cz,
+                                  float radius, float maxDamage,
+                                  float playerX, float playerY, float playerZ,
+                                  java.util.Random rnd) {
+        Explosion.blastBlocks(this, cx, cy, cz, radius, rnd);
+
+        // Damage all mobs caught in the blast.
+        for (Mob mob : mobs) {
+            float dmg = Explosion.damageAt(cx, cy, cz, radius, maxDamage,
+                    mob.position.x, mob.position.y, mob.position.z);
+            if (dmg > 0f) {
+                mob.damage(dmg, cx, cz);
+            }
+        }
+
+        // Return the player's share so the caller can add it to the frame damage.
+        return Explosion.damageAt(cx, cy, cz, radius, maxDamage,
+                playerX, playerY, playerZ);
+    }
+
     /**
      * Advances every mob (wandering/pathing, gravity, collision), spawns new ones
      * near the player up to the cap, and despawns any that wander beyond
@@ -1879,6 +1928,13 @@ public class World implements BlockAccessor {
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, playerPos, rnd);
             }
+            if (mob.wantsToExplode()) {
+                float cx = mob.position.x, cy = mob.position.y, cz = mob.position.z;
+                it.remove(); // creeper dies in the blast
+                damage += triggerExplosion(cx, cy, cz,
+                        Explosion.CREEPER_RADIUS, Explosion.CREEPER_CENTER_DAMAGE,
+                        playerPos.x, playerPos.y, playerPos.z, rnd) * damageMul;
+            }
         }
 
         if (difficulty.allowsHostileMobs()
@@ -1891,6 +1947,7 @@ public class World implements BlockAccessor {
         }
 
         tickBreeding(rnd);
+        tickBobber(dt, rnd);
         damage += updateArrows(dt, playerBox) * damageMul;
         return damage;
     }
@@ -1904,6 +1961,7 @@ public class World implements BlockAccessor {
     void tickBreeding(Random rnd) {
         java.util.List<Mob> babies = new java.util.ArrayList<>();
         for (int a = 0; a < mobs.size(); a++) {
+            if (mobs.size() + babies.size() >= MAX_MOBS) break;
             Mob ma = mobs.get(a);
             if (!ma.isInLoveMode()) continue;
             for (int b = a + 1; b < mobs.size(); b++) {
@@ -1927,6 +1985,64 @@ public class World implements BlockAccessor {
             }
         }
         mobs.addAll(babies);
+    }
+
+    // -----------------------------------------------------------------------
+    // Fishing bobber management
+    // -----------------------------------------------------------------------
+
+    /**
+     * Casts a new fishing bobber from the given origin with the given velocity.
+     * Any previously active bobber is discarded.  Call this when the player
+     * right-clicks with a {@link BlockType#FISHING_ROD} and no bobber is active.
+     *
+     * @param x  world X of the throw origin (typically the player's eye)
+     * @param y  world Y of the throw origin
+     * @param z  world Z of the throw origin
+     * @param vx horizontal velocity component along X
+     * @param vy vertical launch velocity (positive = upward)
+     * @param vz horizontal velocity component along Z
+     */
+    public void castBobber(float x, float y, float z, float vx, float vy, float vz) {
+        activeBobber = new FishingBobber(x, y, z, vx, vy, vz);
+    }
+
+    /**
+     * Reels in the active fishing bobber and returns any item caught.
+     * The bobber is cleared regardless of whether a fish was caught.
+     *
+     * @param rnd random source (used by the loot table)
+     * @return the caught {@link BlockType}, or {@code null} if the bobber was
+     *         not biting (nothing caught)
+     */
+    public BlockType reelIn(Random rnd) {
+        if (activeBobber == null) return null;
+        BlockType loot = activeBobber.reelIn(rnd);
+        activeBobber = null;
+        return loot;
+    }
+
+    /**
+     * Returns the active fishing bobber for rendering, or {@code null} if none
+     * has been cast.
+     *
+     * @return the active {@link FishingBobber}, or {@code null}
+     */
+    public FishingBobber getActiveBobber() {
+        return activeBobber;
+    }
+
+    /**
+     * Advances the active bobber's physics and bite-timer state machine.
+     * Called internally by {@link #updateMobs} each tick.
+     */
+    private void tickBobber(float dt, Random rnd) {
+        if (activeBobber == null) return;
+        activeBobber.tick(dt, this, rnd);
+        // Discard the bobber if it missed water and is no longer in-flight.
+        if (!activeBobber.isInFlight() && !activeBobber.isFloating() && !activeBobber.isBiting()) {
+            activeBobber = null;
+        }
     }
 
     /** Per-player damage result with the position of the mob that dealt it (for knockback direction). */
@@ -1974,6 +2090,27 @@ public class World implements BlockAccessor {
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, target, rnd);
             }
+            if (mob.wantsToExplode()) {
+                float cx = mob.position.x, cy = mob.position.y, cz = mob.position.z;
+                it.remove();
+                // Destroy blocks with the nearest player as the blast anchor, then
+                // compute per-player splash damage so every player in range takes a hit.
+                Vector3f anchor = playerPositions.get(nearest);
+                triggerExplosion(cx, cy, cz,
+                        Explosion.CREEPER_RADIUS, Explosion.CREEPER_CENTER_DAMAGE,
+                        anchor.x, anchor.y, anchor.z, rnd);
+                for (int pi = 0; pi < count; pi++) {
+                    Vector3f p = playerPositions.get(pi);
+                    float d = Explosion.damageAt(cx, cy, cz,
+                            Explosion.CREEPER_RADIUS, Explosion.CREEPER_CENTER_DAMAGE,
+                            p.x, p.y, p.z);
+                    if (d > 0f) {
+                        damage[pi] += d;
+                        srcX[pi] = cx;
+                        srcZ[pi] = cz;
+                    }
+                }
+            }
         }
 
         if (night && difficulty.allowsHostileMobs() && hostileCount() < MAX_HOSTILES && rnd.nextInt(HOSTILE_SPAWN_ODDS) == 0) {
@@ -1986,6 +2123,7 @@ public class World implements BlockAccessor {
         }
 
         tickBreeding(rnd);
+        tickBobber(dt, rnd);
         float[] arrowDamage = updateArrowsMulti(dt, playerBoxes);
         for (int i = 0; i < count; i++) {
             damage[i] += arrowDamage[i];

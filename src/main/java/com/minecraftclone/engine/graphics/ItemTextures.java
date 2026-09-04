@@ -333,6 +333,19 @@ public class ItemTextures {
             // Saddle: leather seat with side skirts and an iron-buckle stripe.
             case SADDLE -> paintSaddle();
 
+            // ----------------------------------------------------------------
+            // Phase 0: Fishing items
+            // ----------------------------------------------------------------
+            case STRING       -> paintString();
+            case RAW_FISH     -> paintFish(false);
+            case COOKED_FISH  -> paintFish(true);
+            case FISHING_ROD  -> paintFishingRod();
+
+            // ----------------------------------------------------------------
+            // Phase 0: Explosives
+            // ----------------------------------------------------------------
+            case GUNPOWDER -> paintGunpowder();
+
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
     }
@@ -1388,5 +1401,100 @@ public class ItemTextures {
     public void destroy() {
         for (int id : textureIds.values())        glDeleteTextures(id);
         for (int id : tinkersTextureIds.values()) glDeleteTextures(id);
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 0: Fishing items
+    // -----------------------------------------------------------------------
+
+    /**
+     * A thin coil of white string — drawn as a loose loop of pale thread.
+     */
+    private static BufferedImage paintString() {
+        BufferedImage img = blank();
+        int thread  = 0xF0EEE8;
+        int shadow  = 0xC8C4BC;
+        // Two diagonal strands forming an X-shape loop.
+        drawThickLine(img, 3, 12, 12, 3, thread);
+        drawThickLine(img, 3,  3, 12, 12, shadow);
+        // A few extra pixels to suggest a knot at the centre.
+        img.setRGB(7, 7, 0xFF000000 | 0xFFFFFF);
+        img.setRGB(8, 8, 0xFF000000 | 0xFFFFFF);
+        return img;
+    }
+
+    /**
+     * A fish silhouette — raw is blue-grey, cooked is warm brown.
+     */
+    private static BufferedImage paintFish(boolean cooked) {
+        BufferedImage img = blank();
+        int body  = cooked ? 0xC0844A : 0x6890B8;
+        int belly = cooked ? 0xE8B078 : 0x90B8D8;
+        int fin   = cooked ? 0x9A6030 : 0x4870A0;
+        int eye   = 0x202020;
+
+        // Main body — a broad oval from left to right.
+        for (int y = 5; y <= 11; y++) {
+            int x0, x1;
+            if (y == 5 || y == 11)      { x0 = 5;  x1 = 11; }
+            else if (y == 6 || y == 10) { x0 = 4;  x1 = 12; }
+            else                        { x0 = 3;  x1 = 13; }
+            for (int x = x0; x <= x1; x++) {
+                boolean isBelly = x < 8 && y >= 8;
+                img.setRGB(x, y, 0xFF000000 | (isBelly ? belly : body));
+            }
+        }
+        // Tail fan — three short strokes to the right.
+        for (int dy = -1; dy <= 1; dy++) {
+            img.setRGB(14, 8 + dy, 0xFF000000 | fin);
+            img.setRGB(13, 8 + dy, 0xFF000000 | fin);
+        }
+        // Dorsal fin — a small triangle on top.
+        img.setRGB(7, 4, 0xFF000000 | fin);
+        img.setRGB(8, 4, 0xFF000000 | fin);
+        img.setRGB(8, 3, 0xFF000000 | fin);
+        // Eye.
+        img.setRGB(5, 7, 0xFF000000 | eye);
+        return img;
+    }
+
+    /**
+     * A fishing rod: a thin wooden shaft with a thin black line hanging off the
+     * tip, Minecraft-style.
+     */
+    private static BufferedImage paintFishingRod() {
+        BufferedImage img = blank();
+        int shaft = 0xA9814F;
+        int line  = 0xD0CFC8;
+        // Rod shaft — diagonal from bottom-left to upper-right.
+        drawThickLine(img, 2, 14, 10, 3, shaft);
+        // Fishing line — thin, from rod tip down-right.
+        for (int i = 0; i <= 5; i++) {
+            int x = 10 + i, y = 3 + i;
+            if (x < SIZE && y < SIZE) img.setRGB(x, y, 0xFF000000 | line);
+        }
+        return img;
+    }
+
+    /**
+     * Gunpowder: a small heap of dark grey-black powder granules.
+     */
+    private static BufferedImage paintGunpowder() {
+        BufferedImage img = blank();
+        // Pile shape — slightly wider at the bottom.
+        int[] halfW = {0, 1, 2, 3, 4, 5, 5, 4, 3, 1};
+        int baseY = 13;
+        for (int i = 0; i < halfW.length; i++) {
+            int y  = baseY - i;
+            int hw = halfW[i];
+            for (int dx = -hw; dx <= hw; dx++) {
+                int x = 8 + dx;
+                boolean edge = Math.abs(dx) == hw;
+                // Dark charcoal-grey with occasional lighter speck for granule texture.
+                int c = edge ? 0x282828 : (((x * 13 + y * 7) % 5 == 0) ? 0x606060 : 0x383838);
+                img.setRGB(x, y, 0xFF000000 | c);
+            }
+        }
+        return img;
     }
 }
