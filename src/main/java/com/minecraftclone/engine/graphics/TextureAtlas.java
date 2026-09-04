@@ -404,6 +404,7 @@ public class TextureAtlas {
         paintSapling(image, 284, rnd, 0x1A7040, 0x5A3218, true);  // PINE_SAPLING (dark)
         paintCherryLogSide(image, 285, rnd);                      // CHERRY_LOG sides
         paintSapling(image, 286, rnd, 0xFFB7C5, 0xD4A0B0, false); // CHERRY_SAPLING (pink blossom)
+        paintPineLeaves(image, 287, rnd);                         // PINE_LEAVES
 
         return image;
     }
@@ -2853,6 +2854,30 @@ public class TextureAtlas {
                 int r = clamp(0x28 + noise / 2);
                 int g = clamp(0xA0 + noise);
                 int b = clamp(0x30 + noise / 2);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * Pine / spruce leaves (tile 287): dark blue-green needle foliage, denser
+     * and darker than oak, with a cool blue-green cast and very few transparent gaps.
+     */
+    private void paintPineLeaves(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // Dense: only 1-in-12 transparent (pine needles are thick)
+                if (rnd.nextInt(12) == 0) {
+                    img.setRGB(ox + x, oy + y, 0x00000000);
+                    continue;
+                }
+                int noise = rnd.nextInt(20) - 10;
+                // Dark blue-green (#1A6040 base)
+                int r = clamp(0x1A + noise / 3);
+                int g = clamp(0x60 + noise);
+                int b = clamp(0x40 + noise / 2);
                 img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
             }
         }

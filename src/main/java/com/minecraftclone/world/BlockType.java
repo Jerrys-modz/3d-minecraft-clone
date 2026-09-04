@@ -820,21 +820,23 @@ public enum BlockType {
     //   278 = pine-log side  (reddish-dark bark)
     //   279 = birch leaves   (light yellow-green)
     //   280 = jungle leaves  (bright tropical green)
-    //   tile 7 (log top ring) is reused for all log tops / bottoms.
-    //   tile 9 (oak leaves)  is reused for pine leaves.
+    //   tile 8 (log top/bottom ring) is reused for all log tops / bottoms.
+    //   287 = pine leaves    (dark blue-green needles).
     // -----------------------------------------------------------------------
 
     /** Birch wood log — pale cream bark; drops itself when broken with an axe. */
-    BIRCH_LOG(529, true, false, 276, 7, 276),
+    BIRCH_LOG(529, true, false, 8, 276, 8),
     /** Jungle wood log — warm dark-brown tropical bark. */
-    JUNGLE_LOG(530, true, false, 277, 7, 277),
+    JUNGLE_LOG(530, true, false, 8, 277, 8),
     /** Pine / spruce log — reddish-dark bark used for taiga and mountain trees. */
-    PINE_LOG(531, true, false, 278, 7, 278),
+    PINE_LOG(531, true, false, 8, 278, 8),
 
     /** Birch leaves — light yellow-green canopy; rare drop: 1 birch sapling. */
     BIRCH_LEAVES(532, true, true, 279, 279, 279),
     /** Jungle leaves — dense bright-green canopy; rare drop: 1 jungle sapling. */
     JUNGLE_LEAVES(533, true, true, 280, 280, 280),
+    /** Pine / spruce leaves — dark blue-green needles; rare drop: 1 pine sapling. */
+    PINE_LEAVES(540, true, true, 287, 287, 287),
 
     // -----------------------------------------------------------------------
     // Saplings — cross-shaped non-solid plants placed on DIRT or GRASS.
@@ -857,7 +859,7 @@ public enum BlockType {
     PINE_SAPLING(537, false, true, 284),
 
     /** Cherry log — pale pinkish-white bark; the trunk of cherry-grove trees. */
-    CHERRY_LOG(538, true, false, 285, 7, 285),
+    CHERRY_LOG(538, true, false, 8, 285, 8),
     /** Cherry sapling — grows into a cherry tree (pink blossom canopy). */
     CHERRY_SAPLING(539, false, true, 286),
 
@@ -1346,7 +1348,8 @@ public enum BlockType {
     /** True for any leaf cube (oak, birch, jungle, pine, or cherry). */
     public boolean isLeaves() {
         return this == LEAVES || this == CHERRY_LEAVES
-                || this == BIRCH_LEAVES || this == JUNGLE_LEAVES;
+                || this == BIRCH_LEAVES || this == JUNGLE_LEAVES
+                || this == PINE_LEAVES;
     }
 
     /**

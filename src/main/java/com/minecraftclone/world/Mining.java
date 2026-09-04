@@ -123,6 +123,7 @@ public final class Mining {
         put(BlockType.CHERRY_LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
         put(BlockType.BIRCH_LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
         put(BlockType.JUNGLE_LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
+        put(BlockType.PINE_LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
         put(BlockType.TALL_GRASS, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.OAK_SAPLING, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.BIRCH_SAPLING, 0f, ToolKind.NONE, TIER_HAND);

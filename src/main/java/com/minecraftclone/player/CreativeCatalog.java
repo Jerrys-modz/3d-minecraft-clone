@@ -25,7 +25,7 @@ public final class CreativeCatalog {
                     BlockType.WOOD_LOG, BlockType.BIRCH_LOG, BlockType.JUNGLE_LOG,
                     BlockType.PINE_LOG, BlockType.CHERRY_LOG,
                     BlockType.PLANKS, BlockType.LEAVES, BlockType.BIRCH_LEAVES,
-                    BlockType.JUNGLE_LEAVES,
+                    BlockType.JUNGLE_LEAVES, BlockType.PINE_LEAVES, BlockType.CHERRY_LEAVES,
                     BlockType.GRAVEL, BlockType.SNOW,
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
                     BlockType.CRAFTING_TABLE, BlockType.CHEST, BlockType.BARREL,

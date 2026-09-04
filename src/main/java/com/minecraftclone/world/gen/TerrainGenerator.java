@@ -1299,12 +1299,12 @@ public class TerrainGenerator implements WorldGenerator {
                     if (Math.abs(dx) == radius && Math.abs(dz) == radius) continue; // round corners
                     BlockType existing = chunk.getLocal(x + dx, cy, z + dz);
                     if (existing == BlockType.AIR) {
-                        chunk.setLocal(x + dx, cy, z + dz, BlockType.LEAVES); // pine reuses oak leaf tile
+                        chunk.setLocal(x + dx, cy, z + dz, BlockType.PINE_LEAVES);
                     }
                 }
             }
         }
-        chunk.setLocal(x, y + trunkHeight, z, BlockType.LEAVES);
+        chunk.setLocal(x, y + trunkHeight, z, BlockType.PINE_LEAVES);
     }
 
     /** Birch tree: slimmer oak shape with BIRCH_LOG trunk and BIRCH_LEAVES canopy. */

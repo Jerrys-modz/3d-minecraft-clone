@@ -96,6 +96,7 @@ class SaplingGrowthTest {
         assertTrue(BlockType.CHERRY_LEAVES.isLeaves());
         assertTrue(BlockType.BIRCH_LEAVES.isLeaves());
         assertTrue(BlockType.JUNGLE_LEAVES.isLeaves());
+        assertTrue(BlockType.PINE_LEAVES.isLeaves());
     }
 
     @Test

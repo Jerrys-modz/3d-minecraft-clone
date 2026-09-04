@@ -595,7 +595,24 @@ public final class Farming {
     private static void growJungleSapling(World world, int wx, int wy, int wz, Random rnd) {
         int[] sw = find2x2JungleSWCorner(world::getBlock, wx, wy, wz);
         if (sw != null) {
-            // Remove all four saplings then grow large tree from SW corner.
+            // Pre-flight: check that all four 2×2 trunk columns have enough clearance
+            // for the minimum large-jungle-tree height (trunkH=20) plus a 3-block
+            // canopy buffer, so saplings are never consumed without a tree being placed.
+            final int MIN_TRUNK_H = 20;
+            final int CANOPY_BUFFER = 3;
+            boolean clear = true;
+            outer:
+            for (int tx = 0; tx < 2; tx++) {
+                for (int tz = 0; tz < 2; tz++) {
+                    if (!hasClearance(world, sw[0] + tx, wy, sw[1] + tz,
+                            MIN_TRUNK_H + CANOPY_BUFFER)) {
+                        clear = false;
+                        break outer;
+                    }
+                }
+            }
+            if (!clear) return; // not enough headroom; saplings stay in place
+            // Remove all four saplings, then grow the large tree from the SW corner.
             int[][] corners = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
             for (int[] c : corners) {
                 world.setBlock(sw[0] + c[0], wy, sw[1] + c[1], BlockType.AIR);
@@ -720,11 +737,11 @@ public final class Farming {
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
                     if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius > 1) continue;
-                    setLeafIfAir(world, x + dx, layerY, z + dz, BlockType.LEAVES);
+                    setLeafIfAir(world, x + dx, layerY, z + dz, BlockType.PINE_LEAVES);
                 }
             }
         }
-        world.setBlock(x, y + trunkH, z, BlockType.LEAVES);
+        world.setBlock(x, y + trunkH, z, BlockType.PINE_LEAVES);
     }
 
     /** Grow a small 1-trunk jungle tree. */
@@ -798,6 +815,7 @@ public final class Farming {
      * above {@code (x, y, z)}, meaning growth won't clip into solid blocks.
      */
     private static boolean hasClearance(World world, int x, int y, int z, int needed) {
+        if (y + needed >= Chunk.HEIGHT) return false; // would write beyond world top
         for (int i = 1; i <= needed; i++) {
             BlockType b = world.getBlock(x, y + i, z);
             if (b != null && b != BlockType.AIR && !b.isLeaves()) return false;
