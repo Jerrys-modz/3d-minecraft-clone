@@ -770,6 +770,25 @@ public enum BlockType {
     FISHING_ROD(459, 0),
 
     // -----------------------------------------------------------------------
+    // Explosives and blast loot
+    // -----------------------------------------------------------------------
+
+    /**
+     * Gunpowder — dropped by creepers when killed by a player (not when they
+     * explode on their own).  The primary ingredient for {@link #TNT}.
+     */
+    GUNPOWDER(522, 0),
+
+    /**
+     * TNT — a placeable, craftable explosive block (5 gunpowder + 4 sand in a
+     * checkerboard at a crafting table).  Right-click a placed TNT to ignite
+     * it; it explodes immediately, carving a roughly 4-block-radius crater and
+     * dealing heavy damage to nearby entities.  TNT caught in another blast
+     * chain-detonates.
+     */
+    TNT(523, true, false, 275, 275, 275),
+
+    // -----------------------------------------------------------------------
     // Tinkers' Construct sentinels: two inventory-item slots that carry the
     // real part/tool data in a TinkersItem payload inside ItemStack.
     // All materials are supported dynamically via TinkersRegistry — no per-

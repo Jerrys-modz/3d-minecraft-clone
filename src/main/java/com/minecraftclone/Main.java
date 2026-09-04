@@ -3970,6 +3970,23 @@ public class Main {
                         handRenderer.triggerSwing();
                         audio.play(SoundEvent.EAT);
                         showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
+                    } else if (netClient == null && noMob && targeted == BlockType.TNT) {
+                        // Right-click a placed TNT block to ignite it immediately.
+                        // The block is removed first so it cannot be caught in the
+                        // blast as a solid cell (which would suppress the explosion).
+                        int tx = hit.blockPos.x, ty = hit.blockPos.y, tz = hit.blockPos.z;
+                        world.setBlock(tx, ty, tz, BlockType.AIR);
+                        org.joml.Vector3f pp = player.getPosition();
+                        float expDmg = world.triggerExplosion(
+                                tx + 0.5f, ty + 0.5f, tz + 0.5f,
+                                com.minecraftclone.world.Explosion.TNT_RADIUS,
+                                com.minecraftclone.world.Explosion.TNT_CENTER_DAMAGE,
+                                pp.x, pp.y, pp.z, loot);
+                        if (expDmg > 0f) {
+                            player.takeDamage(expDmg);
+                        }
+                        handRenderer.triggerSwing();
+                        showMessage(messages, "BOOM!", new Vector4f(1f, 0.7f, 0.1f, 1f), 1.5f);
                     } else if (noMob && mode.canPlace() && heldItem != null) {
                         // Don't place if clicking on a bed (sleep instead) or if placement spot is a bed
                         BlockType placeTarget = world.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);

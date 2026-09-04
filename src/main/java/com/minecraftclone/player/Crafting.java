@@ -95,6 +95,7 @@ public final class Crafting {
         CHARS.put('X', BlockType.COPPER_INGOT);       // X = copper ingot (cross-section of wire)
         CHARS.put('A', BlockType.GOLD_INGOT);         // A = gold ingot (Au)
         CHARS.put('R', BlockType.STRING);             // R = stRing (fishing)
+        CHARS.put('M', BlockType.GUNPOWDER);          // M = guMpowder / bang (explosives)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -174,6 +175,10 @@ public final class Crafting {
         //                    SRR      (row 2: S = stick at col 0, R = string at cols 1-2)
         // Note: 'R' = STRING in the character map above.
         shaped3x3("..S", ".SR", "SRR", BlockType.FISHING_ROD, 1);
+
+        // TNT: 5 gunpowder + 4 sand in a checkerboard pattern.
+        // M = gunpowder ('M' = guMpowder), N = sand.
+        shaped3x3("MNM", "NMN", "MNM", BlockType.TNT, 1);
 
         // Clay canteen: 4 clay balls in a 2x2 (inventory grid). Crafting-table
         // recipe uses a distinct 3x3 vessel shape so it does not collide with

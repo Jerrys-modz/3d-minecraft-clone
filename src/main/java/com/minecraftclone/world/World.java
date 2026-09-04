@@ -1822,6 +1822,52 @@ public class World implements BlockAccessor {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Explosion API
+    // -----------------------------------------------------------------------
+
+    /**
+     * Triggers an explosion at ({@code cx}, {@code cy}, {@code cz}): destroys
+     * blocks in a sphere of {@code radius} blocks (see {@link Explosion}),
+     * damages the player if they are within {@code radius × 1.5} blocks, and
+     * damages nearby mobs with the same falloff.  Returns the player damage
+     * (already scaled by the falloff formula — the caller applies any
+     * difficulty multiplier on top).
+     *
+     * <p>Call this from {@link #updateMobs} when a creeper detonates, or
+     * from {@link com.minecraftclone.Main} when a TNT block is ignited.
+     *
+     * @param cx          explosion centre X
+     * @param cy          explosion centre Y
+     * @param cz          explosion centre Z
+     * @param radius      blast sphere radius (blocks)
+     * @param maxDamage   maximum damage at the explosion centre
+     * @param playerX     player position X (for damage falloff)
+     * @param playerY     player position Y
+     * @param playerZ     player position Z
+     * @param rnd         random source (used for block-drop rolls)
+     * @return            player damage from this explosion (≥ 0)
+     */
+    public float triggerExplosion(float cx, float cy, float cz,
+                                  float radius, float maxDamage,
+                                  float playerX, float playerY, float playerZ,
+                                  java.util.Random rnd) {
+        Explosion.blastBlocks(this, cx, cy, cz, radius, rnd);
+
+        // Damage all mobs caught in the blast.
+        for (Mob mob : mobs) {
+            float dmg = Explosion.damageAt(cx, cy, cz, radius, maxDamage,
+                    mob.position.x, mob.position.y, mob.position.z);
+            if (dmg > 0f) {
+                mob.damage(dmg, cx, cz);
+            }
+        }
+
+        // Return the player's share so the caller can add it to the frame damage.
+        return Explosion.damageAt(cx, cy, cz, radius, maxDamage,
+                playerX, playerY, playerZ);
+    }
+
     /**
      * Advances every mob (wandering/pathing, gravity, collision), spawns new ones
      * near the player up to the cap, and despawns any that wander beyond
@@ -1881,6 +1927,13 @@ public class World implements BlockAccessor {
             damage += mob.getMeleeRequest() * damageMul;
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, playerPos, rnd);
+            }
+            if (mob.wantsToExplode()) {
+                float cx = mob.position.x, cy = mob.position.y, cz = mob.position.z;
+                it.remove(); // creeper dies in the blast
+                damage += triggerExplosion(cx, cy, cz,
+                        Explosion.CREEPER_RADIUS, Explosion.CREEPER_CENTER_DAMAGE,
+                        playerPos.x, playerPos.y, playerPos.z, rnd) * damageMul;
             }
         }
 
@@ -2036,6 +2089,17 @@ public class World implements BlockAccessor {
             }
             if (mob.wantsToShoot()) {
                 spawnArrow(mob, target, rnd);
+            }
+            if (mob.wantsToExplode()) {
+                float cx = mob.position.x, cy = mob.position.y, cz = mob.position.z;
+                it.remove();
+                Vector3f tgt = playerPositions.get(nearest);
+                float expDmg = triggerExplosion(cx, cy, cz,
+                        Explosion.CREEPER_RADIUS, Explosion.CREEPER_CENTER_DAMAGE,
+                        tgt.x, tgt.y, tgt.z, rnd);
+                damage[nearest] += expDmg;
+                srcX[nearest] = cx;
+                srcZ[nearest] = cz;
             }
         }
 

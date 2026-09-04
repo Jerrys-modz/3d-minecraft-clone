@@ -373,6 +373,9 @@ public final class Mining {
         put(BlockType.END_PORTAL, 0.1f, ToolKind.NONE, TIER_HAND);
 
         // Bedrock is handled separately (unbreakable) by Main, not through hardness.
+
+        // Explosives.
+        put(BlockType.TNT, 0.0f, ToolKind.NONE, TIER_HAND); // instant break (but explodes when ignited)
     }
 
     private static void put(BlockType type, float hardness, ToolKind effectiveTool, int requiredTier) {
