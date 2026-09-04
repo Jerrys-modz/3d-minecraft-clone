@@ -173,12 +173,12 @@ class RadiationTest {
         // Use a low rate so it builds slowly; advance only until ~50 units then stop.
         stepWithRate(stats, 5f, 9f); // ~45 units (rough; decay and discretisation vary)
 
-        float health = stats.getHealth();
-        // No damage should have been applied by radiation alone in the first 9 s
-        // (the rate is low enough not to cross the threshold in this window).
-        // Only check that health is still at max or close (lava/fire/etc = false).
-        assertTrue(stats.getRadiation() < 60f || stats.getHealth() <= PlayerStats.MAX_HEALTH,
-                "Below threshold or at most at full health");
+        // Radiation must be below the damage threshold; if not, the test setup is wrong.
+        assertTrue(stats.getRadiation() < 60f,
+                "Radiation should be below the damage threshold after 9 s at 5 rad/s");
+        // No radiation damage should have been applied — health must remain full.
+        assertEquals(PlayerStats.MAX_HEALTH, stats.getHealth(), 1e-3f,
+                "Health must stay at MAX_HEALTH when radiation is below the damage threshold");
     }
 
     @Test

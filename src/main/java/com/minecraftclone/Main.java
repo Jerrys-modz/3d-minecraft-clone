@@ -1662,6 +1662,7 @@ public class Main {
         float[] swimStrokeTimer = {0f}; // time until the next stroke sound while swimming and moving
         boolean[] wasInWater = {false}; // last frame's Player#isInWater(), to fire a splash sound only on the change
         float[] splashCooldown = {0f}; // time until another splash sound is allowed - see SPLASH_COOLDOWN_SECONDS
+        float[] radiationScanTimer = {0f}; // throttles the per-frame radiation ore scan (runs every 0.25 s)
         // Boat the player is currently riding; null when on foot.
         com.minecraftclone.world.BoatEntity[] mountedBoat = {null};
         // Horse (or other rideable mob) the player is currently riding; null when on foot.
@@ -3011,25 +3012,32 @@ public class Main {
                 // radiation rate that falls off with the square of the distance.
                 // The hazmat suit blocks a fraction of exposure per piece worn.
                 if (!settings.getGameMode().isCreative() && !settings.getGameMode().isSpectator()) {
-                    float rawRadRate = 0f;
-                    int scanR = 5;
-                    int ipx = (int) Math.floor(px), ipy = (int) Math.floor(playerY), ipz = (int) Math.floor(pz);
-                    for (int dy = -scanR; dy <= scanR; dy++) {
-                        for (int dz = -scanR; dz <= scanR; dz++) {
-                            for (int dx = -scanR; dx <= scanR; dx++) {
-                                float dist2 = dx * dx + dy * dy + dz * dz;
-                                if (dist2 > (float) (scanR * scanR)) continue;
-                                BlockType nb = world.getBlock(ipx + dx, ipy + dy, ipz + dz);
-                                if (nb == BlockType.URANIUM_ORE   || nb == BlockType.SMALL_URANIUM_ORE
-                                 || nb == BlockType.PLUTONIUM_ORE || nb == BlockType.SMALL_PLUTONIUM_ORE) {
-                                    rawRadRate += 12f / Math.max(1f, dist2); // 12 rad/s at distance 1
+                    // Throttle: scan radioactive ores only every 0.25 s, not every frame.
+                    // An 11×11×11 block sphere (~500 chunk-map lookups) at 60 FPS is wasteful;
+                    // radiation changes slowly enough that 4 Hz resolution is imperceptible.
+                    radiationScanTimer[0] -= dt;
+                    if (radiationScanTimer[0] <= 0f) {
+                        radiationScanTimer[0] = 0.25f;
+                        float rawRadRate = 0f;
+                        int scanR = 5;
+                        int ipx = (int) Math.floor(px), ipy = (int) Math.floor(playerY), ipz = (int) Math.floor(pz);
+                        for (int dy = -scanR; dy <= scanR; dy++) {
+                            for (int dz = -scanR; dz <= scanR; dz++) {
+                                for (int dx = -scanR; dx <= scanR; dx++) {
+                                    float dist2 = dx * dx + dy * dy + dz * dz;
+                                    if (dist2 > (float) (scanR * scanR)) continue;
+                                    BlockType nb = world.getBlock(ipx + dx, ipy + dy, ipz + dz);
+                                    if (nb == BlockType.URANIUM_ORE   || nb == BlockType.SMALL_URANIUM_ORE
+                                     || nb == BlockType.PLUTONIUM_ORE || nb == BlockType.SMALL_PLUTONIUM_ORE) {
+                                        rawRadRate += 12f / Math.max(1f, dist2); // 12 rad/s at distance 1
+                                    }
                                 }
                             }
                         }
+                        // Scale by armor protection (0 = full hazmat, 1 = unprotected)
+                        float radMultiplier = player.getInventory().armorRadiationMultiplier();
+                        player.getStats().setRadiationRate(rawRadRate * radMultiplier);
                     }
-                    // Scale by armor protection (0 = full hazmat, 1 = unprotected)
-                    float radMultiplier = player.getInventory().armorRadiationMultiplier();
-                    player.getStats().setRadiationRate(rawRadRate * radMultiplier);
                 }
 
                 player.update(dt, input, world, coldFactor, settings.getDifficulty());
