@@ -1890,8 +1890,43 @@ public class World implements BlockAccessor {
             trySpawnMob(rnd, playerPos.x, playerPos.z, difficulty);
         }
 
+        tickBreeding(rnd);
         damage += updateArrows(dt, playerBox) * damageMul;
         return damage;
+    }
+
+    /**
+     * Checks all pairs of same-type love-mode adults; if two are within
+     * {@link Mob#BREED_RANGE} of each other, spawns a baby between them and
+     * applies the breeding cooldown to both parents.  The baby is added to the
+     * mob list and grows into an adult after {@link Mob#BABY_GROW_TIME} seconds.
+     */
+    void tickBreeding(Random rnd) {
+        java.util.List<Mob> babies = new java.util.ArrayList<>();
+        for (int a = 0; a < mobs.size(); a++) {
+            Mob ma = mobs.get(a);
+            if (!ma.isInLoveMode()) continue;
+            for (int b = a + 1; b < mobs.size(); b++) {
+                Mob mb = mobs.get(b);
+                if (!mb.isInLoveMode()) continue;
+                if (ma.type != mb.type) continue;
+                float dx = ma.position.x - mb.position.x;
+                float dz = ma.position.z - mb.position.z;
+                float distSq = dx * dx + dz * dz;
+                if (distSq > Mob.BREED_RANGE * Mob.BREED_RANGE) continue;
+                // Spawn baby at the midpoint between parents, at the same height
+                float bx = (ma.position.x + mb.position.x) * 0.5f;
+                float by = (ma.position.y + mb.position.y) * 0.5f;
+                float bz = (ma.position.z + mb.position.z) * 0.5f;
+                Mob baby = newMob(ma.type, bx, by, bz);
+                baby.setBaby(true);
+                babies.add(baby);
+                ma.applyBreedingCooldown();
+                mb.applyBreedingCooldown();
+                break; // each mob breeds at most once per tick
+            }
+        }
+        mobs.addAll(babies);
     }
 
     /** Per-player damage result with the position of the mob that dealt it (for knockback direction). */
@@ -1950,6 +1985,7 @@ public class World implements BlockAccessor {
             trySpawnMob(rnd, playerPositions.get(p).x, playerPositions.get(p).z, difficulty);
         }
 
+        tickBreeding(rnd);
         float[] arrowDamage = updateArrowsMulti(dt, playerBoxes);
         for (int i = 0; i < count; i++) {
             damage[i] += arrowDamage[i];
@@ -2142,7 +2178,7 @@ public class World implements BlockAccessor {
     }
 
     /** Creates a mob with the next server id, ready to be added to {@link #mobs}. */
-    private Mob newMob(Mob.Type type, float x, float y, float z) {
+    Mob newMob(Mob.Type type, float x, float y, float z) {
         Mob mob = new Mob(type, x, y, z);
         mob.id = nextMobId++;
         return mob;

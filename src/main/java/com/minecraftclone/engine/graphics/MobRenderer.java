@@ -213,9 +213,16 @@ public class MobRenderer {
         float yaw = mob.yaw;
         float cos = (float) Math.cos(yaw), sin = (float) Math.sin(yaw);
         float feetY = mob.position.y - mob.type.height / 2f;
-        float x0 = part.cx - part.hw, x1 = part.cx + part.hw;
-        float y0 = part.cy - part.hh, y1 = part.cy + part.hh;
-        float z0 = part.cz - part.hd, z1 = part.cz + part.hd;
+
+        // Baby mobs are rendered at half scale; all local-space offsets and extents
+        // are multiplied by BABY_SCALE so the animal looks like a calf/piglet/lamb.
+        float scale = mob.isBaby() ? Mob.BABY_SCALE : 1f;
+        float hw = part.hw * scale, hh = part.hh * scale, hd = part.hd * scale;
+        float pcx = part.cx * scale, pcy = part.cy * scale, pcz = part.cz * scale;
+
+        float x0 = pcx - hw, x1 = pcx + hw;
+        float y0 = pcy - hh, y1 = pcy + hh;
+        float z0 = pcz - hd, z1 = pcz + hd;
 
         // Local corners (x, y, z), wound to match the chunk mesh so back-face
         // culling leaves the outside visible.

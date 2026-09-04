@@ -1,6 +1,7 @@
 package com.minecraftclone.world;
 
 import com.minecraftclone.util.AABB;
+import com.minecraftclone.world.BlockType;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -19,6 +20,13 @@ import java.util.Random;
  * shoot). Mobs spawn on grass surfaces near the player (hostiles only at
  * night), despawn once they're far away (hostiles also melt away at dawn), and
  * can be killed for drops. Transient - not saved, like dropped items.
+ *
+ * <p><b>Animal breeding:</b> right-clicking a breedable passive (pig, cow, sheep)
+ * with valid food (wheat for cows/sheep, carrot or potato for pigs) puts it into
+ * love mode for {@value #LOVE_DURATION} seconds.  When two adults of the same
+ * kind are in love mode within {@value #BREED_RANGE} blocks, they produce a baby;
+ * the baby grows into an adult after {@value #BABY_GROW_TIME} seconds.  A newly
+ * bred pair is locked out of breeding again for {@value #BREED_COOLDOWN} seconds.
  */
 public class Mob {
 
@@ -81,6 +89,20 @@ public class Mob {
     /** Horizontal speed (blocks/second) applied while a player is riding this mob. */
     private static final float RIDE_SPEED = 10f;
 
+    // -----------------------------------------------------------------------
+    // Breeding constants
+    // -----------------------------------------------------------------------
+    /** How long (seconds) an animal stays in love mode waiting for a partner. */
+    static final float LOVE_DURATION  = 25f;
+    /** How close (blocks, horizontal) two love-mode mobs must be to breed. */
+    static final float BREED_RANGE    = 4f;
+    /** Time (seconds) for a baby to grow into an adult. */
+    static final float BABY_GROW_TIME = 60f;
+    /** Cooldown (seconds) before a freshly-bred adult can breed again. */
+    static final float BREED_COOLDOWN = 300f;
+    /** Baby mobs render and collide at this fraction of the adult size. */
+    public static final float BABY_SCALE = 0.5f;
+
     // Swimming/drowning: a mob submerged in water floats and paddles instead of
     // sinking under full gravity, and drowns if it stays fully underwater too
     // long - the same buoyancy the player gets, so mobs can cross (and perish
@@ -130,6 +152,12 @@ public class Mob {
     private boolean swimming;    // this frame: in water and not standing on the bottom
     private boolean saddled;     // a player has placed a saddle on this mob (horses only)
     private boolean mounted;     // a player is currently riding this mob
+
+    // --- Breeding state ---
+    private float loveTimer      = 0f;  // > 0: in love mode; counts down to 0
+    private float breedingCooldown = 0f; // > 0: recently bred; locked out of love mode
+    private boolean baby         = false; // true: this is a baby that hasn't grown up yet
+    private float growthTimer    = 0f;  // counts up; at BABY_GROW_TIME the baby becomes an adult
 
     public Mob(Type type, float x, float y, float z) {
         this.type = type;
@@ -205,6 +233,98 @@ public class Mob {
      * {@link Type#HORSE}).
      */
     public float mountYOffset() { return type.height * 0.4f; }
+
+    // -----------------------------------------------------------------------
+    // Breeding API
+    // -----------------------------------------------------------------------
+
+    /**
+     * True if this mob can currently enter love mode: it must be a breedable
+     * passive (pig, cow, or sheep), an adult, not already in love mode, and past
+     * its post-breed cooldown.
+     */
+    public boolean isBreedingCapable() {
+        return isBreedable(type) && !baby && loveTimer <= 0f && breedingCooldown <= 0f;
+    }
+
+    /** True if this mob is currently in love mode (waiting for a partner). */
+    public boolean isInLoveMode() { return loveTimer > 0f; }
+
+    /** True if this mob is a baby that hasn't grown into an adult yet. */
+    public boolean isBaby() { return baby; }
+
+    /**
+     * Mark this mob as a baby.  Called when a baby is first spawned; the baby
+     * will automatically grow into an adult after {@link #BABY_GROW_TIME} seconds.
+     */
+    public void setBaby(boolean baby) {
+        this.baby = baby;
+        this.growthTimer = baby ? 0f : BABY_GROW_TIME;
+    }
+
+    /**
+     * Feed this mob the given item.  If the item is appropriate breeding food
+     * for this mob type and the mob is capable of breeding, the mob enters love
+     * mode and the method returns {@code true} (the caller should consume one
+     * item from the player's inventory).  Returns {@code false} if the food is
+     * wrong for this mob or the mob is not ready to breed.
+     */
+    public boolean feed(BlockType food) {
+        if (!isBreedingCapable()) return false;
+        if (!isValidBreedingFood(type, food)) return false;
+        loveTimer = LOVE_DURATION;
+        return true;
+    }
+
+    /**
+     * Trigger the post-breed cooldown on this mob.  Called by {@link World} on
+     * both parents after a successful breed event.
+     */
+    public void applyBreedingCooldown() {
+        loveTimer = 0f;
+        breedingCooldown = BREED_COOLDOWN;
+    }
+
+    /**
+     * Advances only the breeding-related timers (love mode, cooldown, and baby
+     * growth) by {@code dt} seconds without triggering pathfinding or other AI.
+     * Package-private so unit tests can advance time without a live world.
+     */
+    void tickTimers(float dt) {
+        if (loveTimer > 0f) loveTimer = Math.max(0f, loveTimer - dt);
+        if (breedingCooldown > 0f) breedingCooldown = Math.max(0f, breedingCooldown - dt);
+        if (baby) {
+            growthTimer += dt;
+            if (growthTimer >= BABY_GROW_TIME) {
+                baby = false; // grown up
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Breeding helpers (package-private so World can call them)
+    // -----------------------------------------------------------------------
+
+    /** True if the given mob type can breed (breedable passives only). */
+    public static boolean isBreedable(Type t) {
+        return t == Type.PIG || t == Type.COW || t == Type.SHEEP;
+    }
+
+    /**
+     * True if {@code food} is a valid breeding trigger for {@code type}.
+     * <ul>
+     *   <li>Pigs eat carrots or raw potatoes.</li>
+     *   <li>Cows and sheep eat wheat.</li>
+     * </ul>
+     */
+    static boolean isValidBreedingFood(Type type, BlockType food) {
+        if (food == null) return false;
+        return switch (type) {
+            case PIG   -> food == BlockType.CARROT || food == BlockType.POTATO;
+            case COW, SHEEP -> food == BlockType.WHEAT;
+            default    -> false;
+        };
+    }
 
     /**
      * Tick used <em>in place of</em> {@link #update} while a player rides this
@@ -397,6 +517,8 @@ public class Mob {
     public void update(float dt, BlockAccessor world, Random rnd, Vector3f playerPos) {
         age += dt;
         wanderTimer -= dt;
+        tickTimers(dt);
+
 
         if (type.hostile) {
             updateHostile(dt, world, rnd, playerPos);

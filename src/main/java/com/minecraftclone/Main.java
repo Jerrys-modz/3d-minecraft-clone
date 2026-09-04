@@ -3500,6 +3500,28 @@ public class Main {
                     }
                 }
 
+                // Right-click a breedable passive mob (pig/cow/sheep) with the right food to
+                // start love mode.  The food item is consumed from the hotbar (except in Creative).
+                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
+                        && targetedMob != null
+                        && com.minecraftclone.world.Mob.isBreedable(targetedMob.type)) {
+                    if (targetedMob.isBreedingCapable() && targetedMob.feed(heldItem)) {
+                        if (!mode.isCreative()) {
+                            player.getInventory().remove(heldItem, 1);
+                        }
+                        handRenderer.triggerSwing();
+                        String mobName = targetedMob.type.name().charAt(0)
+                                + targetedMob.type.name().substring(1).toLowerCase();
+                        showMessage(messages, "♥ " + mobName + " is in love mode!",
+                                new Vector4f(1f, 0.5f, 0.8f, 1f), 2f);
+                    } else if (targetedMob.isInLoveMode()) {
+                        String mobName = targetedMob.type.name().charAt(0)
+                                + targetedMob.type.name().substring(1).toLowerCase();
+                        showMessage(messages, mobName + " is already in love mode!",
+                                new Vector4f(1f, 0.5f, 0.8f, 1f), 1.5f);
+                    }
+                }
+
                 // Full canteen can be drunk when not targeting a block or mob
                 // (hit == null ensures the player isn't facing a block they might
                 // want to interact with — right-clicking a door or water source
