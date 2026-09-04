@@ -153,6 +153,11 @@ public final class Farming {
         return isNearWater(world::getBlock, wx, wy, wz);
     }
 
+    /**
+     * Block-accessor overload of {@link #isNearWater(World, int, int, int)}.
+     * Package-private so unit tests can inject an in-memory grid without a
+     * full {@link World} instance.
+     */
     static boolean isNearWater(BlockGet get, int wx, int wy, int wz) {
         for (int dz = -4; dz <= 4; dz++) {
             for (int dx = -4; dx <= 4; dx++) {
@@ -176,6 +181,10 @@ public final class Farming {
         return tillAt(world::getBlock, world::setBlock, wx, wy, wz);
     }
 
+    /**
+     * Block-accessor overload of {@link #tillAt(World, int, int, int)}.
+     * Package-private for testability; the {@code World} overload delegates here.
+     */
     static boolean tillAt(BlockGet get, BlockSet set, int wx, int wy, int wz) {
         if (!canTill(get.get(wx, wy, wz))) return false;
         BlockType above = get.get(wx, wy + 1, wz);
@@ -415,6 +424,11 @@ public final class Farming {
         return applyBonemeal(world::getBlock, world::setBlock, wx, wy, wz, rnd);
     }
 
+    /**
+     * Block-accessor overload of {@link #applyBonemeal(World, int, int, int, Random)}.
+     * Cannot grow trees (no cross-chunk writes); sapling bone-meal is handled by
+     * the {@code World}-aware overload before this one is reached.
+     */
     static boolean applyBonemeal(BlockGet get, BlockSet set, int wx, int wy, int wz, Random rnd) {
         BlockType b = get.get(wx, wy, wz);
         if (b == null) return false;
@@ -486,6 +500,10 @@ public final class Farming {
         return spawned > 0;
     }
 
+    /**
+     * Picks a random decoration that bone meal sprouts on grass:
+     * 8 % chance of a red flower, 8 % of a yellow flower, remainder tall grass.
+     */
     static BlockType randomSprout(Random rnd) {
         float r = rnd.nextFloat();
         if (r < 0.08f) return BlockType.FLOWER_RED;
@@ -851,15 +869,31 @@ public final class Farming {
         return after != sapling;
     }
 
+    /**
+     * Read-only block accessor abstraction used so farming helpers (including
+     * {@link #find2x2JungleSWCorner}) can be unit-tested against an in-memory
+     * grid without requiring a full {@link com.minecraftclone.world.World}.
+     */
     @FunctionalInterface
     interface BlockGet {
+        /**
+         * Returns the block at {@code (x, y, z)}, or {@code null} / AIR if the
+         * position is unloaded or outside world bounds.
+         */
         BlockType get(int x, int y, int z);
     }
 
+    /**
+     * Write-only block mutator abstraction paired with {@link BlockGet}, allowing
+     * farming helpers to be driven by a test double that tracks modifications
+     * without touching the real chunk storage.
+     */
     @FunctionalInterface
     interface BlockSet {
+        /** Unconditionally sets the block at {@code (x, y, z)} to {@code type}. */
         void set(int x, int y, int z, BlockType type);
     }
 
+    /** Utility class — not instantiable. */
     private Farming() {}
 }
