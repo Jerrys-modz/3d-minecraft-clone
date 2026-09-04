@@ -2093,13 +2093,23 @@ public class World implements BlockAccessor {
             if (mob.wantsToExplode()) {
                 float cx = mob.position.x, cy = mob.position.y, cz = mob.position.z;
                 it.remove();
-                Vector3f tgt = playerPositions.get(nearest);
-                float expDmg = triggerExplosion(cx, cy, cz,
+                // Destroy blocks with the nearest player as the blast anchor, then
+                // compute per-player splash damage so every player in range takes a hit.
+                Vector3f anchor = playerPositions.get(nearest);
+                triggerExplosion(cx, cy, cz,
                         Explosion.CREEPER_RADIUS, Explosion.CREEPER_CENTER_DAMAGE,
-                        tgt.x, tgt.y, tgt.z, rnd);
-                damage[nearest] += expDmg;
-                srcX[nearest] = cx;
-                srcZ[nearest] = cz;
+                        anchor.x, anchor.y, anchor.z, rnd);
+                for (int pi = 0; pi < count; pi++) {
+                    Vector3f p = playerPositions.get(pi);
+                    float d = Explosion.damageAt(cx, cy, cz,
+                            Explosion.CREEPER_RADIUS, Explosion.CREEPER_CENTER_DAMAGE,
+                            p.x, p.y, p.z);
+                    if (d > 0f) {
+                        damage[pi] += d;
+                        srcX[pi] = cx;
+                        srcZ[pi] = cz;
+                    }
+                }
             }
         }
 

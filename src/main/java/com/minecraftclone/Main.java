@@ -3970,8 +3970,9 @@ public class Main {
                         handRenderer.triggerSwing();
                         audio.play(SoundEvent.EAT);
                         showMessage(messages, "Drank from canteen.", new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
-                    } else if (netClient == null && noMob && targeted == BlockType.TNT) {
+                    } else if (netClient == null && !mode.isSpectator() && noMob && targeted == BlockType.TNT) {
                         // Right-click a placed TNT block to ignite it immediately.
+                        // Spectator mode is non-interactive, so guard here as well.
                         // The block is removed first so it cannot be caught in the
                         // blast as a solid cell (which would suppress the explosion).
                         int tx = hit.blockPos.x, ty = hit.blockPos.y, tz = hit.blockPos.z;
@@ -3983,7 +3984,8 @@ public class Main {
                                 com.minecraftclone.world.Explosion.TNT_CENTER_DAMAGE,
                                 pp.x, pp.y, pp.z, loot);
                         if (expDmg > 0f) {
-                            player.takeDamage(expDmg);
+                            // Apply the same difficulty multiplier used for creeper damage.
+                            player.takeDamage(expDmg * settings.getDifficulty().mobDamageMultiplier());
                         }
                         handRenderer.triggerSwing();
                         showMessage(messages, "BOOM!", new Vector4f(1f, 0.7f, 0.1f, 1f), 1.5f);
