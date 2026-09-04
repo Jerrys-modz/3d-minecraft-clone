@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * <ul>
  *   <li>Only PIG / COW / SHEEP are breedable types.</li>
  *   <li>Valid and invalid food per mob type.</li>
- *   <li>Love-mode timer countdown via {@link Mob#update(float)}.</li>
+ *   <li>Love-mode timer countdown via {@link Mob#tickTimers(float)}.</li>
  *   <li>Breeding cooldown prevents immediate re-feeding.</li>
  *   <li>Baby flag is set and cleared after the grow-up timer elapses.</li>
  *   <li>{@link World#tickBreeding(Random)} spawns a baby between two nearby
@@ -38,7 +38,7 @@ class AnimalBreedingTest {
         return new Mob(type, 0f, 1f, 0f);
     }
 
-    /** Creates a minimal World in the temp directory. */
+    /** Creates a minimal World backed by the JUnit temp directory. */
     private World world() {
         return new World(12345L, new WorldGenSettings(), null,
                 tmp.resolve("w" + System.nanoTime()), DimensionType.OVERWORLD, true);
@@ -53,31 +53,37 @@ class AnimalBreedingTest {
     // Breedable types
     // -----------------------------------------------------------------------
 
+    /** Pigs are breedable. */
     @Test
     void pigIsBreadable() {
         assertTrue(Mob.isBreedable(Mob.Type.PIG));
     }
 
+    /** Cows are breedable. */
     @Test
     void cowIsBreedable() {
         assertTrue(Mob.isBreedable(Mob.Type.COW));
     }
 
+    /** Sheep are breedable. */
     @Test
     void sheepIsBreedable() {
         assertTrue(Mob.isBreedable(Mob.Type.SHEEP));
     }
 
+    /** Horses are not breedable. */
     @Test
     void horseIsNotBreedable() {
         assertFalse(Mob.isBreedable(Mob.Type.HORSE));
     }
 
+    /** Zombies are not breedable. */
     @Test
     void zombieIsNotBreedable() {
         assertFalse(Mob.isBreedable(Mob.Type.ZOMBIE));
     }
 
+    /** Wolves are not breedable. */
     @Test
     void wolfIsNotBreedable() {
         assertFalse(Mob.isBreedable(Mob.Type.WOLF));
@@ -87,21 +93,25 @@ class AnimalBreedingTest {
     // Valid breeding foods
     // -----------------------------------------------------------------------
 
+    /** Carrot is valid breeding food for a pig. */
     @Test
     void carrotFeedsPig() {
         assertTrue(Mob.isValidBreedingFood(Mob.Type.PIG, BlockType.CARROT));
     }
 
+    /** Potato is valid breeding food for a pig. */
     @Test
     void potatoFeedsPig() {
         assertTrue(Mob.isValidBreedingFood(Mob.Type.PIG, BlockType.POTATO));
     }
 
+    /** Wheat is valid breeding food for a cow. */
     @Test
     void wheatFeedsCow() {
         assertTrue(Mob.isValidBreedingFood(Mob.Type.COW, BlockType.WHEAT));
     }
 
+    /** Wheat is valid breeding food for a sheep. */
     @Test
     void wheatFeedsSheep() {
         assertTrue(Mob.isValidBreedingFood(Mob.Type.SHEEP, BlockType.WHEAT));
@@ -111,16 +121,19 @@ class AnimalBreedingTest {
     // Invalid breeding foods
     // -----------------------------------------------------------------------
 
+    /** Wheat is not valid breeding food for a pig. */
     @Test
     void wheatDoesNotFeedPig() {
         assertFalse(Mob.isValidBreedingFood(Mob.Type.PIG, BlockType.WHEAT));
     }
 
+    /** Carrot is not valid breeding food for a cow. */
     @Test
     void carrotDoesNotFeedCow() {
         assertFalse(Mob.isValidBreedingFood(Mob.Type.COW, BlockType.CARROT));
     }
 
+    /** Dirt is not valid breeding food for any breedable mob. */
     @Test
     void dirtDoesNotFeedAnything() {
         assertFalse(Mob.isValidBreedingFood(Mob.Type.PIG,   BlockType.DIRT));
@@ -132,6 +145,7 @@ class AnimalBreedingTest {
     // feed() and love-mode entry
     // -----------------------------------------------------------------------
 
+    /** Feeding a capable mob with valid food returns true and enters love mode. */
     @Test
     void feedWithValidFoodEntersLoveMode() {
         Mob pig = mob(Mob.Type.PIG);
@@ -143,6 +157,7 @@ class AnimalBreedingTest {
         assertTrue(pig.isInLoveMode(), "pig should be in love mode after being fed");
     }
 
+    /** Feeding a mob with food not valid for its type returns false and leaves it out of love mode. */
     @Test
     void feedWithInvalidFoodDoesNotEnterLoveMode() {
         Mob pig = mob(Mob.Type.PIG);
@@ -152,6 +167,7 @@ class AnimalBreedingTest {
         assertFalse(pig.isInLoveMode());
     }
 
+    /** Feeding a mob that is already in love mode returns false. */
     @Test
     void feedWhileAlreadyInLoveModeReturnsFalse() {
         Mob cow = mob(Mob.Type.COW);
@@ -166,6 +182,7 @@ class AnimalBreedingTest {
     // Love-mode countdown
     // -----------------------------------------------------------------------
 
+    /** Love mode expires once LOVE_DURATION seconds have elapsed. */
     @Test
     void loveModeExpiresAfterDuration() {
         Mob sheep = mob(Mob.Type.SHEEP);
@@ -177,6 +194,7 @@ class AnimalBreedingTest {
         assertFalse(sheep.isInLoveMode(), "love mode should expire after LOVE_DURATION seconds");
     }
 
+    /** Love mode is still active just before LOVE_DURATION elapses. */
     @Test
     void loveModeStillActiveBeforeDurationExpires() {
         Mob sheep = mob(Mob.Type.SHEEP);
@@ -190,6 +208,7 @@ class AnimalBreedingTest {
     // Breeding cooldown
     // -----------------------------------------------------------------------
 
+    /** Applying a breeding cooldown clears love mode and marks the mob as not breeding-capable. */
     @Test
     void afterBreedingCooldownMobIsNotBreedingCapable() {
         Mob cow = mob(Mob.Type.COW);
@@ -200,6 +219,7 @@ class AnimalBreedingTest {
         assertFalse(cow.isBreedingCapable(), "mob should not be breeding-capable during cooldown");
     }
 
+    /** The mob becomes breeding-capable again once BREED_COOLDOWN seconds have elapsed. */
     @Test
     void mobBecomesBreedingCapableAfterCooldownExpires() {
         Mob cow = mob(Mob.Type.COW);
@@ -211,6 +231,7 @@ class AnimalBreedingTest {
         assertTrue(cow.isBreedingCapable(), "mob should be breedable again after cooldown");
     }
 
+    /** Attempting to feed a mob during its breeding cooldown returns false. */
     @Test
     void feedDuringCooldownReturnsFalse() {
         Mob pig = mob(Mob.Type.PIG);
@@ -225,6 +246,7 @@ class AnimalBreedingTest {
     // Baby flag and growth
     // -----------------------------------------------------------------------
 
+    /** setBaby(true) is reflected immediately by isBaby(). */
     @Test
     void setBabyFlagIsReflected() {
         Mob pig = mob(Mob.Type.PIG);
@@ -234,6 +256,7 @@ class AnimalBreedingTest {
         assertTrue(pig.isBaby());
     }
 
+    /** A baby grows into an adult once BABY_GROW_TIME seconds have elapsed. */
     @Test
     void babyGrowsUpAfterGrowTime() {
         Mob pig = mob(Mob.Type.PIG);
@@ -244,6 +267,7 @@ class AnimalBreedingTest {
         assertFalse(pig.isBaby(), "baby should have grown up after BABY_GROW_TIME seconds");
     }
 
+    /** A baby is still a baby just before BABY_GROW_TIME elapses. */
     @Test
     void babyStillYoungBeforeGrowTimeExpires() {
         Mob pig = mob(Mob.Type.PIG);
@@ -253,6 +277,7 @@ class AnimalBreedingTest {
         assertTrue(pig.isBaby(), "baby should still be a baby before BABY_GROW_TIME");
     }
 
+    /** Baby mobs cannot enter love mode or breed. */
     @Test
     void babyIsNotBreedingCapable() {
         Mob pig = mob(Mob.Type.PIG);
@@ -265,8 +290,8 @@ class AnimalBreedingTest {
     // -----------------------------------------------------------------------
 
     /**
-     * Creates a minimal world with two love-mode mobs of the same type close
-     * together; after {@code tickBreeding} a baby should appear in the mob list.
+     * Two love-mode adults of the same type within BREED_RANGE cause
+     * {@link World#tickBreeding(Random)} to spawn exactly one baby.
      */
     @Test
     void tickBreedingSpawnsBabyForNearbyPair() {
@@ -292,6 +317,7 @@ class AnimalBreedingTest {
         assertTrue(baby.isBaby(), "newly spawned mob should be a baby");
     }
 
+    /** Both parents receive a breeding cooldown after tickBreeding produces a baby. */
     @Test
     void tickBreedingAppliesCooldownToParents() {
         World world = world();
@@ -312,6 +338,7 @@ class AnimalBreedingTest {
         assertFalse(mb.isBreedingCapable(), "parent B should be on breeding cooldown");
     }
 
+    /** tickBreeding does not pair mobs of different types, even when both are in love mode. */
     @Test
     void tickBreedingDoesNotPairMismatchedTypes() {
         World world = world();
@@ -331,6 +358,7 @@ class AnimalBreedingTest {
         assertEquals(before, after, "no baby should be produced for mismatched types");
     }
 
+    /** tickBreeding does not pair adults that are farther apart than BREED_RANGE. */
     @Test
     void tickBreedingDoesNotPairMobsTooFarApart() {
         World world = world();
@@ -352,6 +380,7 @@ class AnimalBreedingTest {
         assertEquals(before, after, "no baby should be produced when parents are too far apart");
     }
 
+    /** tickBreeding is a no-op when neither mob is in love mode. */
     @Test
     void tickBreedingNoActionWithoutLoveModeParents() {
         World world = world();
