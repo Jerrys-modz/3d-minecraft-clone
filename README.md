@@ -287,6 +287,23 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 
 If you've got a specific one of these in mind, just say which and it jumps the queue.
 
+## Phase 0 — Deep Survival Foundation
+
+The active development phase. All eight items must be done before Phase 1 (Bronze Age & Steam) begins.
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | **Farming** | ✅ Done | Hoe, farmland, wheat/potato/carrot growth stages, bone meal; see Features |
+| 2 | **Animal Breeding** | ✅ Done | Love mode, babies, 5-min cooldown; pigs (carrot/potato), cows/sheep (wheat); see Features |
+| 3 | **Beds & Spawn** | ✅ Done | Sleep to skip night, set respawn point; see Features |
+| 4 | **Thirst** | ✅ Done | `PlayerStats.thirst` (drains over 15 min, dehydration damage); clay canteen (fill at water source, right-click to drink 40 units); cyan-blue HUD bar |
+| 5 | **Temperature** | ✅ Done | Biome × season × altitude × cave; cold exposure; warm armor (fur wolf/bear tiers); frost HUD bar; see Features |
+| 6 | **Weather & Seasons** | ✅ Done | Rain, snow, thunderstorms, blizzards, fog; 4 seasons; weather forecast (`H`); see Features |
+| 7 | **Radiation** | ❌ TODO | Uranium/plutonium ore emits radiation on proximity; radiation damage over time; hazmat suit (rubber + steel) blocks exposure; radiation HUD indicator |
+| 8 | **More Hostile Mobs** | ✅ Done | Zombies, skeletons (arrows), creepers (fuse + explosion, gunpowder drop, TNT), spiders (string drop), wolves, polar bears |
+
+> **Next up:** implement **Radiation** (item #7) — uranium/plutonium ore blocks, proximity damage, hazmat suit crafting recipe, HUD indicator.
+
 ## Testing a PR
 
 Every push to a pull request automatically runs the JUnit 5 unit tests (`src/test/`, covering inventory/stacking, click/drag/craft interactions, game-mode flight rules, crafting recipes and the fluid sim), builds a runnable fat jar, and uploads it as a build **artifact** — open the PR's **Actions** tab and download `minecraft-clone-pr-N.jar` from the latest run. You can also comment `/build` on a PR to trigger a fresh build of that PR's head on demand, and a headless smoke test renders a few frames to a screenshot each run (see `.github/workflows/pr-build.yml`). Download it and run:
