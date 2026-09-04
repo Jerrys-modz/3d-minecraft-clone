@@ -847,9 +847,10 @@ public class Mob {
     }
 
     private AABB box() {
-        float hw = type.width / 2f;
-        float y0 = position.y - type.height / 2f;
-        float y1 = position.y + type.height / 2f;
+        float scale = baby ? BABY_SCALE : 1f;
+        float hw = type.width / 2f * scale;
+        float y0 = position.y - type.height / 2f * scale;
+        float y1 = position.y + type.height / 2f * scale;
         return new AABB(position.x - hw, y0, position.z - hw, position.x + hw, y1, position.z + hw);
     }
 }

@@ -3502,7 +3502,11 @@ public class Main {
 
                 // Right-click a breedable passive mob (pig/cow/sheep) with the right food to
                 // start love mode.  The food item is consumed from the hotbar (except in Creative).
-                if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
+                // Single-player only: in multiplayer targetedMob is a remoteMobs mirror and feeding
+                // it locally would not notify the server.  A dedicated feed packet is needed before
+                // enabling this in multiplayer.
+                if (netClient == null
+                        && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
                         && targetedMob != null
                         && com.minecraftclone.world.Mob.isBreedable(targetedMob.type)) {
                     if (targetedMob.isBreedingCapable() && targetedMob.feed(heldItem)) {

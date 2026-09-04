@@ -1904,6 +1904,7 @@ public class World implements BlockAccessor {
     void tickBreeding(Random rnd) {
         java.util.List<Mob> babies = new java.util.ArrayList<>();
         for (int a = 0; a < mobs.size(); a++) {
+            if (mobs.size() + babies.size() >= MAX_MOBS) break;
             Mob ma = mobs.get(a);
             if (!ma.isInLoveMode()) continue;
             for (int b = a + 1; b < mobs.size(); b++) {
