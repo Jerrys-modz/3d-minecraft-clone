@@ -113,10 +113,12 @@ public final class Armor {
     private Armor() {
     }
 
+    /** True if {@code type} is a registered armor piece (null-safe). */
     public static boolean isArmor(BlockType type) {
         return type != null && ARMOR.containsKey(type);
     }
 
+    /** Full {@link ArmorStats} for {@code type}, or {@code null} if it isn't armor. */
     public static ArmorStats stats(BlockType type) {
         return ARMOR.get(type);
     }

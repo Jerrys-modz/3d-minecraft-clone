@@ -114,18 +114,22 @@ public class PlayerStats {
         this.radiationRate = Math.max(0f, ratePerSecond);
     }
 
+    /** Current health, 0 (dead) to {@link #MAX_HEALTH}. */
     public float getHealth() {
         return health;
     }
 
+    /** Current hunger, 0 (starving) to {@link #MAX_HUNGER}. */
     public float getHunger() {
         return hunger;
     }
 
+    /** Current thirst, 0 (dehydrated) to {@link #MAX_THIRST}. */
     public float getThirst() {
         return thirst;
     }
 
+    /** Current stamina, 0 (exhausted) to {@link #MAX_STAMINA}. */
     public float getStamina() {
         return stamina;
     }
@@ -135,10 +139,12 @@ public class PlayerStats {
         return Math.max(0f, DROWN_GRACE_SECONDS - submergedTime);
     }
 
+    /** True once health has hit zero; stays true until {@link #reset()} or {@link #forceFull()} is called. */
     public boolean isDead() {
         return dead;
     }
 
+    /** Resets every stat to full and clears the dead flag — called on respawn. */
     public void reset() {
         health    = MAX_HEALTH;
         hunger    = MAX_HUNGER;
