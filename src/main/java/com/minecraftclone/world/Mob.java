@@ -205,7 +205,7 @@ public class Mob {
             case SKELETON -> BlockType.BONES;
             case WOLF -> BlockType.WOLF_PELT;
             case POLAR_BEAR -> BlockType.BEAR_HIDE;
-            case SPIDER -> BlockType.COAL;        // spiders drop string in vanilla; coal is the closest available item
+            case SPIDER -> BlockType.STRING;       // spider silk string, used to craft fishing rods
             case CREEPER -> BlockType.COAL;       // creepers drop gunpowder; coal is the placeholder
             case HORSE -> BlockType.RAW_BEEF;     // placeholder; horses drop leather in vanilla
         };

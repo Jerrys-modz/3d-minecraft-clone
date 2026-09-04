@@ -94,6 +94,7 @@ public final class Crafting {
         // Electric Age: copper/gold wiring
         CHARS.put('X', BlockType.COPPER_INGOT);       // X = copper ingot (cross-section of wire)
         CHARS.put('A', BlockType.GOLD_INGOT);         // A = gold ingot (Au)
+        CHARS.put('R', BlockType.STRING);             // R = stRing (fishing)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -166,6 +167,13 @@ public final class Crafting {
         // Bone meal: crush one bone into 3 piles (inventory 2x2 or crafting table).
         shapeless2x2(BlockType.BONE_MEAL, 3, BlockType.BONES);
         shapeless3x3(BlockType.BONE_MEAL, 3, BlockType.BONES);
+
+        // Fishing rod: three sticks in a diagonal (top-right to bottom-left) + two string.
+        // Vanilla pattern:   ..S      (row 0: S = stick at col 2)
+        //                    .SR      (row 1: S = stick at col 1, R = string at col 2)
+        //                    SRR      (row 2: S = stick at col 0, R = string at cols 1-2)
+        // Note: 'R' = STRING in the character map above.
+        shaped3x3("..S", ".SR", "SRR", BlockType.FISHING_ROD, 1);
 
         // Clay canteen: 4 clay balls in a 2x2 (inventory grid). Crafting-table
         // recipe uses a distinct 3x3 vessel shape so it does not collide with

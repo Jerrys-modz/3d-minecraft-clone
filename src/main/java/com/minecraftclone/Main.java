@@ -3526,6 +3526,38 @@ public class Main {
                     }
                 }
 
+                // Fishing rod: right-click to cast a bobber, right-click again to reel in.
+                // Only in single-player (netClient == null); multiplayer needs a server packet.
+                if (netClient == null && input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT)
+                        && heldItem != null && heldItem.isFishingRod()) {
+                    if (world.getActiveBobber() != null) {
+                        // Reel in an existing bobber.
+                        BlockType fishCatch = world.reelIn(loot);
+                        handRenderer.triggerSwing();
+                        if (fishCatch != null) {
+                            player.getInventory().add(fishCatch, 1);
+                            String itemName = fishCatch.name().charAt(0)
+                                    + fishCatch.name().substring(1).replace('_', ' ').toLowerCase();
+                            showMessage(messages, "Caught: " + itemName + "!",
+                                    new Vector4f(0.4f, 0.9f, 1f, 1f), 2f);
+                        } else {
+                            showMessage(messages, "Nothing on the line.",
+                                    new Vector4f(0.8f, 0.8f, 0.8f, 1f), 1f);
+                        }
+                    } else {
+                        // Cast a new bobber in the direction the player is looking.
+                        org.joml.Vector3f eye   = player.getEyePosition();
+                        org.joml.Vector3f front = player.getCamera().getFront();
+                        float speed = 18f;
+                        world.castBobber(
+                                eye.x, eye.y, eye.z,
+                                front.x * speed, front.y * speed + 4f, front.z * speed);
+                        handRenderer.triggerSwing();
+                        showMessage(messages, "Bobber cast — wait for a bite!",
+                                new Vector4f(0.4f, 0.9f, 1f, 1f), 1.5f);
+                    }
+                }
+
                 // Full canteen can be drunk when not targeting a block or mob
                 // (hit == null ensures the player isn't facing a block they might
                 // want to interact with — right-clicking a door or water source

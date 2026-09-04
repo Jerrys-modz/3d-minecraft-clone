@@ -127,6 +127,9 @@ public final class Smelting {
 
         // Farming: raw potato baked into cooked potato.
         smelt(BlockType.POTATO, BlockType.POTATO_COOKED);
+
+        // Fishing: raw fish cooked into cooked fish.
+        smelt(BlockType.RAW_FISH, BlockType.COOKED_FISH);
     }
 
     private Smelting() {

@@ -184,6 +184,9 @@ public class World implements BlockAccessor {
     // Placed boats.  Transient - not saved (like dropped items).
     private final List<BoatEntity> boats = new ArrayList<>();
 
+    // Active fishing bobber (single-player: at most one at a time). Transient.
+    private FishingBobber activeBobber;
+
     public World(long seed, WorldGenSettings genSettings, TextureAtlas atlas, Path saveDir, DimensionType dimension) {
         this(seed, genSettings, atlas, saveDir, dimension, false);
     }
@@ -1891,6 +1894,7 @@ public class World implements BlockAccessor {
         }
 
         tickBreeding(rnd);
+        tickBobber(dt, rnd);
         damage += updateArrows(dt, playerBox) * damageMul;
         return damage;
     }
@@ -1928,6 +1932,64 @@ public class World implements BlockAccessor {
             }
         }
         mobs.addAll(babies);
+    }
+
+    // -----------------------------------------------------------------------
+    // Fishing bobber management
+    // -----------------------------------------------------------------------
+
+    /**
+     * Casts a new fishing bobber from the given origin with the given velocity.
+     * Any previously active bobber is discarded.  Call this when the player
+     * right-clicks with a {@link BlockType#FISHING_ROD} and no bobber is active.
+     *
+     * @param x  world X of the throw origin (typically the player's eye)
+     * @param y  world Y of the throw origin
+     * @param z  world Z of the throw origin
+     * @param vx horizontal velocity component along X
+     * @param vy vertical launch velocity (positive = upward)
+     * @param vz horizontal velocity component along Z
+     */
+    public void castBobber(float x, float y, float z, float vx, float vy, float vz) {
+        activeBobber = new FishingBobber(x, y, z, vx, vy, vz);
+    }
+
+    /**
+     * Reels in the active fishing bobber and returns any item caught.
+     * The bobber is cleared regardless of whether a fish was caught.
+     *
+     * @param rnd random source (used by the loot table)
+     * @return the caught {@link BlockType}, or {@code null} if the bobber was
+     *         not biting (nothing caught)
+     */
+    public BlockType reelIn(Random rnd) {
+        if (activeBobber == null) return null;
+        BlockType loot = activeBobber.reelIn(rnd);
+        activeBobber = null;
+        return loot;
+    }
+
+    /**
+     * Returns the active fishing bobber for rendering, or {@code null} if none
+     * has been cast.
+     *
+     * @return the active {@link FishingBobber}, or {@code null}
+     */
+    public FishingBobber getActiveBobber() {
+        return activeBobber;
+    }
+
+    /**
+     * Advances the active bobber's physics and bite-timer state machine.
+     * Called internally by {@link #updateMobs} each tick.
+     */
+    private void tickBobber(float dt, Random rnd) {
+        if (activeBobber == null) return;
+        activeBobber.tick(dt, this, rnd);
+        // Discard the bobber if it missed water and is no longer in-flight.
+        if (!activeBobber.isInFlight() && !activeBobber.isFloating() && !activeBobber.isBiting()) {
+            activeBobber = null;
+        }
     }
 
     /** Per-player damage result with the position of the mob that dealt it (for knockback direction). */
@@ -1987,6 +2049,7 @@ public class World implements BlockAccessor {
         }
 
         tickBreeding(rnd);
+        tickBobber(dt, rnd);
         float[] arrowDamage = updateArrowsMulti(dt, playerBoxes);
         for (int i = 0; i < count; i++) {
             damage[i] += arrowDamage[i];
