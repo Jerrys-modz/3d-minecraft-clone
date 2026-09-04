@@ -305,6 +305,240 @@ The active development phase. All eight items must be done before Phase 1 (Bronz
 
 > **Phase 0 complete! ✅** All 8 Deep Survival Foundation features are implemented. Next phase: **Phase 1 — Bronze Age & Steam**.
 
+---
+
+## Phase 1 — Bronze Age & Steam
+
+The next active development phase. Primitive processing unlocks before any electricity — ore doubling starts with a mortar, metals are cast in a crucible, and steam machines provide the first real throughput boost.
+
+**Tier:** GTNH Steam Tier
+
+### Primitive Processing
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Mortar & Pestle** | ❌ Todo | Right-click held ore in hand to grind; ore → dust (1:1, no machine needed) |
+| **Crucible** | ❌ Todo | Placed over fire; melt metals; pour into Clay Molds for ingots, plates, rods |
+| **Alloys — Bronze & Brass** | ❌ Todo | Copper dust + tin dust (3:1) in crucible → bronze ingot; unlocks bronze tools |
+| **Bronze Tools** | ❌ Todo | Tier between stone and iron; bronze pickaxe, axe, hammer, sword, shovel |
+
+### Primitive Blast Furnace
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Primitive Blast Furnace** | ❌ Todo | Multi-block: 3×3×3 of fire bricks; iron + charcoal → wrought iron at 700K |
+| **Wrought Iron** | ❌ Todo | Intermediate between iron and steel; required for steam machine casings |
+
+### Steam Machines
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Steam Boiler** | ❌ Todo | Bronze casing + water input + fuel slot → steam pressure; powers all steam machines |
+| **Steam Macerator** | ❌ Todo | Ore → 2× crushed ore (doubles yield); replaces hand-grinding |
+| **Steam Furnace** | ❌ Todo | Twice the speed of the placed furnace; runs on steam not fuel |
+| **Steam Ore Washer** | ❌ Todo | Crushed ore + water → purified ore + tiny byproduct dusts |
+
+> **Survival interlock:** Steam machines require water (now a scarce resource via Thirst). Winter season slows boiler efficiency — players must stockpile fuel or build heated structures.
+
+**New blocks/items needed:** `MORTAR` · `CRUCIBLE` · `CLAY_MOLD` · `FIRE_BRICK` · `BRONZE_CASING` · `STEAM_BOILER` · `STEAM_MACERATOR` · `STEAM_FURNACE` · `STEAM_ORE_WASHER` · `BRONZE_PIPE` · `WROUGHT_IRON_INGOT` · `BRONZE_INGOT` · `PLATE (per metal)` · `ROD (per metal)`
+
+---
+
+## Phase 2 — Steel Age & Basic Electricity
+
+Introduces the EU power system and the first electric machines. Steel enables machine casings; the ore-processing chain (Macerator → Ore Washer → Thermal Centrifuge) gives 3× ore yield.
+
+**Tier:** LV (Low Voltage)
+
+### Steel Production
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Steel Alloy** | ❌ Todo | Iron + coal dust in blast furnace at 1000K; required for all electric machine casings |
+| **Upgraded Blast Furnace** | ❌ Todo | Replace fire brick with steel casings; raises max temp; unlocks steel + chrome |
+
+### Energy System
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **EU System** | ❌ Todo | Energy Units (EU/t); produced, stored, transmitted, consumed by machines |
+| **Coal Generator** | ❌ Todo | Burns fuel → 32 EU/t (LV); entry-point power source |
+| **Battery Buffer** | ❌ Todo | Stores EU in inserted battery items; smooths generator output |
+| **Cables** | ❌ Todo | Copper (LV, 2EU/m loss), Tin (ULV, 1EU/m), Gold (MV); wire placed as world blocks |
+| **LV Transformer** | ❌ Todo | Steps voltage up/down; prevents machine explosion from overvoltage |
+
+### LV Machines
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Macerator (LV)** | ❌ Todo | Ore → 2× crushed ore + byproduct; faster than steam |
+| **Ore Washer (LV)** | ❌ Todo | Crushed → purified ore + 3 tiny dusts of secondary metals |
+| **Thermal Centrifuge (LV)** | ❌ Todo | Purified ore → dust + byproduct dust; completes the 3-step ore chain |
+| **Electric Furnace (LV)** | ❌ Todo | 4× faster than placed furnace; runs on EU |
+| **Electrolyzer (LV)** | ❌ Todo | Splits compound dusts into elements; required for chrome, aluminium, etc. |
+| **Compressor / Extractor** | ❌ Todo | Compress dusts to plates, gems to lens; extract rubber from rubber wood |
+
+### Primitive Circuits
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Vacuum Tube Circuit** | ❌ Todo | Primitive circuit: glass tube + copper wire; used in all LV machine recipes |
+
+> **Survival interlock:** Running cables through your base creates fire hazard if insulation burns. Mining deeper to reach cobalt/nickel for the Electrolyzer means coping with cave temperature drops — torch warmth becomes a mechanic, not just lighting.
+
+**New blocks/items needed:** `STEEL_CASING` · `COAL_GENERATOR` · `BATTERY_BUFFER` · `LV_TRANSFORMER` · `CABLE_COPPER` · `CABLE_TIN` · `CABLE_GOLD` · `MACERATOR_LV` · `ORE_WASHER_LV` · `THERMAL_CENTRIFUGE_LV` · `ELECTRIC_FURNACE_LV` · `ELECTROLYZER_LV` · `COMPRESSOR_LV` · `LV_BATTERY (tin)` · `VACUUM_TUBE` · `STEEL_INGOT`
+
+---
+
+## Phase 3 — Chemistry & Fluids
+
+Fluids become first-class objects: tanks, pipes, cells, and drums route them between machines. Chemistry unlocks acid processing (3× ore yield) and advanced alloys gating MV casings.
+
+**Tier:** MV (Medium Voltage)
+
+### Fluid System
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Fluid Tanks** | ❌ Todo | Steel / stainless tanks in world; capacity in mB; required for all chemical recipes |
+| **Fluid Pipes** | ❌ Todo | Bronze → steel → stainless; route fluids between machines |
+| **Fluid Cells & Drums** | ❌ Todo | Tin cell (1000 mB) for hand transport; steel drum (16000 mB) for bulk storage |
+
+### Chemistry
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Chemical Reactor (MV)** | ❌ Todo | Combines dust + fluid → compound; required for acid production |
+| **Sulfuric Acid** | ❌ Todo | Sulfur dust + water → H₂SO₄; enables wet ore processing (3× yield) |
+| **Hydrochloric Acid** | ❌ Todo | Salt + electrolysis → HCl + sodium; needed for titanium chain |
+| **Oil & Distillation** | ❌ Todo | Oil pools underground; pump → distillation tower → diesel, light/heavy fuel, lubricant |
+
+### Advanced Alloys
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Invar** | ❌ Todo | Iron + nickel (2:1); low thermal expansion; required for pipes and reactor components |
+| **Electrum** | ❌ Todo | Gold + silver (1:1); good conductor; used in MV circuits and cables |
+| **Stainless Steel** | ❌ Todo | Iron + chrome + manganese + nickel; required for MV casings and tanks |
+| **MV Machines** | ❌ Todo | All LV machines upgraded to MV tier; 4× speed, 4× EU cost; stainless casing |
+
+### Circuits
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Integrated Logic Circuit** | ❌ Todo | Silicon wafer + electrum + copper; used in all MV recipes |
+| **Silicon Chain** | ❌ Todo | Quartz → silicon dust → wafer (CVD chamber) → chip |
+
+> **Survival interlock:** Chemical spills (acid tank damage) if pipes burst from overpressure. Oil extraction near lava creates fire spread danger. Working in chemical areas requires rubber hazmat suit.
+
+**New blocks/items needed:** `STEEL_TANK` · `FLUID_PIPE (3 tiers)` · `TIN_CELL` · `STEEL_DRUM` · `CHEMICAL_REACTOR_MV` · `DISTILLATION_TOWER (multi-block)` · `OIL_PUMP` · `INVAR_INGOT` · `ELECTRUM_INGOT` · `STAINLESS_INGOT` · `MV_CASING` · `SILICON_WAFER` · `MV_BATTERY (lithium)` · `MV_TRANSFORMER`
+
+---
+
+## Phase 4 — Electric Blast Furnace & Multi-blocks
+
+The EBF is the defining multi-block of GTNH: it's the gate to titanium, tungstensteel, chrome, and iridium — all required for HV+ content. Multi-block machines start appearing in earnest.
+
+**Tier:** HV (High Voltage)
+
+### Core Multi-block: EBF
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Electric Blast Furnace** | ❌ Todo | Multi-block controller + heat coils (kanthal, nichrome, tungstensteel) + hatches; reaches 2700–9000K |
+| **Titanium** | ❌ Todo | Rutile dust in EBF at 1700K; required for HV casings and next-tier pipes |
+| **Tungstensteel** | ❌ Todo | Tungsten + steel in EBF at 3000K; required for HV machines and EV coils |
+| **Chrome & Iridium** | ❌ Todo | Chromite → chrome at 1700K; Iridium from platinum group processing at 2700K |
+
+### Other Multi-blocks
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Large Chemical Reactor** | ❌ Todo | Multi-block; handles fluid-in + fluid-out simultaneously; required for petrochemicals |
+| **Implosion Compressor** | ❌ Todo | TNT charges compress gem dust → gems, carbon plates → diamond plates |
+| **Vacuum Freezer** | ❌ Todo | Cools hot ingots from EBF output; required for hot tungsten → tungsten ingot |
+
+### HV Machines & Circuits
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **HV Machines** | ❌ Todo | Tungstensteel casing; 16× speed vs LV; required for advanced alloy chains |
+| **Advanced Circuit (HV)** | ❌ Todo | Gold + silicon + electrum; unlocks HV machine recipes |
+| **Steam Turbine** | ❌ Todo | Burns steam from large boiler → 512 EU/t (HV); better than coal generator |
+
+> **Survival interlock:** EBF emits heat in a radius — base layout must account for it. Implosion compressor is literally explosive; a miscalculation destroys nearby structure. Radiation from iridium and plutonium processing requires full hazmat.
+
+**New blocks/items needed:** `EBF_CONTROLLER` · `KANTHAL_COIL` · `NICHROME_COIL` · `HV_CASING (tungstensteel)` · `TITANIUM_INGOT` · `TUNGSTENSTEEL_INGOT` · `HOT_TUNGSTEN_INGOT` · `VACUUM_FREEZER` · `IMPLOSION_COMPRESSOR` · `LARGE_CHEM_REACTOR` · `STEAM_TURBINE` · `HV_BATTERY` · `HV_TRANSFORMER`
+
+---
+
+## Phase 5 — EV/IV — Exotic Materials
+
+Naquadah and trinium push the voltage wall to EV/IV. Superconducting cables eliminate transmission loss. The nuclear fission reactor provides serious power but demands engineering discipline.
+
+**Tier:** EV · IV · LuV
+
+### Advanced Material Chains
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Naquadah Processing** | ❌ Todo | Naquadah ore → ingot via acid + EBF at 5400K; required for ZPM+ content |
+| **Trinium Processing** | ❌ Todo | Extremely rare ore; trinium ingot at 7200K; required for UV casing |
+| **Lutetium & Americium** | ❌ Todo | Rare earth chain from monazite; lutetium for superconductors |
+| **Superconducting Cables** | ❌ Todo | Niobium-titanium and lutetium cables; zero EU loss for EV+ |
+
+### Advanced Circuits
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Elite / Master Circuit** | ❌ Todo | Requires naquadah + advanced wafer; unlocks EV machine recipes |
+| **Quantum Circuit** | ❌ Todo | Iridium + neutronium; opens ZPM/UV tier |
+
+### Power Generation
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Nuclear Fission Reactor** | ❌ Todo | Multi-block; uranium/plutonium fuel rods → 2048 EU/t (EV); coolant circuit required |
+| **Large Gas Turbine** | ❌ Todo | Burns naquadah gas or hydrogen → high EU/t; multi-block |
+
+> **Survival interlock:** Nuclear reactor meltdown is real — coolant loop failure causes catastrophic explosion and permanent radiation contamination of chunks. Players must build automatic shutoff circuits. This is the phase where base design becomes a genuine engineering problem.
+
+**New blocks/items needed:** `NAQUADAH_INGOT` · `TRINIUM_INGOT` · `LUTETIUM_INGOT` · `SUPERCONDUCTOR_CABLE` · `EV_CASING (titanium)` · `IV_CASING (tungstensteel)` · `FISSION_REACTOR` · `FUEL_ROD_URANIUM` · `COOLANT_CELL` · `EV_TRANSFORMER` · `GAS_TURBINE (multi-block)`
+
+---
+
+## Phase 6 — Endgame: Fusion & Beyond
+
+The fusion reactor is the apex power source — a 16-block-radius ring multi-block producing 512 000 EU/t. Space travel and neutronium unlock MAX-tier machines.
+
+**Tier:** ZPM · UV · UHV
+
+### Fusion Reactor
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Fusion Reactor** | ❌ Todo | Massive ring multi-block (16-block radius); fuses He-3 + deuterium → 512 000 EU/t; unlimited power |
+| **Plasma Arc Furnace** | ❌ Todo | Ionised plasma from fusion → produces neutronium and californium at superhigh temp |
+| **Neutronium** | ❌ Todo | End-game material; the hardest substance; required for MAX-tier machine frames |
+
+### Space / Late Content
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Space Shuttle / Moon** | ❌ Todo | Rocket fuel chain → launch; moon has unique ores (He-3 for fusion, aluminium ore) |
+| **Naquadah Reactor** | ❌ Todo | Burns naquadah fuel cells; equivalent power to fusion but simpler; 8192 EU/t |
+
+### MAX-Tier Machines
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **UHV / UEV Machines** | ❌ Todo | Neutronium casings; millions of EU/t; process recipes that take hours at lower tiers instantly |
+| **Ultimate / Biological / Optical Circuits** | ❌ Todo | DNA-based and photon-based computation; required for MAX-tier machines |
+
+> **Survival interlock:** Space travel exposes the player to vacuum (instant death without a spacesuit), cosmic radiation, and microgravity (different physics). Moon biomes are permanently below −100°C. This is where survival and tech converge into one system.
+
+**New blocks/items needed:** `FUSION_RING (multi-block)` · `PLASMA_ARC_FURNACE` · `NEUTRONIUM_INGOT` · `NAQUADAH_REACTOR` · `SPACESUIT (full set)` · `ROCKET_FUEL` · `MOON_BIOME` · `UHV_CASING (neutronium)`
+
 ## Testing a PR
 
 Every push to a pull request automatically runs the JUnit 5 unit tests (`src/test/`, covering inventory/stacking, click/drag/craft interactions, game-mode flight rules, crafting recipes and the fluid sim), builds a runnable fat jar, and uploads it as a build **artifact** — open the PR's **Actions** tab and download `minecraft-clone-pr-N.jar` from the latest run. You can also comment `/build` on a PR to trigger a fresh build of that PR's head on demand, and a headless smoke test renders a few frames to a screenshot each run (see `.github/workflows/pr-build.yml`). Download it and run:
