@@ -121,7 +121,13 @@ public final class Mining {
         // Instant, no tool - decoration.
         put(BlockType.LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
         put(BlockType.CHERRY_LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
+        put(BlockType.BIRCH_LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
+        put(BlockType.JUNGLE_LEAVES, 0.2f, ToolKind.AXE, TIER_HAND);
         put(BlockType.TALL_GRASS, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.OAK_SAPLING, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.BIRCH_SAPLING, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.JUNGLE_SAPLING, 0f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.PINE_SAPLING, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_RED, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.FLOWER_YELLOW, 0f, ToolKind.NONE, TIER_HAND);
         put(BlockType.BERRY_BUSH, 0f, ToolKind.NONE, TIER_HAND);
@@ -158,6 +164,9 @@ public final class Mining {
 
         // Wood - a broadaxe is the heavy wood-cutter (twice as fast as an axe would be).
         put(BlockType.WOOD_LOG, 1.5f, ToolKind.BROADAXE, TIER_HAND);
+        put(BlockType.BIRCH_LOG, 1.5f, ToolKind.BROADAXE, TIER_HAND);
+        put(BlockType.JUNGLE_LOG, 2.0f, ToolKind.BROADAXE, TIER_HAND); // jungle wood is denser
+        put(BlockType.PINE_LOG, 1.5f, ToolKind.BROADAXE, TIER_HAND);
         put(BlockType.PLANKS, 1.0f, ToolKind.BROADAXE, TIER_HAND);
         put(BlockType.PLANKS_SLAB, 1.0f, ToolKind.BROADAXE, TIER_HAND);
         put(BlockType.CRAFTING_TABLE, 1.5f, ToolKind.BROADAXE, TIER_HAND);

@@ -407,6 +407,11 @@ public final class Farming {
      * anything that isn't soil or a crop.
      */
     public static boolean applyBonemeal(World world, int wx, int wy, int wz, Random rnd) {
+        BlockType b = world.getBlock(wx, wy, wz);
+        // Saplings need the full World so the tree can cross chunk boundaries.
+        if (b != null && b.isSapling()) {
+            return applyBonemealSapling(world, wx, wy, wz, b, rnd);
+        }
         return applyBonemeal(world::getBlock, world::setBlock, wx, wy, wz, rnd);
     }
 
@@ -431,6 +436,8 @@ public final class Farming {
         if (b == BlockType.GRASS || b == BlockType.SWAMP_GRASS || b == BlockType.MYCELIUM) {
             return sproutOnGrass(get, set, wx, wy, wz, rnd);
         }
+        // Bone meal on saplings is handled by the World-aware overload; this
+        // BlockGet/BlockSet variant cannot do cross-chunk tree placement.
         return false;
     }
 
@@ -484,6 +491,317 @@ public final class Farming {
         if (r < 0.08f) return BlockType.FLOWER_RED;
         if (r < 0.16f) return BlockType.FLOWER_YELLOW;
         return BlockType.TALL_GRASS;
+    }
+
+    // -----------------------------------------------------------------------
+    // Sapling growth tick — same random-tick algorithm as crops
+    // -----------------------------------------------------------------------
+
+    /**
+     * Sapling growth chance per random tick (1-in-N).  Vanilla oak saplings
+     * grow ~1/7 ticks that hit them; we use the same rate for all types.
+     */
+    private static final int SAPLING_GROW_CHANCE = 7;
+
+    /**
+     * Called each frame alongside {@link #tickCrops}. Attempts to grow any
+     * sapling blocks selected by the random-tick in loaded chunks near the
+     * player.
+     *
+     * <p>Jungle saplings check all four possible 2×2 corner configurations:
+     * if every position in a 2×2 square contains {@code JUNGLE_SAPLING} (all
+     * at the same Y), the group grows a large 2-block-wide jungle tree; a
+     * lone jungle sapling grows a smaller 1-block-wide tree.
+     *
+     * @param world   world to query and mutate
+     * @param dt      frame delta-time in seconds
+     * @param rnd     shared random
+     * @param playerX player world X coordinate (bounds simulation radius)
+     * @param playerZ player world Z coordinate
+     */
+    public static void tickSaplings(World world, float dt, Random rnd,
+                                    float playerX, float playerZ) {
+        float ticksF = dt * 20f;
+        int wholeTicks = (int) ticksF;
+        float fracTick = ticksF - wholeTicks;
+
+        int sectionsPerColumn = Chunk.HEIGHT / SECTION_HEIGHT;
+        int playerChunkX = Math.floorDiv((int) Math.floor(playerX), Chunk.SIZE);
+        int playerChunkZ = Math.floorDiv((int) Math.floor(playerZ), Chunk.SIZE);
+
+        for (Chunk chunk : world.getLoadedChunks()) {
+            int originX = chunk.getOriginX();
+            int originZ = chunk.getOriginZ();
+            int chunkX = Math.floorDiv(originX, Chunk.SIZE);
+            int chunkZ = Math.floorDiv(originZ, Chunk.SIZE);
+            if (Math.abs(chunkX - playerChunkX) > SIMULATION_CHUNK_RADIUS
+                    || Math.abs(chunkZ - playerChunkZ) > SIMULATION_CHUNK_RADIUS) {
+                continue;
+            }
+
+            int picks = RANDOM_TICK_SPEED * sectionsPerColumn * wholeTicks;
+            if (rnd.nextFloat() < fracTick) {
+                picks += RANDOM_TICK_SPEED * sectionsPerColumn;
+            }
+
+            for (int p = 0; p < picks; p++) {
+                int lx = rnd.nextInt(Chunk.SIZE);
+                int ly = rnd.nextInt(Chunk.HEIGHT);
+                int lz = rnd.nextInt(Chunk.SIZE);
+
+                int wx = originX + lx;
+                int wy = ly;
+                int wz = originZ + lz;
+
+                BlockType b = world.getBlock(wx, wy, wz);
+                if (b == null || !b.isSapling()) continue;
+
+                // Each tick the sapling gets only a 1-in-SAPLING_GROW_CHANCE
+                // of actually growing, matching vanilla oak growth rates.
+                if (rnd.nextInt(SAPLING_GROW_CHANCE) != 0) continue;
+
+                growSapling(world, wx, wy, wz, b, rnd);
+            }
+        }
+    }
+
+    /**
+     * Attempt to grow the sapling at {@code (wx, wy, wz)}.
+     * Does nothing if the block below is not DIRT or GRASS, or if there
+     * is not enough clear space above for the tree.
+     */
+    static void growSapling(World world, int wx, int wy, int wz,
+                            BlockType sapling, Random rnd) {
+        // Must be planted on dirt or grass.
+        BlockType below = world.getBlock(wx, wy - 1, wz);
+        if (below != BlockType.DIRT && below != BlockType.GRASS) return;
+
+        switch (sapling) {
+            case OAK_SAPLING    -> growOakTree(world, wx, wy, wz, rnd);
+            case BIRCH_SAPLING  -> growBirchTree(world, wx, wy, wz, rnd);
+            case JUNGLE_SAPLING -> growJungleSapling(world, wx, wy, wz, rnd);
+            case PINE_SAPLING   -> growPineTree(world, wx, wy, wz, rnd);
+            default             -> { /* not a sapling */ }
+        }
+    }
+
+    /**
+     * Jungle sapling: if a complete 2×2 of JUNGLE_SAPLING exists (all at the
+     * same Y, any of the four corner configurations containing this sapling),
+     * grows a large multi-trunk jungle tree rooted at the SW corner.
+     * Otherwise grows a single-trunk jungle tree here.
+     */
+    private static void growJungleSapling(World world, int wx, int wy, int wz, Random rnd) {
+        int[] sw = find2x2JungleSWCorner(world::getBlock, wx, wy, wz);
+        if (sw != null) {
+            // Remove all four saplings then grow large tree from SW corner.
+            int[][] corners = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
+            for (int[] c : corners) {
+                world.setBlock(sw[0] + c[0], wy, sw[1] + c[1], BlockType.AIR);
+            }
+            growLargeJungleTree(world, sw[0], wy, sw[1], rnd);
+        } else {
+            // No complete 2×2 — grow a small 1×1 jungle tree.
+            growSmallJungleTree(world, wx, wy, wz, rnd);
+        }
+    }
+
+    /**
+     * Returns the {@code [swX, swZ]} of the SW corner of a complete 2×2
+     * JUNGLE_SAPLING square at height {@code wy} that contains {@code (wx, wz)},
+     * or {@code null} if no such square exists.
+     *
+     * <p>Package-private so unit tests can verify the detection logic without
+     * a full World instance.
+     */
+    static int[] find2x2JungleSWCorner(BlockGet get, int wx, int wy, int wz) {
+        int[][] offsets = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
+        for (int[] myCorner : offsets) {
+            int swx = wx - myCorner[0];
+            int swz = wz - myCorner[1];
+            boolean allSaplings = true;
+            for (int[] c : offsets) {
+                if (get.get(swx + c[0], wy, swz + c[1]) != BlockType.JUNGLE_SAPLING) {
+                    allSaplings = false;
+                    break;
+                }
+            }
+            if (allSaplings) return new int[]{swx, swz};
+        }
+        return null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Tree-growing helpers (use world.setBlock so they cross chunk boundaries)
+    // -----------------------------------------------------------------------
+
+    /** Grow a standard oak tree at {@code (x, y, z)} (the sapling position). */
+    static void growOakTree(World world, int x, int y, int z, Random rnd) {
+        int trunkH = 4 + rnd.nextInt(3);
+        if (!hasClearance(world, x, y, z, trunkH + 2)) return;
+        world.setBlock(x, y, z, BlockType.AIR); // remove sapling
+        for (int i = 0; i < trunkH; i++) {
+            world.setBlock(x, y + i, z, BlockType.WOOD_LOG);
+        }
+        int canopyBase = y + trunkH - 2;
+        for (int cy = 0; cy <= 2; cy++) {
+            int radius = (cy == 2) ? 1 : 2;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx == 0 && dz == 0 && cy < 2) continue;
+                    if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
+                    setLeafIfAir(world, x + dx, canopyBase + cy, z + dz, BlockType.LEAVES);
+                }
+            }
+        }
+        world.setBlock(x, y + trunkH, z, BlockType.LEAVES);
+    }
+
+    /** Grow a birch tree (slimmer, slightly taller than oak). */
+    static void growBirchTree(World world, int x, int y, int z, Random rnd) {
+        int trunkH = 5 + rnd.nextInt(3);
+        if (!hasClearance(world, x, y, z, trunkH + 2)) return;
+        world.setBlock(x, y, z, BlockType.AIR);
+        for (int i = 0; i < trunkH; i++) {
+            world.setBlock(x, y + i, z, BlockType.BIRCH_LOG);
+        }
+        int canopyBase = y + trunkH - 2;
+        for (int cy = 0; cy <= 2; cy++) {
+            int radius = (cy == 2) ? 1 : 2;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx == 0 && dz == 0 && cy < 2) continue;
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius == 2) continue;
+                    setLeafIfAir(world, x + dx, canopyBase + cy, z + dz, BlockType.BIRCH_LEAVES);
+                }
+            }
+        }
+        world.setBlock(x, y + trunkH, z, BlockType.BIRCH_LEAVES);
+    }
+
+    /** Grow a pine/spruce tree (tall, conical). */
+    static void growPineTree(World world, int x, int y, int z, Random rnd) {
+        int trunkH = 8 + rnd.nextInt(5);
+        if (!hasClearance(world, x, y, z, trunkH + 1)) return;
+        world.setBlock(x, y, z, BlockType.AIR);
+        for (int i = 0; i < trunkH; i++) {
+            world.setBlock(x, y + i, z, BlockType.PINE_LOG);
+        }
+        // Conical canopy: wider at the bottom, narrowing to a point at top.
+        for (int tier = 0; tier < 5; tier++) {
+            int layerY = y + trunkH - 4 + tier;
+            int radius = Math.max(0, 3 - tier);
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius > 1) continue;
+                    setLeafIfAir(world, x + dx, layerY, z + dz, BlockType.LEAVES);
+                }
+            }
+        }
+        world.setBlock(x, y + trunkH, z, BlockType.LEAVES);
+    }
+
+    /** Grow a small 1-trunk jungle tree. */
+    static void growSmallJungleTree(World world, int x, int y, int z, Random rnd) {
+        int trunkH = 8 + rnd.nextInt(5);
+        if (!hasClearance(world, x, y, z, trunkH + 2)) return;
+        world.setBlock(x, y, z, BlockType.AIR);
+        for (int i = 0; i < trunkH; i++) {
+            world.setBlock(x, y + i, z, BlockType.JUNGLE_LOG);
+        }
+        int canopyBase = y + trunkH - 2;
+        for (int cy = 0; cy <= 2; cy++) {
+            int radius = (cy == 2) ? 1 : 3;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx == 0 && dz == 0 && cy < 2) continue;
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius) continue;
+                    setLeafIfAir(world, x + dx, canopyBase + cy, z + dz, BlockType.JUNGLE_LEAVES);
+                }
+            }
+        }
+        world.setBlock(x, y + trunkH, z, BlockType.JUNGLE_LEAVES);
+    }
+
+    /**
+     * Grow a large 2×2-trunk jungle tree. {@code (bx, bz)} is the SW corner
+     * of the 2×2 base; {@code y} is the first clear block above the ground.
+     */
+    static void growLargeJungleTree(World world, int bx, int y, int bz, Random rnd) {
+        int trunkH = 20 + rnd.nextInt(11);
+        // Lay 2×2 trunk columns.
+        for (int tx = 0; tx < 2; tx++) {
+            for (int tz = 0; tz < 2; tz++) {
+                for (int i = 0; i < trunkH; i++) {
+                    world.setBlock(bx + tx, y + i, bz + tz, BlockType.JUNGLE_LOG);
+                }
+            }
+        }
+        // Wide spherical canopy near the top.
+        int topY = y + trunkH;
+        int canopyRadius = 5 + rnd.nextInt(3);
+        for (int dy = -canopyRadius / 2; dy <= canopyRadius / 2; dy++) {
+            int sliceR = (int) Math.sqrt(canopyRadius * canopyRadius
+                    - (double) dy * dy * 4); // flatten vertically
+            sliceR = Math.min(sliceR, canopyRadius);
+            for (int dx = -sliceR; dx <= sliceR + 1; dx++) {
+                for (int dz = -sliceR; dz <= sliceR + 1; dz++) {
+                    double dist = Math.sqrt(
+                            (dx - 0.5) * (dx - 0.5) + (dz - 0.5) * (dz - 0.5));
+                    if (dist <= sliceR + 0.5) {
+                        setLeafIfAir(world, bx + dx, topY + dy, bz + dz,
+                                BlockType.JUNGLE_LEAVES);
+                    }
+                }
+            }
+        }
+        // Cap above canopy.
+        for (int dx = 0; dx < 2; dx++) {
+            for (int dz = 0; dz < 2; dz++) {
+                world.setBlock(bx + dx, topY + 1, bz + dz, BlockType.JUNGLE_LEAVES);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Private helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * True if there are at least {@code needed} consecutive AIR blocks directly
+     * above {@code (x, y, z)}, meaning growth won't clip into solid blocks.
+     */
+    private static boolean hasClearance(World world, int x, int y, int z, int needed) {
+        for (int i = 1; i <= needed; i++) {
+            BlockType b = world.getBlock(x, y + i, z);
+            if (b != null && b != BlockType.AIR && !b.isLeaves()) return false;
+        }
+        return true;
+    }
+
+    /** Place {@code leafType} only if the target cell is AIR (don't overwrite logs). */
+    private static void setLeafIfAir(World world, int x, int y, int z, BlockType leafType) {
+        BlockType existing = world.getBlock(x, y, z);
+        if (existing == BlockType.AIR || existing == null) {
+            world.setBlock(x, y, z, leafType);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Bone meal — sapling fast-grow
+    // -----------------------------------------------------------------------
+
+    /**
+     * Extended bone-meal handler that also covers saplings and the new tree
+     * leaf types. Called from the existing {@link #applyBonemeal} path via
+     * the sapling check inside that method.
+     */
+    static boolean applyBonemealSapling(World world, int wx, int wy, int wz,
+                                        BlockType sapling, Random rnd) {
+        growSapling(world, wx, wy, wz, sapling, rnd);
+        // If the sapling was replaced with a log or air, growth happened.
+        BlockType after = world.getBlock(wx, wy, wz);
+        return after != sapling;
     }
 
     @FunctionalInterface
