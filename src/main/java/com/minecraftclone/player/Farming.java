@@ -595,17 +595,17 @@ public final class Farming {
     private static void growJungleSapling(World world, int wx, int wy, int wz, Random rnd) {
         int[] sw = find2x2JungleSWCorner(world::getBlock, wx, wy, wz);
         if (sw != null) {
-            // Pre-flight: check that all four 2×2 trunk columns have enough clearance
-            // for the minimum large-jungle-tree height (trunkH=20) plus a 3-block
-            // canopy buffer, so saplings are never consumed without a tree being placed.
-            final int MIN_TRUNK_H = 20;
+            // Select the actual trunkH first so we validate the exact height that
+            // growLargeJungleTree will use — prevents a tall tree (trunkH up to 30)
+            // from overwriting occupied cells above a shorter MIN_TRUNK_H preflight.
+            final int trunkH = 20 + rnd.nextInt(11); // mirrors growLargeJungleTree range
             final int CANOPY_BUFFER = 3;
             boolean clear = true;
             outer:
             for (int tx = 0; tx < 2; tx++) {
                 for (int tz = 0; tz < 2; tz++) {
                     if (!hasClearance(world, sw[0] + tx, wy, sw[1] + tz,
-                            MIN_TRUNK_H + CANOPY_BUFFER)) {
+                            trunkH + CANOPY_BUFFER)) {
                         clear = false;
                         break outer;
                     }
@@ -617,7 +617,7 @@ public final class Farming {
             for (int[] c : corners) {
                 world.setBlock(sw[0] + c[0], wy, sw[1] + c[1], BlockType.AIR);
             }
-            growLargeJungleTree(world, sw[0], wy, sw[1], rnd);
+            growLargeJungleTree(world, sw[0], wy, sw[1], trunkH);
         } else {
             // No complete 2×2 — grow a small 1×1 jungle tree.
             growSmallJungleTree(world, wx, wy, wz, rnd);
@@ -769,9 +769,10 @@ public final class Farming {
     /**
      * Grow a large 2×2-trunk jungle tree. {@code (bx, bz)} is the SW corner
      * of the 2×2 base; {@code y} is the first clear block above the ground.
+     * {@code trunkH} must be pre-selected by the caller so the clearance
+     * preflight in {@link #growJungleSapling} can validate the exact height.
      */
-    static void growLargeJungleTree(World world, int bx, int y, int bz, Random rnd) {
-        int trunkH = 20 + rnd.nextInt(11);
+    static void growLargeJungleTree(World world, int bx, int y, int bz, int trunkH) {
         // Lay 2×2 trunk columns.
         for (int tx = 0; tx < 2; tx++) {
             for (int tz = 0; tz < 2; tz++) {
@@ -781,8 +782,10 @@ public final class Farming {
             }
         }
         // Wide spherical canopy near the top.
+        // canopyRadius is fixed (no longer random) so the preflight height matches
+        // exactly what we write here. 6 is the midpoint of the original 5–7 range.
         int topY = y + trunkH;
-        int canopyRadius = 5 + rnd.nextInt(3);
+        int canopyRadius = 6;
         for (int dy = -canopyRadius / 2; dy <= canopyRadius / 2; dy++) {
             int sliceR = (int) Math.sqrt(canopyRadius * canopyRadius
                     - (double) dy * dy * 4); // flatten vertically
