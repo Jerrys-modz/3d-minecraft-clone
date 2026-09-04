@@ -856,6 +856,11 @@ public enum BlockType {
     /** Pine sapling — grows into a conical pine / spruce tree. */
     PINE_SAPLING(537, false, true, 284),
 
+    /** Cherry log — pale pinkish-white bark; the trunk of cherry-grove trees. */
+    CHERRY_LOG(538, true, false, 285, 7, 285),
+    /** Cherry sapling — grows into a cherry tree (pink blossom canopy). */
+    CHERRY_SAPLING(539, false, true, 286),
+
     // -----------------------------------------------------------------------
     // Tinkers' Construct sentinels: two inventory-item slots that carry the
     // real part/tool data in a TinkersItem payload inside ItemStack.
@@ -1350,7 +1355,8 @@ public enum BlockType {
      */
     public boolean isSapling() {
         return this == OAK_SAPLING || this == BIRCH_SAPLING
-                || this == JUNGLE_SAPLING || this == PINE_SAPLING;
+                || this == JUNGLE_SAPLING || this == PINE_SAPLING
+                || this == CHERRY_SAPLING;
     }
 
     /**
@@ -1359,7 +1365,8 @@ public enum BlockType {
      */
     public boolean isLog() {
         return this == WOOD_LOG || this == BIRCH_LOG
-                || this == JUNGLE_LOG || this == PINE_LOG;
+                || this == JUNGLE_LOG || this == PINE_LOG
+                || this == CHERRY_LOG;
     }
 
     /** True for a stepped stair block (stone or planks). */

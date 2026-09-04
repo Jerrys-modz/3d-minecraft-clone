@@ -22,8 +22,10 @@ public final class CreativeCatalog {
     public static final Tab[] TABS = {
             new Tab("Building", new BlockType[]{
                     BlockType.STONE, BlockType.DIRT, BlockType.GRASS, BlockType.SAND,
-                    BlockType.WOOD_LOG, BlockType.BIRCH_LOG, BlockType.JUNGLE_LOG, BlockType.PINE_LOG,
-                    BlockType.PLANKS, BlockType.LEAVES, BlockType.BIRCH_LEAVES, BlockType.JUNGLE_LEAVES,
+                    BlockType.WOOD_LOG, BlockType.BIRCH_LOG, BlockType.JUNGLE_LOG,
+                    BlockType.PINE_LOG, BlockType.CHERRY_LOG,
+                    BlockType.PLANKS, BlockType.LEAVES, BlockType.BIRCH_LEAVES,
+                    BlockType.JUNGLE_LEAVES,
                     BlockType.GRAVEL, BlockType.SNOW,
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
                     BlockType.CRAFTING_TABLE, BlockType.CHEST, BlockType.BARREL,
@@ -44,7 +46,7 @@ public final class CreativeCatalog {
             }),
             new Tab("Decoration", new BlockType[]{
                     BlockType.OAK_SAPLING, BlockType.BIRCH_SAPLING,
-                    BlockType.JUNGLE_SAPLING, BlockType.PINE_SAPLING,
+                    BlockType.JUNGLE_SAPLING, BlockType.PINE_SAPLING, BlockType.CHERRY_SAPLING,
                     BlockType.TALL_GRASS, BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW,
                     BlockType.BERRY_BUSH, BlockType.TORCH, BlockType.DEAD_BUSH,
                     BlockType.MUSHROOM_RED, BlockType.MUSHROOM_BROWN, BlockType.VINE,

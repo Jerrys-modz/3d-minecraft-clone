@@ -402,6 +402,8 @@ public class TextureAtlas {
         paintSapling(image, 282, rnd, 0x7DC04A, 0xD0C89A, false); // BIRCH_SAPLING
         paintSapling(image, 283, rnd, 0x2F9930, 0x7A4B1E, true);  // JUNGLE_SAPLING (broad)
         paintSapling(image, 284, rnd, 0x1A7040, 0x5A3218, true);  // PINE_SAPLING (dark)
+        paintCherryLogSide(image, 285, rnd);                      // CHERRY_LOG sides
+        paintSapling(image, 286, rnd, 0xFFB7C5, 0xD4A0B0, false); // CHERRY_SAPLING (pink blossom)
 
         return image;
     }
@@ -2763,6 +2765,49 @@ public class TextureAtlas {
                 int g = clamp(((base >>  8) & 0xFF) + noise);
                 int b = clamp(( base        & 0xFF) + noise);
                 img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * Cherry log side (tile 285): pale cream-pink bark — softer and lighter
+     * than birch, with faint horizontal banding and a subtle pink undertone.
+     */
+    private void paintCherryLogSide(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        // Light pinkish-cream base (#F0D8D8 — very pale rose-white)
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(14) - 7;
+                int r = clamp(0xF0 + noise);
+                int g = clamp(0xD8 + noise - 4);
+                int b = clamp(0xD8 + noise - 4);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Faint horizontal banding every 3-4 rows (cherry bark lines)
+        for (int y = 2; y < TILE_PX; y += 4) {
+            for (int x = 1; x < TILE_PX - 1; x++) {
+                if (rnd.nextInt(3) != 0) {
+                    int cur = img.getRGB(ox + x, oy + y);
+                    int rr = clamp(((cur >> 16) & 0xFF) - 18);
+                    int gg = clamp(((cur >>  8) & 0xFF) - 22);
+                    int bb = clamp(( cur        & 0xFF) - 20);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rr << 16) | (gg << 8) | bb);
+                }
+            }
+        }
+        // Subtle vertical grain (lighter than birch — cherry bark is smooth)
+        for (int x = 3; x < TILE_PX; x += 5) {
+            for (int y = 0; y < TILE_PX; y++) {
+                if (rnd.nextInt(5) == 0) {
+                    int cur = img.getRGB(ox + x, oy + y);
+                    int rr = clamp(((cur >> 16) & 0xFF) - 8);
+                    int gg = clamp(((cur >>  8) & 0xFF) - 10);
+                    int bb = clamp(( cur        & 0xFF) - 10);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rr << 16) | (gg << 8) | bb);
+                }
             }
         }
     }

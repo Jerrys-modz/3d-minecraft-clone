@@ -46,11 +46,12 @@ class SaplingGrowthTest {
     // -----------------------------------------------------------------------
 
     @Test
-    void isSaplingTrueForAllFourTypes() {
+    void isSaplingTrueForAllFiveTypes() {
         assertTrue(BlockType.OAK_SAPLING.isSapling());
         assertTrue(BlockType.BIRCH_SAPLING.isSapling());
         assertTrue(BlockType.JUNGLE_SAPLING.isSapling());
         assertTrue(BlockType.PINE_SAPLING.isSapling());
+        assertTrue(BlockType.CHERRY_SAPLING.isSapling());
     }
 
     @Test
@@ -69,11 +70,12 @@ class SaplingGrowthTest {
     // -----------------------------------------------------------------------
 
     @Test
-    void isLogTrueForAllFourLogTypes() {
+    void isLogTrueForAllFiveLogTypes() {
         assertTrue(BlockType.WOOD_LOG.isLog());
         assertTrue(BlockType.BIRCH_LOG.isLog());
         assertTrue(BlockType.JUNGLE_LOG.isLog());
         assertTrue(BlockType.PINE_LOG.isLog());
+        assertTrue(BlockType.CHERRY_LOG.isLog());
     }
 
     @Test
@@ -192,6 +194,7 @@ class SaplingGrowthTest {
             BlockType.BIRCH_SAPLING.id,
             BlockType.JUNGLE_SAPLING.id,
             BlockType.PINE_SAPLING.id,
+            BlockType.CHERRY_SAPLING.id,
         };
         for (int i = 0; i < ids.length; i++) {
             for (int j = i + 1; j < ids.length; j++) {
@@ -208,6 +211,7 @@ class SaplingGrowthTest {
             BlockType.BIRCH_LOG.id,
             BlockType.JUNGLE_LOG.id,
             BlockType.PINE_LOG.id,
+            BlockType.CHERRY_LOG.id,
         };
         for (int i = 0; i < ids.length; i++) {
             for (int j = i + 1; j < ids.length; j++) {

@@ -1398,6 +1398,9 @@ public class Main {
                     // Jungle leaves drop saplings at half the rate (vanilla: 1 in 40).
                     world.spawnItem(bx, by, bz, BlockType.JUNGLE_SAPLING, 1, loot);
                 }
+                if (targetType == BlockType.CHERRY_LEAVES && loot.nextInt(20) == 0) {
+                    world.spawnItem(bx, by, bz, BlockType.CHERRY_SAPLING, 1, loot);
+                }
                 // Breaking tall grass has a 1-in-8 chance to drop wheat seeds.
                 if (targetType == BlockType.TALL_GRASS && loot.nextInt(8) == 0) {
                     world.spawnItem(bx, by, bz, BlockType.SEEDS, 1, loot);

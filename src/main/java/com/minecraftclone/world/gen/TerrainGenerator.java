@@ -1203,11 +1203,11 @@ public class TerrainGenerator implements WorldGenerator {
         chunk.setLocal(x, y, z, rnd.nextBoolean() ? BlockType.MUSHROOM_RED : BlockType.MUSHROOM_BROWN);
     }
 
-    /** A cherry tree: a wood trunk crowned with pink blossom leaves, like the oak but pink. */
+    /** A cherry tree: a cherry-wood trunk crowned with pink blossom leaves. */
     private void placeCherryTree(Chunk chunk, int x, int y, int z, Random rnd) {
         int trunkHeight = 4 + rnd.nextInt(2);
         for (int i = 0; i < trunkHeight; i++) {
-            chunk.setLocal(x, y + i, z, BlockType.WOOD_LOG);
+            chunk.setLocal(x, y + i, z, BlockType.CHERRY_LOG);
         }
         int canopyBase = y + trunkHeight - 2;
         for (int cy = 0; cy <= 2; cy++) {

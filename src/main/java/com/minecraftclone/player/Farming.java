@@ -581,6 +581,7 @@ public final class Farming {
             case BIRCH_SAPLING  -> growBirchTree(world, wx, wy, wz, rnd);
             case JUNGLE_SAPLING -> growJungleSapling(world, wx, wy, wz, rnd);
             case PINE_SAPLING   -> growPineTree(world, wx, wy, wz, rnd);
+            case CHERRY_SAPLING -> growCherryTree(world, wx, wy, wz, rnd);
             default             -> { /* not a sapling */ }
         }
     }
@@ -677,6 +678,31 @@ public final class Farming {
             }
         }
         world.setBlock(x, y + trunkH, z, BlockType.BIRCH_LEAVES);
+    }
+
+    /**
+     * Grow a cherry tree (short, wide pink blossom canopy).
+     * Trunk uses {@code CHERRY_LOG}; canopy uses {@code CHERRY_LEAVES}.
+     */
+    static void growCherryTree(World world, int x, int y, int z, Random rnd) {
+        int trunkH = 4 + rnd.nextInt(2);
+        if (!hasClearance(world, x, y, z, trunkH + 2)) return;
+        world.setBlock(x, y, z, BlockType.AIR); // remove sapling
+        for (int i = 0; i < trunkH; i++) {
+            world.setBlock(x, y + i, z, BlockType.CHERRY_LOG);
+        }
+        int canopyBase = y + trunkH - 2;
+        for (int cy = 0; cy <= 2; cy++) {
+            int radius = (cy == 2) ? 1 : 2;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx == 0 && dz == 0 && cy < 2) continue;
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius == 2) continue;
+                    setLeafIfAir(world, x + dx, canopyBase + cy, z + dz, BlockType.CHERRY_LEAVES);
+                }
+            }
+        }
+        world.setBlock(x, y + trunkH, z, BlockType.CHERRY_LEAVES);
     }
 
     /** Grow a pine/spruce tree (tall, conical). */
