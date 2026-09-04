@@ -128,6 +128,13 @@ public class ItemTextures {
             case BEAR_LEGGINGS -> paintLeggings(0xEFEDE6);
             case BEAR_BOOTS -> paintBoots(0xEFEDE6);
 
+            // Hazmat suit - bright yellow-green sealed suit with dark grey visor/trim.
+            case RUBBER -> paintRubber();
+            case HAZMAT_HELMET -> paintHazmatHelmet();
+            case HAZMAT_CHESTPLATE -> paintChestplate(0xD4E840);
+            case HAZMAT_LEGGINGS -> paintLeggings(0xD4E840);
+            case HAZMAT_BOOTS -> paintBoots(0xD4E840);
+
             // GTNH Ores - early game (stone tier)
             case CRUSHED_COPPER -> paintCrushedOre(0xE8772F);
             case COPPER_DUST -> paintDustOre(0xE8772F);
@@ -1472,6 +1479,47 @@ public class ItemTextures {
         for (int i = 0; i <= 5; i++) {
             int x = 10 + i, y = 3 + i;
             if (x < SIZE && y < SIZE) img.setRGB(x, y, 0xFF000000 | line);
+        }
+        return img;
+    }
+
+    /**
+     * Raw rubber: a dark charcoal-grey blob with a slightly glossy sheen.
+     */
+    private static BufferedImage paintRubber() {
+        BufferedImage img = blank();
+        // Rounded blob shape
+        int cx = 8, cy = 8, rx = 5, ry = 4;
+        for (int y = cy - ry; y <= cy + ry; y++) {
+            for (int x = cx - rx; x <= cx + rx; x++) {
+                float dx = (float)(x - cx) / rx;
+                float dy = (float)(y - cy) / ry;
+                if (dx * dx + dy * dy <= 1.0f) {
+                    boolean edge = (dx * dx + dy * dy) > 0.7f;
+                    // Slight gloss highlight in top-left
+                    boolean gloss = (x < cx && y < cy && dx * dx + dy * dy < 0.25f);
+                    int c = gloss ? 0x606060 : (edge ? 0x1A1A1A : 0x2E2E2E);
+                    img.setRGB(x, y, 0xFF000000 | c);
+                }
+            }
+        }
+        return img;
+    }
+
+    /**
+     * Hazmat helmet: bright yellow-green dome with a dark tinted visor strip.
+     */
+    private static BufferedImage paintHazmatHelmet() {
+        BufferedImage img = paintHelmet(0xD4E840);
+        // Dark tinted visor strip across the face opening
+        for (int y = 8; y <= 11; y++) {
+            for (int x = 4; x <= 11; x++) {
+                int existing = img.getRGB(x, y);
+                if ((existing & 0xFF000000) != 0) {
+                    // Blend dark green tint over the visor area
+                    img.setRGB(x, y, 0xFF2A3010);
+                }
+            }
         }
         return img;
     }

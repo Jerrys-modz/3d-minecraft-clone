@@ -789,6 +789,27 @@ public enum BlockType {
     TNT(523, true, false, 275, 275, 275),
 
     // -----------------------------------------------------------------------
+    // Phase 0 — Radiation: hazmat protection against uranium/plutonium ore exposure.
+    // Hazmat suit blocks radiation; rubber is vulcanised from crushed sulfur.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Raw rubber — vulcanised from {@link #CRUSHED_SULFUR} in a crafting table
+     * (3 crushed sulfur → 1 rubber).  The primary material for hazmat-suit armour.
+     */
+    RUBBER(524, 0),
+
+    /**
+     * Hazmat helmet — the head piece of the hazmat suit (rubber + steel ingots).
+     * A full four-piece set completely blocks radiation from nearby uranium and
+     * plutonium ore.  Each piece alone reduces exposure proportionally.
+     */
+    HAZMAT_HELMET(525, 0),
+    HAZMAT_CHESTPLATE(526, 0),
+    HAZMAT_LEGGINGS(527, 0),
+    HAZMAT_BOOTS(528, 0),
+
+    // -----------------------------------------------------------------------
     // Tinkers' Construct sentinels: two inventory-item slots that carry the
     // real part/tool data in a TinkersItem payload inside ItemStack.
     // All materials are supported dynamically via TinkersRegistry — no per-

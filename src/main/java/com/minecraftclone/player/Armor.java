@@ -39,7 +39,11 @@ public final class Armor {
     /** Warmth needed to fully resist the cold (all four pieces fully warm). */
     public static final float WARMTH_CAP = 4f;
 
-    public record ArmorStats(Slot slot, int defense, float warmth, int maxUses) {
+    public record ArmorStats(Slot slot, int defense, float warmth, int maxUses, float radiationBlock) {
+        /** Convenience constructor for non-radiation armour pieces (radiationBlock = 0). */
+        ArmorStats(Slot slot, int defense, float warmth, int maxUses) {
+            this(slot, defense, warmth, maxUses, 0f);
+        }
     }
 
     private static final Map<BlockType, ArmorStats> ARMOR = new EnumMap<>(BlockType.class);
@@ -88,19 +92,33 @@ public final class Armor {
         put(BlockType.BEAR_CHESTPLATE, Slot.CHESTPLATE, 4, 1f, 480);
         put(BlockType.BEAR_LEGGINGS, Slot.LEGGINGS, 3, 1f, 430);
         put(BlockType.BEAR_BOOTS, Slot.BOOTS, 2, 1f, 280);
+        // Hazmat suit - rubber outer layer over steel, sealed against radiation.
+        // Each piece blocks 0.25 radiation exposure; a full set (4 × 0.25 = 1.0)
+        // is completely radiation-proof. Moderate defence (iron-tier ballpark)
+        // but no warmth (the sealed suit traps nothing against the cold).
+        putRad(BlockType.HAZMAT_HELMET,     Slot.HELMET,     3, 0f, 200, 0.25f);
+        putRad(BlockType.HAZMAT_CHESTPLATE, Slot.CHESTPLATE, 6, 0f, 320, 0.25f);
+        putRad(BlockType.HAZMAT_LEGGINGS,   Slot.LEGGINGS,   5, 0f, 280, 0.25f);
+        putRad(BlockType.HAZMAT_BOOTS,      Slot.BOOTS,      3, 0f, 160, 0.25f);
     }
 
     private static void put(BlockType type, Slot slot, int defense, float warmth, int maxUses) {
-        ARMOR.put(type, new ArmorStats(slot, defense, warmth, maxUses));
+        ARMOR.put(type, new ArmorStats(slot, defense, warmth, maxUses, 0f));
+    }
+
+    private static void putRad(BlockType type, Slot slot, int defense, float warmth, int maxUses, float radiationBlock) {
+        ARMOR.put(type, new ArmorStats(slot, defense, warmth, maxUses, radiationBlock));
     }
 
     private Armor() {
     }
 
+    /** True if {@code type} is a registered armor piece (null-safe). */
     public static boolean isArmor(BlockType type) {
         return type != null && ARMOR.containsKey(type);
     }
 
+    /** Full {@link ArmorStats} for {@code type}, or {@code null} if it isn't armor. */
     public static ArmorStats stats(BlockType type) {
         return ARMOR.get(type);
     }
@@ -155,6 +173,26 @@ public final class Armor {
      */
     public static float damageMultiplier(int defensePoints) {
         return 1f - Math.min(DEFENSE_CAP, defensePoints) / 25f;
+    }
+
+    /**
+     * How much of the radiation-exposure rate a single armour piece blocks (0 = none).
+     * A hazmat piece returns 0.25; a full set sums to 1.0 and is completely radiation-proof.
+     */
+    public static float radiationBlock(BlockType type) {
+        ArmorStats stats = ARMOR.get(type);
+        return stats == null ? 0f : stats.radiationBlock();
+    }
+
+    /**
+     * Total radiation-exposure multiplier for the four equipped pieces.
+     * Returns 0 (no radiation passes through) when wearing a full hazmat set,
+     * 1 (fully exposed) when wearing no radiation-blocking pieces.
+     */
+    public static float radiationMultiplier(BlockType helmet, BlockType chestplate, BlockType leggings, BlockType boots) {
+        float block = radiationBlock(helmet) + radiationBlock(chestplate)
+                    + radiationBlock(leggings) + radiationBlock(boots);
+        return Math.max(0f, 1f - Math.min(1f, block));
     }
 
     /** Durability cost in uses for {@code damage} dealt (about one use per 4 damage, minimum 1). */

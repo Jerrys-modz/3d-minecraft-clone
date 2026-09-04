@@ -3,12 +3,18 @@ package com.minecraftclone.player;
 import com.minecraftclone.Difficulty;
 
 /**
- * Health, hunger, thirst and stamina: the core survival loop. Damage comes
- * from falling too far, standing in lava, staying submerged too long, letting
- * hunger hit zero, or letting thirst hit zero; health slowly regenerates when
- * both hunger and thirst are sufficient. Sprinting costs both stamina
- * (immediate, regenerates fast) and a little extra hunger (permanent until you
- * eat). Fill a clay canteen at a water source and drink it to restore thirst.
+ * Health, hunger, thirst, stamina and radiation: the core survival loop.
+ * Damage comes from falling too far, standing in lava, staying submerged too
+ * long, letting hunger/thirst hit zero, or accumulating too much radiation
+ * from nearby uranium/plutonium ore.  Health slowly regenerates when both
+ * hunger and thirst are sufficient.  Sprinting costs both stamina (immediate,
+ * regenerates fast) and a little extra hunger (permanent until you eat).  Fill
+ * a clay canteen at a water source and drink it to restore thirst.
+ * <p>
+ * Radiation builds up while the player is within 5 blocks of radioactive ore
+ * (uranium/plutonium) and decays slowly once exposure ends.  At 60 % of the
+ * maximum level it starts dealing continuous health damage.  A full hazmat
+ * suit blocks all radiation; partial suits reduce exposure proportionally.
  * <p>
  * Hunger drain, starvation, and regen rate follow the world's
  * {@link Difficulty}: Peaceful doesn't drain hunger and regenerates quickly;
@@ -16,12 +22,13 @@ import com.minecraftclone.Difficulty;
  */
 public class PlayerStats {
 
-    public static final float MAX_HEALTH  = 100f;
-    public static final float MAX_HUNGER  = 100f;
-    public static final float MAX_THIRST  = 100f;
-    public static final float MAX_STAMINA = 100f;
+    public static final float MAX_HEALTH    = 100f;
+    public static final float MAX_HUNGER    = 100f;
+    public static final float MAX_THIRST    = 100f;
+    public static final float MAX_STAMINA   = 100f;
+    public static final float MAX_RADIATION = 100f;
     /** Seconds of breath you start a dive with - same value as {@link #DROWN_GRACE_SECONDS}, just public for the HUD's breath meter. */
-    public static final float MAX_BREATH  = 6f;
+    public static final float MAX_BREATH    = 6f;
 
     private static final float SAFE_FALL_SPEED = 10f;          // blocks/sec you can land at with no damage
     private static final float FALL_DAMAGE_PER_SPEED = 3.5f;   // damage per (blocks/sec) over the safe speed
@@ -34,6 +41,16 @@ public class PlayerStats {
     private static final float STARVE_DAMAGE_PER_SECOND = 2f;
     /** Dehydration kicks in once thirst hits zero - similar rate to starvation. */
     private static final float DEHYDRATE_DAMAGE_PER_SECOND = 2f;
+    /**
+     * Radiation builds up at the rate set by {@link #setRadiationRate} and
+     * decays at this rate per second when exposure drops to zero.  Once
+     * accumulated radiation exceeds {@link #RADIATION_DAMAGE_THRESHOLD} it
+     * starts dealing damage scaled to the current level.
+     */
+    private static final float RADIATION_DECAY_PER_SECOND    = 100f / (10f * 60f); // full decay in ~10 min
+    /** Radiation exposure above this level (fraction of MAX_RADIATION) starts dealing damage. */
+    private static final float RADIATION_DAMAGE_THRESHOLD    = 60f;                 // 60 % of MAX
+    private static final float RADIATION_DAMAGE_PER_SECOND   = 4f;                  // max damage rate at full radiation
     private static final float REGEN_HUNGER_THRESHOLD = 50f;   // need at least this much hunger to regenerate health
     private static final float REGEN_THIRST_THRESHOLD = 50f;   // need at least this much thirst to regenerate health
     private static final float REGEN_PER_SECOND = 1f;
@@ -44,12 +61,18 @@ public class PlayerStats {
     private static final float STAMINA_REGEN_PER_SECOND = 15f;
     private static final float STAMINA_SPRINT_MIN = 10f; // must regen back above this before sprinting resumes once exhausted
 
-    private float health  = MAX_HEALTH;
-    private float hunger  = MAX_HUNGER;
-    private float thirst  = MAX_THIRST;
-    private float stamina = MAX_STAMINA;
+    private float health    = MAX_HEALTH;
+    private float hunger    = MAX_HUNGER;
+    private float thirst    = MAX_THIRST;
+    private float stamina   = MAX_STAMINA;
+    private float radiation = 0f;          // 0 (clean) .. MAX_RADIATION (fully irradiated)
     private float submergedTime = 0f;
-    private float coldness = 0f; // 0 (warm) .. 1 (freezing out in a blizzard), set by Player each frame
+    private float coldness      = 0f;      // 0 (warm) .. 1 (freezing out in a blizzard), set by Player each frame
+    /**
+     * Radiation input rate for this frame, in units/second (0 = no exposure).
+     * Set by Main before calling {@link #update} based on nearby radioactive ore.
+     */
+    private float radiationRate = 0f;
     private boolean staminaExhausted = false;
     private boolean dead = false;
     /** Damage multiplier from equipped armor (1 = no armor); applied by {@link #damage}. */
@@ -77,18 +100,36 @@ public class PlayerStats {
         return coldness;
     }
 
+    /** Current radiation level, 0 (clean) to {@link #MAX_RADIATION} (fully irradiated). */
+    public float getRadiation() {
+        return radiation;
+    }
+
+    /**
+     * Sets how fast radiation is accumulating this frame, in units/second.
+     * Call once per frame from Main before calling {@link #update} — the value
+     * is consumed inside {@code update} and does not carry across frames.
+     */
+    public void setRadiationRate(float ratePerSecond) {
+        this.radiationRate = Math.max(0f, ratePerSecond);
+    }
+
+    /** Current health, 0 (dead) to {@link #MAX_HEALTH}. */
     public float getHealth() {
         return health;
     }
 
+    /** Current hunger, 0 (starving) to {@link #MAX_HUNGER}. */
     public float getHunger() {
         return hunger;
     }
 
+    /** Current thirst, 0 (dehydrated) to {@link #MAX_THIRST}. */
     public float getThirst() {
         return thirst;
     }
 
+    /** Current stamina, 0 (exhausted) to {@link #MAX_STAMINA}. */
     public float getStamina() {
         return stamina;
     }
@@ -98,16 +139,20 @@ public class PlayerStats {
         return Math.max(0f, DROWN_GRACE_SECONDS - submergedTime);
     }
 
+    /** True once health has hit zero; stays true until {@link #reset()} or {@link #forceFull()} is called. */
     public boolean isDead() {
         return dead;
     }
 
+    /** Resets every stat to full and clears the dead flag — called on respawn. */
     public void reset() {
-        health  = MAX_HEALTH;
-        hunger  = MAX_HUNGER;
-        thirst  = MAX_THIRST;
-        stamina = MAX_STAMINA;
+        health    = MAX_HEALTH;
+        hunger    = MAX_HUNGER;
+        thirst    = MAX_THIRST;
+        stamina   = MAX_STAMINA;
+        radiation = 0f;
         submergedTime = 0f;
+        radiationRate = 0f;
         coldness = 0f;
         staminaExhausted = false;
         dead = false;
@@ -117,15 +162,17 @@ public class PlayerStats {
 
     /** Restores the four survival bars from a save (clamped). A 0-health restore leaves the player dead. */
     public void restore(float health, float hunger, float thirst, float stamina) {
-        this.health  = clamp(health,  0f, MAX_HEALTH);
-        this.hunger  = clamp(hunger,  0f, MAX_HUNGER);
-        this.thirst  = clamp(thirst,  0f, MAX_THIRST);
-        this.stamina = clamp(stamina, 0f, MAX_STAMINA);
+        this.health    = clamp(health,  0f, MAX_HEALTH);
+        this.hunger    = clamp(hunger,  0f, MAX_HUNGER);
+        this.thirst    = clamp(thirst,  0f, MAX_THIRST);
+        this.stamina   = clamp(stamina, 0f, MAX_STAMINA);
+        this.radiation = 0f;
         this.dead = this.health <= 0f;
-        this.submergedTime = 0f;
-        this.coldness = 0f;
+        this.submergedTime    = 0f;
+        this.radiationRate    = 0f;
+        this.coldness         = 0f;
         this.staminaExhausted = this.stamina <= 0f;
-        this.armorMultiplier = 1f;
+        this.armorMultiplier  = 1f;
         this.frameDamageAccumulator = 0f;
     }
 
@@ -135,11 +182,13 @@ public class PlayerStats {
 
     /** Keeps every stat topped up and the player alive - used in creative/spectator modes. */
     public void forceFull() {
-        health  = MAX_HEALTH;
-        hunger  = MAX_HUNGER;
-        thirst  = MAX_THIRST;
-        stamina = MAX_STAMINA;
+        health    = MAX_HEALTH;
+        hunger    = MAX_HUNGER;
+        thirst    = MAX_THIRST;
+        stamina   = MAX_STAMINA;
+        radiation = 0f;
         submergedTime = 0f;
+        radiationRate = 0f;
         coldness = 0f;
         staminaExhausted = false;
         dead = false;
@@ -261,6 +310,23 @@ public class PlayerStats {
                 tookDamage = true;
             }
         }
+
+        // Radiation: accumulates while radiationRate > 0, decays once exposure ends.
+        // Above the damage threshold it continuously burns health.
+        if (radiationRate > 0f) {
+            radiation = Math.min(MAX_RADIATION, radiation + radiationRate * dt);
+        } else {
+            radiation = Math.max(0f, radiation - RADIATION_DECAY_PER_SECOND * dt);
+        }
+        // Radiation damage is always applied (not gated by drainMul / difficulty floor) —
+        // irradiation is a direct hazard rather than a hunger-equivalent.
+        if (radiation > RADIATION_DAMAGE_THRESHOLD) {
+            float factor = (radiation - RADIATION_DAMAGE_THRESHOLD)
+                         / (MAX_RADIATION - RADIATION_DAMAGE_THRESHOLD);
+            damage(RADIATION_DAMAGE_PER_SECOND * factor * dt);
+            tookDamage = true;
+        }
+        radiationRate = 0f; // consumed — Main must call setRadiationRate each frame
         // Peaceful always regenerates; other difficulties only when well-fed
         // and nothing else hurt you this tick.
         if (!dead && health < MAX_HEALTH && (difficulty == Difficulty.PEACEFUL

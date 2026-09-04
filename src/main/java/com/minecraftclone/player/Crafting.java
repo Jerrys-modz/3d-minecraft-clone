@@ -96,6 +96,7 @@ public final class Crafting {
         CHARS.put('A', BlockType.GOLD_INGOT);         // A = gold ingot (Au)
         CHARS.put('R', BlockType.STRING);             // R = stRing (fishing)
         CHARS.put('M', BlockType.GUNPOWDER);          // M = guMpowder / bang (explosives)
+        CHARS.put('J', BlockType.RUBBER);             // J = rubber (unused; 'T' is taken by TORCH)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -179,6 +180,26 @@ public final class Crafting {
         // TNT: 5 gunpowder + 4 sand in a checkerboard pattern.
         // M = gunpowder ('M' = guMpowder), N = sand.
         shaped3x3("MNM", "NMN", "MNM", BlockType.TNT, 1);
+
+        // ---------------------------------------------------------------
+        // Phase 0: Radiation — rubber and hazmat suit
+        // ---------------------------------------------------------------
+        // Rubber: vulcanise 3 crushed sulfur into 1 rubber (shapeless, 3x3 only).
+        // Represents a basic vulcanisation step using heat (crafting table).
+        // (no dedicated char for CRUSHED_SULFUR; uses shapeless so none needed)
+        shapeless3x3(BlockType.RUBBER, 1,
+                BlockType.CRUSHED_SULFUR, BlockType.CRUSHED_SULFUR, BlockType.CRUSHED_SULFUR);
+
+        // Hazmat suit: rubber outer layer over steel-ingot structural frame.
+        // J = RUBBER, Q = STEEL_INGOT.
+        // Helmet (5 pieces, top-heavy): J J J / J . J / Q . Q
+        shaped3x3("JJJ", "J.J", "Q.Q", BlockType.HAZMAT_HELMET, 1);
+        // Chestplate (8 pieces): J . J / J Q J / J J J
+        shaped3x3("J.J", "JQJ", "JJJ", BlockType.HAZMAT_CHESTPLATE, 1);
+        // Leggings (7 pieces): J J J / J Q J / J . J
+        shaped3x3("JJJ", "JQJ", "J.J", BlockType.HAZMAT_LEGGINGS, 1);
+        // Boots (4 pieces): J . J / J . J / Q . Q
+        shaped3x3("J.J", "J.J", "Q.Q", BlockType.HAZMAT_BOOTS, 1);
 
         // Clay canteen: 4 clay balls in a 2x2 (inventory grid). Crafting-table
         // recipe uses a distinct 3x3 vessel shape so it does not collide with

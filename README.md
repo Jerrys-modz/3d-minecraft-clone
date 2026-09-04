@@ -36,6 +36,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Fishing**: craft a **fishing rod** (three sticks in a diagonal plus two string at a crafting table; spiders now drop string) and right-click open water to cast a bobber. The bobber arcs out under gravity and floats on the surface; after a random wait (5–30 seconds) a fish bites and a second right-click reels it in — you catch a **raw fish** (restores 2 hunger) or occasionally a bonus piece of string or bone. Leave the rod alone too long after a bite and the fish escapes, resetting the timer. Smelt raw fish into **cooked fish** (4 hunger) in a furnace. 16 dedicated unit tests in `FishingTest` cover item definitions, spider-string drops, bobber state (in-flight/floating/biting), reel-in loot, and the World cast/retrieve API.
 - **Animal breeding**: right-click a pig (with a carrot or potato), cow, or sheep (with wheat) to put it in **love mode** — a quick heart-swarm cue. Two adults of the same type in love mode that are within 4 blocks of each other automatically produce a **baby**, rendered at half scale, that grows into a full adult over time. Breeding triggers a 5-minute **cooldown** on both parents so a single farm can't overpopulate itself; babies are immune to love mode until they grow up. The mechanic is food-gated (carrots/potatoes for pigs; wheat for cows and sheep) and integrates with the survival inventory — one food item is consumed per feeding in Survival mode.
 - **Hostile mobs** come out at night: zombies and skeletons spawn in the dark around you and hunt you down, pathing around walls and ledges just like the passives. Zombies close in and slug you on contact; skeletons keep their distance and fire arrows (projectiles that fly with gravity, thunk into blocks, and hurt when they hit). Both are killable - zombies drop rotten flesh (barely edible), skeletons drop bones - and both melt away at dawn, so daylight is safe again. In creative you're invulnerable and one-shot everything; spectator is untouched. Hostiles swim and can drown just like the passives, so water is a usable escape route - though an angry zombie that follows you in is a real threat until it surfaces to breathe.
+- **Radiation & hazmat suit**: standing within 5 blocks of **uranium or plutonium ore** (both vein and small-ore variants) steadily builds up **radiation exposure**, shown as a yellow-green HUD bar that deepens toward orange-red as the level climbs. Below 60 % of the cap it's just a warning; above that it starts dealing continuous health damage that scales with how irradiated you are. Radiation decays slowly on its own (full decontamination takes ~10 minutes) so just leaving the mine isn't an instant fix. Protect yourself with a **hazmat suit** — four pieces (helmet, chestplate, leggings, boots) crafted from **rubber** and **steel ingots**; each piece blocks 25 % of incoming radiation, and a complete set blocks all of it. Rubber is made at a crafting table from 3 crushed sulfur (vulcanisation step). The suit also grants iron-level defence against physical damage, though it offers no cold insulation. Covered by 17 dedicated unit tests in `RadiationTest` (block identities, per-piece radiation-block fraction, full/partial suit protection, accumulation, decay, damage threshold, reset behaviour).
 - **Creeper explosions, gunpowder & TNT**: creepers are now fully functional — when one gets within 2.5 blocks of you it lights its **fuse** (1.5 s). Back away and the fuse goes out; stay close and it **explodes**, blasting a sphere of blocks away and dealing splash damage that falls off with distance (max 9 HP at ground zero, zero beyond 4.5 blocks). A creeper killed by the player drops **gunpowder**. Craft **TNT** at a crafting table (5 gunpowder + 4 sand in the classic checkerboard pattern) and right-click a placed TNT block to ignite it — the blast radius is larger (4 blocks) and hits harder (14 HP centre) than a creeper. Explosions deal area damage to all mobs and the player, destroy blocks (survival probability rises from 0% at centre to 50% at the edge), chain-detonate nearby TNT, and drop ~30% of destroyed blocks as items. The whole system is built on a reusable `Explosion` utility (`blastBlocks` / `damageAt`) that any future explosive can call. 16 dedicated unit tests in `TntTest` cover block definitions, drop types, fuse constants, explosion constants, damage falloff, and the full creeper fuse state machine (ignition, abort, progress).
 - **Inventory & hotbar (Minecraft-style)**: a 36-slot inventory - 9 hotbar slots plus a 3×9 grid - where items stack up to 64 (tools are unstackable). Press `E` to open it and move items with the mouse: left-click picks up/places a whole stack, right-click does one item, shift-click quick-moves a stack between the hotbar and inventory, and drag spreads a stack across slots. Hovering any item shows a Minecraft-style tooltip with its name (and durability for tools). The in-game hotbar shows the first 9 slots (`1`-`9` / scroll to select). **Creative mode** gets its own inventory screen instead: a tabbed item catalog (Building / Decoration / Materials / Tools / Combat / Armor / Food) over the hotbar, where clicking an item puts a full stack on your cursor (shift-click moves it straight into a hotbar slot) and an "X" slot deletes whatever the cursor holds. Long tabs (Materials, with the GTNH ore set) **scroll** — mouse wheel or the scrollbar on the right — so the grid never runs through the hotbar. A **search box** sits under the tabs: click it, then type to filter every catalog item by name (try `copper` or `diamond pickaxe`). It is not focused when the screen opens, so walking keys don't dump into it, and clicking anywhere else (a tab, an item, the hotbar) unfocuses it. Esc clears the query, then closes.
 - **Map (JourneyMap-style)**: chunks in your **render distance** paint onto the map as they load — grass, water, sand, snow, stone, trees, netherrack — with height shading so hills read lighter than valleys, not as a grey grid of ore dots. Turn render distance up in Settings to map more of the world at once. The **mini-map** defaults to the top-right corner, zoomed in to about five chunks around you, tracks your heading with a green arrow and gold **N** / white **S E W** compass letters on dark pills, and marks **discovered** GTNH veins as coloured diamonds. Hold **Alt** in-game to free the cursor: drag the map to move it, drag a corner to resize (it stays square), scroll over it to scale, or press `R` to snap it back to the default corner — size and position save in `settings.txt`. Press `M` for the **full map**: **click and drag** (or WASD / arrow keys) to pan, scroll to zoom on the cursor, `R` to reset. Veins cluster into VisualProspecting-style **ore mix waypoints** (Copper Mix, Magnetite Mix, …) with a diamond, a name label, and a hover popup showing the mix composition and XYZ — but only after you **find** the ore (look at it or mine it, including a surface small-ore). Walking a chunk maps the terrain; it does not cheat the mix onto the map. Older saves fill in terrain as those chunks load again; mixes already recorded on an old map stay.
@@ -286,6 +287,257 @@ This project is being grown incrementally, loosely following [Survivalcraft](htt
 - **Animal breeding** ✅ implemented — feed pigs (carrot/potato) or cows/sheep (wheat) to trigger love mode; two nearby adults of the same type spawn a half-scale baby that grows up over 60 seconds. Five-minute breeding cooldown per parent. Covered by dedicated unit tests in `AnimalBreedingTest`. See the **Animal breeding** entry in Features.
 
 If you've got a specific one of these in mind, just say which and it jumps the queue.
+
+## Phase 0 — Deep Survival Foundation
+
+The active development phase. All eight items must be done before Phase 1 (Bronze Age & Steam) begins.
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | **Farming** | ✅ Done | Hoe, farmland, wheat/potato/carrot growth stages, bone meal; see Features |
+| 2 | **Animal Breeding** | ✅ Done | Love mode, babies, 5-min cooldown; pigs (carrot/potato), cows/sheep (wheat); see Features |
+| 3 | **Beds & Spawn** | ✅ Done | Sleep to skip night, set respawn point; see Features |
+| 4 | **Thirst** | ✅ Done | `PlayerStats.thirst` (drains over 15 min, dehydration damage); clay canteen (fill at water source, right-click to drink 40 units); cyan-blue HUD bar |
+| 5 | **Temperature** | ✅ Done | Biome × season × altitude × cave; cold exposure; warm armor (fur wolf/bear tiers); frost HUD bar; see Features |
+| 6 | **Weather & Seasons** | ✅ Done | Rain, snow, thunderstorms, blizzards, fog; 4 seasons; weather forecast (`H`); see Features |
+| 7 | **Radiation** | ✅ Done | Uranium/plutonium ore emits radiation within 5 blocks; radiation accumulates (decays over 10 min); damage starts at 60 % exposure; hazmat suit (rubber + steel, 4 pieces = full block); yellow-green → orange-red HUD bar; rubber crafted from 3 crushed sulfur |
+| 8 | **More Hostile Mobs** | ✅ Done | Zombies, skeletons (arrows), creepers (fuse + explosion, gunpowder drop, TNT), spiders (string drop), wolves, polar bears |
+
+> **Phase 0 complete! ✅** All 8 Deep Survival Foundation features are implemented. Next phase: **Phase 1 — Bronze Age & Steam**.
+
+---
+
+## Phase 1 — Bronze Age & Steam
+
+The next active development phase. Primitive processing unlocks before any electricity — ore doubling starts with a mortar, metals are cast in a crucible, and steam machines provide the first real throughput boost.
+
+**Tier:** GTNH Steam Tier
+
+### Primitive Processing
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Mortar & Pestle** | ❌ Todo | Right-click held ore in hand to grind; ore → dust (1:1, no machine needed) |
+| **Crucible** | ❌ Todo | Placed over fire; melt metals; pour into Clay Molds for ingots, plates, rods |
+| **Alloys — Bronze & Brass** | ❌ Todo | Copper dust + tin dust (3:1) in crucible → bronze ingot; unlocks bronze tools |
+| **Bronze Tools** | ❌ Todo | Tier between stone and iron; bronze pickaxe, axe, hammer, sword, shovel |
+
+### Primitive Blast Furnace
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Primitive Blast Furnace** | ❌ Todo | Multi-block: 3×3×3 of fire bricks; iron + charcoal → wrought iron at 700K |
+| **Wrought Iron** | ❌ Todo | Intermediate between iron and steel; required for steam machine casings |
+
+### Steam Machines
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Steam Boiler** | ❌ Todo | Bronze casing + water input + fuel slot → steam pressure; powers all steam machines |
+| **Steam Macerator** | ❌ Todo | Ore → 2× crushed ore (doubles yield); replaces hand-grinding |
+| **Steam Furnace** | ❌ Todo | Twice the speed of the placed furnace; runs on steam not fuel |
+| **Steam Ore Washer** | ❌ Todo | Crushed ore + water → purified ore + tiny byproduct dusts |
+
+> **Survival interlock:** Steam machines require water (now a scarce resource via Thirst). Winter season slows boiler efficiency — players must stockpile fuel or build heated structures.
+
+**New blocks/items needed:** `MORTAR` · `CRUCIBLE` · `CLAY_MOLD` · `FIRE_BRICK` · `BRONZE_CASING` · `STEAM_BOILER` · `STEAM_MACERATOR` · `STEAM_FURNACE` · `STEAM_ORE_WASHER` · `BRONZE_PIPE` · `WROUGHT_IRON_INGOT` · `BRONZE_INGOT` · `PLATE (per metal)` · `ROD (per metal)`
+
+---
+
+## Phase 2 — Steel Age & Basic Electricity
+
+Introduces the EU power system and the first electric machines. Steel enables machine casings; the ore-processing chain (Macerator → Ore Washer → Thermal Centrifuge) gives 3× ore yield.
+
+**Tier:** LV (Low Voltage)
+
+### Steel Production
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Steel Alloy** | ❌ Todo | Iron + coal dust in blast furnace at 1000K; required for all electric machine casings |
+| **Upgraded Blast Furnace** | ❌ Todo | Replace fire brick with steel casings; raises max temp; unlocks steel + chrome |
+
+### Energy System
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **EU System** | ❌ Todo | Energy Units (EU/t); produced, stored, transmitted, consumed by machines |
+| **Coal Generator** | ❌ Todo | Burns fuel → 32 EU/t (LV); entry-point power source |
+| **Battery Buffer** | ❌ Todo | Stores EU in inserted battery items; smooths generator output |
+| **Cables** | ❌ Todo | Copper (LV, 2EU/m loss), Tin (ULV, 1EU/m), Gold (MV); wire placed as world blocks |
+| **LV Transformer** | ❌ Todo | Steps voltage up/down; prevents machine explosion from overvoltage |
+
+### LV Machines
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Macerator (LV)** | ❌ Todo | Ore → 2× crushed ore + byproduct; faster than steam |
+| **Ore Washer (LV)** | ❌ Todo | Crushed → purified ore + 3 tiny dusts of secondary metals |
+| **Thermal Centrifuge (LV)** | ❌ Todo | Purified ore → dust + byproduct dust; completes the 3-step ore chain |
+| **Electric Furnace (LV)** | ❌ Todo | 4× faster than placed furnace; runs on EU |
+| **Electrolyzer (LV)** | ❌ Todo | Splits compound dusts into elements; required for chrome, aluminium, etc. |
+| **Compressor / Extractor** | ❌ Todo | Compress dusts to plates, gems to lens; extract rubber from rubber wood |
+
+### Primitive Circuits
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Vacuum Tube Circuit** | ❌ Todo | Primitive circuit: glass tube + copper wire; used in all LV machine recipes |
+
+> **Survival interlock:** Running cables through your base creates fire hazard if insulation burns. Mining deeper to reach cobalt/nickel for the Electrolyzer means coping with cave temperature drops — torch warmth becomes a mechanic, not just lighting.
+
+**New blocks/items needed:** `STEEL_CASING` · `COAL_GENERATOR` · `BATTERY_BUFFER` · `LV_TRANSFORMER` · `CABLE_COPPER` · `CABLE_TIN` · `CABLE_GOLD` · `MACERATOR_LV` · `ORE_WASHER_LV` · `THERMAL_CENTRIFUGE_LV` · `ELECTRIC_FURNACE_LV` · `ELECTROLYZER_LV` · `COMPRESSOR_LV` · `LV_BATTERY (tin)` · `VACUUM_TUBE` · `STEEL_INGOT`
+
+---
+
+## Phase 3 — Chemistry & Fluids
+
+Fluids become first-class objects: tanks, pipes, cells, and drums route them between machines. Chemistry unlocks acid processing (3× ore yield) and advanced alloys gating MV casings.
+
+**Tier:** MV (Medium Voltage)
+
+### Fluid System
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Fluid Tanks** | ❌ Todo | Steel / stainless tanks in world; capacity in mB; required for all chemical recipes |
+| **Fluid Pipes** | ❌ Todo | Bronze → steel → stainless; route fluids between machines |
+| **Fluid Cells & Drums** | ❌ Todo | Tin cell (1000 mB) for hand transport; steel drum (16000 mB) for bulk storage |
+
+### Chemistry
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Chemical Reactor (MV)** | ❌ Todo | Combines dust + fluid → compound; required for acid production |
+| **Sulfuric Acid** | ❌ Todo | Sulfur dust + water → H₂SO₄; enables wet ore processing (3× yield) |
+| **Hydrochloric Acid** | ❌ Todo | Salt + electrolysis → HCl + sodium; needed for titanium chain |
+| **Oil & Distillation** | ❌ Todo | Oil pools underground; pump → distillation tower → diesel, light/heavy fuel, lubricant |
+
+### Advanced Alloys
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Invar** | ❌ Todo | Iron + nickel (2:1); low thermal expansion; required for pipes and reactor components |
+| **Electrum** | ❌ Todo | Gold + silver (1:1); good conductor; used in MV circuits and cables |
+| **Stainless Steel** | ❌ Todo | Iron + chrome + manganese + nickel; required for MV casings and tanks |
+| **MV Machines** | ❌ Todo | All LV machines upgraded to MV tier; 4× speed, 4× EU cost; stainless casing |
+
+### Circuits
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Integrated Logic Circuit** | ❌ Todo | Silicon wafer + electrum + copper; used in all MV recipes |
+| **Silicon Chain** | ❌ Todo | Quartz → silicon dust → wafer (CVD chamber) → chip |
+
+> **Survival interlock:** Chemical spills (acid tank damage) if pipes burst from overpressure. Oil extraction near lava creates fire spread danger. Working in chemical areas requires rubber hazmat suit.
+
+**New blocks/items needed:** `STEEL_TANK` · `FLUID_PIPE (3 tiers)` · `TIN_CELL` · `STEEL_DRUM` · `CHEMICAL_REACTOR_MV` · `DISTILLATION_TOWER (multi-block)` · `OIL_PUMP` · `INVAR_INGOT` · `ELECTRUM_INGOT` · `STAINLESS_INGOT` · `MV_CASING` · `SILICON_WAFER` · `MV_BATTERY (lithium)` · `MV_TRANSFORMER`
+
+---
+
+## Phase 4 — Electric Blast Furnace & Multi-blocks
+
+The EBF is the defining multi-block of GTNH: it's the gate to titanium, tungstensteel, chrome, and iridium — all required for HV+ content. Multi-block machines start appearing in earnest.
+
+**Tier:** HV (High Voltage)
+
+### Core Multi-block: EBF
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Electric Blast Furnace** | ❌ Todo | Multi-block controller + heat coils (kanthal, nichrome, tungstensteel) + hatches; reaches 2700–9000K |
+| **Titanium** | ❌ Todo | Rutile dust in EBF at 1700K; required for HV casings and next-tier pipes |
+| **Tungstensteel** | ❌ Todo | Tungsten + steel in EBF at 3000K; required for HV machines and EV coils |
+| **Chrome & Iridium** | ❌ Todo | Chromite → chrome at 1700K; Iridium from platinum group processing at 2700K |
+
+### Other Multi-blocks
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Large Chemical Reactor** | ❌ Todo | Multi-block; handles fluid-in + fluid-out simultaneously; required for petrochemicals |
+| **Implosion Compressor** | ❌ Todo | TNT charges compress gem dust → gems, carbon plates → diamond plates |
+| **Vacuum Freezer** | ❌ Todo | Cools hot ingots from EBF output; required for hot tungsten → tungsten ingot |
+
+### HV Machines & Circuits
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **HV Machines** | ❌ Todo | Tungstensteel casing; 16× speed vs LV; required for advanced alloy chains |
+| **Advanced Circuit (HV)** | ❌ Todo | Gold + silicon + electrum; unlocks HV machine recipes |
+| **Steam Turbine** | ❌ Todo | Burns steam from large boiler → 512 EU/t (HV); better than coal generator |
+
+> **Survival interlock:** EBF emits heat in a radius — base layout must account for it. Implosion compressor is literally explosive; a miscalculation destroys nearby structure. Radiation from iridium and plutonium processing requires full hazmat.
+
+**New blocks/items needed:** `EBF_CONTROLLER` · `KANTHAL_COIL` · `NICHROME_COIL` · `HV_CASING (tungstensteel)` · `TITANIUM_INGOT` · `TUNGSTENSTEEL_INGOT` · `HOT_TUNGSTEN_INGOT` · `VACUUM_FREEZER` · `IMPLOSION_COMPRESSOR` · `LARGE_CHEM_REACTOR` · `STEAM_TURBINE` · `HV_BATTERY` · `HV_TRANSFORMER`
+
+---
+
+## Phase 5 — EV/IV — Exotic Materials
+
+Naquadah and trinium push the voltage wall to EV/IV. Superconducting cables eliminate transmission loss. The nuclear fission reactor provides serious power but demands engineering discipline.
+
+**Tier:** EV · IV · LuV
+
+### Advanced Material Chains
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Naquadah Processing** | ❌ Todo | Naquadah ore → ingot via acid + EBF at 5400K; required for ZPM+ content |
+| **Trinium Processing** | ❌ Todo | Extremely rare ore; trinium ingot at 7200K; required for UV casing |
+| **Lutetium & Americium** | ❌ Todo | Rare earth chain from monazite; lutetium for superconductors |
+| **Superconducting Cables** | ❌ Todo | Niobium-titanium and lutetium cables; zero EU loss for EV+ |
+
+### Advanced Circuits
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Elite / Master Circuit** | ❌ Todo | Requires naquadah + advanced wafer; unlocks EV machine recipes |
+| **Quantum Circuit** | ❌ Todo | Iridium + neutronium; opens ZPM/UV tier |
+
+### Power Generation
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Nuclear Fission Reactor** | ❌ Todo | Multi-block; uranium/plutonium fuel rods → 2048 EU/t (EV); coolant circuit required |
+| **Large Gas Turbine** | ❌ Todo | Burns naquadah gas or hydrogen → high EU/t; multi-block |
+
+> **Survival interlock:** Nuclear reactor meltdown is real — coolant loop failure causes catastrophic explosion and permanent radiation contamination of chunks. Players must build automatic shutoff circuits. This is the phase where base design becomes a genuine engineering problem.
+
+**New blocks/items needed:** `NAQUADAH_INGOT` · `TRINIUM_INGOT` · `LUTETIUM_INGOT` · `SUPERCONDUCTOR_CABLE` · `EV_CASING (titanium)` · `IV_CASING (tungstensteel)` · `FISSION_REACTOR` · `FUEL_ROD_URANIUM` · `COOLANT_CELL` · `EV_TRANSFORMER` · `GAS_TURBINE (multi-block)`
+
+---
+
+## Phase 6 — Endgame: Fusion & Beyond
+
+The fusion reactor is the apex power source — a 16-block-radius ring multi-block producing 512 000 EU/t. Space travel and neutronium unlock MAX-tier machines.
+
+**Tier:** ZPM · UV · UHV
+
+### Fusion Reactor
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Fusion Reactor** | ❌ Todo | Massive ring multi-block (16-block radius); fuses He-3 + deuterium → 512 000 EU/t; unlimited power |
+| **Plasma Arc Furnace** | ❌ Todo | Ionised plasma from fusion → produces neutronium and californium at superhigh temp |
+| **Neutronium** | ❌ Todo | End-game material; the hardest substance; required for MAX-tier machine frames |
+
+### Space / Late Content
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Space Shuttle / Moon** | ❌ Todo | Rocket fuel chain → launch; moon has unique ores (He-3 for fusion, aluminium ore) |
+| **Naquadah Reactor** | ❌ Todo | Burns naquadah fuel cells; equivalent power to fusion but simpler; 8192 EU/t |
+
+### MAX-Tier Machines
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **UHV / UEV Machines** | ❌ Todo | Neutronium casings; millions of EU/t; process recipes that take hours at lower tiers instantly |
+| **Ultimate / Biological / Optical Circuits** | ❌ Todo | DNA-based and photon-based computation; required for MAX-tier machines |
+
+> **Survival interlock:** Space travel exposes the player to vacuum (instant death without a spacesuit), cosmic radiation, and microgravity (different physics). Moon biomes are permanently below −100°C. This is where survival and tech converge into one system.
+
+**New blocks/items needed:** `FUSION_RING (multi-block)` · `PLASMA_ARC_FURNACE` · `NEUTRONIUM_INGOT` · `NAQUADAH_REACTOR` · `SPACESUIT (full set)` · `ROCKET_FUEL` · `MOON_BIOME` · `UHV_CASING (neutronium)`
 
 ## Testing a PR
 

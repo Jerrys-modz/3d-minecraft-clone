@@ -684,12 +684,12 @@ public class Hud {
 
     /**
      * Bottom Y of the held-item name: sits above the maximum status-bar stack
-     * (stamina, thirst, hunger, health, breath, coldness — 6 bars) so it never
-     * draws through any bar, even when both optional bars are visible.
+     * (stamina, thirst, hunger, health, breath, coldness, radiation — 7 bars)
+     * so it never draws through any bar, even when all optional bars are visible.
      */
     public static float hotbarHeldNameY() {
         float panelTop = -1f + HOTBAR_BOTTOM_MARGIN + HOTBAR_SLOT_SIZE + HOTBAR_PADDING;
-        return panelTop + STAT_BAR_STACK_MARGIN + 6f * (STAT_BAR_HEIGHT + STAT_BAR_GAP);
+        return panelTop + STAT_BAR_STACK_MARGIN + 7f * (STAT_BAR_HEIGHT + STAT_BAR_GAP);
     }
 
     public static String titleFromEnum(String name) {
@@ -874,11 +874,16 @@ public class Hud {
      * <p>When {@code coldness} is above zero a frost-blue cold-exposure bar is appended
      * at the top of the stack. The bar reaches full width at maximum cold exposure (1.0).
      * It disappears completely once the player is warm again (coldness == 0).
+     *
+     * <p>When {@code radiation} is above zero a yellow-green radiation bar is appended
+     * at the very top. It fills as radiation accumulates and turns deep orange-red once
+     * the damage threshold is crossed. It disappears when the player is fully decontaminated.
      */
     public void renderStatusBars(float health, float maxHealth, float hunger, float maxHunger,
                                   float thirst, float maxThirst,
                                   float stamina, float maxStamina, float breath, float maxBreath,
                                   boolean submerged, float coldness,
+                                  float radiation, float maxRadiation,
                                   int hotbarSlotCount, float aspectRatio) {
         glDisable(GL_DEPTH_TEST);
         hudTransform.identity().scale(1f / aspectRatio, 1f, 1f);
@@ -906,7 +911,16 @@ public class Hud {
         }
         if (coldness > 0f) {
             // Frost-blue cold-exposure bar: pale at low exposure, deeper blue-white at max.
-            renderStatBar(minX, maxX, y, Math.min(1f, coldness), new Vector4f(0.60f, 0.88f, 1.00f, 0.95f));
+            y = renderStatBar(minX, maxX, y, Math.min(1f, coldness), new Vector4f(0.60f, 0.88f, 1.00f, 0.95f));
+        }
+        if (radiation > 0f) {
+            // Radiation bar: yellow-green at low levels, deepening to orange-red once above the
+            // damage threshold (~60 %). The colour warns the player before damage starts.
+            float radFrac = Math.min(1f, radiation / maxRadiation);
+            float r = 0.55f + 0.40f * radFrac;   // 0.55 → 0.95 (green-yellow → orange-red)
+            float g = 0.90f - 0.60f * radFrac;   // 0.90 → 0.30 (yellow → dim)
+            float b = 0.10f;
+            renderStatBar(minX, maxX, y, radFrac, new Vector4f(r, g, b, 0.95f));
         }
 
         lineShader.unbind();
