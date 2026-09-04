@@ -30,6 +30,12 @@ public class MobTextures {
     private static final int H = 16;
 
     // Texture regions (u0, v0, u1, v1) - v increases downward, one row = 1/16.
+    // Health-bar texture UV regions (separate 2x1 texture: left pixel = green fill, right = dark bg).
+    /** Left pixel of the health-bar texture: bright green (health filled portion). */
+    public static final float[] HEALTH_GREEN = {0f, 0f, 0.5f, 1f};
+    /** Right pixel of the health-bar texture: dark background (health empty portion). */
+    public static final float[] HEALTH_BG    = {0.5f, 0f, 1f, 1f};
+
     public static final float[] BODY = {0f, 0f, 1f, 6f / 16f};
     public static final float[] BODY_TOP = {0f, 6f / 16f, 1f, 7f / 16f};
     public static final float[] HEAD_SIDE = {0f, 7f / 16f, 1f, 10f / 16f};
@@ -66,6 +72,8 @@ public class MobTextures {
     private final Map<Mob.Type, Integer> textureIds = new EnumMap<>(Mob.Type.class);
     private int arrowTextureId = -1;
     private int playerTextureId = -1;
+    /** 2×1 texture used to draw health bars above remote players: green | dark. */
+    private int healthBarTexId = -1;
 
     /** Paints and uploads every mob type's skin, plus the skeleton-arrow sprite and the player skin. */
     public void generate() {
@@ -74,6 +82,25 @@ public class MobTextures {
         }
         arrowTextureId = GLTexture.upload(buildArrow());
         playerTextureId = GLTexture.upload(buildPlayer());
+        healthBarTexId = GLTexture.upload(buildHealthBar());
+    }
+
+    /**
+     * Builds the 2×1 health-bar texture.
+     * Left pixel (u < 0.5): bright green — the filled portion of the bar.
+     * Right pixel (u ≥ 0.5): dark charcoal — the empty background.
+     */
+    private static BufferedImage buildHealthBar() {
+        BufferedImage img = new BufferedImage(2, 1, BufferedImage.TYPE_INT_ARGB);
+        img.setRGB(0, 0, 0xFF33CC33); // green fill
+        img.setRGB(1, 0, 0xFF222222); // dark background
+        return img;
+    }
+
+    /** Binds the health-bar texture to texture unit 0 (for rendering remote-player health bars). */
+    public void bindHealthBar() {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, healthBarTexId);
     }
 
     private BufferedImage build(Mob.Type type) {
@@ -465,6 +492,9 @@ public class MobTextures {
         }
         if (playerTextureId != -1) {
             glDeleteTextures(playerTextureId);
+        }
+        if (healthBarTexId != -1) {
+            glDeleteTextures(healthBarTexId);
         }
     }
 }

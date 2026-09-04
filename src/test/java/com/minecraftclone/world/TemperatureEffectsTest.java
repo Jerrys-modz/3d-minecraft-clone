@@ -35,6 +35,7 @@ class TemperatureEffectsTest {
     //   localTemp = 20°C  →  coldFactor = 0.0  (clamped, positive temperatures are warm)
     // ------------------------------------------------------------------
 
+    /** Temperatures at or above 2 °C must yield a cold factor of exactly zero. */
     @Test
     void warmTemperatureProducesNoColdFactor() {
         assertEquals(0f, Climate.coldFactor(20f),  0.001f, "20°C (plains summer) must be fully warm");
@@ -42,12 +43,14 @@ class TemperatureEffectsTest {
         assertEquals(0f, Climate.coldFactor(2f),   0.001f, "2°C is the exact warm threshold");
     }
 
+    /** Temperatures at or below −20 °C must clamp the cold factor to 1. */
     @Test
     void freezingTemperatureProducesMaxColdFactor() {
         assertEquals(1f, Climate.coldFactor(-20f), 0.001f, "-20°C must hit the cold cap");
         assertEquals(1f, Climate.coldFactor(-50f), 0.001f, "-50°C is clamped to 1");
     }
 
+    /** Cold factor increases linearly between the 2 °C warm threshold and −20 °C maximum. */
     @Test
     void coldFactorScalesLinearlyBetweenThresholds() {
         // 2°C → 0, -20°C → 1. Midpoint -9°C → 0.5.
@@ -60,6 +63,7 @@ class TemperatureEffectsTest {
     // Biome base temperatures vs the cold-factor formula
     // ------------------------------------------------------------------
 
+    /** Desert and Savanna biomes are always hot enough to produce zero cold exposure. */
     @Test
     void hotBiomesProduceNoCold() {
         // Desert (34°C), Savanna (30°C), Badlands (32°C) — always fully warm.
@@ -72,6 +76,7 @@ class TemperatureEffectsTest {
         assertEquals(0f, Climate.coldFactor(savannaTemp), 0.001f, "Savanna is never cold");
     }
 
+    /** Tundra and Snowy biomes register meaningful cold exposure even at noon. */
     @Test
     void coldBiomesProduceHighColdFactor() {
         DayNightCycle cycle = new DayNightCycle();
@@ -89,6 +94,7 @@ class TemperatureEffectsTest {
     // Altitude lapse: mountain peak is colder than its foothills
     // ------------------------------------------------------------------
 
+    /** A mountain summit experiences lower temperature and higher cold exposure than its base. */
     @Test
     void mountainPeakColderThanBase() {
         DayNightCycle cycle = new DayNightCycle();
@@ -106,6 +112,7 @@ class TemperatureEffectsTest {
     // Underground stability: caves hover near the biome's annual mean
     // ------------------------------------------------------------------
 
+    /** In mid-winter a cave remains warmer than the frozen surface above it. */
     @Test
     void caveIsWarmerThanSurfaceInWinter() {
         // Mid-winter, noon -- mirrors ClimateTest.cavesAreWarmerThanAFrozenSurfaceInWinter.
@@ -131,12 +138,14 @@ class TemperatureEffectsTest {
     // Armor warmth and cold multiplier
     // ------------------------------------------------------------------
 
+    /** A player wearing no armor receives the full cold exposure (multiplier = 1). */
     @Test
     void noArmorLeavesFullColdExposure() {
         assertEquals(1f, Armor.coldMultiplier(0f), 1e-6f,
                 "No armor = 100% of the cold reaches you");
     }
 
+    /** A full set of bear-hide armor reaches the warmth cap and blocks all cold. */
     @Test
     void fullBearArmorEliminatesCold() {
         float warmth = Armor.totalWarmth(
@@ -149,6 +158,7 @@ class TemperatureEffectsTest {
                 "Full bear set: 0% cold reaches the player");
     }
 
+    /** A full fur set cuts cold exposure to below 25% without going negative. */
     @Test
     void fullFurSetCutsExposureToFraction() {
         float warmth = Armor.totalWarmth(
@@ -161,6 +171,7 @@ class TemperatureEffectsTest {
         assertTrue(mul >= 0f,   "Cold multiplier must never go negative");
     }
 
+    /** Iron armor provides negligible insulation; the cold multiplier stays close to 1. */
     @Test
     void ironArmorProvidesLittleWarmth() {
         float warmth = Armor.totalWarmth(
@@ -173,6 +184,7 @@ class TemperatureEffectsTest {
                 "Iron armor is a poor insulator: cold multiplier should be close to 1");
     }
 
+    /** Diamond armor has zero warmth and provides no cold protection whatsoever. */
     @Test
     void diamondArmorProvidesNoWarmth() {
         float warmth = Armor.totalWarmth(
@@ -191,6 +203,7 @@ class TemperatureEffectsTest {
 
     private static final float DT = 1f; // 1 second steps for legible arithmetic
 
+    /** Without any cold exposure, health must not decrease from cold damage alone. */
     @Test
     void noColdnessNoColdDamage() {
         PlayerStats stats = new PlayerStats();
@@ -205,6 +218,7 @@ class TemperatureEffectsTest {
                 "No coldness: health should not drop from cold damage");
     }
 
+    /** Full cold exposure drains hunger faster than the passive rate alone. */
     @Test
     void fullColdExposureDrainsHungerFasterThanPassive() {
         PlayerStats warmStats = new PlayerStats();
@@ -219,6 +233,7 @@ class TemperatureEffectsTest {
                 "Full cold exposure must drain hunger faster than no cold");
     }
 
+    /** Once hunger is exhausted by cold, freeze damage reduces health below the maximum. */
     @Test
     void coldExposureFreezesOnceStarved() {
         PlayerStats stats = new PlayerStats();
@@ -236,6 +251,7 @@ class TemperatureEffectsTest {
                 "Freeze damage must have reduced health once hunger ran out");
     }
 
+    /** Half cold exposure drains hunger more slowly than full cold exposure over the same duration. */
     @Test
     void partialColdExposureDrainsSlower() {
         PlayerStats halfCold = new PlayerStats();
@@ -250,6 +266,7 @@ class TemperatureEffectsTest {
                 "Half cold exposure drains hunger more slowly than full exposure");
     }
 
+    /** Returning to warmth (coldness = 0) immediately stops the accelerated hunger drain. */
     @Test
     void warmingUpStopsColdDamage() {
         PlayerStats stats = new PlayerStats();

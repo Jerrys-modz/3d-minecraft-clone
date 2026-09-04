@@ -28,14 +28,33 @@ public class RemotePlayer {
     public boolean onGround;
     public boolean flying;
     public boolean sprinting;
+    /**
+     * Last reported health (0..MAX_HEALTH). Initialised to full health and
+     * updated each time the server relays this player's Move packet. Used to
+     * render a health bar above the figure on other clients.
+     */
+    public float health = 20f;
+    /**
+     * Last reported hunger (0..MAX_HUNGER). Carried alongside health for
+     * completeness; not currently rendered but available for future HUD work.
+     */
+    public float hunger = 20f;
+    /**
+     * BlockType id of the item this player is currently holding (0 = empty
+     * hand). Relayed with every Move packet so other clients can eventually
+     * show a held-item indicator above the figure.
+     */
+    public short heldItemId = 0;
 
     public RemotePlayer(int id, String name) {
         this.id = id;
         this.name = name;
     }
 
+    /** Updates position/look and live survival stats relayed from the server. */
     public void update(byte dimension, float x, float y, float z, float yaw, float pitch,
-                       boolean onGround, boolean flying, boolean sprinting) {
+                       boolean onGround, boolean flying, boolean sprinting,
+                       float health, float hunger, short heldItemId) {
         this.dimension = dimension;
         this.target.set(x, y, z);
         this.yawDegrees = yaw;
@@ -43,6 +62,9 @@ public class RemotePlayer {
         this.onGround = onGround;
         this.flying = flying;
         this.sprinting = sprinting;
+        this.health = health;
+        this.hunger = hunger;
+        this.heldItemId = heldItemId;
     }
 
     /** Smooths the rendered pose toward the server target; call once per frame. */

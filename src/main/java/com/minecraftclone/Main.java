@@ -603,14 +603,21 @@ public class Main {
         leaveMultiplayer();
     }
 
-    /** Sends the local player's current position/look to the server (throttled by the caller). */
+    /** Sends the local player's current position/look and live stats to the server (throttled by the caller). */
     private void sendPlayerMove(NetClient client, Player player) {
         if (client == null || !client.isConnected()) return;
         Vector3f p = player.getPosition();
         Camera cam = player.getCamera();
+        // Include survival stats and held item so the server can relay them to
+        // other players, who use them to render a health bar above this figure.
+        float health = player.getStats().getHealth();
+        float hunger = player.getStats().getHunger();
+        ItemStack held = player.getInventory().stackOf(selectedSlot[0]);
+        short heldItemId = held.isEmpty() ? 0 : held.type().id;
         try {
             client.sendMove(new Packets.Move(p.x, p.y, p.z, cam.getYaw(), cam.getPitch(),
-                    player.isOnGround(), player.isFlying(), player.isSprinting()));
+                    player.isOnGround(), player.isFlying(), player.isSprinting(),
+                    health, hunger, heldItemId));
         } catch (IOException e) {
             netError = e.getMessage();
         }
@@ -1075,7 +1082,8 @@ public class Main {
                 }
             } else if (packet instanceof Packets.PlayerJoined joined) {
                 RemotePlayer rp = new RemotePlayer(joined.id(), joined.name());
-                rp.update(joined.dimension(), joined.x(), joined.y(), joined.z(), joined.yaw(), joined.pitch(), false, false, false);
+                rp.update(joined.dimension(), joined.x(), joined.y(), joined.z(), joined.yaw(), joined.pitch(),
+                        false, false, false, PlayerStats.MAX_HEALTH, PlayerStats.MAX_HUNGER, (short) 0);
                 rp.tick(1f); // snap the render pose to the join position
                 remotePlayers.put(joined.id(), rp);
                 showMessage(messages, joined.name() + " joined", new Vector4f(0.7f, 0.9f, 0.7f, 1f), 3f);
@@ -1088,7 +1096,8 @@ public class Main {
                 RemotePlayer rp = remotePlayers.get(state.id());
                 if (rp != null) {
                     rp.update(state.dimension(), state.x(), state.y(), state.z(), state.yaw(), state.pitch(),
-                            state.onGround(), state.flying(), state.sprinting());
+                            state.onGround(), state.flying(), state.sprinting(),
+                            state.health(), state.hunger(), state.heldItemId());
                 }
             } else if (packet instanceof Packets.BlockChange change) {
                 World target = (worlds != null && change.dimension() >= 0 && change.dimension() < worlds.length)
@@ -4025,6 +4034,12 @@ public class Main {
                 }
                 if (!visible.isEmpty()) {
                     playerRenderer.render(mobTextures, visible);
+                    // Health bars share the chunk shader; bind health-bar texture
+                    // instead of the player skin for this second pass.
+                    playerRenderer.renderHealthBars(mobTextures, visible, player.getCamera().getYaw());
+                    // Rebind the atlas so subsequent opaque rendering (water, etc.)
+                    // goes through the right texture.
+                    atlas.bind();
                 }
             }
             // Water after entities: the surface covers submerged bodies instead
