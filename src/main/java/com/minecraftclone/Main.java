@@ -3004,6 +3004,34 @@ public class Main {
                 TerrainGenerator.Biome pBiome = world.getBiome((int) Math.floor(px), (int) Math.floor(pz));
                 float localTemp = climate.temperatureFor(pBiome, playerY, world.getTerrainHeight((int) Math.floor(px), (int) Math.floor(pz)));
                 float coldFactor = Climate.coldFactor(localTemp);
+
+                // --- Radiation proximity scan ---
+                // Uranium and plutonium ore (both vein and small-ore variants) emit
+                // radiation.  Each ore block within a 5-block radius contributes a
+                // radiation rate that falls off with the square of the distance.
+                // The hazmat suit blocks a fraction of exposure per piece worn.
+                if (!settings.getGameMode().isCreative() && !settings.getGameMode().isSpectator()) {
+                    float rawRadRate = 0f;
+                    int scanR = 5;
+                    int ipx = (int) Math.floor(px), ipy = (int) Math.floor(playerY), ipz = (int) Math.floor(pz);
+                    for (int dy = -scanR; dy <= scanR; dy++) {
+                        for (int dz = -scanR; dz <= scanR; dz++) {
+                            for (int dx = -scanR; dx <= scanR; dx++) {
+                                float dist2 = dx * dx + dy * dy + dz * dz;
+                                if (dist2 > (float) (scanR * scanR)) continue;
+                                BlockType nb = world.getBlock(ipx + dx, ipy + dy, ipz + dz);
+                                if (nb == BlockType.URANIUM_ORE   || nb == BlockType.SMALL_URANIUM_ORE
+                                 || nb == BlockType.PLUTONIUM_ORE || nb == BlockType.SMALL_PLUTONIUM_ORE) {
+                                    rawRadRate += 12f / Math.max(1f, dist2); // 12 rad/s at distance 1
+                                }
+                            }
+                        }
+                    }
+                    // Scale by armor protection (0 = full hazmat, 1 = unprotected)
+                    float radMultiplier = player.getInventory().armorRadiationMultiplier();
+                    player.getStats().setRadiationRate(rawRadRate * radMultiplier);
+                }
+
                 player.update(dt, input, world, coldFactor, settings.getDifficulty());
 
                 // --- Horse: steer mounted horse and glue player to its back --
@@ -4193,13 +4221,14 @@ public class Main {
                 // Creative/spectator have no health to show - hide the bars like Minecraft.
                 if (!settings.getGameMode().isInvulnerable()) {
                     hud.renderStatusBars(
-                            player.getStats().getHealth(),  PlayerStats.MAX_HEALTH,
-                            player.getStats().getHunger(),  PlayerStats.MAX_HUNGER,
-                            player.getStats().getThirst(),  PlayerStats.MAX_THIRST,
-                            player.getStats().getStamina(), PlayerStats.MAX_STAMINA,
-                            player.getStats().getBreath(),  PlayerStats.MAX_BREATH,
+                            player.getStats().getHealth(),    PlayerStats.MAX_HEALTH,
+                            player.getStats().getHunger(),    PlayerStats.MAX_HUNGER,
+                            player.getStats().getThirst(),    PlayerStats.MAX_THIRST,
+                            player.getStats().getStamina(),   PlayerStats.MAX_STAMINA,
+                            player.getStats().getBreath(),    PlayerStats.MAX_BREATH,
                             player.isSubmerged(),
                             player.getStats().getColdness(),
+                            player.getStats().getRadiation(), PlayerStats.MAX_RADIATION,
                             Inventory.HOTBAR_SIZE, window.getAspectRatio());
                 }
                 // A blue tint washes over the screen while your eyes are

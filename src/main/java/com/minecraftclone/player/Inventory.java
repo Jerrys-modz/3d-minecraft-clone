@@ -70,6 +70,15 @@ public class Inventory implements StorageContainer {
                 armor[ARMOR_SLOT_LEGGINGS], armor[ARMOR_SLOT_BOOTS]);
     }
 
+    /**
+     * How much of incoming radiation passes through the equipped armour, 0 (fully blocked by
+     * a complete hazmat set) to 1 (no protection at all).  Fractional coverage for incomplete sets.
+     */
+    public float armorRadiationMultiplier() {
+        return Armor.radiationMultiplier(armor[ARMOR_SLOT_HELMET], armor[ARMOR_SLOT_CHESTPLATE],
+                armor[ARMOR_SLOT_LEGGINGS], armor[ARMOR_SLOT_BOOTS]);
+    }
+
     /** Clears every armor slot - the death penalty, alongside {@link #clear()}. */
     public void clearArmor() {
         for (int i = 0; i < ARMOR_SLOT_COUNT; i++) armor[i] = null;
