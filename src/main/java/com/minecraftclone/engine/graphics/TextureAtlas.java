@@ -392,6 +392,20 @@ public class TextureAtlas {
         // Explosives (275).
         paintTnt(image, 275, rnd);                        // TNT
 
+        // Tree variants: birch, jungle, pine logs + leaves; saplings (276-284).
+        paintBirchLogSide(image, 276, rnd);               // BIRCH_LOG sides
+        paintJungleLogSide(image, 277, rnd);              // JUNGLE_LOG sides
+        paintPineLogSide(image, 278, rnd);                // PINE_LOG sides
+        paintBirchLeaves(image, 279, rnd);                // BIRCH_LEAVES
+        paintJungleLeaves(image, 280, rnd);               // JUNGLE_LEAVES
+        paintSapling(image, 281, rnd, 0x5A9A2A, 0x8B5E2F, false); // OAK_SAPLING
+        paintSapling(image, 282, rnd, 0x7DC04A, 0xD0C89A, false); // BIRCH_SAPLING
+        paintSapling(image, 283, rnd, 0x2F9930, 0x7A4B1E, true);  // JUNGLE_SAPLING (broad)
+        paintSapling(image, 284, rnd, 0x1A7040, 0x5A3218, true);  // PINE_SAPLING (dark)
+        paintCherryLogSide(image, 285, rnd);                      // CHERRY_LOG sides
+        paintSapling(image, 286, rnd, 0xFFB7C5, 0xD4A0B0, false); // CHERRY_SAPLING (pink blossom)
+        paintPineLeaves(image, 287, rnd);                         // PINE_LEAVES
+
         return image;
     }
 
@@ -2656,6 +2670,267 @@ public class TextureAtlas {
             for (int col = 0; col < glyph[row].length; col++) {
                 if (glyph[row][col]) {
                     img.setRGB(ox + col, oy + row, argb);
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Tree-variant textures: birch / jungle / pine logs, leaves, saplings
+    // -----------------------------------------------------------------------
+
+    /**
+     * Birch log side (tile 276): pale cream background with thin dark horizontal
+     * streaks (the characteristic eye-marks) and subtle vertical grain.
+     */
+    private void paintBirchLogSide(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        // Cream base
+        int baseR = 0xE8, baseG = 0xE0, baseB = 0xC8;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(12) - 6;
+                int r = clamp(baseR + noise);
+                int g = clamp(baseG + noise);
+                int b = clamp(baseB + noise - 8);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Dark horizontal eye-mark streaks
+        int[] eyeRows = {3, 4, 9, 10};
+        for (int ey : eyeRows) {
+            for (int x = 2; x < TILE_PX - 2; x++) {
+                img.setRGB(ox + x, oy + ey, 0xFF3A2A18);
+            }
+        }
+        // Subtle vertical grain lines
+        for (int x = 4; x < TILE_PX; x += 4) {
+            for (int y = 0; y < TILE_PX; y++) {
+                if (rnd.nextInt(4) == 0) {
+                    int cur = img.getRGB(ox + x, oy + y);
+                    int rr = ((cur >> 16) & 0xFF), gg = ((cur >> 8) & 0xFF), bb = (cur & 0xFF);
+                    img.setRGB(ox + x, oy + y, 0xFF000000
+                            | (clamp(rr - 12) << 16) | (clamp(gg - 10) << 8) | clamp(bb - 8));
+                }
+            }
+        }
+    }
+
+    /**
+     * Jungle log side (tile 277): warm dark-brown tropical bark with rough
+     * vertical ridges and occasional lighter highlights.
+     */
+    private void paintJungleLogSide(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // Dark base with ridge pattern
+                boolean ridge = (x % 3 == 0);
+                int base = ridge ? 0x5A3218 : 0x7A4B28;
+                int noise = rnd.nextInt(16) - 8;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >>  8) & 0xFF) + noise);
+                int b = clamp(( base        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Occasional bright highlight streaks
+        for (int y = 1; y < TILE_PX - 1; y += 5) {
+            for (int x = 0; x < TILE_PX; x++) {
+                if (rnd.nextInt(3) == 0) {
+                    int cur = img.getRGB(ox + x, oy + y);
+                    int rr = clamp(((cur >> 16) & 0xFF) + 20);
+                    int gg = clamp(((cur >>  8) & 0xFF) + 14);
+                    int bb = clamp(( cur        & 0xFF) +  8);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rr << 16) | (gg << 8) | bb);
+                }
+            }
+        }
+    }
+
+    /**
+     * Pine log side (tile 278): reddish-dark bark with tight vertical fissures —
+     * typical of spruce / pine wood.
+     */
+    private void paintPineLogSide(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                boolean fissure = (x % 4 == 2);
+                int base = fissure ? 0x3A1E10 : 0x5C3220;
+                int noise = rnd.nextInt(14) - 7;
+                int r = clamp(((base >> 16) & 0xFF) + noise + (fissure ? -8 : 0));
+                int g = clamp(((base >>  8) & 0xFF) + noise);
+                int b = clamp(( base        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * Cherry log side (tile 285): pale cream-pink bark — softer and lighter
+     * than birch, with faint horizontal banding and a subtle pink undertone.
+     */
+    private void paintCherryLogSide(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        // Light pinkish-cream base (#F0D8D8 — very pale rose-white)
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(14) - 7;
+                int r = clamp(0xF0 + noise);
+                int g = clamp(0xD8 + noise - 4);
+                int b = clamp(0xD8 + noise - 4);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Faint horizontal banding every 3-4 rows (cherry bark lines)
+        for (int y = 2; y < TILE_PX; y += 4) {
+            for (int x = 1; x < TILE_PX - 1; x++) {
+                if (rnd.nextInt(3) != 0) {
+                    int cur = img.getRGB(ox + x, oy + y);
+                    int rr = clamp(((cur >> 16) & 0xFF) - 18);
+                    int gg = clamp(((cur >>  8) & 0xFF) - 22);
+                    int bb = clamp(( cur        & 0xFF) - 20);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rr << 16) | (gg << 8) | bb);
+                }
+            }
+        }
+        // Subtle vertical grain (lighter than birch — cherry bark is smooth)
+        for (int x = 3; x < TILE_PX; x += 5) {
+            for (int y = 0; y < TILE_PX; y++) {
+                if (rnd.nextInt(5) == 0) {
+                    int cur = img.getRGB(ox + x, oy + y);
+                    int rr = clamp(((cur >> 16) & 0xFF) - 8);
+                    int gg = clamp(((cur >>  8) & 0xFF) - 10);
+                    int bb = clamp(( cur        & 0xFF) - 10);
+                    img.setRGB(ox + x, oy + y, 0xFF000000 | (rr << 16) | (gg << 8) | bb);
+                }
+            }
+        }
+    }
+
+    /**
+     * Birch leaves (tile 279): lighter yellow-green than oak, slightly sparse
+     * to give birch trees their airy look.
+     */
+    private void paintBirchLeaves(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // Slightly sparser: more gaps (transparent holes) than oak
+                if (rnd.nextInt(5) == 0) {
+                    img.setRGB(ox + x, oy + y, 0x00000000); // transparent gap
+                    continue;
+                }
+                int noise = rnd.nextInt(22) - 11;
+                int r = clamp(0x98 + noise);
+                int g = clamp(0xC8 + noise);
+                int b = clamp(0x50 + noise / 2);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * Jungle leaves (tile 280): dense bright tropical green — richer and darker
+     * than oak, with very few gaps (jungle canopy is impenetrable).
+     */
+    private void paintJungleLeaves(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // Dense: only 1-in-10 transparent
+                if (rnd.nextInt(10) == 0) {
+                    img.setRGB(ox + x, oy + y, 0x00000000);
+                    continue;
+                }
+                int noise = rnd.nextInt(24) - 12;
+                int r = clamp(0x28 + noise / 2);
+                int g = clamp(0xA0 + noise);
+                int b = clamp(0x30 + noise / 2);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * Pine / spruce leaves (tile 287): dark blue-green needle foliage, denser
+     * and darker than oak, with a cool blue-green cast and very few transparent gaps.
+     */
+    private void paintPineLeaves(BufferedImage img, int index, Random rnd) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                // Dense: only 1-in-12 transparent (pine needles are thick)
+                if (rnd.nextInt(12) == 0) {
+                    img.setRGB(ox + x, oy + y, 0x00000000);
+                    continue;
+                }
+                int noise = rnd.nextInt(20) - 10;
+                // Dark blue-green (#1A6040 base)
+                int r = clamp(0x1A + noise / 3);
+                int g = clamp(0x60 + noise);
+                int b = clamp(0x40 + noise / 2);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * A small cross-shaped sapling tile (tiles 281–284).
+     * The image is rendered as a tiny tree silhouette:
+     * a single-pixel trunk and a small leaf blob at the top.
+     *
+     * @param leafColor  ARGB leaf colour (top blob)
+     * @param barkColor  ARGB trunk/bark colour
+     * @param broad      true → wider/rounder crown (jungle); false → slim (oak/birch)
+     */
+    private void paintSapling(BufferedImage img, int index, Random rnd,
+                               int leafColor, int barkColor, boolean broad) {
+        int ox = (index % GRID) * TILE_PX;
+        int oy = (index / GRID) * TILE_PX;
+        // Transparent background
+        for (int y = 0; y < TILE_PX; y++)
+            for (int x = 0; x < TILE_PX; x++)
+                img.setRGB(ox + x, oy + y, 0x00000000);
+
+        int cx = TILE_PX / 2; // center x
+        int trunkTop = TILE_PX / 2;
+        // Trunk: bottom half
+        for (int y = trunkTop; y < TILE_PX; y++) {
+            int noise = rnd.nextInt(10) - 5;
+            int r = clamp(((barkColor >> 16) & 0xFF) + noise);
+            int g = clamp(((barkColor >>  8) & 0xFF) + noise);
+            int b = clamp(( barkColor        & 0xFF) + noise);
+            img.setRGB(ox + cx, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            // Thin roots at very bottom
+            if (y >= TILE_PX - 2) {
+                if (cx - 1 >= 0) img.setRGB(ox + cx - 1, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+                if (cx + 1 < TILE_PX) img.setRGB(ox + cx + 1, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        // Leaf crown: top half, round-ish blob
+        int crownRadius = broad ? 4 : 3;
+        int crownCenterY = TILE_PX / 4;
+        for (int y = 0; y < trunkTop; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int dx = x - cx;
+                int dy = y - crownCenterY;
+                if (dx * dx + dy * dy <= crownRadius * crownRadius) {
+                    if (rnd.nextInt(5) != 0) { // small gaps for a natural look
+                        int noise = rnd.nextInt(20) - 10;
+                        int r = clamp(((leafColor >> 16) & 0xFF) + noise);
+                        int g = clamp(((leafColor >>  8) & 0xFF) + noise);
+                        int b = clamp(( leafColor        & 0xFF) + noise / 2);
+                        img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+                    }
                 }
             }
         }

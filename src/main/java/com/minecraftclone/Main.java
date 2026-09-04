@@ -1387,6 +1387,23 @@ public class Main {
                 if (targetType == BlockType.LEAVES && loot.nextInt(APPLE_DROP_CHANCE) == 0) {
                     world.spawnItem(bx, by, bz, BlockType.APPLE, 1, loot);
                 }
+                // Leaf blocks drop their sapling type (1-in-20 chance), matching vanilla.
+                if (targetType == BlockType.LEAVES && loot.nextInt(20) == 0) {
+                    world.spawnItem(bx, by, bz, BlockType.OAK_SAPLING, 1, loot);
+                }
+                if (targetType == BlockType.BIRCH_LEAVES && loot.nextInt(20) == 0) {
+                    world.spawnItem(bx, by, bz, BlockType.BIRCH_SAPLING, 1, loot);
+                }
+                if (targetType == BlockType.JUNGLE_LEAVES && loot.nextInt(40) == 0) {
+                    // Jungle leaves drop saplings at half the rate (vanilla: 1 in 40).
+                    world.spawnItem(bx, by, bz, BlockType.JUNGLE_SAPLING, 1, loot);
+                }
+                if (targetType == BlockType.CHERRY_LEAVES && loot.nextInt(20) == 0) {
+                    world.spawnItem(bx, by, bz, BlockType.CHERRY_SAPLING, 1, loot);
+                }
+                if (targetType == BlockType.PINE_LEAVES && loot.nextInt(20) == 0) {
+                    world.spawnItem(bx, by, bz, BlockType.PINE_SAPLING, 1, loot);
+                }
                 // Breaking tall grass has a 1-in-8 chance to drop wheat seeds.
                 if (targetType == BlockType.TALL_GRASS && loot.nextInt(8) == 0) {
                     world.spawnItem(bx, by, bz, BlockType.SEEDS, 1, loot);
@@ -3316,6 +3333,10 @@ public class Main {
             // Farming: Minecraft-style random tick across all loaded chunks.
             com.minecraftclone.player.Farming.tickCrops(world, dt, loot,
                     player.getPosition().x, player.getPosition().z);
+            // Saplings: same random-tick system, separate pass so the tick budget
+            // is independent and both pass with their own per-pick logic.
+            com.minecraftclone.player.Farming.tickSaplings(world, dt, loot,
+                    player.getPosition().x, player.getPosition().z);
 
             // Mobs: passives wander, hostiles hunt the player (spawning at night and
             // melting away at dawn); the damage their hits and arrows deal is applied
@@ -3973,6 +3994,20 @@ public class Main {
                                 audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
                                         px + 0.5f, py + 0.5f, pz + 0.5f, 0.8f);
                             }
+                        }
+                    } else if (noMob && heldItem != null && heldItem.isSapling()
+                            && targeted != null
+                            && (targeted == BlockType.DIRT || targeted == BlockType.GRASS)
+                            && mode.canPlace()) {
+                        // Sapling on DIRT or GRASS → place the sapling on top.
+                        int px = hit.blockPos.x, py = hit.blockPos.y + 1, pz = hit.blockPos.z;
+                        if (world.getBlock(px, py, pz) == BlockType.AIR
+                                && !intersectsPlayer(player, new org.joml.Vector3i(px, py, pz))) {
+                            if (!mode.isCreative()) player.getInventory().remove(heldItem, 1);
+                            world.setBlock(px, py, pz, heldItem);
+                            handRenderer.triggerSwing();
+                            audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
+                                    px + 0.5f, py + 0.5f, pz + 0.5f, 0.8f);
                         }
                     } else if (noMob && heldItem == BlockType.CLAY_CANTEEN
                             && (targeted == BlockType.WATER_SOURCE || targeted == BlockType.WATER)) {

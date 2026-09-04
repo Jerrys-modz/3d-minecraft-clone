@@ -476,7 +476,12 @@ public class TerrainGenerator implements WorldGenerator {
                     case FOREST -> {
                         if (surface == BlockType.GRASS) {
                             if (featureRandom.nextInt(18) == 0) {
-                                placeTree(chunk, x, height + 1, z, featureRandom);
+                                // ~30% birch, rest oak — gives forest a mixed look.
+                                if (featureRandom.nextInt(3) == 0) {
+                                    placeBirchTree(chunk, x, height + 1, z, featureRandom);
+                                } else {
+                                    placeTree(chunk, x, height + 1, z, featureRandom);
+                                }
                             } else if (featureRandom.nextInt(60) == 0) {
                                 placeFallenLog(chunk, x, height + 1, z, featureRandom);
                             } else if (featureRandom.nextInt(80) == 0) {
@@ -1150,7 +1155,7 @@ public class TerrainGenerator implements WorldGenerator {
     private void placeJungleTree(Chunk chunk, int x, int y, int z, Random rnd) {
         int trunkHeight = 7 + rnd.nextInt(3);
         for (int i = 0; i < trunkHeight; i++) {
-            chunk.setLocal(x, y + i, z, BlockType.WOOD_LOG);
+            chunk.setLocal(x, y + i, z, BlockType.JUNGLE_LOG);
         }
         int canopyBase = y + trunkHeight - 3;
         for (int cy = 0; cy <= 3; cy++) {
@@ -1161,12 +1166,12 @@ public class TerrainGenerator implements WorldGenerator {
                     if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius == 3) continue;
                     BlockType existing = chunk.getLocal(x + dx, canopyBase + cy, z + dz);
                     if (existing == BlockType.AIR) {
-                        chunk.setLocal(x + dx, canopyBase + cy, z + dz, BlockType.LEAVES);
+                        chunk.setLocal(x + dx, canopyBase + cy, z + dz, BlockType.JUNGLE_LEAVES);
                     }
                 }
             }
         }
-        chunk.setLocal(x, y + trunkHeight, z, BlockType.LEAVES);
+        chunk.setLocal(x, y + trunkHeight, z, BlockType.JUNGLE_LEAVES);
 
         // Vines hanging from the canopy fringe down into the air below.
         for (int dx = -3; dx <= 3; dx++) {
@@ -1198,11 +1203,11 @@ public class TerrainGenerator implements WorldGenerator {
         chunk.setLocal(x, y, z, rnd.nextBoolean() ? BlockType.MUSHROOM_RED : BlockType.MUSHROOM_BROWN);
     }
 
-    /** A cherry tree: a wood trunk crowned with pink blossom leaves, like the oak but pink. */
+    /** A cherry tree: a cherry-wood trunk crowned with pink blossom leaves. */
     private void placeCherryTree(Chunk chunk, int x, int y, int z, Random rnd) {
         int trunkHeight = 4 + rnd.nextInt(2);
         for (int i = 0; i < trunkHeight; i++) {
-            chunk.setLocal(x, y + i, z, BlockType.WOOD_LOG);
+            chunk.setLocal(x, y + i, z, BlockType.CHERRY_LOG);
         }
         int canopyBase = y + trunkHeight - 2;
         for (int cy = 0; cy <= 2; cy++) {
@@ -1281,7 +1286,7 @@ public class TerrainGenerator implements WorldGenerator {
     private void placePineTree(Chunk chunk, int x, int y, int z, Random rnd) {
         int trunkHeight = 6 + rnd.nextInt(3);
         for (int i = 0; i < trunkHeight; i++) {
-            chunk.setLocal(x, y + i, z, BlockType.WOOD_LOG);
+            chunk.setLocal(x, y + i, z, BlockType.PINE_LOG);
         }
         int layers = 4;
         int canopyBase = y + trunkHeight - layers;
@@ -1294,12 +1299,35 @@ public class TerrainGenerator implements WorldGenerator {
                     if (Math.abs(dx) == radius && Math.abs(dz) == radius) continue; // round corners
                     BlockType existing = chunk.getLocal(x + dx, cy, z + dz);
                     if (existing == BlockType.AIR) {
-                        chunk.setLocal(x + dx, cy, z + dz, BlockType.LEAVES);
+                        chunk.setLocal(x + dx, cy, z + dz, BlockType.PINE_LEAVES);
                     }
                 }
             }
         }
-        chunk.setLocal(x, y + trunkHeight, z, BlockType.LEAVES);
+        chunk.setLocal(x, y + trunkHeight, z, BlockType.PINE_LEAVES);
+    }
+
+    /** Birch tree: slimmer oak shape with BIRCH_LOG trunk and BIRCH_LEAVES canopy. */
+    private void placeBirchTree(Chunk chunk, int x, int y, int z, Random rnd) {
+        int trunkHeight = 5 + rnd.nextInt(3); // slightly taller than oak
+        for (int i = 0; i < trunkHeight; i++) {
+            chunk.setLocal(x, y + i, z, BlockType.BIRCH_LOG);
+        }
+        int canopyBase = y + trunkHeight - 2;
+        for (int cy = 0; cy <= 2; cy++) {
+            int radius = (cy == 2) ? 1 : 2;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx == 0 && dz == 0 && cy < 2) continue;
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius == 2) continue;
+                    BlockType existing = chunk.getLocal(x + dx, canopyBase + cy, z + dz);
+                    if (existing == BlockType.AIR) {
+                        chunk.setLocal(x + dx, canopyBase + cy, z + dz, BlockType.BIRCH_LEAVES);
+                    }
+                }
+            }
+        }
+        chunk.setLocal(x, y + trunkHeight, z, BlockType.BIRCH_LEAVES);
     }
 
     private void placeCactus(Chunk chunk, int x, int y, int z, Random rnd) {
