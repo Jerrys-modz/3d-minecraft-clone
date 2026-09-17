@@ -406,6 +406,15 @@ public class TextureAtlas {
         paintSapling(image, 286, rnd, 0xFFB7C5, 0xD4A0B0, false); // CHERRY_SAPLING (pink blossom)
         paintPineLeaves(image, 287, rnd);                         // PINE_LEAVES
 
+        // Phase 1 — Bronze Age machines (288-293).
+        paintFireBrick(image, 288, rnd);                          // FIRE_BRICK
+        paintPrimitiveBlastFurnace(image, 289, rnd, false, false); // PBF body
+        paintPrimitiveBlastFurnace(image, 290, rnd, true, false);  // PBF front idle
+        paintPrimitiveBlastFurnace(image, 291, rnd, true, true);   // PBF front lit
+        paintSteamOreWasher(image, 292, rnd, false);              // WASHER idle
+        paintSteamOreWasher(image, 293, rnd, true);               // WASHER working
+        paintSteelCasing(image, 294, rnd);                        // STEEL_CASING
+
         return image;
     }
 
@@ -2428,6 +2437,65 @@ public class TextureAtlas {
     /** Shared bronze hull for Steam Age machines: plated bronze with corner rivets. */
     private void paintBronzeMachineBox(BufferedImage img, int index, Random rnd) {
         paintMachineBox(img, index, rnd, 0xB87333, 0x6E4420, 0xDCA05A);
+    }
+
+    /** FIRE_BRICK (tile 288): reddish clay brick with pale mortar lines. */
+    private void paintFireBrick(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int brickColor = 0xA84828;
+        int mortarColor = 0xC8B090;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int rowOffset = ((y / 5) % 2) * 4;
+                boolean mortarH = (y % 5 == 0);
+                boolean mortarV = ((x + rowOffset) % 8 == 0);
+                int noise = rnd.nextInt(10) - 5;
+                int base = (mortarH || mortarV) ? mortarColor : brickColor;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8)  & 0xFF) + noise);
+                int b = clamp(( base        & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /** PRIMITIVE_BLAST_FURNACE (tiles 289-291): fire-brick kiln with a dark/lit mouth. */
+    private void paintPrimitiveBlastFurnace(BufferedImage img, int index, Random rnd,
+                                            boolean front, boolean lit) {
+        paintFireBrick(img, index, rnd);
+        if (!front) return;
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 5; y < 13; y++) {
+            for (int x = 4; x < 12; x++) {
+                boolean edge = y == 5 || y == 12 || x == 4 || x == 11;
+                int color;
+                if (edge) color = 0xFF3A1A10;
+                else if (lit) color = rnd.nextInt(4) == 0 ? 0xFFF0C040 : 0xFFC84810;
+                else color = 0xFF140804;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** STEAM_ORE_WASHER (tiles 292/293): bronze box with a water-blue wash chamber. */
+    private void paintSteamOreWasher(BufferedImage img, int index, Random rnd, boolean working) {
+        paintBronzeMachineBox(img, index, rnd);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 4; y < 12; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 4 || y == 11 || x == 3 || x == 12;
+                int color;
+                if (edge) color = 0xFF3A2A18;
+                else if (working) color = rnd.nextInt(5) == 0 ? 0xFFD0F0FF : 0xFF3A88C8;
+                else color = 0xFF1A3048;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** STEEL_CASING (tile 294): riveted steel plates, the LV machine hull. */
+    private void paintSteelCasing(BufferedImage img, int index, Random rnd) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
     }
 
     /**

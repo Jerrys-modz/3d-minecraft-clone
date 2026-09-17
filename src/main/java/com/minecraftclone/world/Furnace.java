@@ -51,6 +51,7 @@ public class Furnace implements BlockEntity, StorageContainer, ProgressMachine {
 
     static {
         fuel(BlockType.COAL, COAL_SMELTS);
+        fuel(BlockType.COAL_DUST, COAL_SMELTS);
         fuel(BlockType.WOOD_LOG, 2);
         fuel(BlockType.PLANKS, 2);
         fuel(BlockType.STICK, 1);

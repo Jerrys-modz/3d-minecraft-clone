@@ -97,6 +97,8 @@ public final class Crafting {
         CHARS.put('R', BlockType.STRING);             // R = stRing (fishing)
         CHARS.put('M', BlockType.GUNPOWDER);          // M = guMpowder / bang (explosives)
         CHARS.put('J', BlockType.RUBBER);             // J = rubber (unused; 'T' is taken by TORCH)
+        CHARS.put('1', BlockType.FIRE_BRICK);         // 1 = fire brick (all A-Z taken)
+        CHARS.put('2', BlockType.STEEL_PLATE);        // 2 = steel plate (casing hull)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -285,6 +287,36 @@ public final class Crafting {
         // Steam Macerator: bronze shell around a diamond grinding element.
         shaped3x3("EEE", "EDI", "EEE", BlockType.STEAM_MACERATOR, 1);
 
+        // Steam Ore Washer: bronze shell around a glass wash chamber.
+        shaped3x3("EEE", "EGE", "EEE", BlockType.STEAM_ORE_WASHER, 1);
+
+        // Mortar: a clay bowl around a stick pestle.
+        shaped3x3("Y.Y", "YSY", ".Y.", BlockType.MORTAR, 1);
+
+        // Bronze tools (correct material char — the shared tools() helper
+        // accidentally bakes copper 'X' into sword/shovel recipes).
+        shaped3x3("EEE", "ESE", ".S.", BlockType.BRONZE_PICKAXE, 1);
+        shaped3x3("EE.", "ESE", ".S.", BlockType.BRONZE_AXE, 1);
+        shaped3x3(".E.", ".E.", ".S.", BlockType.BRONZE_SWORD, 1);
+        shaped3x3(".E.", ".S.", ".S.", BlockType.BRONZE_SHOVEL, 1);
+        // Distinct from the axe (EE./ESE/.S.) — GT-style T-head: EE./ES./.S.
+        shaped3x3("EE.", "ES.", ".S.", BlockType.BRONZE_HAMMER, 1);
+        shaped3x3(".EE", "ESE", ".S.", BlockType.BRONZE_BROADAXE, 1);
+        shaped3x3("EE.", ".S.", ".S.", BlockType.BRONZE_HOE, 1);
+
+        // Brass blend: 1 copper + 1 zinc (dust), plus the GTNH 3:1 that yields 4.
+        shapeless2x2(BlockType.BRASS_DUST, 1, BlockType.COPPER_DUST, BlockType.ZINC_DUST);
+        shapeless3x3(BlockType.BRASS_DUST, 1, BlockType.COPPER_DUST, BlockType.ZINC_DUST);
+        shapeless3x3(BlockType.BRASS_DUST, 4,
+                BlockType.COPPER_DUST, BlockType.COPPER_DUST, BlockType.COPPER_DUST, BlockType.ZINC_DUST);
+
+        // GTNH-style bronze 3:1 (copper:tin) that yields 4 — the 1:1 recipe stays.
+        shapeless3x3(BlockType.BRONZE_DUST, 4,
+                BlockType.COPPER_DUST, BlockType.COPPER_DUST, BlockType.COPPER_DUST, BlockType.TIN_DUST);
+
+        // Primitive Blast Furnace: fire-brick ring, same silhouette as a furnace.
+        shaped3x3("111", "1.1", "111", BlockType.PRIMITIVE_BLAST_FURNACE, 1);
+
         // Steam Pipe: bronze column - connects machines to a boiler's steam.
         shaped3x3(".E.", ".E.", ".E.", BlockType.STEAM_PIPE_BRONZE, 6);
 
@@ -294,12 +326,21 @@ public final class Crafting {
         // Iron Steam Pipe: high-pressure tier, 1.5x throughput.
         shaped3x3(".I.", ".I.", ".I.", BlockType.STEAM_PIPE_IRON, 6);
 
-        // Steel Ingot: 4 iron + 2 coal compressed under extreme heat.
-        // Placeholder until a Blast Furnace machine exists.
-        shaped3x3("ICI", ".C.", "ICI", BlockType.STEEL_INGOT, 1);
+        // File: iron ingot over a stick. Right-click an ingot to draw a rod.
+        shaped2x2("I.", "S.", BlockType.FILE, 1);
+        shaped3x3("I..", "S..", "...", BlockType.FILE, 1);
+
+        // Steel dust: wrought iron carburised with coal dust. Only the PBF
+        // can smelt this — the table recipe that used to make steel ingots
+        // directly is gone.
+        shapeless2x2(BlockType.STEEL_DUST, 1, BlockType.WROUGHT_IRON_INGOT, BlockType.COAL_DUST);
+        shapeless3x3(BlockType.STEEL_DUST, 1, BlockType.WROUGHT_IRON_INGOT, BlockType.COAL_DUST);
 
         // Steel Steam Pipe: top Steam Age tier, 2x throughput.
         shaped3x3(".Q.", ".Q.", ".Q.", BlockType.STEAM_PIPE_STEEL, 6);
+
+        // Steel casing: eight steel plates in a ring. Machine hull.
+        shaped3x3("222", "2.2", "222", BlockType.STEEL_CASING, 1);
 
         // ---- Electric Age -----------------------------------------------
         // Coal Generator: iron ring around a furnace.

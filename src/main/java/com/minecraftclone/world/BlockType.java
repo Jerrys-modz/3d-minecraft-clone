@@ -1008,7 +1008,83 @@ public enum BlockType {
      * and burst-powering machines when demand exceeds generator output.
      * Passively accepts EU from an adjacent or networked generator.  Tile 274.
      */
-    BATTERY_BLOCK(521, true, false, 274, 274, 274);
+    BATTERY_BLOCK(521, true, false, 274, 274, 274),
+
+    // -----------------------------------------------------------------------
+    // Phase 1 — Bronze Age & Steam: mortar, bronze tools, brass, fire bricks,
+    // primitive blast furnace, wrought iron, steam ore washer.
+    // -----------------------------------------------------------------------
+
+    /** Mortar and pestle: right-click to grind ore/crushed/impure into dust 1:1. */
+    MORTAR(541, 0),
+
+    BRONZE_PICKAXE(542, 0),
+    BRONZE_AXE(543, 0),
+    BRONZE_SWORD(544, 0),
+    BRONZE_SHOVEL(545, 0),
+    BRONZE_HAMMER(546, 0),
+    BRONZE_BROADAXE(547, 0),
+    BRONZE_HOE(548, 0),
+
+    /** Brass blend: copper + zinc. Smelts into brass ingots. */
+    BRASS_DUST(549, 0),
+    BRASS_INGOT(550, 0),
+
+    /** Dust forms of the vanilla metals, produced by the mortar or ore washer. */
+    IRON_DUST(551, 0),
+    GOLD_DUST(552, 0),
+
+    /** Fire brick: smelted clay. Building block of the Primitive Blast Furnace. */
+    FIRE_BRICK(553, true, false, 288, 288, 288),
+
+    /**
+     * Primitive Blast Furnace: fire-brick kiln that forges iron into wrought
+     * iron. Directional front face: tile 290 idle / 291 lit. Tile 289 body.
+     */
+    PRIMITIVE_BLAST_FURNACE(554, true, false, 289, 289, 289, 290, 291, 0, 0),
+
+    /** Wrought iron ingot: PBF output; intermediate between iron and steel. */
+    WROUGHT_IRON_INGOT(555, 0),
+
+    /**
+     * Steam Ore Washer: washes crushed/impure ore into dust using steam and
+     * adjacent water. Directional front: tile 292 idle / 293 working.
+     */
+    STEAM_ORE_WASHER(556, true, false, 292, 292, 292, 292, 293, 0, 0),
+
+    // -----------------------------------------------------------------------
+    // Phase 2 — Steel Age: coal dust, steel dust, file, plates/rods, casing.
+    // -----------------------------------------------------------------------
+
+    /** Pulverised coal. Mix with wrought iron to make steel dust. Also furnace fuel. */
+    COAL_DUST(557, 0),
+
+    /** Wrought iron + coal dust. Only the Primitive Blast Furnace can smelt this to steel. */
+    STEEL_DUST(558, 0),
+
+    /** Metal file: right-click to draw an ingot into a rod. Iron ingot + stick. */
+    FILE(559, 0),
+
+    COPPER_PLATE(560, 0),
+    TIN_PLATE(561, 0),
+    IRON_PLATE(562, 0),
+    GOLD_PLATE(563, 0),
+    BRONZE_PLATE(564, 0),
+    BRASS_PLATE(565, 0),
+    STEEL_PLATE(566, 0),
+    WROUGHT_IRON_PLATE(567, 0),
+
+    COPPER_ROD(568, 0),
+    TIN_ROD(569, 0),
+    IRON_ROD(570, 0),
+    GOLD_ROD(571, 0),
+    BRONZE_ROD(572, 0),
+    BRASS_ROD(573, 0),
+    STEEL_ROD(574, 0),
+    WROUGHT_IRON_ROD(575, 0),
+
+    /** Machine hull: eight steel plates in a ring. Tile 294. */
+    STEEL_CASING(576, true, false, 294, 294, 294);
 
     public final short id;
     public final boolean solid;
@@ -1412,7 +1488,7 @@ public enum BlockType {
 
     /** True for any hoe item (used to till DIRT/GRASS into FARMLAND). */
     public boolean isHoe() {
-        return this == WOOD_HOE || this == STONE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
+        return this == WOOD_HOE || this == STONE_HOE || this == BRONZE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
     }
 
     /** True for bone meal (right-click crops to grow them, or grass to sprout plants). */

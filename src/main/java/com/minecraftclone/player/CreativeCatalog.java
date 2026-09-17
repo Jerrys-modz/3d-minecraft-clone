@@ -28,6 +28,8 @@ public final class CreativeCatalog {
                     BlockType.JUNGLE_LEAVES, BlockType.PINE_LEAVES, BlockType.CHERRY_LEAVES,
                     BlockType.GRAVEL, BlockType.SNOW,
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
+                    BlockType.FIRE_BRICK, BlockType.PRIMITIVE_BLAST_FURNACE, BlockType.STEEL_CASING,
+                    BlockType.STEAM_BOILER, BlockType.STEAM_FURNACE, BlockType.STEAM_MACERATOR, BlockType.STEAM_ORE_WASHER,
                     BlockType.CRAFTING_TABLE, BlockType.CHEST, BlockType.BARREL,
                     BlockType.STONE_STAIRS, BlockType.PLANKS_STAIRS, BlockType.WOODEN_FENCE,
                     BlockType.CACTUS, BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE,
@@ -61,6 +63,13 @@ public final class CreativeCatalog {
             new Tab("Materials", new BlockType[]{
                     BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
                     BlockType.COAL, BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
+                    BlockType.IRON_DUST, BlockType.GOLD_DUST, BlockType.BRONZE_DUST, BlockType.BRONZE_INGOT,
+                    BlockType.BRASS_DUST, BlockType.BRASS_INGOT, BlockType.WROUGHT_IRON_INGOT,
+                    BlockType.COAL_DUST, BlockType.STEEL_DUST, BlockType.STEEL_INGOT,
+                    BlockType.COPPER_PLATE, BlockType.TIN_PLATE, BlockType.IRON_PLATE, BlockType.GOLD_PLATE,
+                    BlockType.BRONZE_PLATE, BlockType.BRASS_PLATE, BlockType.STEEL_PLATE, BlockType.WROUGHT_IRON_PLATE,
+                    BlockType.COPPER_ROD, BlockType.TIN_ROD, BlockType.IRON_ROD, BlockType.GOLD_ROD,
+                    BlockType.BRONZE_ROD, BlockType.BRASS_ROD, BlockType.STEEL_ROD, BlockType.WROUGHT_IRON_ROD,
                     BlockType.WOOL, BlockType.BONES, BlockType.BONE_MEAL,
                     // GTNH Ores - early game
                     BlockType.COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.COPPER_DUST, BlockType.COPPER_INGOT,
@@ -178,7 +187,7 @@ public final class CreativeCatalog {
             }),
             new Tab("Tools", buildToolsTab()),
             new Tab("Combat", new BlockType[]{
-                    BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD,
+                    BlockType.WOOD_SWORD, BlockType.STONE_SWORD, BlockType.BRONZE_SWORD, BlockType.IRON_SWORD, BlockType.DIAMOND_SWORD,
             }),
             new Tab("Armor", new BlockType[]{
                     BlockType.WOOD_HELMET, BlockType.STONE_HELMET, BlockType.IRON_HELMET, BlockType.DIAMOND_HELMET,
@@ -209,17 +218,19 @@ public final class CreativeCatalog {
         List<BlockType> list = new ArrayList<>();
         // Vanilla tools
         list.add(BlockType.WOOD_PICKAXE);    list.add(BlockType.STONE_PICKAXE);
-        list.add(BlockType.IRON_PICKAXE);    list.add(BlockType.DIAMOND_PICKAXE);
+        list.add(BlockType.BRONZE_PICKAXE);  list.add(BlockType.IRON_PICKAXE);    list.add(BlockType.DIAMOND_PICKAXE);
         list.add(BlockType.WOOD_AXE);        list.add(BlockType.STONE_AXE);
-        list.add(BlockType.IRON_AXE);        list.add(BlockType.DIAMOND_AXE);
+        list.add(BlockType.BRONZE_AXE);      list.add(BlockType.IRON_AXE);        list.add(BlockType.DIAMOND_AXE);
         list.add(BlockType.WOOD_SHOVEL);     list.add(BlockType.STONE_SHOVEL);
-        list.add(BlockType.IRON_SHOVEL);     list.add(BlockType.DIAMOND_SHOVEL);
+        list.add(BlockType.BRONZE_SHOVEL);   list.add(BlockType.IRON_SHOVEL);     list.add(BlockType.DIAMOND_SHOVEL);
         list.add(BlockType.WOOD_HAMMER);     list.add(BlockType.STONE_HAMMER);
-        list.add(BlockType.IRON_HAMMER);     list.add(BlockType.DIAMOND_HAMMER);
+        list.add(BlockType.BRONZE_HAMMER);   list.add(BlockType.IRON_HAMMER);     list.add(BlockType.DIAMOND_HAMMER);
         list.add(BlockType.WOOD_BROADAXE);   list.add(BlockType.STONE_BROADAXE);
-        list.add(BlockType.IRON_BROADAXE);   list.add(BlockType.DIAMOND_BROADAXE);
+        list.add(BlockType.BRONZE_BROADAXE); list.add(BlockType.IRON_BROADAXE);   list.add(BlockType.DIAMOND_BROADAXE);
         list.add(BlockType.WOOD_HOE);        list.add(BlockType.STONE_HOE);
-        list.add(BlockType.IRON_HOE);        list.add(BlockType.DIAMOND_HOE);
+        list.add(BlockType.BRONZE_HOE);      list.add(BlockType.IRON_HOE);        list.add(BlockType.DIAMOND_HOE);
+        list.add(BlockType.MORTAR);
+        list.add(BlockType.FILE);
         return list.toArray(new BlockType[0]);
     }
 
