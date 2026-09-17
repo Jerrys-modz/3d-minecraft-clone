@@ -23,6 +23,11 @@ public final class Smelting {
         // Add a smelting recipe with one line: ore -> refined output.
         smelt(BlockType.IRON_ORE, BlockType.IRON_INGOT);
         smelt(BlockType.BRONZE_DUST, BlockType.BRONZE_INGOT);
+        smelt(BlockType.BRASS_DUST, BlockType.BRASS_INGOT);
+        smelt(BlockType.IRON_DUST, BlockType.IRON_INGOT);
+        smelt(BlockType.GOLD_DUST, BlockType.GOLD_INGOT);
+        smelt(BlockType.CLAY_BALL, BlockType.FIRE_BRICK);
+        smelt(BlockType.CLAY, BlockType.FIRE_BRICK);
         smelt(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);
         smelt(BlockType.DIAMOND_ORE, BlockType.DIAMOND);
         smelt(BlockType.COAL_ORE, BlockType.COAL);

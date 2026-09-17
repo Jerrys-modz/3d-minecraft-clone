@@ -3620,6 +3620,9 @@ public class Main {
                 // want to interact with — right-clicking a door or water source
                 // should not simultaneously drain the canteen).
                 if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && noMob && hit == null
+                        && tryMortarGrind(player, selectedSlot[0], mode, handRenderer, audio, messages)) {
+                    // Mortar grind consumed the click.
+                } else if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && noMob && hit == null
                         && heldItem == BlockType.CLAY_CANTEEN_FULL && !mode.isCreative()
                         && player.getStats().getThirst() < PlayerStats.MAX_THIRST) {
                     player.getStats().drink(40f);   // restores 40 out of 100 thirst
@@ -3703,6 +3706,18 @@ public class Main {
                         com.minecraftclone.world.SteamMaceratorEntity sm = world.getOrCreateSteamMacerator(
                                 hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, sm);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.STEAM_ORE_WASHER) {
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.SteamOreWasherEntity wash = world.getOrCreateSteamOreWasher(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, wash);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.PRIMITIVE_BLAST_FURNACE) {
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.PrimitiveBlastFurnaceEntity pbf = world.getOrCreatePrimitiveBlastFurnace(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, pbf);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.
@@ -4018,6 +4033,8 @@ public class Main {
                         }
                         handRenderer.triggerSwing();
                         showMessage(messages, "Canteen filled!", new Vector4f(0.3f, 0.6f, 1f, 1f), 1.5f);
+                    } else if (noMob && tryMortarGrind(player, selectedSlot[0], mode, handRenderer, audio, messages)) {
+                        // Mortar grind consumed the click (ore in hand, or mortar in hand).
                     } else if (noMob && mode.canPlace() && heldItem == BlockType.SUGAR_CANE) {
                         // Sugar cane can only be placed on dirt/grass/sand adjacent to water
                         // (or on top of another sugar cane whose base is adjacent to water).
@@ -4795,6 +4812,35 @@ public class Main {
             System.err.println("Could not read/write seed file (" + e.getMessage() + "), using a fresh in-memory seed.");
             return System.currentTimeMillis();
         }
+    }
+
+    /**
+     * Right-click grind: if the selected item is grindable and a mortar is in
+     * the bag (or the mortar itself is selected), convert one ore/crushed/impure
+     * into dust. Returns true when the click was consumed.
+     */
+    private boolean tryMortarGrind(Player player, int selected, GameMode mode,
+                                   HandRenderer handRenderer, AudioEngine audio,
+                                   java.util.List<Hud.Message> messages) {
+        if (!com.minecraftclone.player.Mortar.isGrindable(
+                player.getInventory().typeOf(selected))
+                && !com.minecraftclone.player.Mortar.isMortar(
+                player.getInventory().typeOf(selected))) {
+            return false;
+        }
+        boolean[] broke = new boolean[1];
+        BlockType dust = com.minecraftclone.player.Mortar.grind(
+                player.getInventory(), selected, player.getDurability(), mode.isCreative(), broke);
+        if (dust == null) return false;
+        handRenderer.triggerSwing();
+        audio.play(com.minecraftclone.engine.audio.SoundEvent.CRAFT);
+        String name = dust.displayName();
+        if (broke[0]) {
+            showMessage(messages, "Ground " + name + " — mortar broke!", new org.joml.Vector4f(1f, 0.6f, 0.3f, 1f), 2f);
+        } else {
+            showMessage(messages, "Ground " + name + ".", new org.joml.Vector4f(0.8f, 0.8f, 0.5f, 1f), 1.5f);
+        }
+        return true;
     }
 
     /**

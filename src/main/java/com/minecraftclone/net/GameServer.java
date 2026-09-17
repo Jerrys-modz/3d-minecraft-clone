@@ -1007,7 +1007,8 @@ public class GameServer implements AutoCloseable {
                 || block == BlockType.PART_BUILDER || block == BlockType.TOOL_STATION
                 || block == BlockType.SMELTERY_CONTROLLER
                 || block == BlockType.CASTING_TABLE || block == BlockType.CASTING_BASIN
-                || block == BlockType.STEAM_BOILER || block == BlockType.STEAM_FURNACE || block == BlockType.STEAM_MACERATOR;
+                || block == BlockType.STEAM_BOILER || block == BlockType.STEAM_FURNACE || block == BlockType.STEAM_MACERATOR
+                || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -1024,6 +1025,8 @@ public class GameServer implements AutoCloseable {
             case SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
             case SteamFurnaceEntity.TYPE -> block == BlockType.STEAM_FURNACE;
             case com.minecraftclone.world.SteamMaceratorEntity.TYPE -> block == BlockType.STEAM_MACERATOR;
+            case com.minecraftclone.world.SteamOreWasherEntity.TYPE -> block == BlockType.STEAM_ORE_WASHER;
+            case com.minecraftclone.world.PrimitiveBlastFurnaceEntity.TYPE -> block == BlockType.PRIMITIVE_BLAST_FURNACE;
             default -> false;
         };
     }

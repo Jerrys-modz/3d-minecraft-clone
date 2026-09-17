@@ -1008,7 +1008,49 @@ public enum BlockType {
      * and burst-powering machines when demand exceeds generator output.
      * Passively accepts EU from an adjacent or networked generator.  Tile 274.
      */
-    BATTERY_BLOCK(521, true, false, 274, 274, 274);
+    BATTERY_BLOCK(521, true, false, 274, 274, 274),
+
+    // -----------------------------------------------------------------------
+    // Phase 1 — Bronze Age & Steam: mortar, bronze tools, brass, fire bricks,
+    // primitive blast furnace, wrought iron, steam ore washer.
+    // -----------------------------------------------------------------------
+
+    /** Mortar and pestle: right-click to grind ore/crushed/impure into dust 1:1. */
+    MORTAR(541, 0),
+
+    BRONZE_PICKAXE(542, 0),
+    BRONZE_AXE(543, 0),
+    BRONZE_SWORD(544, 0),
+    BRONZE_SHOVEL(545, 0),
+    BRONZE_HAMMER(546, 0),
+    BRONZE_BROADAXE(547, 0),
+    BRONZE_HOE(548, 0),
+
+    /** Brass blend: copper + zinc. Smelts into brass ingots. */
+    BRASS_DUST(549, 0),
+    BRASS_INGOT(550, 0),
+
+    /** Dust forms of the vanilla metals, produced by the mortar or ore washer. */
+    IRON_DUST(551, 0),
+    GOLD_DUST(552, 0),
+
+    /** Fire brick: smelted clay. Building block of the Primitive Blast Furnace. */
+    FIRE_BRICK(553, true, false, 288, 288, 288),
+
+    /**
+     * Primitive Blast Furnace: fire-brick kiln that forges iron into wrought
+     * iron. Directional front face: tile 290 idle / 291 lit. Tile 289 body.
+     */
+    PRIMITIVE_BLAST_FURNACE(554, true, false, 289, 289, 289, 290, 291, 0, 0),
+
+    /** Wrought iron ingot: PBF output; intermediate between iron and steel. */
+    WROUGHT_IRON_INGOT(555, 0),
+
+    /**
+     * Steam Ore Washer: washes crushed/impure ore into dust using steam and
+     * adjacent water. Directional front: tile 292 idle / 293 working.
+     */
+    STEAM_ORE_WASHER(556, true, false, 292, 292, 292, 292, 293, 0, 0);
 
     public final short id;
     public final boolean solid;
@@ -1412,7 +1454,7 @@ public enum BlockType {
 
     /** True for any hoe item (used to till DIRT/GRASS into FARMLAND). */
     public boolean isHoe() {
-        return this == WOOD_HOE || this == STONE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
+        return this == WOOD_HOE || this == STONE_HOE || this == BRONZE_HOE || this == IRON_HOE || this == DIAMOND_HOE;
     }
 
     /** True for bone meal (right-click crops to grow them, or grass to sprout plants). */

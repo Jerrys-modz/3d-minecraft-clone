@@ -97,6 +97,7 @@ public final class Crafting {
         CHARS.put('R', BlockType.STRING);             // R = stRing (fishing)
         CHARS.put('M', BlockType.GUNPOWDER);          // M = guMpowder / bang (explosives)
         CHARS.put('J', BlockType.RUBBER);             // J = rubber (unused; 'T' is taken by TORCH)
+        CHARS.put('1', BlockType.FIRE_BRICK);         // 1 = fire brick (all A-Z taken)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -284,6 +285,36 @@ public final class Crafting {
 
         // Steam Macerator: bronze shell around a diamond grinding element.
         shaped3x3("EEE", "EDI", "EEE", BlockType.STEAM_MACERATOR, 1);
+
+        // Steam Ore Washer: bronze shell around a glass wash chamber.
+        shaped3x3("EEE", "EGE", "EEE", BlockType.STEAM_ORE_WASHER, 1);
+
+        // Mortar: a clay bowl around a stick pestle.
+        shaped3x3("Y.Y", "YSY", ".Y.", BlockType.MORTAR, 1);
+
+        // Bronze tools (correct material char — the shared tools() helper
+        // accidentally bakes copper 'X' into sword/shovel recipes).
+        shaped3x3("EEE", "ESE", ".S.", BlockType.BRONZE_PICKAXE, 1);
+        shaped3x3("EE.", "ESE", ".S.", BlockType.BRONZE_AXE, 1);
+        shaped3x3(".E.", ".E.", ".S.", BlockType.BRONZE_SWORD, 1);
+        shaped3x3(".E.", ".S.", ".S.", BlockType.BRONZE_SHOVEL, 1);
+        // Distinct from the axe (EE./ESE/.S.) — GT-style T-head: EE./ES./.S.
+        shaped3x3("EE.", "ES.", ".S.", BlockType.BRONZE_HAMMER, 1);
+        shaped3x3(".EE", "ESE", ".S.", BlockType.BRONZE_BROADAXE, 1);
+        shaped3x3("EE.", ".S.", ".S.", BlockType.BRONZE_HOE, 1);
+
+        // Brass blend: 1 copper + 1 zinc (dust), plus the GTNH 3:1 that yields 4.
+        shapeless2x2(BlockType.BRASS_DUST, 1, BlockType.COPPER_DUST, BlockType.ZINC_DUST);
+        shapeless3x3(BlockType.BRASS_DUST, 1, BlockType.COPPER_DUST, BlockType.ZINC_DUST);
+        shapeless3x3(BlockType.BRASS_DUST, 4,
+                BlockType.COPPER_DUST, BlockType.COPPER_DUST, BlockType.COPPER_DUST, BlockType.ZINC_DUST);
+
+        // GTNH-style bronze 3:1 (copper:tin) that yields 4 — the 1:1 recipe stays.
+        shapeless3x3(BlockType.BRONZE_DUST, 4,
+                BlockType.COPPER_DUST, BlockType.COPPER_DUST, BlockType.COPPER_DUST, BlockType.TIN_DUST);
+
+        // Primitive Blast Furnace: fire-brick ring, same silhouette as a furnace.
+        shaped3x3("111", "1.1", "111", BlockType.PRIMITIVE_BLAST_FURNACE, 1);
 
         // Steam Pipe: bronze column - connects machines to a boiler's steam.
         shaped3x3(".E.", ".E.", ".E.", BlockType.STEAM_PIPE_BRONZE, 6);

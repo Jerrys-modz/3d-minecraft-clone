@@ -385,6 +385,8 @@ public class World implements BlockAccessor {
                         furnace.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof SteamMaceratorEntity mac) {
                         mac.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamOreWasherEntity wash) {
+                        wash.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
                         ef.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
@@ -725,6 +727,28 @@ public class World implements BlockAccessor {
         return sm;
     }
 
+    /** Returns the Steam Ore Washer entity at a position, creating + attaching it on first use. */
+    public SteamOreWasherEntity getOrCreateSteamOreWasher(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof SteamOreWasherEntity w) {
+            w.attach(x, y, z, this);
+            return w;
+        }
+        SteamOreWasherEntity w = new SteamOreWasherEntity();
+        w.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), w);
+        return w;
+    }
+
+    /** Returns the Primitive Blast Furnace entity at a position, creating it on first use. */
+    public PrimitiveBlastFurnaceEntity getOrCreatePrimitiveBlastFurnace(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof PrimitiveBlastFurnaceEntity pbf) return pbf;
+        PrimitiveBlastFurnaceEntity pbf = new PrimitiveBlastFurnaceEntity();
+        blockEntities.put(blockKey(x, y, z), pbf);
+        return pbf;
+    }
+
     // ------------------------------------------------------------------
     // Electric Age machine helpers
     // ------------------------------------------------------------------
@@ -791,6 +815,8 @@ public class World implements BlockAccessor {
             furnace.attach(x, y, z, this);
         } else if (entity instanceof SteamMaceratorEntity mac) {
             mac.attach(x, y, z, this);
+        } else if (entity instanceof SteamOreWasherEntity wash) {
+            wash.attach(x, y, z, this);
         } else if (entity instanceof ElectricFurnaceEntity ef) {
             ef.attach(x, y, z, this);
         } else if (entity instanceof BatteryBlockEntity bat) {
@@ -1195,6 +1221,8 @@ public class World implements BlockAccessor {
                         furnace.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof SteamMaceratorEntity mac) {
                         mac.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof SteamOreWasherEntity wash) {
+                        wash.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
                         ef.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {

@@ -135,6 +135,8 @@ public final class AnvilGui {
     public static BlockType repairMaterialOf(BlockType tool) {
         Mining.ToolStats stats = Mining.toolStats(tool);
         if (stats == null) return null;
+        if (Mining.isBronzeTool(tool)) return BlockType.BRONZE_INGOT;
+        if (tool == BlockType.MORTAR) return BlockType.CLAY_BALL;
         return switch (stats.tier()) {
             case Mining.TIER_WOOD    -> BlockType.PLANKS;
             case Mining.TIER_STONE   -> BlockType.STONE;

@@ -29,6 +29,13 @@ public final class Mining {
     public static final int TIER_HAND = 0;
     public static final int TIER_WOOD = 1;
     public static final int TIER_STONE = 2;
+    /**
+     * Bronze harvest level matches stone (can mine iron ore, not gold), but
+     * bronze tools swing 1.5× as fast as stone — see {@link #breakTimeSeconds}.
+     * Kept equal to {@link #TIER_STONE} so existing 2^tier speed math and
+     * harvest gates stay untouched.
+     */
+    public static final int TIER_BRONZE = TIER_STONE;
     public static final int TIER_IRON = 3;
     public static final int TIER_DIAMOND = 4;
 
@@ -74,6 +81,15 @@ public final class Mining {
         TOOLS.put(BlockType.STONE_HOE,   new ToolStats(ToolKind.NONE, TIER_STONE,  132));
         TOOLS.put(BlockType.IRON_HOE,    new ToolStats(ToolKind.NONE, TIER_IRON,   251));
         TOOLS.put(BlockType.DIAMOND_HOE, new ToolStats(ToolKind.NONE, TIER_DIAMOND, 1562));
+        // Bronze: stone harvest, more durability than stone, between stone and iron.
+        TOOLS.put(BlockType.BRONZE_PICKAXE, new ToolStats(ToolKind.PICKAXE, TIER_BRONZE, 191));
+        TOOLS.put(BlockType.BRONZE_AXE, new ToolStats(ToolKind.AXE, TIER_BRONZE, 191));
+        TOOLS.put(BlockType.BRONZE_SWORD, new ToolStats(ToolKind.SWORD, TIER_BRONZE, 191));
+        TOOLS.put(BlockType.BRONZE_SHOVEL, new ToolStats(ToolKind.SHOVEL, TIER_BRONZE, 191));
+        TOOLS.put(BlockType.BRONZE_HAMMER, new ToolStats(ToolKind.HAMMER, TIER_BRONZE, 191));
+        TOOLS.put(BlockType.BRONZE_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_BRONZE, 191));
+        TOOLS.put(BlockType.BRONZE_HOE, new ToolStats(ToolKind.NONE, TIER_BRONZE, 191));
+        TOOLS.put(BlockType.MORTAR, new ToolStats(ToolKind.NONE, TIER_HAND, 64));
 
         // Phase 0.5: Tinkers' Construct assembled tools are handled dynamically via
         // TinkersItem.Tool and TinkersRegistry — no static TOOLS entries needed.
@@ -388,6 +404,14 @@ public final class Mining {
 
         // Explosives.
         put(BlockType.TNT, 0.0f, ToolKind.NONE, TIER_HAND); // instant break (but explodes when ignited)
+
+        // Phase 1 machines and masonry.
+        put(BlockType.FIRE_BRICK, 2.0f, ToolKind.HAMMER, TIER_HAND);
+        put(BlockType.PRIMITIVE_BLAST_FURNACE, 3.5f, ToolKind.HAMMER, TIER_HAND);
+        put(BlockType.STEAM_ORE_WASHER, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.STEAM_BOILER, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.STEAM_FURNACE, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.STEAM_MACERATOR, 3.5f, ToolKind.PICKAXE, TIER_STONE);
     }
 
     private static void put(BlockType type, float hardness, ToolKind effectiveTool, int requiredTier) {
@@ -395,6 +419,14 @@ public final class Mining {
     }
 
     private Mining() {
+    }
+
+    /** True for the bronze tool set (pick/axe/sword/shovel/hammer/broadaxe/hoe). */
+    public static boolean isBronzeTool(BlockType type) {
+        return type == BlockType.BRONZE_PICKAXE || type == BlockType.BRONZE_AXE
+                || type == BlockType.BRONZE_SWORD || type == BlockType.BRONZE_SHOVEL
+                || type == BlockType.BRONZE_HAMMER || type == BlockType.BRONZE_BROADAXE
+                || type == BlockType.BRONZE_HOE;
     }
 
     public static boolean isTool(BlockType type) {
@@ -541,6 +573,7 @@ public final class Mining {
             // a broadaxe is the heavy wood-cutter, one tier of speed stronger.
             int power = held.tier() + (held.kind() == ToolKind.BROADAXE ? 1 : 0);
             speedMultiplier = 1 << power; // wood=2x, stone=4x, iron=8x, diamond=16x (broadaxe: double)
+            if (isBronzeTool(heldItem)) speedMultiplier *= 1.5f; // between stone (4x) and iron (8x)
         }
         return info.hardnessSeconds() / speedMultiplier;
     }
@@ -568,6 +601,7 @@ public final class Mining {
             if (held != null && held.kind() == info.effectiveTool()) {
                 int power = held.tier() + (held.kind() == ToolKind.BROADAXE ? 1 : 0);
                 speedMultiplier = 1 << power;
+                if (isBronzeTool(heldItem.type())) speedMultiplier *= 1.5f;
             }
         }
         return info.hardnessSeconds() / speedMultiplier;

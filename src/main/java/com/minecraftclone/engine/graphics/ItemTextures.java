@@ -329,6 +329,20 @@ public class ItemTextures {
             case BRONZE_DUST -> paintDustOre(0xCD7F32);
             case BRONZE_INGOT -> paintIngot(0xCD7F32);
             case STEEL_INGOT -> paintIngot(0xC8C8D8);
+            case BRASS_DUST -> paintDustOre(0xB5A642);
+            case BRASS_INGOT -> paintIngot(0xB5A642);
+            case IRON_DUST -> paintDustOre(0xC8C8C8);
+            case GOLD_DUST -> paintDustOre(0xE8C93A);
+            case WROUGHT_IRON_INGOT -> paintIngot(0xC4B8A8);
+
+            case BRONZE_PICKAXE -> paintPickaxe(0xCD7F32);
+            case BRONZE_AXE -> paintAxe(0xCD7F32);
+            case BRONZE_SWORD -> paintSword(0xCD7F32);
+            case BRONZE_SHOVEL -> paintShovel(0xCD7F32);
+            case BRONZE_HAMMER -> paintHammer(0xCD7F32);
+            case BRONZE_BROADAXE -> paintBroadaxe(0xCD7F32);
+            case BRONZE_HOE -> paintHoe(0xCD7F32);
+            case MORTAR -> paintMortar();
 
             // Buckets: empty iron pail vs one holding glowing lava.
             case IRON_BUCKET -> paintBucket(false);
@@ -355,6 +369,33 @@ public class ItemTextures {
 
             default -> throw new IllegalArgumentException("No item texture generator for " + type);
         };
+    }
+
+    /** A clay bowl with a wooden pestle resting in it. */
+    private static BufferedImage paintMortar() {
+        BufferedImage img = blank();
+        int clay = 0xB09070;
+        int rim  = shade(clay, 0.65f);
+        int wood = 0x8B5A2B;
+        int dark = shade(wood, 0.55f);
+        // Bowl body.
+        for (int y = 8; y <= 14; y++) {
+            int inset = (y - 8) / 2;
+            int left = 3 + inset;
+            int right = 12 - inset;
+            for (int x = left; x <= right; x++) {
+                boolean edge = x == left || x == right || y == 14;
+                img.setRGB(x, y, 0xFF000000 | (edge ? rim : clay));
+            }
+        }
+        // Inner hollow.
+        for (int y = 9; y <= 11; y++) {
+            for (int x = 5; x <= 10; x++) img.setRGB(x, y, 0xFF000000 | shade(clay, 0.55f));
+        }
+        // Pestle: diagonal stick.
+        drawThickLine(img, 9, 2, 6, 10, wood);
+        drawThickLine(img, 10, 2, 7, 10, dark);
+        return img;
     }
 
     /**
