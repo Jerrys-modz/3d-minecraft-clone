@@ -1050,7 +1050,41 @@ public enum BlockType {
      * Steam Ore Washer: washes crushed/impure ore into dust using steam and
      * adjacent water. Directional front: tile 292 idle / 293 working.
      */
-    STEAM_ORE_WASHER(556, true, false, 292, 292, 292, 292, 293, 0, 0);
+    STEAM_ORE_WASHER(556, true, false, 292, 292, 292, 292, 293, 0, 0),
+
+    // -----------------------------------------------------------------------
+    // Phase 2 — Steel Age: coal dust, steel dust, file, plates/rods, casing.
+    // -----------------------------------------------------------------------
+
+    /** Pulverised coal. Mix with wrought iron to make steel dust. Also furnace fuel. */
+    COAL_DUST(557, 0),
+
+    /** Wrought iron + coal dust. Only the Primitive Blast Furnace can smelt this to steel. */
+    STEEL_DUST(558, 0),
+
+    /** Metal file: right-click to draw an ingot into a rod. Iron ingot + stick. */
+    FILE(559, 0),
+
+    COPPER_PLATE(560, 0),
+    TIN_PLATE(561, 0),
+    IRON_PLATE(562, 0),
+    GOLD_PLATE(563, 0),
+    BRONZE_PLATE(564, 0),
+    BRASS_PLATE(565, 0),
+    STEEL_PLATE(566, 0),
+    WROUGHT_IRON_PLATE(567, 0),
+
+    COPPER_ROD(568, 0),
+    TIN_ROD(569, 0),
+    IRON_ROD(570, 0),
+    GOLD_ROD(571, 0),
+    BRONZE_ROD(572, 0),
+    BRASS_ROD(573, 0),
+    STEEL_ROD(574, 0),
+    WROUGHT_IRON_ROD(575, 0),
+
+    /** Machine hull: eight steel plates in a ring. Tile 294. */
+    STEEL_CASING(576, true, false, 294, 294, 294);
 
     public final short id;
     public final boolean solid;

@@ -90,6 +90,7 @@ public final class Mining {
         TOOLS.put(BlockType.BRONZE_BROADAXE, new ToolStats(ToolKind.BROADAXE, TIER_BRONZE, 191));
         TOOLS.put(BlockType.BRONZE_HOE, new ToolStats(ToolKind.NONE, TIER_BRONZE, 191));
         TOOLS.put(BlockType.MORTAR, new ToolStats(ToolKind.NONE, TIER_HAND, 64));
+        TOOLS.put(BlockType.FILE, new ToolStats(ToolKind.NONE, TIER_IRON, 128));
 
         // Phase 0.5: Tinkers' Construct assembled tools are handled dynamically via
         // TinkersItem.Tool and TinkersRegistry — no static TOOLS entries needed.
@@ -412,6 +413,7 @@ public final class Mining {
         put(BlockType.STEAM_BOILER, 3.5f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.STEAM_FURNACE, 3.5f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.STEAM_MACERATOR, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.STEEL_CASING, 4.0f, ToolKind.PICKAXE, TIER_STONE);
     }
 
     private static void put(BlockType type, float hardness, ToolKind effectiveTool, int requiredTier) {

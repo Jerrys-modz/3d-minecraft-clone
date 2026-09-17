@@ -98,6 +98,7 @@ public final class Crafting {
         CHARS.put('M', BlockType.GUNPOWDER);          // M = guMpowder / bang (explosives)
         CHARS.put('J', BlockType.RUBBER);             // J = rubber (unused; 'T' is taken by TORCH)
         CHARS.put('1', BlockType.FIRE_BRICK);         // 1 = fire brick (all A-Z taken)
+        CHARS.put('2', BlockType.STEEL_PLATE);        // 2 = steel plate (casing hull)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -325,12 +326,21 @@ public final class Crafting {
         // Iron Steam Pipe: high-pressure tier, 1.5x throughput.
         shaped3x3(".I.", ".I.", ".I.", BlockType.STEAM_PIPE_IRON, 6);
 
-        // Steel Ingot: 4 iron + 2 coal compressed under extreme heat.
-        // Placeholder until a Blast Furnace machine exists.
-        shaped3x3("ICI", ".C.", "ICI", BlockType.STEEL_INGOT, 1);
+        // File: iron ingot over a stick. Right-click an ingot to draw a rod.
+        shaped2x2("I.", "S.", BlockType.FILE, 1);
+        shaped3x3("I..", "S..", "...", BlockType.FILE, 1);
+
+        // Steel dust: wrought iron carburised with coal dust. Only the PBF
+        // can smelt this — the table recipe that used to make steel ingots
+        // directly is gone.
+        shapeless2x2(BlockType.STEEL_DUST, 1, BlockType.WROUGHT_IRON_INGOT, BlockType.COAL_DUST);
+        shapeless3x3(BlockType.STEEL_DUST, 1, BlockType.WROUGHT_IRON_INGOT, BlockType.COAL_DUST);
 
         // Steel Steam Pipe: top Steam Age tier, 2x throughput.
         shaped3x3(".Q.", ".Q.", ".Q.", BlockType.STEAM_PIPE_STEEL, 6);
+
+        // Steel casing: eight steel plates in a ring. Machine hull.
+        shaped3x3("222", "2.2", "222", BlockType.STEEL_CASING, 1);
 
         // ---- Electric Age -----------------------------------------------
         // Coal Generator: iron ring around a furnace.

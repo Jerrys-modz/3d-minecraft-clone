@@ -10,9 +10,10 @@ import java.io.IOException;
 /**
  * A placed Primitive Blast Furnace: the first dedicated high-heat furnace.
  * Crafted from fire bricks (themselves smelted clay) and loaded like a
- * regular furnace, but it only accepts iron-chain inputs and produces
- * {@link BlockType#WROUGHT_IRON_INGOT} — the metal steam-age casings
- * graduate to, and the stepping stone to steel.
+ * regular furnace. Iron-chain inputs become {@link BlockType#WROUGHT_IRON_INGOT};
+ * {@link BlockType#STEEL_DUST} (wrought iron mixed with coal dust) becomes
+ * {@link BlockType#STEEL_INGOT}. A regular furnace cannot reach this heat,
+ * so steel stays gated behind the kiln.
  *
  * <p>Takes twice as long as a regular furnace ({@link #SMELT_TIME} = 16s)
  * and burns the same solid fuels. State persists with its chunk.
@@ -42,11 +43,15 @@ public final class PrimitiveBlastFurnaceEntity implements BlockEntity, StorageCo
     public BlockType blockType() { return BlockType.PRIMITIVE_BLAST_FURNACE; }
 
     /**
-     * Iron-chain input → wrought iron. Vanilla iron ore/ingot/dust plus the
-     * crushed iron-bearing minerals the regular furnace would smelt to iron.
+     * Iron-chain input → wrought iron. Steel dust (wrought iron + coal dust)
+     * → steel ingot. Vanilla iron ore/ingot/dust plus the crushed iron-bearing
+     * minerals the regular furnace would smelt to iron.
      */
     public static BlockType outputFor(BlockType input) {
         if (input == null) return null;
+        if (input == BlockType.STEEL_DUST) {
+            return BlockType.STEEL_INGOT;
+        }
         if (input == BlockType.IRON_ORE
                 || input == BlockType.IRON_INGOT
                 || input == BlockType.IRON_DUST

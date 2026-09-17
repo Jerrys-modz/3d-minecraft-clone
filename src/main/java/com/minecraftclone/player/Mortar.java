@@ -34,13 +34,17 @@ public final class Mortar {
         String name = input.name();
         if (name.endsWith("_DUST")) return input;
 
+        // Two-step coal: ore → coal, then coal → coal dust. Named lookup
+        // would send COAL_ORE straight to COAL_DUST now that the dust exists.
+        if (input == BlockType.COAL_ORE) return BlockType.COAL;
+        if (input == BlockType.COAL) return BlockType.COAL_DUST;
+
         BlockType named = namedDust(input);
         if (named != null) return named;
 
         // Vanilla ores that don't follow the GTNH *_ORE → *_DUST pattern.
         if (input == BlockType.IRON_ORE) return BlockType.IRON_DUST;
         if (input == BlockType.GOLD_ORE) return BlockType.GOLD_DUST;
-        if (input == BlockType.COAL_ORE) return BlockType.COAL;
 
         // Crushed/impure minerals whose smelting output is an ingot: grind to
         // that metal's dust when the dust item exists (magnetite → iron dust).

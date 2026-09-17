@@ -79,7 +79,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Multiplayer**: **Multiplayer** on the main menu opens a connect screen - pick a player name, host and port, then **Host & Play** (starts an embedded server in this process and joins it) or **Join Server** to connect to an existing one. A dedicated headless server is available too: `java -jar minecraft-clone.jar --server [port]`. The server is authoritative for the world: every client sees the same terrain (generated from the server's seed - clients regenerate untouched chunks locally and request only player-edited ones over the wire), block breaks/places/re-toggles are validated and broadcast to everyone, mobs are simulated and shared server-side (they chase the nearest player), and other players appear as blocky humanoid figures with their names. Chat with **T** (Enter to send, Esc to cancel) and see join/leave notices. See the section below for what's shared vs. still per-player.
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, vanilla ores plus a GTNH mineral set, berry bushes, torches, lamps, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet. Ore tiles use a Minecraft-style stone-and-vein overlay (sparse flecks for small ores) with distinct mineral palettes so copper, cobalt, ruby, sulfur and the rest don't collapse into the same grey blob.
 - **Recipe Book** - press \R\ for a searchable, JEI-style index of every recipe across **all machines**: crafting grids (2x2/3x3/5x5), the Furnace, the Smeltery (with its ore double-yield noted), Part Builder, Casting Table/Basin and Tool Station assembly for every registered material. Type to filter by name; click an entry to see its ingredient layout, yield and station. Press \B\ on a selected entry to bookmark it - bookmarks sort to the top of the index and persist between sessions in \ecipe_bookmarks.txt\. The keybind is rebindable in Controls.
-- **Steam Age (early GTNH)** - the first tech tier. Start by grinding ore with a **Mortar** (clay bowl + stick pestle): right-click with a grindable ore selected (or the mortar itself) to turn one ore / crushed / impure pile into dust 1:1. Alloy **bronze** (copper + tin, 1:1 or 3:1→4) and **brass** (copper + zinc) at a crafting table, then smelt the blend. **Bronze tools** (pick, axe, sword, shovel, hammer, broadaxe, hoe) harvest at stone tier, last longer than stone, and mine 1.5× faster. Craft **Steam Pipes** in four tiers: **wooden** (plank column, cheap starter that throttles flow to half rate), **bronze** (bronze column, full throughput), **iron** (iron column, 1.5x throughput) and **steel**. Run them from a **Steam Boiler** (bronze ring around a hollow center, loaded with any furnace fuel by right-clicking) to anywhere: a **Steam Furnace** (bronze shell around a furnace core) placed against any pipe draws heat through the network, throttled by its weakest segment; a **Steam Macerator** doubles ore into crushed; a **Steam Ore Washer** needs steam *and* adjacent water (ice does not count) to wash crushed/impure into dust, with a 25% related-metal byproduct. The boiler builds a steam buffer (up to six coal's worth) shown by its glowing green pressure gauge. Smelt clay into **fire bricks** and craft a **Primitive Blast Furnace** (8 fire bricks) to refine the iron chain into **wrought iron** — slower than a regular furnace, iron-only. One well-fed boiler can run machines all over your base.
+- **Steam Age (early GTNH)** - the first tech tier. Start by grinding ore with a **Mortar** (clay bowl + stick pestle): right-click with a grindable ore selected (or the mortar itself) to turn one ore / crushed / impure pile into dust 1:1. Grind coal a second time for **coal dust**. Alloy **bronze** (copper + tin, 1:1 or 3:1→4) and **brass** (copper + zinc) at a crafting table, then smelt the blend. **Bronze tools** (pick, axe, sword, shovel, hammer, broadaxe, hoe) harvest at stone tier, last longer than stone, and mine 1.5× faster. Right-click a **hammer** on an ingot to flatten a **plate**, or a **file** (iron + stick) to draw a **rod**. Craft **Steam Pipes** in four tiers: **wooden** (plank column, cheap starter that throttles flow to half rate), **bronze** (bronze column, full throughput), **iron** (iron column, 1.5x throughput) and **steel**. Run them from a **Steam Boiler** (bronze ring around a hollow center, loaded with any furnace fuel by right-clicking) to anywhere: a **Steam Furnace** (bronze shell around a furnace core) placed against any pipe draws heat through the network, throttled by its weakest segment; a **Steam Macerator** doubles ore into crushed; a **Steam Ore Washer** needs steam *and* adjacent water (ice does not count) to wash crushed/impure into dust, with a 25% related-metal byproduct. The boiler builds a steam buffer (up to six coal's worth) shown by its glowing green pressure gauge. Smelt clay into **fire bricks** and craft a **Primitive Blast Furnace** (8 fire bricks) to refine the iron chain into **wrought iron**, then mix wrought iron with coal dust and smelt the **steel dust** in the same kiln for **steel ingots** — a regular furnace is not hot enough. Eight steel plates craft a **steel casing**. One well-fed boiler can run machines all over your base.
 - **Electric Age (GTNH EU tier)** - the second tech tier, built on top of the Steam Age. Craft a **Coal Generator** (iron ring around a furnace: `IFI/IFI/IFI`) and load it with any burnable fuel — it converts burn energy into EU stored in a 10 000 EU internal buffer. Run **Copper Cables** (three copper ingots vertical → 6 cables) or faster **Gold Cables** (gold ingots, 2× throughput) to any machine. Place a **Battery Block** (`XIX/IXI/XIX`, X = copper ingot) inline to absorb generator surplus and buffer burst-draw by machines. The **Electric Furnace** (`IXI/XFX/IXI`) has a 100 EU/s copper-rate draw (200 EU/s through an all-gold run); its base smelting speed is **2× a plain furnace** and scales with cable throughput. The cable network uses the same weakest-link rule as steam pipes: one copper segment in a gold run limits the whole line to copper rate.
 
 ## Requirements
@@ -188,7 +188,7 @@ A **furnace** (craft in the crafting grid: a ring of 8 stone → 1 furnace, then
 
 The furnace works in the background - load it, close the GUI, and come back later. Its contents and smelting progress are saved with its chunk, so a furnace keeps cooking across a restart (the old instant smelt-on-`C` was replaced by this GUI). A broken furnace drops itself and whatever it was smelting or burning.
 
-A **Primitive Blast Furnace** (8 fire bricks) is a slower, iron-only kiln that outputs **wrought iron**. A **Steam Ore Washer** reuses the same 3-slot furnace GUI: crushed ore in the top, related-metal byproduct in the middle, washed dust in the output; it draws steam from a boiler and needs water next door.
+A **Primitive Blast Furnace** (8 fire bricks) is a slower kiln: iron-chain inputs become **wrought iron**, and **steel dust** (wrought iron + coal dust at a crafting table) becomes **steel ingots**. A regular furnace cannot smelt steel. A **Steam Ore Washer** reuses the same 3-slot furnace GUI: crushed ore in the top, related-metal byproduct in the middle, washed dust in the output; it draws steam from a boiler and needs water next door. Right-click a **hammer** on an ingot for a **plate**, or a **file** for a **rod**; eight steel plates craft a **steel casing**.
 
 A **crafting table** (4 planks) is the same idea for crafting: right-click it for a dedicated 3×3 crafting station with its own GUI.
 
@@ -305,7 +305,7 @@ The active development phase. All eight items must be done before Phase 1 (Bronz
 | 7 | **Radiation** | ✅ Done | Uranium/plutonium ore emits radiation within 5 blocks; radiation accumulates (decays over 10 min); damage starts at 60 % exposure; hazmat suit (rubber + steel, 4 pieces = full block); yellow-green → orange-red HUD bar; rubber crafted from 3 crushed sulfur |
 | 8 | **More Hostile Mobs** | ✅ Done | Zombies, skeletons (arrows), creepers (fuse + explosion, gunpowder drop, TNT), spiders (string drop), wolves, polar bears |
 
-> **Phase 0 complete! ✅** All 8 Deep Survival Foundation features are implemented. Phase 1 (Bronze Age & Steam) is in progress — mortar, bronze tools, brass, fire bricks, primitive blast furnace, wrought iron, and the steam ore washer are in.
+> **Phase 0 complete! ✅** All 8 Deep Survival Foundation features are implemented. Phase 1 (Bronze Age & Steam) primitive processing is in, and Phase 2 steel production has started — coal dust, steel dust, plates/rods, the file, and steel casings.
 
 ---
 
@@ -319,17 +319,18 @@ Primitive processing unlocks before any electricity — ore doubling starts with
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Mortar & Pestle** | ✅ Done | Craft `Y.Y/YSY/.Y.` (clay + stick). Right-click with a grindable ore selected (or the mortar itself) to grind 1:1 into dust. 64 uses; repairs with clay. |
+| **Mortar & Pestle** | ✅ Done | Craft `Y.Y/YSY/.Y.` (clay + stick). Right-click with a grindable ore selected (or the mortar itself) to grind 1:1 into dust. Coal ore → coal; coal → coal dust. 64 uses; repairs with clay. |
 | **Crucible** | ❌ Todo | Dedicated crucible + clay molds. Tinkers smeltery already melts metals — skipped for now. |
 | **Alloys — Bronze & Brass** | ✅ Done | Bronze: 1 Cu + 1 Sn, or 3 Cu + 1 Sn → 4 dust. Brass: 1 Cu + 1 Zn, or 3 Cu + 1 Zn → 4 dust. Smelt the blend. |
 | **Bronze Tools** | ✅ Done | Pick / axe / sword / shovel / hammer / broadaxe / hoe. Stone harvest, 191 uses, 1.5× stone speed. Repair with bronze ingots. |
+| **Plates & Rods** | ✅ Done | Right-click a hammer on an ingot → plate; a file (iron + stick) on an ingot → rod. Copper / tin / iron / gold / bronze / brass / wrought iron / steel. File: 128 uses, repairs with iron. |
 
 ### Primitive Blast Furnace
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Primitive Blast Furnace** | ✅ Done | Single block from 8 fire bricks (`111/1.1/111`). Iron-chain only (ore / ingot / dust / crushed iron minerals) → wrought iron in 16 s. |
-| **Wrought Iron** | ✅ Done | PBF output; intermediate between iron and steel. |
+| **Primitive Blast Furnace** | ✅ Done | Single block from 8 fire bricks (`111/1.1/111`). Iron-chain → wrought iron; steel dust → steel ingot. 16 s per item. Regular furnace cannot make steel. |
+| **Wrought Iron** | ✅ Done | PBF output; mix 1:1 with coal dust for steel dust. |
 | **Fire Bricks** | ✅ Done | Smelt clay balls or clay blocks. |
 
 ### Steam Machines
@@ -345,7 +346,7 @@ Primitive processing unlocks before any electricity — ore doubling starts with
 
 **Added this phase:** `MORTAR` · `BRONZE_{PICKAXE,AXE,SWORD,SHOVEL,HAMMER,BROADAXE,HOE}` · `BRASS_DUST` · `BRASS_INGOT` · `IRON_DUST` · `GOLD_DUST` · `FIRE_BRICK` · `PRIMITIVE_BLAST_FURNACE` · `WROUGHT_IRON_INGOT` · `STEAM_ORE_WASHER` (boiler / macerator / furnace / bronze already existed).
 
-**Still open:** `CRUCIBLE` · `CLAY_MOLD` · plates / rods per metal.
+**Still open:** `CRUCIBLE` · `CLAY_MOLD`.
 
 ---
 
@@ -359,8 +360,9 @@ Introduces the EU power system and the first electric machines. Steel enables ma
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Steel Alloy** | ❌ Todo | Iron + coal dust in blast furnace at 1000K; required for all electric machine casings |
-| **Upgraded Blast Furnace** | ❌ Todo | Replace fire brick with steel casings; raises max temp; unlocks steel + chrome |
+| **Steel Alloy** | ✅ Done | 1 wrought iron + 1 coal dust → steel dust (crafting table). PBF smelts steel dust → steel ingot. The old 4-iron+2-coal table recipe is gone. |
+| **Upgraded Blast Furnace** | ❌ Todo | Replace fire brick with steel casings; raises max temp; unlocks chrome |
+| **Steel Casing** | ✅ Done | 8 steel plates in a ring (`222/2.2/222`). Placeable hull; later LV machine recipes will use it. |
 
 ### Energy System
 
@@ -391,7 +393,7 @@ Introduces the EU power system and the first electric machines. Steel enables ma
 
 > **Survival interlock:** Running cables through your base creates fire hazard if insulation burns. Mining deeper to reach cobalt/nickel for the Electrolyzer means coping with cave temperature drops — torch warmth becomes a mechanic, not just lighting.
 
-**New blocks/items needed:** `STEEL_CASING` · `COAL_GENERATOR` · `BATTERY_BUFFER` · `LV_TRANSFORMER` · `CABLE_COPPER` · `CABLE_TIN` · `CABLE_GOLD` · `MACERATOR_LV` · `ORE_WASHER_LV` · `THERMAL_CENTRIFUGE_LV` · `ELECTRIC_FURNACE_LV` · `ELECTROLYZER_LV` · `COMPRESSOR_LV` · `LV_BATTERY (tin)` · `VACUUM_TUBE` · `STEEL_INGOT`
+**New blocks/items needed:** `COAL_GENERATOR` · `BATTERY_BUFFER` · `LV_TRANSFORMER` · `CABLE_COPPER` · `CABLE_TIN` · `CABLE_GOLD` · `MACERATOR_LV` · `ORE_WASHER_LV` · `THERMAL_CENTRIFUGE_LV` · `ELECTRIC_FURNACE_LV` · `ELECTROLYZER_LV` · `COMPRESSOR_LV` · `LV_BATTERY (tin)` · `VACUUM_TUBE`
 
 ---
 

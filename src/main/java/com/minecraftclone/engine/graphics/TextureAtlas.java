@@ -413,6 +413,7 @@ public class TextureAtlas {
         paintPrimitiveBlastFurnace(image, 291, rnd, true, true);   // PBF front lit
         paintSteamOreWasher(image, 292, rnd, false);              // WASHER idle
         paintSteamOreWasher(image, 293, rnd, true);               // WASHER working
+        paintSteelCasing(image, 294, rnd);                        // STEEL_CASING
 
         return image;
     }
@@ -2490,6 +2491,11 @@ public class TextureAtlas {
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }
+    }
+
+    /** STEEL_CASING (tile 294): riveted steel plates, the LV machine hull. */
+    private void paintSteelCasing(BufferedImage img, int index, Random rnd) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
     }
 
     /**

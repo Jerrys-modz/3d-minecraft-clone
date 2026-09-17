@@ -329,6 +329,8 @@ public class ItemTextures {
             case BRONZE_DUST -> paintDustOre(0xCD7F32);
             case BRONZE_INGOT -> paintIngot(0xCD7F32);
             case STEEL_INGOT -> paintIngot(0xC8C8D8);
+            case STEEL_DUST -> paintDustOre(0xA0A0B0);
+            case COAL_DUST -> paintDustOre(0x2A2A2A);
             case BRASS_DUST -> paintDustOre(0xB5A642);
             case BRASS_INGOT -> paintIngot(0xB5A642);
             case IRON_DUST -> paintDustOre(0xC8C8C8);
@@ -343,6 +345,25 @@ public class ItemTextures {
             case BRONZE_BROADAXE -> paintBroadaxe(0xCD7F32);
             case BRONZE_HOE -> paintHoe(0xCD7F32);
             case MORTAR -> paintMortar();
+            case FILE -> paintFile();
+
+            case COPPER_PLATE -> paintPlate(0xE8772F);
+            case TIN_PLATE -> paintPlate(0xC8D8E0);
+            case IRON_PLATE -> paintPlate(0xE8E8E8);
+            case GOLD_PLATE -> paintPlate(0xE8C93A);
+            case BRONZE_PLATE -> paintPlate(0xCD7F32);
+            case BRASS_PLATE -> paintPlate(0xB5A642);
+            case STEEL_PLATE -> paintPlate(0xC8C8D8);
+            case WROUGHT_IRON_PLATE -> paintPlate(0xC4B8A8);
+
+            case COPPER_ROD -> paintRod(0xE8772F);
+            case TIN_ROD -> paintRod(0xC8D8E0);
+            case IRON_ROD -> paintRod(0xE8E8E8);
+            case GOLD_ROD -> paintRod(0xE8C93A);
+            case BRONZE_ROD -> paintRod(0xCD7F32);
+            case BRASS_ROD -> paintRod(0xB5A642);
+            case STEEL_ROD -> paintRod(0xC8C8D8);
+            case WROUGHT_IRON_ROD -> paintRod(0xC4B8A8);
 
             // Buckets: empty iron pail vs one holding glowing lava.
             case IRON_BUCKET -> paintBucket(false);
@@ -395,6 +416,39 @@ public class ItemTextures {
         // Pestle: diagonal stick.
         drawThickLine(img, 9, 2, 6, 10, wood);
         drawThickLine(img, 10, 2, 7, 10, dark);
+        return img;
+    }
+
+    /** A short metal rod, end-on highlight. */
+    private static BufferedImage paintRod(int color) {
+        BufferedImage img = blank();
+        for (int y = 2; y <= 13; y++) {
+            img.setRGB(7, y, 0xFF000000 | shade(color, 0.75f));
+            img.setRGB(8, y, 0xFF000000 | color);
+            img.setRGB(9, y, 0xFF000000 | lighten(color));
+        }
+        img.setRGB(7, 2, 0xFF000000 | lighten(color));
+        img.setRGB(8, 2, 0xFF000000 | lighten(color));
+        img.setRGB(9, 2, 0xFF000000 | lighten(color));
+        return img;
+    }
+
+    /** A tapered metal rasp on a short wood handle. */
+    private static BufferedImage paintFile() {
+        BufferedImage img = blank();
+        int steel = 0xC0C0C8;
+        int dark = shade(steel, 0.7f);
+        int wood = 0x6E4A2A;
+        for (int y = 1; y <= 9; y++) {
+            int left = 6 + (y < 4 ? 0 : (y - 3) / 4);
+            int right = 10 - (y < 4 ? 0 : (y - 3) / 4);
+            for (int x = left; x <= right; x++) {
+                int c = ((x + y) % 2 == 0) ? steel : dark;
+                img.setRGB(x, y, 0xFF000000 | c);
+            }
+        }
+        drawThickLine(img, 7, 9, 7, 14, wood);
+        drawThickLine(img, 8, 9, 8, 14, shade(wood, 0.75f));
         return img;
     }
 
