@@ -137,6 +137,7 @@ public final class AnvilGui {
         if (stats == null) return null;
         if (Mining.isBronzeTool(tool)) return BlockType.BRONZE_INGOT;
         if (tool == BlockType.MORTAR) return BlockType.CLAY_BALL;
+        if (tool == BlockType.FILE) return BlockType.IRON_INGOT;
         return switch (stats.tier()) {
             case Mining.TIER_WOOD    -> BlockType.PLANKS;
             case Mining.TIER_STONE   -> BlockType.STONE;

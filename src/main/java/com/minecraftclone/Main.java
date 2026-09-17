@@ -3623,6 +3623,9 @@ public class Main {
                         && tryMortarGrind(player, selectedSlot[0], mode, handRenderer, audio, messages)) {
                     // Mortar grind consumed the click.
                 } else if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && noMob && hit == null
+                        && tryMetalwork(player, selectedSlot[0], mode, handRenderer, audio, messages)) {
+                    // Hammer plate / file rod consumed the click.
+                } else if (input.isMouseJustPressed(GLFW_MOUSE_BUTTON_RIGHT) && noMob && hit == null
                         && heldItem == BlockType.CLAY_CANTEEN_FULL && !mode.isCreative()
                         && player.getStats().getThirst() < PlayerStats.MAX_THIRST) {
                     player.getStats().drink(40f);   // restores 40 out of 100 thirst
@@ -4035,6 +4038,8 @@ public class Main {
                         showMessage(messages, "Canteen filled!", new Vector4f(0.3f, 0.6f, 1f, 1f), 1.5f);
                     } else if (noMob && tryMortarGrind(player, selectedSlot[0], mode, handRenderer, audio, messages)) {
                         // Mortar grind consumed the click (ore in hand, or mortar in hand).
+                    } else if (noMob && tryMetalwork(player, selectedSlot[0], mode, handRenderer, audio, messages)) {
+                        // Hammer plate / file rod consumed the click.
                     } else if (noMob && mode.canPlace() && heldItem == BlockType.SUGAR_CANE) {
                         // Sugar cane can only be placed on dirt/grass/sand adjacent to water
                         // (or on top of another sugar cane whose base is adjacent to water).
@@ -4839,6 +4844,59 @@ public class Main {
             showMessage(messages, "Ground " + name + " — mortar broke!", new org.joml.Vector4f(1f, 0.6f, 0.3f, 1f), 2f);
         } else {
             showMessage(messages, "Ground " + name + ".", new org.joml.Vector4f(0.8f, 0.8f, 0.5f, 1f), 1.5f);
+        }
+        return true;
+    }
+
+    /**
+     * Right-click metalworking: hammer an ingot into a plate, or file one
+     * into a rod. Prefers the selected tool (hammer vs file) so both sitting
+     * in the bag does not steal the click. Returns true when consumed.
+     */
+    private boolean tryMetalwork(Player player, int selected, GameMode mode,
+                                 HandRenderer handRenderer, AudioEngine audio,
+                                 java.util.List<Hud.Message> messages) {
+        Inventory inv = player.getInventory();
+        BlockType held = inv.typeOf(selected);
+        boolean[] broke = new boolean[1];
+        BlockType out;
+        String verb;
+        String toolName;
+        if (com.minecraftclone.player.Metalworking.isFile(held)) {
+            out = com.minecraftclone.player.Metalworking.fileRod(
+                    inv, selected, player.getDurability(), mode.isCreative(), broke);
+            verb = "Filed";
+            toolName = "file";
+        } else if (com.minecraftclone.player.Metalworking.isHammer(held)) {
+            out = com.minecraftclone.player.Metalworking.hammerPlate(
+                    inv, selected, player.getDurability(), mode.isCreative(), broke);
+            verb = "Hammered";
+            toolName = "hammer";
+        } else if (com.minecraftclone.player.Metalworking.isPlateable(held)
+                && com.minecraftclone.player.Metalworking.hasHammer(inv)) {
+            out = com.minecraftclone.player.Metalworking.hammerPlate(
+                    inv, selected, player.getDurability(), mode.isCreative(), broke);
+            verb = "Hammered";
+            toolName = "hammer";
+        } else if (com.minecraftclone.player.Metalworking.isDrawable(held)
+                && com.minecraftclone.player.Metalworking.hasFile(inv)) {
+            out = com.minecraftclone.player.Metalworking.fileRod(
+                    inv, selected, player.getDurability(), mode.isCreative(), broke);
+            verb = "Filed";
+            toolName = "file";
+        } else {
+            return false;
+        }
+        if (out == null) return false;
+        handRenderer.triggerSwing();
+        audio.play(com.minecraftclone.engine.audio.SoundEvent.CRAFT);
+        String name = out.displayName();
+        if (broke[0]) {
+            showMessage(messages, verb + " " + name + " — " + toolName + " broke!",
+                    new org.joml.Vector4f(1f, 0.6f, 0.3f, 1f), 2f);
+        } else {
+            showMessage(messages, verb + " " + name + ".",
+                    new org.joml.Vector4f(0.8f, 0.8f, 0.5f, 1f), 1.5f);
         }
         return true;
     }

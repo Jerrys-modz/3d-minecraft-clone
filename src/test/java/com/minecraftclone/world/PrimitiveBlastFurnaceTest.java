@@ -70,4 +70,25 @@ class PrimitiveBlastFurnaceTest {
         assertEquals(3, loaded.countOf(PrimitiveBlastFurnaceEntity.SLOT_INPUT));
         assertEquals(BlockType.COAL, loaded.typeOf(PrimitiveBlastFurnaceEntity.SLOT_FUEL));
     }
+
+    @Test
+    void steelDustBecomesSteelIngot() {
+        assertEquals(BlockType.STEEL_INGOT, PrimitiveBlastFurnaceEntity.outputFor(BlockType.STEEL_DUST));
+        assertNull(com.minecraftclone.player.Smelting.outputFor(BlockType.STEEL_DUST),
+                "a regular furnace is not hot enough for steel");
+        PrimitiveBlastFurnaceEntity pbf = new PrimitiveBlastFurnaceEntity();
+        pbf.setSlot(PrimitiveBlastFurnaceEntity.SLOT_INPUT, BlockType.STEEL_DUST, 1);
+        pbf.setSlot(PrimitiveBlastFurnaceEntity.SLOT_FUEL, BlockType.COAL, 2);
+        float dt = PrimitiveBlastFurnaceEntity.SMELT_TIME;
+        for (int i = 0; i < 4; i++) pbf.tick(dt / 2f);
+        assertEquals(BlockType.STEEL_INGOT, pbf.typeOf(PrimitiveBlastFurnaceEntity.SLOT_OUTPUT));
+        assertEquals(1, pbf.countOf(PrimitiveBlastFurnaceEntity.SLOT_OUTPUT));
+        assertEquals(0, pbf.countOf(PrimitiveBlastFurnaceEntity.SLOT_INPUT));
+    }
+
+    @Test
+    void wroughtIronIsNotADirectPbfInput() {
+        assertNull(PrimitiveBlastFurnaceEntity.outputFor(BlockType.WROUGHT_IRON_INGOT),
+                "mix wrought iron with coal dust first");
+    }
 }

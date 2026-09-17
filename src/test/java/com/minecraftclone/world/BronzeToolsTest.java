@@ -144,4 +144,53 @@ class BronzeToolsTest {
         assertEquals(BlockType.BRONZE_DUST, r.output());
         assertEquals(4, r.outputAmount());
     }
+
+    @Test
+    void steelDustCraftsFromWroughtIronAndCoalDust() {
+        BlockType[] grid = new BlockType[4];
+        grid[0] = BlockType.WROUGHT_IRON_INGOT;
+        grid[1] = BlockType.COAL_DUST;
+        Crafting.Recipe r = Crafting.match(grid);
+        assertNotNull(r);
+        assertEquals(BlockType.STEEL_DUST, r.output());
+    }
+
+    @Test
+    void tableNoLongerMakesSteelIngots() {
+        BlockType[] grid = new BlockType[9];
+        grid[0] = BlockType.IRON_INGOT; grid[1] = BlockType.COAL; grid[2] = BlockType.IRON_INGOT;
+        grid[4] = BlockType.COAL;
+        grid[6] = BlockType.IRON_INGOT; grid[7] = BlockType.COAL; grid[8] = BlockType.IRON_INGOT;
+        Crafting.Recipe r = Crafting.match3x3(grid);
+        assertTrue(r == null || r.output() != BlockType.STEEL_INGOT,
+                "placeholder table steel is gone — use the PBF");
+    }
+
+    @Test
+    void fileRecipeAndSteelCasing() {
+        BlockType[] fileGrid = new BlockType[4];
+        fileGrid[0] = BlockType.IRON_INGOT;
+        fileGrid[2] = BlockType.STICK;
+        Crafting.Recipe file = Crafting.match(fileGrid);
+        assertNotNull(file);
+        assertEquals(BlockType.FILE, file.output());
+
+        BlockType[] casing = new BlockType[9];
+        for (int i = 0; i < 9; i++) if (i != 4) casing[i] = BlockType.STEEL_PLATE;
+        Crafting.Recipe c = Crafting.match3x3(casing);
+        assertNotNull(c);
+        assertEquals(BlockType.STEEL_CASING, c.output());
+    }
+
+    @Test
+    void fileRepairsWithIron() {
+        assertEquals(BlockType.IRON_INGOT, AnvilGui.repairMaterialOf(BlockType.FILE));
+        assertTrue(Mining.isTool(BlockType.FILE));
+    }
+
+    @Test
+    void coalDustBurnsLikeCoal() {
+        assertTrue(Furnace.isFuel(BlockType.COAL_DUST));
+        assertEquals(Furnace.fuelDuration(BlockType.COAL), Furnace.fuelDuration(BlockType.COAL_DUST));
+    }
 }

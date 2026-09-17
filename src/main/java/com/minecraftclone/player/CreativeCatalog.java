@@ -28,7 +28,7 @@ public final class CreativeCatalog {
                     BlockType.JUNGLE_LEAVES, BlockType.PINE_LEAVES, BlockType.CHERRY_LEAVES,
                     BlockType.GRAVEL, BlockType.SNOW,
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
-                    BlockType.FIRE_BRICK, BlockType.PRIMITIVE_BLAST_FURNACE,
+                    BlockType.FIRE_BRICK, BlockType.PRIMITIVE_BLAST_FURNACE, BlockType.STEEL_CASING,
                     BlockType.STEAM_BOILER, BlockType.STEAM_FURNACE, BlockType.STEAM_MACERATOR, BlockType.STEAM_ORE_WASHER,
                     BlockType.CRAFTING_TABLE, BlockType.CHEST, BlockType.BARREL,
                     BlockType.STONE_STAIRS, BlockType.PLANKS_STAIRS, BlockType.WOODEN_FENCE,
@@ -64,7 +64,12 @@ public final class CreativeCatalog {
                     BlockType.COAL_ORE, BlockType.IRON_ORE, BlockType.GOLD_ORE, BlockType.DIAMOND_ORE,
                     BlockType.COAL, BlockType.STICK, BlockType.IRON_INGOT, BlockType.GOLD_INGOT, BlockType.DIAMOND,
                     BlockType.IRON_DUST, BlockType.GOLD_DUST, BlockType.BRONZE_DUST, BlockType.BRONZE_INGOT,
-                    BlockType.BRASS_DUST, BlockType.BRASS_INGOT, BlockType.WROUGHT_IRON_INGOT, BlockType.STEEL_INGOT,
+                    BlockType.BRASS_DUST, BlockType.BRASS_INGOT, BlockType.WROUGHT_IRON_INGOT,
+                    BlockType.COAL_DUST, BlockType.STEEL_DUST, BlockType.STEEL_INGOT,
+                    BlockType.COPPER_PLATE, BlockType.TIN_PLATE, BlockType.IRON_PLATE, BlockType.GOLD_PLATE,
+                    BlockType.BRONZE_PLATE, BlockType.BRASS_PLATE, BlockType.STEEL_PLATE, BlockType.WROUGHT_IRON_PLATE,
+                    BlockType.COPPER_ROD, BlockType.TIN_ROD, BlockType.IRON_ROD, BlockType.GOLD_ROD,
+                    BlockType.BRONZE_ROD, BlockType.BRASS_ROD, BlockType.STEEL_ROD, BlockType.WROUGHT_IRON_ROD,
                     BlockType.WOOL, BlockType.BONES, BlockType.BONE_MEAL,
                     // GTNH Ores - early game
                     BlockType.COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.COPPER_DUST, BlockType.COPPER_INGOT,
@@ -225,6 +230,7 @@ public final class CreativeCatalog {
         list.add(BlockType.WOOD_HOE);        list.add(BlockType.STONE_HOE);
         list.add(BlockType.BRONZE_HOE);      list.add(BlockType.IRON_HOE);        list.add(BlockType.DIAMOND_HOE);
         list.add(BlockType.MORTAR);
+        list.add(BlockType.FILE);
         return list.toArray(new BlockType[0]);
     }
 

@@ -22,6 +22,9 @@ class MortarTest {
         assertEquals(BlockType.IRON_DUST, Mortar.dustFor(BlockType.IRON_ORE));
         assertEquals(BlockType.GOLD_DUST, Mortar.dustFor(BlockType.GOLD_ORE));
         assertEquals(BlockType.COAL, Mortar.dustFor(BlockType.COAL_ORE));
+        assertEquals(BlockType.COAL_DUST, Mortar.dustFor(BlockType.COAL));
+        assertTrue(Mortar.isGrindable(BlockType.COAL));
+        assertFalse(Mortar.isGrindable(BlockType.COAL_DUST));
     }
 
     @Test
