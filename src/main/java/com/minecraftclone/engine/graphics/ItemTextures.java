@@ -390,6 +390,9 @@ public class ItemTextures {
             case GUNPOWDER -> paintGunpowder();
             case VACUUM_TUBE -> paintVacuumTube();
             case LV_BATTERY -> paintLvBattery();
+            case TIN_CELL -> paintCell(0);
+            case WATER_CELL -> paintCell(0xFF3A70C0);
+            case LAVA_CELL -> paintCell(0xFFE86A10);
 
             // Phase 3 alloys: invar (cool greenish grey), electrum (pale gold), stainless (bright blue-grey).
             case INVAR_DUST -> paintDustOre(0xB4B8A0);
@@ -1666,6 +1669,23 @@ public class ItemTextures {
     /**
      * Gunpowder: a small heap of dark grey-black powder granules.
      */
+    /** Tin cell: a tin capsule with a glass window, showing its fluid (0 = empty). */
+    private static BufferedImage paintCell(int fluid) {
+        BufferedImage img = blank();
+        for (int y = 2; y <= 13; y++) {
+            for (int x = 4; x <= 11; x++) {
+                boolean corner = (y == 2 || y == 13) && (x == 4 || x == 11);
+                if (corner) continue;
+                boolean rim = x == 4 || x == 11 || y == 2 || y == 13;
+                boolean window = x >= 6 && x <= 9 && y >= 5 && y <= 11;
+                int c = rim ? 0xFF6A7278 : window ? (fluid != 0 ? fluid : 0xFF20282C) : 0xFFAEB8BE;
+                img.setRGB(x, y, c);
+            }
+        }
+        if (fluid != 0) img.setRGB(7, 6, 0xFFFFFFFF);   // glint on the fluid
+        return img;
+    }
+
     /** LV battery: a tin-grey cell with a copper terminal and a blue charge band. */
     private static BufferedImage paintLvBattery() {
         BufferedImage img = blank();

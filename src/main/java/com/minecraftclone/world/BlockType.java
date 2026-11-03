@@ -1171,7 +1171,19 @@ public enum BlockType {
     STAINLESS_STEEL_ROD(619, 0),
 
     /** MV machine hull: eight stainless steel plates in a ring. Tile 310. */
-    MV_CASING(620, true, false, 310, 310, 310);
+    MV_CASING(620, true, false, 310, 310, 310),
+
+    // ---- Phase 3: fluids ---------------------------------------------
+    /** Steel Tank — stores 32 000 mB of one fluid. Tile 311 (sides, glass window) / 312 (top/bottom). */
+    STEEL_TANK(621, true, false, 312, 311, 312),
+    /** Fluid Pipe (bronze) — connects tanks to machines that use fluids. Tile 313. */
+    FLUID_PIPE(622, true, false, 313, 313, 313),
+    /** Empty tin cell — scoops 1000 mB of water or still lava, or draws it from a tank. */
+    TIN_CELL(623, 0),
+    /** Tin cell holding 1000 mB of water. */
+    WATER_CELL(624, 0),
+    /** Tin cell holding 1000 mB of lava. */
+    LAVA_CELL(625, 0);
 
     public final short id;
     public final boolean solid;

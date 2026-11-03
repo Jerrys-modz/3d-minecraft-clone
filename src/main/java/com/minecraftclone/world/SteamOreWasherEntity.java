@@ -19,9 +19,11 @@ import java.io.IOException;
  *       {@link Mortar#isGrindable grindable} that isn't already dust).</li>
  *   <li><b>Heat</b>: draws steam from an adjacent steaming boiler (direct
  *       or through pipes), same as the Steam Macerator.</li>
- *   <li><b>Water</b>: needs a neighbouring water block (source, flow, or
- *       static ocean). Frozen ice does not count, so a washer on a lake
- *       that ices over in winter stops until the thaw.</li>
+ *   <li><b>Water</b>: a neighbouring water block (source, flow, or static
+ *       ocean) is free; frozen ice does not count, so a washer on a lake
+ *       that ices over in winter stops until the thaw. Otherwise each wash
+ *       uses {@value #WATER_PER_WASH} mB from a Steel Tank that is adjacent
+ *       or connected by fluid pipe.</li>
  *   <li><b>Output</b> (slot 2): 1× dust. Slot 1 (the furnace GUI's fuel
  *       slot) occasionally receives a tiny byproduct dust of a related metal.</li>
  * </ul>
@@ -38,6 +40,9 @@ public final class SteamOreWasherEntity implements BlockEntity, StorageContainer
 
     /** Real-time seconds to wash one item (same pace as a furnace). */
     public static final float WASH_SECONDS = Furnace.SMELT_TIME;
+
+    /** Tank water used per wash when no water block is adjacent. */
+    public static final int WATER_PER_WASH = 100;
 
     /** Chance that a wash also yields one byproduct dust. */
     public static final float BYPRODUCT_CHANCE = 0.25f;
@@ -159,7 +164,10 @@ public final class SteamOreWasherEntity implements BlockEntity, StorageContainer
                 drawRate = net != null && net.minTier != null ? net.minTier.throughput : 1f;
             }
         }
-        boolean watered = waterOverride != null ? waterOverride : hasWater();
+        boolean openWater = waterOverride != null ? waterOverride : hasWater();
+        FluidTankEntity tank = openWater || !attached ? null
+                : FluidNetwork.findTankWith(world, posX, posY, posZ, Fluid.WATER, WATER_PER_WASH);
+        boolean watered = openWater || tank != null;
         boolean hot = boiler != null && boiler.steamSeconds() > 0f && canWash() && watered;
         if (!hot) {
             lastSteamFraction = 0f;
@@ -184,6 +192,10 @@ public final class SteamOreWasherEntity implements BlockEntity, StorageContainer
                 counts[SLOT_OUTPUT] = 1;
             }
             maybeEmitByproduct(result);
+            if (tank != null) {
+                tank.drain(Fluid.WATER, WATER_PER_WASH);   // open water is free; tank water is used up
+                if (!tank.has(Fluid.WATER, WATER_PER_WASH)) break;
+            }
         }
     }
 

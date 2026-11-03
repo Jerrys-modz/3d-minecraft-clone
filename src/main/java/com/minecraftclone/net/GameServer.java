@@ -1014,7 +1014,7 @@ public class GameServer implements AutoCloseable {
                 || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
                 || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR
                 || block == BlockType.ELECTRIC_EXTRACTOR || block == BlockType.BATTERY_BLOCK
-                || block == BlockType.ELECTROLYZER;
+                || block == BlockType.ELECTROLYZER || block == BlockType.STEEL_TANK;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -1041,6 +1041,7 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.ElectricCompressorEntity.TYPE -> block == BlockType.ELECTRIC_COMPRESSOR;
             case com.minecraftclone.world.ElectricExtractorEntity.TYPE -> block == BlockType.ELECTRIC_EXTRACTOR;
             case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
+            case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
             case com.minecraftclone.world.BatteryBlockEntity.TYPE -> block == BlockType.BATTERY_BLOCK;
             default -> false;
         };
@@ -1110,6 +1111,7 @@ public class GameServer implements AutoCloseable {
             case COAL_GENERATOR -> world.getOrCreateCoalGenerator(open.x(), open.y(), open.z());
             case ELECTRIC_FURNACE -> world.getOrCreateElectricFurnace(open.x(), open.y(), open.z());
             case BATTERY_BLOCK -> world.getOrCreateBatteryBlock(open.x(), open.y(), open.z());
+            case STEEL_TANK -> world.getOrCreateSteelTank(open.x(), open.y(), open.z());
             case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR, ELECTRIC_EXTRACTOR,
                  ELECTROLYZER ->
                     world.getOrCreateElectricMachine(open.x(), open.y(), open.z());

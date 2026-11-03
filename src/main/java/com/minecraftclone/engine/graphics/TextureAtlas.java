@@ -430,6 +430,9 @@ public class TextureAtlas {
         paintTransformer(image, 308, rnd, false);                 // LV_TRANSFORMER sides
         paintTransformer(image, 309, rnd, true);                  // LV_TRANSFORMER top/bottom (coil face)
         paintMachineBox(image, 310, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8); // MV_CASING (stainless)
+        paintSteelTank(image, 311, rnd, true);                    // STEEL_TANK sides (sight glass)
+        paintSteelTank(image, 312, rnd, false);                   // STEEL_TANK top/bottom (lid)
+        paintFluidPipe(image, 313, rnd);                          // FLUID_PIPE
 
         return image;
     }
@@ -2577,6 +2580,51 @@ public class TextureAtlas {
                     color = working ? (rnd.nextInt(3) == 0 ? 0xFFFFE080 : 0xFFE07020) : 0xFFC8C8D0;     // plate
                 } else color = 0xFF14141C;
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * STEEL_TANK (tiles 311 side / 312 lid): a riveted steel frame. The sides
+     * carry a tall glass sight window with a water line; the lid is a plate
+     * with a central filler cap.
+     */
+    private void paintSteelTank(BufferedImage img, int index, Random rnd, boolean side) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        if (side) {
+            for (int y = 2; y < 14; y++) {
+                for (int x = 5; x < 11; x++) {
+                    boolean rim = x == 5 || x == 10 || y == 2 || y == 13;
+                    int color = rim ? 0xFF9EC8D8 : y < 6 ? 0xFF203038 : ((x + y) % 3 == 0 ? 0xFF4A8AD8 : 0xFF3A70C0);
+                    img.setRGB(ox + x, oy + y, color);
+                }
+            }
+        } else {
+            for (int y = 5; y < 11; y++) {
+                for (int x = 5; x < 11; x++) {
+                    int dx = x * 2 - 15, dy = y * 2 - 15;
+                    if (dx * dx + dy * dy <= 40) img.setRGB(ox + x, oy + y, dx * dx + dy * dy <= 12 ? 0xFF6A6A7A : 0xFF3A3A48);
+                }
+            }
+        }
+    }
+
+    /**
+     * FLUID_PIPE (tile 313): a bronze pipe end with a glass-lined bore showing
+     * blue fluid — the same cross-section idea as the steam pipes and cables.
+     */
+    private void paintFluidPipe(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                int dx = x - 8, dy = y - 8, d2 = dx * dx + dy * dy;
+                int base = d2 > 42 ? 0x6A4A1E : d2 > 30 ? 0xC08A3A : d2 > 20 ? 0xA8D0E0 : 0x3A70C0;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
             }
         }
     }

@@ -6,8 +6,10 @@ import com.minecraftclone.player.Mortar;
  * A placed LV Ore Washer: step two of the electric ore chain. Rinses crushed
  * ore or an impure pile into <b>purified ore</b> (1:1), with a 25% related-metal
  * byproduct dust (same pairings as the {@link SteamOreWasherEntity}). Like
- * the steam washer it needs an adjacent, unfrozen water block — a washer
- * beside a lake that ices over in winter stops until the thaw.
+ * the steam washer it needs water: an adjacent, unfrozen water block (free —
+ * a washer beside a lake that ices over in winter stops until the thaw), or
+ * {@value #WATER_PER_WASH} mB per wash from a Steel Tank that is adjacent or
+ * connected by fluid pipe.
  *
  * <p>Purified ore then goes to the {@link ThermalCentrifugeEntity} for 3×
  * dust (or the macerator for 2×, or a furnace for an ingot).
@@ -24,6 +26,9 @@ public final class ElectricOreWasherEntity extends ElectricMachineEntity {
 
     /** Fraction of washes that also yield a byproduct dust. */
     public static final float BYPRODUCT_CHANCE = 0.25f;
+
+    /** Tank water used per wash when no water block is adjacent. */
+    public static final int WATER_PER_WASH = 100;
 
     /** Test hook: forces the water check instead of reading the world. */
     Boolean waterOverride;
@@ -56,6 +61,18 @@ public final class ElectricOreWasherEntity extends ElectricMachineEntity {
 
     @Override
     protected boolean environmentReady() {
-        return waterOverride != null ? waterOverride : hasAdjacentWater();
+        if (waterOverride != null) return waterOverride;
+        return hasAdjacentWater() || waterTank() != null;
+    }
+
+    @Override
+    protected void onOperationComplete(BlockType input) {
+        if (waterOverride != null || hasAdjacentWater()) return;   // open water is free
+        FluidTankEntity tank = waterTank();
+        if (tank != null) tank.drain(Fluid.WATER, WATER_PER_WASH);
+    }
+
+    private FluidTankEntity waterTank() {
+        return attached ? FluidNetwork.findTankWith(world, posX, posY, posZ, Fluid.WATER, WATER_PER_WASH) : null;
     }
 }

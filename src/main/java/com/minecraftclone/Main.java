@@ -847,6 +847,7 @@ public class Main {
             case com.minecraftclone.world.ElectricCompressorEntity.TYPE -> block == BlockType.ELECTRIC_COMPRESSOR;
             case com.minecraftclone.world.ElectricExtractorEntity.TYPE -> block == BlockType.ELECTRIC_EXTRACTOR;
             case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
+            case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
             case com.minecraftclone.world.BatteryBlockEntity.TYPE -> block == BlockType.BATTERY_BLOCK;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
@@ -4110,6 +4111,69 @@ public class Main {
                             handRenderer.triggerSwing();
                             audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
                                     px + 0.5f, py + 0.5f, pz + 0.5f, 0.8f);
+                        }
+                    } else if (noMob && hit != null && targeted == BlockType.STEEL_TANK) {
+                        // Steel Tank: pour a filled cell in, draw into an empty cell, or read the gauge.
+                        com.minecraftclone.world.FluidTankEntity tank =
+                                world.getOrCreateSteelTank(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.Fluid cellFluid = com.minecraftclone.world.Fluid.inCell(heldItem);
+                        int cell = com.minecraftclone.world.Fluid.CELL_MB;
+                        boolean changed = false;
+                        if (cellFluid != null) {
+                            if (tank.canFill(cellFluid, cell)) {
+                                tank.fill(cellFluid, cell);
+                                player.getInventory().remove(heldItem, 1);
+                                player.getInventory().add(BlockType.TIN_CELL, 1);
+                                changed = true;
+                            } else {
+                                showMessage(messages, tank.fluid() != null && tank.fluid() != cellFluid
+                                                ? "The tank holds " + tank.fluid().displayName + " - fluids don't mix."
+                                                : "The tank is full.",
+                                        new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else if (heldItem == BlockType.TIN_CELL) {
+                            com.minecraftclone.world.Fluid f = tank.fluid();
+                            if (f != null && tank.has(f, cell)) {
+                                tank.drain(f, cell);
+                                player.getInventory().remove(BlockType.TIN_CELL, 1);
+                                player.getInventory().add(com.minecraftclone.world.Fluid.cellFor(f), 1);
+                                changed = true;
+                            } else {
+                                showMessage(messages, "Not enough fluid in the tank to fill a cell (1000 mB).",
+                                        new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else {
+                            showMessage(messages, tank.fluid() == null ? "Steel Tank: empty (0 / "
+                                            + com.minecraftclone.world.FluidTankEntity.CAPACITY_MB + " mB)"
+                                            : "Steel Tank: " + tank.fluid().displayName + " " + tank.amount() + " / "
+                                            + com.minecraftclone.world.FluidTankEntity.CAPACITY_MB + " mB",
+                                    new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
+                        }
+                        if (changed) {
+                            audio.play(SoundEvent.SPLASH);
+                            handRenderer.triggerSwing();
+                            pushContainerSnapshot(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            world.markChunkModifiedByPlayer(World.worldToChunk(hit.blockPos.x),
+                                    World.worldToChunk(hit.blockPos.z));
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.TIN_CELL
+                            && com.minecraftclone.world.Fluid.ofBlock(targeted) != null) {
+                        // Empty cell on water (any - like the canteen) or still lava (consumed, like a bucket).
+                        com.minecraftclone.world.Fluid f = com.minecraftclone.world.Fluid.ofBlock(targeted);
+                        if (f == com.minecraftclone.world.Fluid.LAVA && targeted == BlockType.LAVA_FLOW) {
+                            showMessage(messages, "Only still lava can be scooped.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            player.getInventory().remove(BlockType.TIN_CELL, 1);
+                            player.getInventory().add(com.minecraftclone.world.Fluid.cellFor(f), 1);
+                            if (f == com.minecraftclone.world.Fluid.LAVA) {
+                                world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                                syncBlockToServer((byte) currentDim[0].ordinal(), world,
+                                        hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
+                            }
+                            audio.play(SoundEvent.SPLASH);
+                            handRenderer.triggerSwing();
+                            showMessage(messages, "Filled a " + f.displayName.toLowerCase() + " cell.",
+                                    new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
                         }
                     } else if (noMob && heldItem == BlockType.CLAY_CANTEEN
                             && (targeted == BlockType.WATER_SOURCE || targeted == BlockType.WATER)) {

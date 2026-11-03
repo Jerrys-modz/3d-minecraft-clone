@@ -409,9 +409,9 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Fluid Tanks** | ❌ Todo | Steel / stainless tanks in world; capacity in mB; required for all chemical recipes |
-| **Fluid Pipes** | ❌ Todo | Bronze → steel → stainless; route fluids between machines |
-| **Fluid Cells & Drums** | ❌ Todo | Tin cell (1000 mB) for hand transport; steel drum (16000 mB) for bulk storage |
+| **Fluid Tanks** | ✅ Done | `STEEL_TANK` (`222/2G2/222`): 32 000 mB of one fluid (water or lava). Right-click with a filled cell to pour, an empty cell to draw, or anything else to read the gauge. Stainless tanks still todo. |
+| **Fluid Pipes** | 🟡 Partial | `FLUID_PIPE` (bronze, `EGE` → 4): connects tanks to machines. Both ore washers now run on **100 mB of tank water per wash** (adjacent or piped tank) when no water block is next to them — open water stays free. Steel/stainless tiers and pumping between tanks still todo. |
+| **Fluid Cells & Drums** | 🟡 Partial | `TIN_CELL` (`.8./8G8/.8.` → 2) holds 1000 mB: fill from any water (not consumed, like the canteen) or still lava (consumed, like a bucket), or from a tank; `WATER_CELL` / `LAVA_CELL`. Steel drum still todo. |
 
 ### Chemistry
 
@@ -440,7 +440,9 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 
 > **Survival interlock:** Chemical spills (acid tank damage) if pipes burst from overpressure. Oil extraction near lava creates fire spread danger. Working in chemical areas requires rubber hazmat suit.
 
-**New blocks/items needed:** `STEEL_TANK` · `FLUID_PIPE (3 tiers)` · `TIN_CELL` · `STEEL_DRUM` · `CHEMICAL_REACTOR_MV` · `DISTILLATION_TOWER (multi-block)` · `OIL_PUMP` · `INVAR_INGOT` · `ELECTRUM_INGOT` · `STAINLESS_INGOT` · `MV_CASING` · `SILICON_WAFER` · `MV_BATTERY (lithium)` · `MV_TRANSFORMER`
+**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL`.
+
+**Still open:** `FLUID_PIPE (steel/stainless tiers)` · `STEEL_DRUM` · `CHEMICAL_REACTOR_MV` · `DISTILLATION_TOWER (multi-block)` · `OIL_PUMP` · `SILICON_WAFER` · `MV_BATTERY (lithium)` · `MV_TRANSFORMER` · MV machines
 
 ---
 

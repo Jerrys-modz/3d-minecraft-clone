@@ -778,6 +778,15 @@ public class World implements BlockAccessor {
         return ef;
     }
 
+    /** Returns the Steel Tank entity at a position, creating it on first use. */
+    public FluidTankEntity getOrCreateSteelTank(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof FluidTankEntity t) return t;
+        FluidTankEntity t = new FluidTankEntity();
+        blockEntities.put(blockKey(x, y, z), t);
+        return t;
+    }
+
     /** Returns the LV Macerator entity at a position, creating + attaching it on first use. */
     public ElectricMaceratorEntity getOrCreateElectricMacerator(int x, int y, int z) {
         return getOrCreateElectricMachine(x, y, z, ElectricMaceratorEntity.class, ElectricMaceratorEntity::new);
@@ -822,10 +831,10 @@ public class World implements BlockAccessor {
     }
 
     /**
-     * Creates the block entity for a freshly placed Electric Age block. EU
-     * sources and consumers find each other by scanning for <em>entities</em>,
-     * so a battery or generator that was placed but never right-clicked would
-     * otherwise be invisible to the machines wired to it.
+     * Creates the block entity for a freshly placed Electric Age block or
+     * Steel Tank. EU sources/consumers and tanks are found by scanning for
+     * <em>entities</em>, so a battery, generator or tank that was placed but
+     * never right-clicked would otherwise be invisible to the machines wired to it.
      */
     private void ensureElectricEntity(int x, int y, int z, BlockType type) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
@@ -836,6 +845,7 @@ public class World implements BlockAccessor {
             case ELECTRIC_FURNACE -> getOrCreateElectricFurnace(x, y, z);
             case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR,
                  ELECTRIC_EXTRACTOR, ELECTROLYZER -> getOrCreateElectricMachine(x, y, z);
+            case STEEL_TANK -> getOrCreateSteelTank(x, y, z);
             default -> { }
         }
     }

@@ -81,6 +81,9 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
     /** Seconds per operation at full power through direct adjacency. */
     protected abstract float operationSeconds();
 
+    /** Called after each completed operation with the consumed input (e.g. to use up tank water). */
+    protected void onOperationComplete(BlockType input) { }
+
     /** Extra world precondition (e.g. adjacent water). Default: always ready. */
     protected boolean environmentReady() { return true; }
 
@@ -171,6 +174,7 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
             types[SLOT_OUTPUT] = output;
             counts[SLOT_OUTPUT] = yield;
         }
+        onOperationComplete(input);
         if (by == null || byproductChance() <= 0f) return;
         byproductCredit += byproductChance();
         if (byproductCredit < 1f - 1e-4f) return;

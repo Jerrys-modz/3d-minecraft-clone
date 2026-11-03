@@ -394,6 +394,14 @@ public final class Crafting {
                 BlockType.NICKEL_DUST, BlockType.MANGANESE_DUST, BlockType.CHROMIUM_DUST);
         // MV casing: eight stainless plates in a ring.
         shaped3x3("999", "9.9", "999", BlockType.MV_CASING, 1);
+
+        // ---- Phase 3: fluids ------------------------------------------------
+        // Steel Tank: steel plates around a glass sight window.
+        shaped3x3("222", "2G2", "222", BlockType.STEEL_TANK, 1);
+        // Fluid Pipe: a glass-lined bronze run -> 4.
+        shaped3x3("...", "EGE", "...", BlockType.FLUID_PIPE, 4);
+        // Tin Cell: four tin plates around a glass liner -> 2.
+        shaped3x3(".8.", "8G8", ".8.", BlockType.TIN_CELL, 2);
         // LV Battery: copper-cable terminal over a tin-plate cell filled with sulfur electrolyte.
         shaped3x3(".5.", "878", "878", BlockType.LV_BATTERY, 1);
 
