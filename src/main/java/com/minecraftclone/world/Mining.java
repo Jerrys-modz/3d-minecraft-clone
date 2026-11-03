@@ -414,6 +414,14 @@ public final class Mining {
         put(BlockType.STEAM_FURNACE, 3.5f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.STEAM_MACERATOR, 3.5f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.STEEL_CASING, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+
+        // Electric Age machines and wiring.
+        put(BlockType.COAL_GENERATOR, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTRIC_FURNACE, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.BATTERY_BLOCK, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTRIC_MACERATOR, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.COPPER_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.GOLD_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
     }
 
     private static void put(BlockType type, float hardness, ToolKind effectiveTool, int requiredTier) {

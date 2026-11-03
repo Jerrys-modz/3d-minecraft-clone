@@ -173,9 +173,9 @@ public final class SteamFurnaceEntity implements BlockEntity, StorageContainer, 
                 world.pipeNetworks().networkAt(com.minecraftclone.world.pipes.PipeType.STEAM, posX, posY, posZ);
         if (net == null) return null;
         for (long key : net.cells) {
-            int cx = (int) (key & 0x1FFFFFL) << 21 >> 21;
-            int cy = (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
-            int cz = (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+            int cx = (int) (key & 0x1FFFFFL) << 11 >> 11;
+            int cy = (int) ((key >> 21) & 0x1FFFFFL) << 11 >> 11;
+            int cz = (int) ((key >> 42) & 0x1FFFFFL) << 11 >> 11;
             for (int[] d : FACES) {
                 BlockEntity e = world.blockEntityAt(cx + d[0], cy + d[1], cz + d[2]);
                 if (e instanceof SteamBoilerEntity b) return b;

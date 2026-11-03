@@ -580,20 +580,7 @@ public class InventoryController {
         // Prefer the open container: ore/fuel into a furnace, anything into a
         // chest, smeltables into a smeltery, items into empty crafting-grid cells.
         if (gui.kind() == ContainerGui.Kind.FURNACE) {
-            boolean steam = gui.furnace() == null && gui.container() instanceof com.minecraftclone.world.SteamFurnaceEntity;
-            int target = -1;
-            if (steam) {
-                // Steam furnace: only an input slot (heat comes from a boiler).
-                if (Smelting.isSmeltable(t)) {
-                    target = ContainerGui.CONTAINER_START + com.minecraftclone.world.SteamFurnaceEntity.SLOT_INPUT;
-                }
-            } else {
-                if (Smelting.isSmeltable(t)) {
-                    target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_INPUT;
-                } else if (com.minecraftclone.world.Furnace.isFuel(t)) {
-                    target = ContainerGui.CONTAINER_START + com.minecraftclone.world.Furnace.SLOT_FUEL;
-                }
-            }
+            int target = quickMoveFurnaceTarget(gui.container(), t);
             if (target >= 0) {
                 int moved = moveToFurnaceSlot(target, t, count);
                 count -= moved;
@@ -672,6 +659,34 @@ public class InventoryController {
             }
         }
         return stack;
+    }
+
+    /**
+     * The GUI slot a shift-clicked {@code t} should go to in a furnace-style
+     * machine, or -1 if it doesn't belong there. Only the plain furnace and
+     * the Primitive Blast Furnace burn fuel from a slot; the steam/electric
+     * machines take input only (their slot 1 is a placeholder or an output),
+     * and the Coal Generator's single slot takes fuel only.
+     */
+    public static int quickMoveFurnaceTarget(StorageContainer machine, BlockType t) {
+        int start = ContainerGui.CONTAINER_START;
+        if (machine instanceof com.minecraftclone.world.CoalGeneratorEntity) {
+            return com.minecraftclone.world.Furnace.isFuel(t)
+                    ? start + com.minecraftclone.world.CoalGeneratorEntity.SLOT_FUEL : -1;
+        }
+        if (machine instanceof com.minecraftclone.world.ElectricMaceratorEntity) {
+            return com.minecraftclone.world.ElectricMaceratorEntity.outputFor(t) != null
+                    ? start + com.minecraftclone.world.ElectricMaceratorEntity.SLOT_INPUT : -1;
+        }
+        boolean inputOnly = machine instanceof com.minecraftclone.world.SteamFurnaceEntity
+                || machine instanceof com.minecraftclone.world.SteamMaceratorEntity
+                || machine instanceof com.minecraftclone.world.SteamOreWasherEntity
+                || machine instanceof com.minecraftclone.world.ElectricFurnaceEntity;
+        if (Smelting.isSmeltable(t)) return start + com.minecraftclone.world.Furnace.SLOT_INPUT;
+        if (!inputOnly && com.minecraftclone.world.Furnace.isFuel(t)) {
+            return start + com.minecraftclone.world.Furnace.SLOT_FUEL;
+        }
+        return -1;
     }
 
     /** Moves up to {@code count} of {@code t} into a furnace slot, topping up a same-type stack; returns items moved. */

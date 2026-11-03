@@ -389,6 +389,8 @@ public class World implements BlockAccessor {
                         wash.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
                         ef.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof ElectricMaceratorEntity em) {
+                        em.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
                     }
@@ -488,6 +490,7 @@ public class World implements BlockAccessor {
         multiBlockManager.onBlockChanged(this, worldX, worldY, worldZ);
         // A pipe placed or broken changes network topology: drop stale runs.
         pipeNetworkManager.onBlockChanged(worldX, worldY, worldZ);
+        if (type != old) ensureElectricEntity(worldX, worldY, worldZ, type);
 
         // Placing/removing a light source (e.g. a torch) can change the baked glow
         // in every chunk within its radius, not just literal boundary columns - the
@@ -569,15 +572,15 @@ public class World implements BlockAccessor {
     }
 
     private static int keyX(long key) {
-        return (int) (key & 0x1FFFFFL) << 21 >> 21;
+        return (int) (key & 0x1FFFFFL) << 11 >> 11;
     }
 
     private static int keyY(long key) {
-        return (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
+        return (int) ((key >> 21) & 0x1FFFFFL) << 11 >> 11;
     }
 
     private static int keyZ(long key) {
-        return (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+        return (int) ((key >> 42) & 0x1FFFFFL) << 11 >> 11;
     }
 
     /** The block entity at a block position, or null if none. */
@@ -775,6 +778,37 @@ public class World implements BlockAccessor {
         return ef;
     }
 
+    /** Returns the LV Macerator entity at a position, creating + attaching it on first use. */
+    public ElectricMaceratorEntity getOrCreateElectricMacerator(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof ElectricMaceratorEntity em) {
+            em.attach(x, y, z, this);
+            return em;
+        }
+        ElectricMaceratorEntity em = new ElectricMaceratorEntity();
+        em.attach(x, y, z, this);
+        blockEntities.put(blockKey(x, y, z), em);
+        return em;
+    }
+
+    /**
+     * Creates the block entity for a freshly placed Electric Age block. EU
+     * sources and consumers find each other by scanning for <em>entities</em>,
+     * so a battery or generator that was placed but never right-clicked would
+     * otherwise be invisible to the machines wired to it.
+     */
+    private void ensureElectricEntity(int x, int y, int z, BlockType type) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing != null && existing.blockType() == type) return;
+        switch (type) {
+            case COAL_GENERATOR -> getOrCreateCoalGenerator(x, y, z);
+            case BATTERY_BLOCK -> getOrCreateBatteryBlock(x, y, z);
+            case ELECTRIC_FURNACE -> getOrCreateElectricFurnace(x, y, z);
+            case ELECTRIC_MACERATOR -> getOrCreateElectricMacerator(x, y, z);
+            default -> { }
+        }
+    }
+
     /** Returns the Battery Block entity at a position, creating + attaching it on first use. */
     public BatteryBlockEntity getOrCreateBatteryBlock(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
@@ -819,6 +853,8 @@ public class World implements BlockAccessor {
             wash.attach(x, y, z, this);
         } else if (entity instanceof ElectricFurnaceEntity ef) {
             ef.attach(x, y, z, this);
+        } else if (entity instanceof ElectricMaceratorEntity em) {
+            em.attach(x, y, z, this);
         } else if (entity instanceof BatteryBlockEntity bat) {
             bat.attach(x, y, z, this);
         }
@@ -1225,6 +1261,8 @@ public class World implements BlockAccessor {
                         wash.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
                         ef.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof ElectricMaceratorEntity em) {
+                        em.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
                     }

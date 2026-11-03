@@ -817,6 +817,14 @@ public class Main {
         return buf.toByteArray();
     }
 
+    /** Machine blocks (other than the plain furnace) whose slots drop when the block is broken. */
+    private static boolean spillsMachineContents(BlockType block) {
+        return block == BlockType.STEAM_FURNACE || block == BlockType.STEAM_MACERATOR
+                || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE
+                || block == BlockType.COAL_GENERATOR || block == BlockType.ELECTRIC_FURNACE
+                || block == BlockType.ELECTRIC_MACERATOR;
+    }
+
     /** True if the block-entity type name matches the block at the cell. */
     private static boolean typeMatchesBlock(String type, BlockType block) {
         return switch (type) {
@@ -825,6 +833,12 @@ public class Main {
             case Furnace.TYPE -> block == BlockType.FURNACE;
             case com.minecraftclone.world.SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
             case com.minecraftclone.world.SteamFurnaceEntity.TYPE -> block == BlockType.STEAM_FURNACE;
+            case com.minecraftclone.world.SteamMaceratorEntity.TYPE -> block == BlockType.STEAM_MACERATOR;
+            case com.minecraftclone.world.SteamOreWasherEntity.TYPE -> block == BlockType.STEAM_ORE_WASHER;
+            case com.minecraftclone.world.PrimitiveBlastFurnaceEntity.TYPE -> block == BlockType.PRIMITIVE_BLAST_FURNACE;
+            case com.minecraftclone.world.CoalGeneratorEntity.TYPE -> block == BlockType.COAL_GENERATOR;
+            case com.minecraftclone.world.ElectricFurnaceEntity.TYPE -> block == BlockType.ELECTRIC_FURNACE;
+            case com.minecraftclone.world.ElectricMaceratorEntity.TYPE -> block == BlockType.ELECTRIC_MACERATOR;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
@@ -1354,6 +1368,16 @@ public class Main {
                             }
                         }
                     }
+                }
+                if (spillsMachineContents(targetType)
+                        && world.blockEntityAt(bx, by, bz) instanceof com.minecraftclone.player.StorageContainer machine) {
+                    // Steam/electric machines and the PBF spill their slots like a furnace.
+                    for (int s = 0; s < machine.size(); s++) {
+                        if (machine.typeOf(s) != null && machine.countOf(s) > 0) {
+                            world.spawnItem(bx, by, bz, machine.typeOf(s), machine.countOf(s), loot);
+                        }
+                    }
+                    world.removeBlockEntity(bx, by, bz);
                 }
                 if (targetType == BlockType.CHEST || targetType == BlockType.BARREL) {
                     // A broken chest/barrel spills its contents.
@@ -3722,6 +3746,36 @@ public class Main {
                                 hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, pbf);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.COAL_GENERATOR) {
+                        // Coal Generator: furnace-style GUI with a single fuel slot;
+                        // the flame shows the burn, the arrow shows the EU buffer.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.CoalGeneratorEntity gen = world.getOrCreateCoalGenerator(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, gen);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                        showMessage(messages, "Generator: " + Math.round(gen.euStored()) + " / "
+                                        + Math.round(com.minecraftclone.world.CoalGeneratorEntity.MAX_EU) + " EU",
+                                new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
+                    } else if (noMob && targeted == BlockType.ELECTRIC_FURNACE) {
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.ElectricFurnaceEntity ef = world.getOrCreateElectricFurnace(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, ef);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.ELECTRIC_MACERATOR) {
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.ElectricMaceratorEntity em = world.getOrCreateElectricMacerator(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, em);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.BATTERY_BLOCK) {
+                        // Battery Block has no inventory: right-click reads out its charge.
+                        com.minecraftclone.world.BatteryBlockEntity bat = world.getOrCreateBatteryBlock(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        showMessage(messages, "Battery: " + Math.round(bat.euStored()) + " / "
+                                        + Math.round(com.minecraftclone.world.BatteryBlockEntity.MAX_EU) + " EU",
+                                new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, player.getInventory(), craftingGrid, null);

@@ -46,6 +46,7 @@ public final class BlockEntities {
         // Electric Age machines.
         register(CoalGeneratorEntity.TYPE, CoalGeneratorEntity::new);
         register(ElectricFurnaceEntity.TYPE, ElectricFurnaceEntity::new);
+        register(ElectricMaceratorEntity.TYPE, ElectricMaceratorEntity::new);
         register(BatteryBlockEntity.TYPE, BatteryBlockEntity::new);
     }
 

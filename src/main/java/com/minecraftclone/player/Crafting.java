@@ -99,6 +99,7 @@ public final class Crafting {
         CHARS.put('J', BlockType.RUBBER);             // J = rubber (unused; 'T' is taken by TORCH)
         CHARS.put('1', BlockType.FIRE_BRICK);         // 1 = fire brick (all A-Z taken)
         CHARS.put('2', BlockType.STEEL_PLATE);        // 2 = steel plate (casing hull)
+        CHARS.put('3', BlockType.STEEL_CASING);       // 3 = steel casing (LV machine hull)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -353,6 +354,8 @@ public final class Crafting {
         shaped3x3("IXI", "XFX", "IXI", BlockType.ELECTRIC_FURNACE, 1);
         // Battery Block: alternating copper ingots and iron in a 3x3.
         shaped3x3("XIX", "IXI", "XIX", BlockType.BATTERY_BLOCK, 1);
+        // LV Macerator: copper windings around a steel casing, diamond grinder on top.
+        shaped3x3("XDX", "X3X", "XXX", BlockType.ELECTRIC_MACERATOR, 1);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.

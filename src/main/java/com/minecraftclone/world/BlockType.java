@@ -1084,7 +1084,14 @@ public enum BlockType {
     WROUGHT_IRON_ROD(575, 0),
 
     /** Machine hull: eight steel plates in a ring. Tile 294. */
-    STEEL_CASING(576, true, false, 294, 294, 294);
+    STEEL_CASING(576, true, false, 294, 294, 294),
+
+    /**
+     * LV Macerator — electric ore grinder built around a steel casing. Grinds
+     * ore / crushed ore / impure piles into 2× dust on EU. Steel-casing sides
+     * (tile 294); directional front tile 295 idle / 296 grinding.
+     */
+    ELECTRIC_MACERATOR(577, true, false, 294, 294, 294, 295, 296, 0, 0);
 
     public final short id;
     public final boolean solid;

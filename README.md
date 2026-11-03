@@ -80,7 +80,7 @@ A survival voxel game written in Java on top of [LWJGL 3](https://www.lwjgl.org/
 - **Procedural block texture atlas**: grass, dirt, stone, sand, water, wood/planks, leaves, bedrock, snow, gravel, cactus, lava, glass, vanilla ores plus a GTNH mineral set, berry bushes, torches, lamps, and alpha-cutout grass/flower tiles, all generated at runtime into one shared sheet. Ore tiles use a Minecraft-style stone-and-vein overlay (sparse flecks for small ores) with distinct mineral palettes so copper, cobalt, ruby, sulfur and the rest don't collapse into the same grey blob.
 - **Recipe Book** - press \R\ for a searchable, JEI-style index of every recipe across **all machines**: crafting grids (2x2/3x3/5x5), the Furnace, the Smeltery (with its ore double-yield noted), Part Builder, Casting Table/Basin and Tool Station assembly for every registered material. Type to filter by name; click an entry to see its ingredient layout, yield and station. Press \B\ on a selected entry to bookmark it - bookmarks sort to the top of the index and persist between sessions in \ecipe_bookmarks.txt\. The keybind is rebindable in Controls.
 - **Steam Age (early GTNH)** - the first tech tier. Start by grinding ore with a **Mortar** (clay bowl + stick pestle): right-click with a grindable ore selected (or the mortar itself) to turn one ore / crushed / impure pile into dust 1:1. Grind coal a second time for **coal dust**. Alloy **bronze** (copper + tin, 1:1 or 3:1→4) and **brass** (copper + zinc) at a crafting table, then smelt the blend. **Bronze tools** (pick, axe, sword, shovel, hammer, broadaxe, hoe) harvest at stone tier, last longer than stone, and mine 1.5× faster. Right-click a **hammer** on an ingot to flatten a **plate**, or a **file** (iron + stick) to draw a **rod**. Craft **Steam Pipes** in four tiers: **wooden** (plank column, cheap starter that throttles flow to half rate), **bronze** (bronze column, full throughput), **iron** (iron column, 1.5x throughput) and **steel**. Run them from a **Steam Boiler** (bronze ring around a hollow center, loaded with any furnace fuel by right-clicking) to anywhere: a **Steam Furnace** (bronze shell around a furnace core) placed against any pipe draws heat through the network, throttled by its weakest segment; a **Steam Macerator** doubles ore into crushed; a **Steam Ore Washer** needs steam *and* adjacent water (ice does not count) to wash crushed/impure into dust, with a 25% related-metal byproduct. The boiler builds a steam buffer (up to six coal's worth) shown by its glowing green pressure gauge. Smelt clay into **fire bricks** and craft a **Primitive Blast Furnace** (8 fire bricks) to refine the iron chain into **wrought iron**, then mix wrought iron with coal dust and smelt the **steel dust** in the same kiln for **steel ingots** — a regular furnace is not hot enough. Eight steel plates craft a **steel casing**. One well-fed boiler can run machines all over your base.
-- **Electric Age (GTNH EU tier)** - the second tech tier, built on top of the Steam Age. Craft a **Coal Generator** (iron ring around a furnace: `IFI/IFI/IFI`) and load it with any burnable fuel — it converts burn energy into EU stored in a 10 000 EU internal buffer. Run **Copper Cables** (three copper ingots vertical → 6 cables) or faster **Gold Cables** (gold ingots, 2× throughput) to any machine. Place a **Battery Block** (`XIX/IXI/XIX`, X = copper ingot) inline to absorb generator surplus and buffer burst-draw by machines. The **Electric Furnace** (`IXI/XFX/IXI`) has a 100 EU/s copper-rate draw (200 EU/s through an all-gold run); its base smelting speed is **2× a plain furnace** and scales with cable throughput. The cable network uses the same weakest-link rule as steam pipes: one copper segment in a gold run limits the whole line to copper rate.
+- **Electric Age (GTNH EU tier)** - the second tech tier, built on top of the Steam Age. Craft a **Coal Generator** (iron ring around a furnace: `IFI/IFI/IFI`) and load it with any burnable fuel — it converts burn energy into EU stored in a 10 000 EU internal buffer. Run **Copper Cables** (three copper ingots vertical → 6 cables) or faster **Gold Cables** (gold ingots, 2× throughput) to any machine. Place a **Battery Block** (`XIX/IXI/XIX`, X = copper ingot) inline to absorb generator surplus and buffer burst-draw by machines. The **Electric Furnace** (`IXI/XFX/IXI`) has a 100 EU/s copper-rate draw (200 EU/s through an all-gold run); its base smelting speed is **2× a plain furnace** and scales with cable throughput. The **LV Macerator** (`XDX/X3X/XXX` — copper ingots around a **steel casing** with a diamond on top) grinds ore, crushed ore and impure piles into **2× dust** for 300 EU per item, twice as fast as a furnace (coal grinds 1:1 into coal dust, so non-ore items can't be multiplied). The cable network uses the same weakest-link rule as steam pipes: one copper segment in a gold run limits the whole line to copper rate. Right-click a generator, Electric Furnace or LV Macerator to open its furnace-style GUI (shift-click routes fuel/ore to the right slot); right-click a Battery Block to read its charge. Breaking a machine spills its slots.
 
 ## Requirements
 
@@ -305,7 +305,7 @@ The active development phase. All eight items must be done before Phase 1 (Bronz
 | 7 | **Radiation** | ✅ Done | Uranium/plutonium ore emits radiation within 5 blocks; radiation accumulates (decays over 10 min); damage starts at 60 % exposure; hazmat suit (rubber + steel, 4 pieces = full block); yellow-green → orange-red HUD bar; rubber crafted from 3 crushed sulfur |
 | 8 | **More Hostile Mobs** | ✅ Done | Zombies, skeletons (arrows), creepers (fuse + explosion, gunpowder drop, TNT), spiders (string drop), wolves, polar bears |
 
-> **Phase 0 complete! ✅** All 8 Deep Survival Foundation features are implemented. Phase 1 (Bronze Age & Steam) primitive processing is in, and Phase 2 steel production has started — coal dust, steel dust, plates/rods, the file, and steel casings.
+> **Phase 0 complete! ✅** All 8 Deep Survival Foundation features are implemented. Phase 1 (Bronze Age & Steam) primitive processing is in, and Phase 2 is under way — steel production (coal dust, steel dust, plates/rods, the file, steel casings) plus the first LV machines: coal generator, battery block, copper/gold cables, electric furnace and the LV macerator.
 
 ---
 
@@ -368,20 +368,20 @@ Introduces the EU power system and the first electric machines. Steel enables ma
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **EU System** | ❌ Todo | Energy Units (EU/t); produced, stored, transmitted, consumed by machines |
-| **Coal Generator** | ❌ Todo | Burns fuel → 32 EU/t (LV); entry-point power source |
-| **Battery Buffer** | ❌ Todo | Stores EU in inserted battery items; smooths generator output |
-| **Cables** | ❌ Todo | Copper (LV, 2EU/m loss), Tin (ULV, 1EU/m), Gold (MV); wire placed as world blocks |
+| **EU System** | 🟡 Partial | EU produced by generators, buffered in batteries, carried by cables, drawn by machines (`EuNetwork`). No voltage tiers or per-metre loss yet. |
+| **Coal Generator** | ✅ Done | Burns any furnace fuel → 200 EU/s into a 10 000 EU buffer. Furnace-style GUI (one fuel slot). |
+| **Battery Buffer** | ✅ Done | **Battery Block** (5 000 EU) charges from a generator and feeds machines. Right-click to read charge. Battery *items* still todo. |
+| **Cables** | 🟡 Partial | Copper (1×) and Gold (2×) cable blocks, weakest-link throughput. Tin tier and distance loss still todo. |
 | **LV Transformer** | ❌ Todo | Steps voltage up/down; prevents machine explosion from overvoltage |
 
 ### LV Machines
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Macerator (LV)** | ❌ Todo | Ore → 2× crushed ore + byproduct; faster than steam |
+| **Macerator (LV)** | ✅ Done | `ELECTRIC_MACERATOR`: ore / crushed / impure → 2× dust on EU, 2× furnace speed, 300 EU per item. Byproducts still todo. |
 | **Ore Washer (LV)** | ❌ Todo | Crushed → purified ore + 3 tiny dusts of secondary metals |
 | **Thermal Centrifuge (LV)** | ❌ Todo | Purified ore → dust + byproduct dust; completes the 3-step ore chain |
-| **Electric Furnace (LV)** | ❌ Todo | 4× faster than placed furnace; runs on EU |
+| **Electric Furnace (LV)** | ✅ Done | 2× a placed furnace (4× through an all-gold cable run); 400 EU per smelt |
 | **Electrolyzer (LV)** | ❌ Todo | Splits compound dusts into elements; required for chrome, aluminium, etc. |
 | **Compressor / Extractor** | ❌ Todo | Compress dusts to plates, gems to lens; extract rubber from rubber wood |
 
@@ -393,7 +393,9 @@ Introduces the EU power system and the first electric machines. Steel enables ma
 
 > **Survival interlock:** Running cables through your base creates fire hazard if insulation burns. Mining deeper to reach cobalt/nickel for the Electrolyzer means coping with cave temperature drops — torch warmth becomes a mechanic, not just lighting.
 
-**New blocks/items needed:** `COAL_GENERATOR` · `BATTERY_BUFFER` · `LV_TRANSFORMER` · `CABLE_COPPER` · `CABLE_TIN` · `CABLE_GOLD` · `MACERATOR_LV` · `ORE_WASHER_LV` · `THERMAL_CENTRIFUGE_LV` · `ELECTRIC_FURNACE_LV` · `ELECTROLYZER_LV` · `COMPRESSOR_LV` · `LV_BATTERY (tin)` · `VACUUM_TUBE`
+**Added this phase:** `COAL_GENERATOR` · `BATTERY_BLOCK` · `COPPER_CABLE` · `GOLD_CABLE` · `ELECTRIC_FURNACE` · `ELECTRIC_MACERATOR` · `STEEL_CASING`.
+
+**Still open:** `LV_TRANSFORMER` · `CABLE_TIN` · `ORE_WASHER_LV` · `THERMAL_CENTRIFUGE_LV` · `ELECTROLYZER_LV` · `COMPRESSOR_LV` · `LV_BATTERY (tin)` · `VACUUM_TUBE`
 
 ---
 

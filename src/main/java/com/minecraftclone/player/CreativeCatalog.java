@@ -30,6 +30,8 @@ public final class CreativeCatalog {
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
                     BlockType.FIRE_BRICK, BlockType.PRIMITIVE_BLAST_FURNACE, BlockType.STEEL_CASING,
                     BlockType.STEAM_BOILER, BlockType.STEAM_FURNACE, BlockType.STEAM_MACERATOR, BlockType.STEAM_ORE_WASHER,
+                    BlockType.COAL_GENERATOR, BlockType.BATTERY_BLOCK, BlockType.COPPER_CABLE, BlockType.GOLD_CABLE,
+                    BlockType.ELECTRIC_FURNACE, BlockType.ELECTRIC_MACERATOR,
                     BlockType.CRAFTING_TABLE, BlockType.CHEST, BlockType.BARREL,
                     BlockType.STONE_STAIRS, BlockType.PLANKS_STAIRS, BlockType.WOODEN_FENCE,
                     BlockType.CACTUS, BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE,

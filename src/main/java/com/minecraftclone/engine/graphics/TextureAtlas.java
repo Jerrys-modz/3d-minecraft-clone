@@ -414,6 +414,8 @@ public class TextureAtlas {
         paintSteamOreWasher(image, 292, rnd, false);              // WASHER idle
         paintSteamOreWasher(image, 293, rnd, true);               // WASHER working
         paintSteelCasing(image, 294, rnd);                        // STEEL_CASING
+        paintElectricMacerator(image, 295, rnd, false);           // ELECTRIC_MACERATOR front idle
+        paintElectricMacerator(image, 296, rnd, true);            // ELECTRIC_MACERATOR front grinding
 
         return image;
     }
@@ -2496,6 +2498,35 @@ public class TextureAtlas {
     /** STEEL_CASING (tile 294): riveted steel plates, the LV machine hull. */
     private void paintSteelCasing(BufferedImage img, int index, Random rnd) {
         paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+    }
+
+    /**
+     * ELECTRIC_MACERATOR front (tiles 295 idle / 296 grinding): a steel casing
+     * with a dark grinder throat crossed by two toothed rollers; the throat
+     * flickers with blue-white sparks while grinding.
+     */
+    private void paintElectricMacerator(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                boolean roller = (y == 6 || y == 9) && x > 3 && x < 12;
+                int color;
+                if (edge) {
+                    color = 0xFF2A2A34;
+                } else if (roller) {
+                    // Toothed rollers: alternating light/dark teeth.
+                    color = ((x + (y == 9 ? 1 : 0)) & 1) == 0 ? 0xFFB0B0BC : 0xFF5A5A66;
+                } else if (working) {
+                    int r = rnd.nextInt(6);
+                    color = r == 0 ? 0xFFE8F0FF : r == 1 ? 0xFF6A8CFF : 0xFF181C2C;
+                } else {
+                    color = 0xFF14141C;
+                }
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
     }
 
     /**
