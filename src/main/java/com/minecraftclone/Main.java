@@ -1389,6 +1389,9 @@ public class Main {
                             world.spawnItem(bx, by, bz, machine.typeOf(s), machine.countOf(s), loot);
                         }
                     }
+                    if (machine instanceof com.minecraftclone.world.ElectricMachineEntity em && em.isMvUpgraded()) {
+                        world.spawnItem(bx, by, bz, BlockType.MV_UPGRADE, 1, loot);   // the upgrade comes back out
+                    }
                     world.removeBlockEntity(bx, by, bz);
                 }
                 if (targetType == BlockType.CHEST || targetType == BlockType.BARREL) {
@@ -3791,14 +3794,35 @@ public class Main {
                             || targeted == BlockType.ELECTRIC_ORE_WASHER || targeted == BlockType.THERMAL_CENTRIFUGE
                             || targeted == BlockType.ELECTRIC_COMPRESSOR || targeted == BlockType.ELECTRIC_EXTRACTOR
                             || targeted == BlockType.ELECTROLYZER || targeted == BlockType.CHEMICAL_REACTOR)) {
-                        // LV processors: furnace-style GUI (input / byproduct / output).
+                        // LV/MV processors: furnace-style GUI (input / byproduct / output),
+                        // or install an MV upgrade if one is in hand.
                         trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.ElectricMachineEntity em = world.getOrCreateElectricMachine(
                                 hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
-                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, em);
-                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                        if (heldItem == BlockType.MV_UPGRADE) {
+                            if (em.installMvUpgrade()) {
+                                if (!mode.isCreative()) player.getInventory().remove(BlockType.MV_UPGRADE, 1);
+                                audio.play(SoundEvent.CRAFT);
+                                handRenderer.triggerSwing();
+                                pushContainerSnapshot(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                                world.markChunkModifiedByPlayer(World.worldToChunk(hit.blockPos.x),
+                                        World.worldToChunk(hit.blockPos.z));
+                                showMessage(messages, "Upgraded to MV: 2x speed, safe on gold cable.",
+                                        new Vector4f(0.6f, 0.9f, 0.6f, 1f), 2.5f);
+                            } else {
+                                showMessage(messages, "This machine already runs at MV.",
+                                        new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else {
+                            activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, em);
+                            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                            if (em.isMv()) {
+                                showMessage(messages, em.isMvUpgraded() ? "MV-upgraded: 2x speed." : "MV machine.",
+                                        new Vector4f(0.6f, 0.9f, 0.6f, 1f), 1.5f);
+                            }
+                        }
                     } else if (noMob && targeted == BlockType.BATTERY_BLOCK) {
-                        // Battery Block: one slot for LV batteries (each adds capacity);
+                        // Battery Block: one slot for LV/MV batteries (each adds capacity);
                         // the arrow shows charge, and a message reads it out.
                         trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.BatteryBlockEntity bat = world.getOrCreateBatteryBlock(
@@ -3806,7 +3830,7 @@ public class Main {
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, bat);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                         showMessage(messages, "Battery: " + Math.round(bat.euStored()) + " / "
-                                        + Math.round(bat.capacity()) + " EU (" + bat.batteryCount() + " LV batteries)",
+                                        + Math.round(bat.capacity()) + " EU (" + bat.batteryCount() + " batteries)",
                                 new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.

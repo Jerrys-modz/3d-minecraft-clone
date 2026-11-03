@@ -60,6 +60,9 @@ public final class ElectrolyzerEntity extends ElectricMachineEntity {
         split(BlockType.CRUSHED_HEMATITE, BlockType.IRON_DUST, null);
         split(BlockType.CRUSHED_BAUXITE, BlockType.ALUMINUM_DUST, BlockType.TITANIUM_DUST);      // TiO2 impurity
         split(BlockType.BAUXITE_DUST, BlockType.ALUMINUM_DUST, null);
+        split(BlockType.SAND, BlockType.SILICON_DUST, null);                                    // SiO2
+        split(BlockType.CRUSHED_LITHIUM, BlockType.LITHIUM_DUST, null);
+        split(BlockType.CRUSHED_LEPIDOLITE, BlockType.LITHIUM_DUST, BlockType.ALUMINUM_DUST);   // Li-Al mica
     }
 
     private static void split(BlockType input, BlockType primary, BlockType secondary) {

@@ -429,20 +429,20 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 | **Invar** | ✅ Done | 2 iron dust + 1 nickel dust → 3 invar dust (crafting grid); smelts in any furnace. Plates/rods via hammer, file or LV Compressor. |
 | **Electrum** | ✅ Done | Gold dust + silver dust → 2 electrum dust; smelts in any furnace. Plates/rods as above. |
 | **Stainless Steel** | ✅ Done | 6 iron + nickel + manganese + chromium dust → 9 stainless dust. **Primitive Blast Furnace only** (like steel). Eight stainless plates ring into an **MV Casing** (`999/9.9/999`), the future MV machine hull. Chromium and manganese come from the electrolyzer (chromite, wolframite) or their own ores. |
-| **MV Machines** | ❌ Todo | All LV machines upgraded to MV tier; 4× speed, 4× EU cost; stainless casing |
+| **MV Machines** | ✅ Done | **MV Upgrade** (`9i9/i0i/9i9`: stainless plates, integrated circuits, MV casing): right-click any LV processor (macerator, ore washer, centrifuge, compressor, extractor, electrolyzer) to make it MV — **2× speed** at the same EU per item, and safe on gold cable without a transformer. The upgrade is saved and drops back out when the machine is broken. The Chemical Reactor is built MV. |
 
 ### Circuits
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Integrated Logic Circuit** | ❌ Todo | Silicon wafer + electrum + copper; used in all MV recipes |
-| **Silicon Chain** | ❌ Todo | Quartz → silicon dust → wafer (CVD chamber) → chip |
+| **Integrated Logic Circuit** | ✅ Done | `INTEGRATED_CIRCUIT` (`5e5/ewe/5e5`: copper cables, electrum plates, a silicon wafer). Used by the MV Upgrade. |
+| **Silicon Chain** | ✅ Done | Sand → (Electrolyzer) 2 silicon dust → (Primitive Blast Furnace) silicon boule → (LV Compressor) 4 wafers → circuit. Lithium dust also comes from the Electrolyzer (crushed lithium, or lepidolite with an aluminium byproduct) for **MV Batteries** (`.g./ele/ele`, +40 000 EU each in a Battery Block). |
 
 > **Survival interlock:** Chemical spills (acid tank damage) if pipes burst from overpressure. Oil extraction near lava creates fire spread danger. Working in chemical areas requires rubber hazmat suit.
 
-**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL` · `SULFURIC_ACID_CELL` · `CHEMICAL_REACTOR`.
+**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL` · `SULFURIC_ACID_CELL` · `CHEMICAL_REACTOR` · `SILICON_DUST` · `SILICON_BOULE` · `SILICON_WAFER` · `INTEGRATED_CIRCUIT` · `LITHIUM_DUST` · `MV_BATTERY` · `MV_UPGRADE`.
 
-**Still open:** `FLUID_PIPE (steel/stainless tiers)` · `STEEL_DRUM` · `DISTILLATION_TOWER (multi-block)` · `OIL_PUMP` · `SILICON_WAFER` · `MV_BATTERY (lithium)` · `MV_TRANSFORMER` · MV machines
+**Still open:** `FLUID_PIPE (steel/stainless tiers)` · `STEEL_DRUM` · `DISTILLATION_TOWER (multi-block)` · `OIL_PUMP` · `MV_TRANSFORMER`
 
 ---
 

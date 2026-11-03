@@ -390,6 +390,13 @@ public class ItemTextures {
             case GUNPOWDER -> paintGunpowder();
             case VACUUM_TUBE -> paintVacuumTube();
             case LV_BATTERY -> paintLvBattery();
+            case MV_BATTERY -> paintBatteryCell(0xFFD8D070, 0xFFE8E8F0, 0xFFFFD850);
+            case SILICON_DUST -> paintDustOre(0x9AA2B8);
+            case SILICON_BOULE -> paintIngot(0x4A5262);
+            case SILICON_WAFER -> paintPlate(0x7A8AB0);
+            case LITHIUM_DUST -> paintDustOre(0xEADCE8);
+            case INTEGRATED_CIRCUIT -> paintCircuit();
+            case MV_UPGRADE -> paintMvUpgrade();
             case TIN_CELL -> paintCell(0);
             case WATER_CELL -> paintCell(0xFF3A70C0);
             case LAVA_CELL -> paintCell(0xFFE86A10);
@@ -1684,6 +1691,56 @@ public class ItemTextures {
             }
         }
         if (fluid != 0) img.setRGB(7, 6, 0xFFFFFFFF);   // glint on the fluid
+        return img;
+    }
+
+    /** A battery cell in the given casing colour, charge-band colour and terminal colour. */
+    private static BufferedImage paintBatteryCell(int casing, int band, int terminal) {
+        BufferedImage img = blank();
+        for (int y = 4; y <= 13; y++) {
+            for (int x = 5; x <= 10; x++) {
+                boolean rim = x == 5 || x == 10 || y == 4 || y == 13;
+                int c = rim ? 0xFF6A6258 : (y == 8 || y == 9) ? band : casing;
+                img.setRGB(x, y, c);
+            }
+        }
+        for (int x = 7; x <= 8; x++) {
+            img.setRGB(x, 3, terminal);
+            img.setRGB(x, 2, terminal);
+        }
+        img.setRGB(6, 5, 0xFFFFFFFF);
+        return img;
+    }
+
+    /** Integrated circuit: a dark green board with a black chip and gold pins. */
+    private static BufferedImage paintCircuit() {
+        BufferedImage img = blank();
+        for (int y = 3; y <= 12; y++) {
+            for (int x = 2; x <= 13; x++) {
+                int c = ((x + y) % 5 == 0) ? 0xFF2E7A3A : 0xFF1E5A2A;            // board + traces
+                if (x >= 5 && x <= 10 && y >= 5 && y <= 10) c = 0xFF1A1A22;       // chip
+                if ((x == 4 || x == 11) && y >= 5 && y <= 10 && (y & 1) == 1) c = 0xFFE8C040; // pins
+                img.setRGB(x, y, c);
+            }
+        }
+        img.setRGB(6, 6, 0xFF6A8AB0);                                             // wafer glint
+        return img;
+    }
+
+    /** MV upgrade: a stainless plate with a circuit inlay and an "MV" chevron. */
+    private static BufferedImage paintMvUpgrade() {
+        BufferedImage img = blank();
+        for (int y = 2; y <= 13; y++) {
+            for (int x = 2; x <= 13; x++) {
+                boolean rim = x == 2 || x == 13 || y == 2 || y == 13;
+                img.setRGB(x, y, rim ? 0xFF5A6470 : 0xFFD4DCE6);
+            }
+        }
+        for (int i = 0; i < 4; i++) {                                             // chevron
+            img.setRGB(4 + i, 5 + i, 0xFFE8C040);
+            img.setRGB(11 - i, 5 + i, 0xFFE8C040);
+        }
+        for (int x = 5; x <= 10; x++) img.setRGB(x, 11, 0xFF1E5A2A);              // circuit strip
         return img;
     }
 

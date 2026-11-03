@@ -55,6 +55,9 @@ public final class PrimitiveBlastFurnaceEntity implements BlockEntity, StorageCo
         if (input == BlockType.STAINLESS_STEEL_DUST) {
             return BlockType.STAINLESS_STEEL_INGOT;
         }
+        if (input == BlockType.SILICON_DUST) {
+            return BlockType.SILICON_BOULE;
+        }
         if (input == BlockType.IRON_ORE
                 || input == BlockType.IRON_INGOT
                 || input == BlockType.IRON_DUST

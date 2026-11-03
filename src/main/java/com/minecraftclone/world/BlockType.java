@@ -1192,7 +1192,23 @@ public enum BlockType {
      * without a transformer). Dust + fluid from tanks → fluid or item.
      * MV casing sides (tile 310); front 314 idle / 315 reacting.
      */
-    CHEMICAL_REACTOR(627, true, false, 310, 310, 310, 314, 315, 0, 0);
+    CHEMICAL_REACTOR(627, true, false, 310, 310, 310, 314, 315, 0, 0),
+
+    // ---- Phase 3: silicon chain, circuits and the MV tier -------------
+    /** Silicon dust — electrolysed from sand. */
+    SILICON_DUST(628, 0),
+    /** Silicon boule — silicon dust melted and pulled in the Primitive Blast Furnace. */
+    SILICON_BOULE(629, 0),
+    /** Silicon wafer — four sliced from a boule by the LV Compressor. */
+    SILICON_WAFER(630, 0),
+    /** Integrated Logic Circuit — the MV-tier circuit (wafer + electrum + copper wiring). */
+    INTEGRATED_CIRCUIT(631, 0),
+    /** Lithium dust — electrolysed from crushed lithium or lepidolite. */
+    LITHIUM_DUST(632, 0),
+    /** MV Battery — lithium cell; each one in a Battery Block adds 40 000 EU capacity. */
+    MV_BATTERY(633, 0),
+    /** MV Upgrade — right-click an LV processor to make it MV: 2× speed, safe on gold cable. */
+    MV_UPGRADE(634, 0);
 
     public final short id;
     public final boolean solid;

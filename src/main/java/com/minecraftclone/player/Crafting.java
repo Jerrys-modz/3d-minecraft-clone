@@ -107,6 +107,12 @@ public final class Crafting {
         CHARS.put('8', BlockType.TIN_PLATE);          // 8 = tin plate (battery casing)
         CHARS.put('9', BlockType.STAINLESS_STEEL_PLATE); // 9 = stainless plate (MV hull)
         CHARS.put('0', BlockType.MV_CASING);          // 0 = MV casing
+        // Digits and capitals are all taken from here on; lowercase codes.
+        CHARS.put('e', BlockType.ELECTRUM_PLATE);     // e = electrum plate
+        CHARS.put('w', BlockType.SILICON_WAFER);      // w = silicon wafer
+        CHARS.put('i', BlockType.INTEGRATED_CIRCUIT); // i = integrated logic circuit
+        CHARS.put('g', BlockType.GOLD_CABLE);         // g = gold (MV) cable
+        CHARS.put('l', BlockType.LITHIUM_DUST);       // l = lithium dust
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -405,6 +411,12 @@ public final class Crafting {
         shaped3x3(".8.", "8G8", ".8.", BlockType.TIN_CELL, 2);
         // Chemical Reactor: glass vessel on an MV casing, vacuum-tube control, stainless shell.
         shaped3x3("9G9", "606", "999", BlockType.CHEMICAL_REACTOR, 1);
+        // Integrated Logic Circuit: a wafer framed by electrum plates, copper wiring at the corners.
+        shaped3x3("5e5", "ewe", "5e5", BlockType.INTEGRATED_CIRCUIT, 1);
+        // MV Battery: gold-cable terminal over an electrum cell packed with lithium.
+        shaped3x3(".g.", "ele", "ele", BlockType.MV_BATTERY, 1);
+        // MV Upgrade: an MV casing wrapped in circuits and stainless plate.
+        shaped3x3("9i9", "i0i", "9i9", BlockType.MV_UPGRADE, 1);
         // LV Battery: copper-cable terminal over a tin-plate cell filled with sulfur electrolyte.
         shaped3x3(".5.", "878", "878", BlockType.LV_BATTERY, 1);
 

@@ -21,9 +21,10 @@ import java.io.IOException;
  *   <li>Capacity: {@value #MAX_EU} EU (about 25 coal burned in a generator).</li>
  * </ul>
  *
- * <p>It has one slot for {@link BlockType#LV_BATTERY} items (the GTNH
- * "battery buffer"): each inserted battery adds {@value #EU_PER_BATTERY} EU
- * of capacity, up to {@value #MAX_BATTERIES} batteries. Charge lives in the
+ * <p>It has one slot for battery items (the GTNH "battery buffer"): each
+ * {@link BlockType#LV_BATTERY} adds {@value #EU_PER_BATTERY} EU of capacity
+ * and each {@link BlockType#MV_BATTERY} {@value #EU_PER_MV_BATTERY} EU, up to
+ * {@value #MAX_BATTERIES} batteries of one kind. Charge lives in the
  * block, so pulling batteries out clamps the stored EU to the new capacity —
  * that energy is lost.
  */
@@ -37,6 +38,21 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
     /** Extra capacity per inserted LV battery. */
     public static final float EU_PER_BATTERY = 10_000f;
 
+    /** Extra capacity per inserted MV (lithium) battery. */
+    public static final float EU_PER_MV_BATTERY = 40_000f;
+
+    /** EU capacity one battery item adds, or 0 if {@code item} isn't a battery. */
+    public static float capacityOf(BlockType item) {
+        if (item == BlockType.LV_BATTERY) return EU_PER_BATTERY;
+        if (item == BlockType.MV_BATTERY) return EU_PER_MV_BATTERY;
+        return 0f;
+    }
+
+    /** True for battery items the slot accepts. */
+    public static boolean isBattery(BlockType item) {
+        return capacityOf(item) > 0f;
+    }
+
     /** Battery items beyond this count add no capacity. */
     public static final int MAX_BATTERIES = 16;
 
@@ -49,13 +65,12 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
 
     /** Current capacity: base plus inserted batteries. */
     public float capacity() {
-        int batteries = slotType == BlockType.LV_BATTERY ? Math.min(slotCount, MAX_BATTERIES) : 0;
-        return MAX_EU + batteries * EU_PER_BATTERY;
+        return MAX_EU + batteryCount() * capacityOf(slotType);
     }
 
-    /** Number of LV batteries currently adding capacity. */
+    /** Number of battery items (LV or MV) currently adding capacity. */
     public int batteryCount() {
-        return slotType == BlockType.LV_BATTERY ? Math.min(slotCount, MAX_BATTERIES) : 0;
+        return isBattery(slotType) ? Math.min(slotCount, MAX_BATTERIES) : 0;
     }
 
     // ------------------------------------------------------------------
@@ -165,7 +180,7 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
 
     @Override
     public int add(BlockType type, int amount) {
-        if (type != BlockType.LV_BATTERY || amount <= 0) return amount;
+        if (!isBattery(type) || amount <= 0) return amount;
         if (slotType != null && slotType != type) return amount;
         int space = Math.min(MAX_BATTERIES, Inventory.maxStack(type)) - slotCount;
         int take = Math.min(space, amount);

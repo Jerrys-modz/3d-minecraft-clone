@@ -97,10 +97,38 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
     }
 
     /**
-     * True for MV-rated machines, which run safely on MV (gold) power without
-     * a transformer. LV machines return false and are overvolted there.
+     * True for machines built MV-rated (the Chemical Reactor), which run
+     * safely on MV (gold) power without a transformer.
      */
     protected boolean mvRated() { return false; }
+
+    /** Set once an {@link BlockType#MV_UPGRADE} has been installed. */
+    private boolean mvUpgraded;
+
+    /** Speed multiplier an installed MV upgrade gives. */
+    public static final float MV_SPEED = 2f;
+
+    /** True when this machine runs at MV: built that way or upgraded. */
+    public boolean isMv() { return mvRated() || mvUpgraded; }
+
+    /** True when an MV upgrade item is installed (it drops when the machine is broken). */
+    public boolean isMvUpgraded() { return mvUpgraded; }
+
+    /**
+     * Installs an MV upgrade: {@value #MV_SPEED}× speed (drawing EU
+     * proportionally faster, same EU per item) and safe on gold cable.
+     * Returns false if the machine is already MV.
+     */
+    public boolean installMvUpgrade() {
+        if (isMv()) return false;
+        mvUpgraded = true;
+        return true;
+    }
+
+    /** Seconds per operation after any MV upgrade. */
+    private float effectiveSeconds() {
+        return mvUpgraded ? operationSeconds() / MV_SPEED : operationSeconds();
+    }
 
     /** True if {@code item} belongs in this machine's input slot. */
     public boolean acceptsInput(BlockType item) {
@@ -115,7 +143,7 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
     @Override public boolean isActive()       { return lastEuFraction > 0f; }
     @Override public float burnFraction()     { return lastEuFraction; }
     @Override public float progressFraction() {
-        return Math.min(1f, Math.max(0f, progress / operationSeconds()));
+        return Math.min(1f, Math.max(0f, progress / effectiveSeconds()));
     }
 
     // ------------------------------------------------------------------
@@ -153,14 +181,14 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
             lastEuFraction = 0f;
             return;
         }
-        if (overvoltage && !mvRated()) {
+        if (overvoltage && !isMv()) {
             // MV straight into an LV machine: it blows (or, where explosions are off, refuses to run).
             lastEuFraction = 0f;
             if (world != null) world.reportOverload(posX, posY, posZ);
             return;
         }
 
-        float seconds = operationSeconds();
+        float seconds = effectiveSeconds();
         float euPerSecond = euPerOperation() / seconds;
         float drawn = euSource.drainEU(Math.min(euPerSecond * dt * drawRate, euSource.euStored()));
         if (drawn <= 0f) {
@@ -277,8 +305,8 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
     // Persistence
     // ------------------------------------------------------------------
 
-    /** v1: slots + progress. v2: adds the byproduct credit. */
-    private static final byte PAYLOAD_VERSION = 2;
+    /** v1: slots + progress. v2: adds the byproduct credit. v3: adds the MV-upgrade flag. */
+    private static final byte PAYLOAD_VERSION = 3;
 
     @Override
     public void writeTo(DataOutput out) throws IOException {
@@ -289,6 +317,7 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
         }
         out.writeFloat(progress);
         out.writeFloat(byproductCredit);
+        out.writeBoolean(mvUpgraded);
     }
 
     @Override
@@ -300,7 +329,8 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
         }
         progress = 0f;
         byproductCredit = 0f;
-        if (version != 1 && version != 2) return;
+        mvUpgraded = false;
+        if (version < 1 || version > 3) return;
         for (int i = 0; i < SLOT_COUNT; i++) {
             int id = in.readUnsignedShort();
             int count = in.readInt();
@@ -309,5 +339,6 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
         }
         progress = Math.max(0f, in.readFloat());
         if (version >= 2) byproductCredit = Math.max(0f, Math.min(1f, in.readFloat()));
+        if (version >= 3) mvUpgraded = in.readBoolean();
     }
 }
