@@ -1132,7 +1132,13 @@ public enum BlockType {
     VACUUM_TUBE(601, 0),
 
     /** LV Compressor — presses ingots into plates on EU. Front 302 idle / 303 pressing. */
-    ELECTRIC_COMPRESSOR(602, true, false, 294, 294, 294, 302, 303, 0, 0);
+    ELECTRIC_COMPRESSOR(602, true, false, 294, 294, 294, 302, 303, 0, 0),
+
+    /** LV Battery — tin-cased cell; each one in a Battery Block adds 10 000 EU capacity. */
+    LV_BATTERY(603, 0),
+
+    /** LV Extractor — jungle wood → rubber on EU. Front 304 idle / 305 extracting. */
+    ELECTRIC_EXTRACTOR(604, true, false, 294, 294, 294, 304, 305, 0, 0);
 
     public final short id;
     public final boolean solid;

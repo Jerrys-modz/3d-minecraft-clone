@@ -674,6 +674,9 @@ public class InventoryController {
             return com.minecraftclone.world.Furnace.isFuel(t)
                     ? start + com.minecraftclone.world.CoalGeneratorEntity.SLOT_FUEL : -1;
         }
+        if (machine instanceof com.minecraftclone.world.BatteryBlockEntity) {
+            return t == BlockType.LV_BATTERY ? start + com.minecraftclone.world.BatteryBlockEntity.SLOT_BATTERIES : -1;
+        }
         if (machine instanceof com.minecraftclone.world.ElectricMachineEntity em) {
             return em.acceptsInput(t) ? start + com.minecraftclone.world.ElectricMachineEntity.SLOT_INPUT : -1;
         }

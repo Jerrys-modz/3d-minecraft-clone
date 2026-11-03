@@ -103,6 +103,8 @@ public final class Crafting {
         CHARS.put('4', BlockType.TIN_INGOT);          // 4 = tin ingot
         CHARS.put('5', BlockType.COPPER_CABLE);       // 5 = copper cable (circuit wiring)
         CHARS.put('6', BlockType.VACUUM_TUBE);        // 6 = vacuum tube (LV circuit)
+        CHARS.put('7', BlockType.CRUSHED_SULFUR);     // 7 = sulfur (battery electrolyte)
+        CHARS.put('8', BlockType.TIN_PLATE);          // 8 = tin plate (battery casing)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -371,6 +373,10 @@ public final class Crafting {
         shaped3x3("XFX", "X3X", "X6X", BlockType.THERMAL_CENTRIFUGE, 1);
         // LV Compressor: a steel-plate press over the casing.
         shaped3x3("X2X", "X3X", "X6X", BlockType.ELECTRIC_COMPRESSOR, 1);
+        // LV Extractor: a wooden tree-tap (planks) over the casing.
+        shaped3x3("XPX", "X3X", "X6X", BlockType.ELECTRIC_EXTRACTOR, 1);
+        // LV Battery: copper-cable terminal over a tin-plate cell filled with sulfur electrolyte.
+        shaped3x3(".5.", "878", "878", BlockType.LV_BATTERY, 1);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.

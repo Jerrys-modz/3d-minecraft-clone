@@ -1,7 +1,11 @@
 package com.minecraftclone.world;
 
+import com.minecraftclone.player.Inventory;
+import com.minecraftclone.player.StorageContainer;
+
 import java.io.DataInput;
 import java.io.DataOutput;
+import java.io.EOFException;
 import java.io.IOException;
 
 /**
@@ -17,17 +21,42 @@ import java.io.IOException;
  *   <li>Capacity: {@value #MAX_EU} EU (about 25 coal burned in a generator).</li>
  * </ul>
  *
- * <p>The Battery Block does NOT have a player-accessible inventory — it is
- * wired up purely through block adjacency and the cable network.
+ * <p>It has one slot for {@link BlockType#LV_BATTERY} items (the GTNH
+ * "battery buffer"): each inserted battery adds {@value #EU_PER_BATTERY} EU
+ * of capacity, up to {@value #MAX_BATTERIES} batteries. Charge lives in the
+ * block, so pulling batteries out clamps the stored EU to the new capacity —
+ * that energy is lost.
  */
-public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, EuSource {
+public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, EuSource, StorageContainer {
 
     public static final String TYPE = "battery_block";
 
-    /** Maximum EU stored (≈ 25 coal × EU_PER_BURN_SECOND × COAL_BURN_TIME). */
+    /** Base EU capacity with no battery items inserted. */
     public static final float MAX_EU = 5_000f;
 
+    /** Extra capacity per inserted LV battery. */
+    public static final float EU_PER_BATTERY = 10_000f;
+
+    /** Battery items beyond this count add no capacity. */
+    public static final int MAX_BATTERIES = 16;
+
+    public static final int SLOT_BATTERIES = 0;
+    public static final int SLOT_COUNT = 1;
+
     private float eu;
+    private BlockType slotType;
+    private int slotCount;
+
+    /** Current capacity: base plus inserted batteries. */
+    public float capacity() {
+        int batteries = slotType == BlockType.LV_BATTERY ? Math.min(slotCount, MAX_BATTERIES) : 0;
+        return MAX_EU + batteries * EU_PER_BATTERY;
+    }
+
+    /** Number of LV batteries currently adding capacity. */
+    public int batteryCount() {
+        return slotType == BlockType.LV_BATTERY ? Math.min(slotCount, MAX_BATTERIES) : 0;
+    }
 
     // ------------------------------------------------------------------
     // BlockEntity
@@ -59,14 +88,14 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
      * Returns how much was actually absorbed (may be less when nearly full).
      */
     public float chargeEU(float amount) {
-        float space = MAX_EU - eu;
+        float space = capacity() - eu;
         float taken = Math.min(amount, space);
         eu += taken;
         return taken;
     }
 
     /** 0..1 fill fraction (drives the GUI arrow). */
-    @Override public float progressFraction() { return Math.min(1f, eu / MAX_EU); }
+    @Override public float progressFraction() { return Math.min(1f, eu / capacity()); }
 
     /** The flame is not meaningful for a battery; always returns 0. */
     @Override public float burnFraction() { return 0f; }
@@ -93,7 +122,7 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
 
     @Override
     public void tick(float dt) {
-        if (dt <= 0 || eu >= MAX_EU) return;
+        if (dt <= 0 || eu >= capacity()) return;
 
         // Re-scan for a generator a couple of times per second.
         scanTimer -= dt;
@@ -103,7 +132,7 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
         }
 
         if (chargeSource == null || chargeSource.euStored() <= 0f) return;
-        float want   = Math.min(dt * CoalGeneratorEntity.EU_PER_BURN_SECOND, MAX_EU - eu);
+        float want   = Math.min(dt * CoalGeneratorEntity.EU_PER_BURN_SECOND, capacity() - eu);
         float drawn  = chargeSource.drainEU(want);
         eu += drawn;
     }
@@ -142,13 +171,65 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
     // Persistence
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // StorageContainer — the battery slot
+    // ------------------------------------------------------------------
+
+    @Override public int size() { return SLOT_COUNT; }
+
+    @Override
+    public BlockType typeOf(int slot) { return slot == SLOT_BATTERIES ? slotType : null; }
+
+    @Override
+    public int countOf(int slot) { return slot == SLOT_BATTERIES ? slotCount : 0; }
+
+    @Override
+    public void setSlot(int slot, BlockType type, int count) {
+        if (slot != SLOT_BATTERIES) return;
+        slotType = (type == null || count <= 0) ? null : type;
+        slotCount = slotType == null ? 0 : count;
+        eu = Math.min(eu, capacity());   // pulled batteries take their share of charge with them
+    }
+
+    @Override
+    public int add(BlockType type, int amount) {
+        if (type != BlockType.LV_BATTERY || amount <= 0) return amount;
+        if (slotType != null && slotType != type) return amount;
+        int space = Math.min(MAX_BATTERIES, Inventory.maxStack(type)) - slotCount;
+        int take = Math.min(space, amount);
+        if (take <= 0) return amount;
+        slotType = type;
+        slotCount += take;
+        return amount - take;
+    }
+
+    @Override
+    public int getCount(BlockType type) { return type != null && type == slotType ? slotCount : 0; }
+
+    // ------------------------------------------------------------------
+    // Persistence — v0 was just the EU float; the slot was appended later.
+    // ------------------------------------------------------------------
+
     @Override
     public void writeTo(DataOutput out) throws IOException {
         out.writeFloat(eu);
+        out.writeShort(slotType == null ? 0 : slotType.id);
+        out.writeInt(slotCount);
     }
 
     @Override
     public void readFrom(DataInput in) throws IOException {
         eu = in.readFloat();
+        slotType = null;
+        slotCount = 0;
+        try {
+            int id = in.readUnsignedShort();
+            int count = in.readInt();
+            slotType = id == 0 || count <= 0 ? null : BlockType.byId(id);
+            slotCount = slotType == null ? 0 : count;
+        } catch (EOFException oldSave) {
+            // Pre-battery-slot payload: just the charge.
+        }
+        eu = Math.max(0f, Math.min(eu, capacity()));
     }
 }

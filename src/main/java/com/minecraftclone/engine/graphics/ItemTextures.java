@@ -388,6 +388,7 @@ public class ItemTextures {
             // ----------------------------------------------------------------
             case GUNPOWDER -> paintGunpowder();
             case VACUUM_TUBE -> paintVacuumTube();
+            case LV_BATTERY -> paintLvBattery();
 
             default -> {
                 // Purified ores reuse their crushed-ore icon with a washed sheen.
@@ -1650,6 +1651,24 @@ public class ItemTextures {
     /**
      * Gunpowder: a small heap of dark grey-black powder granules.
      */
+    /** LV battery: a tin-grey cell with a copper terminal and a blue charge band. */
+    private static BufferedImage paintLvBattery() {
+        BufferedImage img = blank();
+        for (int y = 4; y <= 13; y++) {
+            for (int x = 5; x <= 10; x++) {
+                boolean rim = x == 5 || x == 10 || y == 4 || y == 13;
+                int c = rim ? 0xFF6A7278 : (y == 8 || y == 9) ? 0xFF3A6AD0 : 0xFFAEB8BE;
+                img.setRGB(x, y, c);
+            }
+        }
+        img.setRGB(7, 3, 0xFFB87333);
+        img.setRGB(8, 3, 0xFFB87333);
+        img.setRGB(7, 2, 0xFFDCA05A);
+        img.setRGB(8, 2, 0xFFDCA05A);
+        img.setRGB(6, 5, 0xFFFFFFFF);
+        return img;
+    }
+
     /** Vacuum tube: a glass bulb with a glowing filament on a dark base with two copper pins. */
     private static BufferedImage paintVacuumTube() {
         BufferedImage img = blank();

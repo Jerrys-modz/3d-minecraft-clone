@@ -64,7 +64,7 @@ public final class EuNetwork {
     /** Buffer capacity of a source, used to normalise the GUI charge gauge. */
     public static float capacityOf(EuSource source) {
         if (source instanceof CoalGeneratorEntity) return CoalGeneratorEntity.MAX_EU;
-        if (source instanceof BatteryBlockEntity) return BatteryBlockEntity.MAX_EU;
+        if (source instanceof BatteryBlockEntity b) return b.capacity();
         return 1f;
     }
 

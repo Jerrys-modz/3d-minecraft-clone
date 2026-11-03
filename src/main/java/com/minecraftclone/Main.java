@@ -823,7 +823,8 @@ public class Main {
                 || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE
                 || block == BlockType.COAL_GENERATOR || block == BlockType.ELECTRIC_FURNACE
                 || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
-                || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR;
+                || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR
+                || block == BlockType.ELECTRIC_EXTRACTOR || block == BlockType.BATTERY_BLOCK;
     }
 
     /** True if the block-entity type name matches the block at the cell. */
@@ -843,6 +844,8 @@ public class Main {
             case com.minecraftclone.world.ElectricOreWasherEntity.TYPE -> block == BlockType.ELECTRIC_ORE_WASHER;
             case com.minecraftclone.world.ThermalCentrifugeEntity.TYPE -> block == BlockType.THERMAL_CENTRIFUGE;
             case com.minecraftclone.world.ElectricCompressorEntity.TYPE -> block == BlockType.ELECTRIC_COMPRESSOR;
+            case com.minecraftclone.world.ElectricExtractorEntity.TYPE -> block == BlockType.ELECTRIC_EXTRACTOR;
+            case com.minecraftclone.world.BatteryBlockEntity.TYPE -> block == BlockType.BATTERY_BLOCK;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
@@ -3769,7 +3772,7 @@ public class Main {
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && (targeted == BlockType.ELECTRIC_MACERATOR
                             || targeted == BlockType.ELECTRIC_ORE_WASHER || targeted == BlockType.THERMAL_CENTRIFUGE
-                            || targeted == BlockType.ELECTRIC_COMPRESSOR)) {
+                            || targeted == BlockType.ELECTRIC_COMPRESSOR || targeted == BlockType.ELECTRIC_EXTRACTOR)) {
                         // LV processors: furnace-style GUI (input / byproduct / output).
                         trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.ElectricMachineEntity em = world.getOrCreateElectricMachine(
@@ -3777,11 +3780,15 @@ public class Main {
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, em);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                     } else if (noMob && targeted == BlockType.BATTERY_BLOCK) {
-                        // Battery Block has no inventory: right-click reads out its charge.
+                        // Battery Block: one slot for LV batteries (each adds capacity);
+                        // the arrow shows charge, and a message reads it out.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.BatteryBlockEntity bat = world.getOrCreateBatteryBlock(
                                 hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, bat);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
                         showMessage(messages, "Battery: " + Math.round(bat.euStored()) + " / "
-                                        + Math.round(com.minecraftclone.world.BatteryBlockEntity.MAX_EU) + " EU",
+                                        + Math.round(bat.capacity()) + " EU (" + bat.batteryCount() + " LV batteries)",
                                 new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.

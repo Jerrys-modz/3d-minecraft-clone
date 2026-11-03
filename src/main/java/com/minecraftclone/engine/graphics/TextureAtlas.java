@@ -423,6 +423,8 @@ public class TextureAtlas {
         paintTinCable(image, 301, rnd);                           // TIN_CABLE
         paintElectricCompressor(image, 302, rnd, false);          // ELECTRIC_COMPRESSOR front idle
         paintElectricCompressor(image, 303, rnd, true);           // ELECTRIC_COMPRESSOR front pressing
+        paintElectricExtractor(image, 304, rnd, false);           // ELECTRIC_EXTRACTOR front idle
+        paintElectricExtractor(image, 305, rnd, true);            // ELECTRIC_EXTRACTOR front extracting
 
         return image;
     }
@@ -2569,6 +2571,28 @@ public class TextureAtlas {
                 else if (y == 9 && x >= 5 && x <= 10) {
                     color = working ? (rnd.nextInt(3) == 0 ? 0xFFFFE080 : 0xFFE07020) : 0xFFC8C8D0;     // plate
                 } else color = 0xFF14141C;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * ELECTRIC_EXTRACTOR front (tiles 304 idle / 305 extracting): steel casing
+     * with a wooden tap feeding a collection tank; latex drips and the tank
+     * fills pale cream while extracting.
+     */
+    private void paintElectricExtractor(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                int color;
+                if (edge) color = 0xFF2A2A34;
+                else if (y == 5 && x >= 4 && x <= 8) color = 0xFF8A5A2A;          // wooden tap
+                else if (x == 8 && y > 5 && y < 9) color = working ? 0xFFF0E8C8 : 0xFF14141C;  // drip
+                else if (y >= 9) color = working ? (rnd.nextInt(5) == 0 ? 0xFFFFFFF0 : 0xFFE0D6A8) : 0xFF3A3630; // tank
+                else color = 0xFF14141C;
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }
