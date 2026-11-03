@@ -356,6 +356,10 @@ public final class Crafting {
         shaped3x3("XIX", "IXI", "XIX", BlockType.BATTERY_BLOCK, 1);
         // LV Macerator: copper windings around a steel casing, diamond grinder on top.
         shaped3x3("XDX", "X3X", "XXX", BlockType.ELECTRIC_MACERATOR, 1);
+        // LV Ore Washer: copper windings around a steel casing, glass wash tank on top.
+        shaped3x3("XGX", "X3X", "XXX", BlockType.ELECTRIC_ORE_WASHER, 1);
+        // LV Thermal Centrifuge: copper windings around a steel casing, furnace heater on top.
+        shaped3x3("XFX", "X3X", "XXX", BlockType.THERMAL_CENTRIFUGE, 1);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.

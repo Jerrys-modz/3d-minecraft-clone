@@ -1010,7 +1010,8 @@ public class GameServer implements AutoCloseable {
                 || block == BlockType.STEAM_BOILER || block == BlockType.STEAM_FURNACE || block == BlockType.STEAM_MACERATOR
                 || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE
                 || block == BlockType.COAL_GENERATOR || block == BlockType.ELECTRIC_FURNACE
-                || block == BlockType.ELECTRIC_MACERATOR;
+                || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
+                || block == BlockType.THERMAL_CENTRIFUGE;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -1032,6 +1033,8 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.CoalGeneratorEntity.TYPE -> block == BlockType.COAL_GENERATOR;
             case com.minecraftclone.world.ElectricFurnaceEntity.TYPE -> block == BlockType.ELECTRIC_FURNACE;
             case com.minecraftclone.world.ElectricMaceratorEntity.TYPE -> block == BlockType.ELECTRIC_MACERATOR;
+            case com.minecraftclone.world.ElectricOreWasherEntity.TYPE -> block == BlockType.ELECTRIC_ORE_WASHER;
+            case com.minecraftclone.world.ThermalCentrifugeEntity.TYPE -> block == BlockType.THERMAL_CENTRIFUGE;
             default -> false;
         };
     }
@@ -1099,7 +1102,8 @@ public class GameServer implements AutoCloseable {
             case PRIMITIVE_BLAST_FURNACE -> world.getOrCreatePrimitiveBlastFurnace(open.x(), open.y(), open.z());
             case COAL_GENERATOR -> world.getOrCreateCoalGenerator(open.x(), open.y(), open.z());
             case ELECTRIC_FURNACE -> world.getOrCreateElectricFurnace(open.x(), open.y(), open.z());
-            case ELECTRIC_MACERATOR -> world.getOrCreateElectricMacerator(open.x(), open.y(), open.z());
+            case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE ->
+                    world.getOrCreateElectricMachine(open.x(), open.y(), open.z());
             default -> null;
         };
         if (entity == null) return;

@@ -1091,7 +1091,36 @@ public enum BlockType {
      * ore / crushed ore / impure piles into 2× dust on EU. Steel-casing sides
      * (tile 294); directional front tile 295 idle / 296 grinding.
      */
-    ELECTRIC_MACERATOR(577, true, false, 294, 294, 294, 295, 296, 0, 0);
+    ELECTRIC_MACERATOR(577, true, false, 294, 294, 294, 295, 296, 0, 0),
+
+    // Purified ores: LV Ore Washer output (crushed → purified). Each smelts
+    // like its crushed form and spins into 3× dust in the Thermal Centrifuge.
+    PURIFIED_COPPER(578, 0),
+    PURIFIED_TIN(579, 0),
+    PURIFIED_BAUXITE(580, 0),
+    PURIFIED_ZINC(581, 0),
+    PURIFIED_LEAD(582, 0),
+    PURIFIED_SILVER(583, 0),
+    PURIFIED_NICKEL(584, 0),
+    PURIFIED_COBALT(585, 0),
+    PURIFIED_TUNGSTEN(586, 0),
+    PURIFIED_MOLYBDENUM(587, 0),
+    PURIFIED_PLATINUM(588, 0),
+    PURIFIED_CHROMIUM(589, 0),
+    PURIFIED_MANGANESE(590, 0),
+    PURIFIED_VANADIUM(591, 0),
+    PURIFIED_BERYLLIUM(592, 0),
+    PURIFIED_TITANIUM(593, 0),
+    PURIFIED_URANIUM(594, 0),
+    PURIFIED_THORIUM(595, 0),
+    PURIFIED_PLUTONIUM(596, 0),
+    PURIFIED_IRIDIUM(597, 0),
+
+    /** LV Ore Washer — crushed/impure → purified ore on EU + adjacent water. Front 297 idle / 298 washing. */
+    ELECTRIC_ORE_WASHER(598, true, false, 294, 294, 294, 297, 298, 0, 0),
+
+    /** LV Thermal Centrifuge — purified ore → 3× dust + byproduct. Front 299 idle / 300 spinning. */
+    THERMAL_CENTRIFUGE(599, true, false, 294, 294, 294, 299, 300, 0, 0);
 
     public final short id;
     public final boolean solid;

@@ -389,7 +389,7 @@ public class World implements BlockAccessor {
                         wash.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
                         ef.attach(es.x(), es.y(), es.z(), this);
-                    } else if (es.entity() instanceof ElectricMaceratorEntity em) {
+                    } else if (es.entity() instanceof ElectricMachineEntity em) {
                         em.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
@@ -780,15 +780,39 @@ public class World implements BlockAccessor {
 
     /** Returns the LV Macerator entity at a position, creating + attaching it on first use. */
     public ElectricMaceratorEntity getOrCreateElectricMacerator(int x, int y, int z) {
+        return getOrCreateElectricMachine(x, y, z, ElectricMaceratorEntity.class, ElectricMaceratorEntity::new);
+    }
+
+    /** Returns the LV Ore Washer entity at a position, creating + attaching it on first use. */
+    public ElectricOreWasherEntity getOrCreateElectricOreWasher(int x, int y, int z) {
+        return getOrCreateElectricMachine(x, y, z, ElectricOreWasherEntity.class, ElectricOreWasherEntity::new);
+    }
+
+    /** Returns the Thermal Centrifuge entity at a position, creating + attaching it on first use. */
+    public ThermalCentrifugeEntity getOrCreateThermalCentrifuge(int x, int y, int z) {
+        return getOrCreateElectricMachine(x, y, z, ThermalCentrifugeEntity.class, ThermalCentrifugeEntity::new);
+    }
+
+    /**
+     * The LV processor at a position for whichever of the three electric
+     * processor blocks is there, creating it on first use; null for any other block.
+     */
+    public ElectricMachineEntity getOrCreateElectricMachine(int x, int y, int z) {
+        return switch (getBlock(x, y, z)) {
+            case ELECTRIC_MACERATOR -> getOrCreateElectricMacerator(x, y, z);
+            case ELECTRIC_ORE_WASHER -> getOrCreateElectricOreWasher(x, y, z);
+            case THERMAL_CENTRIFUGE -> getOrCreateThermalCentrifuge(x, y, z);
+            default -> null;
+        };
+    }
+
+    private <T extends ElectricMachineEntity> T getOrCreateElectricMachine(
+            int x, int y, int z, Class<T> kind, java.util.function.Supplier<T> factory) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
-        if (existing instanceof ElectricMaceratorEntity em) {
-            em.attach(x, y, z, this);
-            return em;
-        }
-        ElectricMaceratorEntity em = new ElectricMaceratorEntity();
-        em.attach(x, y, z, this);
-        blockEntities.put(blockKey(x, y, z), em);
-        return em;
+        T machine = kind.isInstance(existing) ? kind.cast(existing) : factory.get();
+        machine.attach(x, y, z, this);
+        if (machine != existing) blockEntities.put(blockKey(x, y, z), machine);
+        return machine;
     }
 
     /**
@@ -804,7 +828,7 @@ public class World implements BlockAccessor {
             case COAL_GENERATOR -> getOrCreateCoalGenerator(x, y, z);
             case BATTERY_BLOCK -> getOrCreateBatteryBlock(x, y, z);
             case ELECTRIC_FURNACE -> getOrCreateElectricFurnace(x, y, z);
-            case ELECTRIC_MACERATOR -> getOrCreateElectricMacerator(x, y, z);
+            case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE -> getOrCreateElectricMachine(x, y, z);
             default -> { }
         }
     }
@@ -853,7 +877,7 @@ public class World implements BlockAccessor {
             wash.attach(x, y, z, this);
         } else if (entity instanceof ElectricFurnaceEntity ef) {
             ef.attach(x, y, z, this);
-        } else if (entity instanceof ElectricMaceratorEntity em) {
+        } else if (entity instanceof ElectricMachineEntity em) {
             em.attach(x, y, z, this);
         } else if (entity instanceof BatteryBlockEntity bat) {
             bat.attach(x, y, z, this);
@@ -1261,7 +1285,7 @@ public class World implements BlockAccessor {
                         wash.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
                         ef.attach(es.x(), es.y(), es.z(), this);
-                    } else if (es.entity() instanceof ElectricMaceratorEntity em) {
+                    } else if (es.entity() instanceof ElectricMachineEntity em) {
                         em.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);

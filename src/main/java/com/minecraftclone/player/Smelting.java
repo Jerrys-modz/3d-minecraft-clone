@@ -33,6 +33,9 @@ public final class Smelting {
         smelt(BlockType.COAL_ORE, BlockType.COAL);
         smelt(BlockType.SAND, BlockType.GLASS);
 
+        // Purified ores (LV Ore Washer output) smelt exactly like their crushed form.
+        // Registered after the crushed recipes below - see smeltPurified().
+
         // GTNH ore chain: crushed ore → ingot (stage 2 of ore → crushed → ingot).
         // Vanilla-style ores with ingot counterparts.
         smelt(BlockType.CRUSHED_COPPER,    BlockType.COPPER_INGOT);
@@ -135,9 +138,18 @@ public final class Smelting {
 
         // Fishing: raw fish cooked into cooked fish.
         smelt(BlockType.RAW_FISH, BlockType.COOKED_FISH);
+        smeltPurified();
     }
 
     private Smelting() {
+    }
+
+    /** Mirrors every crushed-ore recipe onto its {@code PURIFIED_*} counterpart. */
+    private static void smeltPurified() {
+        for (BlockType t : BlockType.values()) {
+            BlockType crushed = com.minecraftclone.world.PurifiedOre.crushedOf(t);
+            if (crushed != null && OUTPUTS.containsKey(crushed)) smelt(t, OUTPUTS.get(crushed));
+        }
     }
 
     /** Registers a smelting recipe: one {@code ore} (plus fuel) yields one {@code output}. */

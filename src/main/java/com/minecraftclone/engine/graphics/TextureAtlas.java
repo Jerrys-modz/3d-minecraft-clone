@@ -416,6 +416,10 @@ public class TextureAtlas {
         paintSteelCasing(image, 294, rnd);                        // STEEL_CASING
         paintElectricMacerator(image, 295, rnd, false);           // ELECTRIC_MACERATOR front idle
         paintElectricMacerator(image, 296, rnd, true);            // ELECTRIC_MACERATOR front grinding
+        paintElectricOreWasher(image, 297, rnd, false);           // ELECTRIC_ORE_WASHER front idle
+        paintElectricOreWasher(image, 298, rnd, true);            // ELECTRIC_ORE_WASHER front washing
+        paintThermalCentrifuge(image, 299, rnd, false);           // THERMAL_CENTRIFUGE front idle
+        paintThermalCentrifuge(image, 300, rnd, true);            // THERMAL_CENTRIFUGE front spinning
 
         return image;
     }
@@ -2498,6 +2502,50 @@ public class TextureAtlas {
     /** STEEL_CASING (tile 294): riveted steel plates, the LV machine hull. */
     private void paintSteelCasing(BufferedImage img, int index, Random rnd) {
         paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+    }
+
+    /**
+     * ELECTRIC_ORE_WASHER front (tiles 297 idle / 298 washing): steel casing
+     * with a glass tank; the water inside churns with white foam while washing.
+     */
+    private void paintElectricOreWasher(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                int color;
+                if (edge) color = 0xFF9EC8D8;                 // glass rim
+                else if (y < 6) color = 0xFF1A2A3A;           // air gap above the water line
+                else if (working && rnd.nextInt(4) == 0) color = 0xFFE8F4FF;  // foam
+                else color = ((x + y) & 3) == 0 ? 0xFF3A78C8 : 0xFF2A5CA8;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * THERMAL_CENTRIFUGE front (tiles 299 idle / 300 spinning): steel casing
+     * with a round drum; four spokes, heated orange while spinning.
+     */
+    private void paintThermalCentrifuge(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        float c = 7.5f;
+        for (int y = 2; y < 14; y++) {
+            for (int x = 2; x < 14; x++) {
+                float dx = x - c, dy = y - c;
+                float d2 = dx * dx + dy * dy;
+                if (d2 > 30f) continue;
+                int color;
+                if (d2 > 22f) color = 0xFF2A2A34;                                  // drum rim
+                else if (d2 < 2.5f) color = 0xFFC8C8D8;                            // hub
+                else if (Math.abs(dx) < 0.6f || Math.abs(dy) < 0.6f) {
+                    color = working ? 0xFFFFB040 : 0xFF7A7A86;                    // spokes
+                } else color = working ? (rnd.nextInt(3) == 0 ? 0xFFE06018 : 0xFF6A2408) : 0xFF16161E;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
     }
 
     /**

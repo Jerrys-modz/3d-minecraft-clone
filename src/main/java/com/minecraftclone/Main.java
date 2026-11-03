@@ -822,7 +822,8 @@ public class Main {
         return block == BlockType.STEAM_FURNACE || block == BlockType.STEAM_MACERATOR
                 || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE
                 || block == BlockType.COAL_GENERATOR || block == BlockType.ELECTRIC_FURNACE
-                || block == BlockType.ELECTRIC_MACERATOR;
+                || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
+                || block == BlockType.THERMAL_CENTRIFUGE;
     }
 
     /** True if the block-entity type name matches the block at the cell. */
@@ -839,6 +840,8 @@ public class Main {
             case com.minecraftclone.world.CoalGeneratorEntity.TYPE -> block == BlockType.COAL_GENERATOR;
             case com.minecraftclone.world.ElectricFurnaceEntity.TYPE -> block == BlockType.ELECTRIC_FURNACE;
             case com.minecraftclone.world.ElectricMaceratorEntity.TYPE -> block == BlockType.ELECTRIC_MACERATOR;
+            case com.minecraftclone.world.ElectricOreWasherEntity.TYPE -> block == BlockType.ELECTRIC_ORE_WASHER;
+            case com.minecraftclone.world.ThermalCentrifugeEntity.TYPE -> block == BlockType.THERMAL_CENTRIFUGE;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
@@ -3763,9 +3766,11 @@ public class Main {
                                 hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, ef);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
-                    } else if (noMob && targeted == BlockType.ELECTRIC_MACERATOR) {
+                    } else if (noMob && (targeted == BlockType.ELECTRIC_MACERATOR
+                            || targeted == BlockType.ELECTRIC_ORE_WASHER || targeted == BlockType.THERMAL_CENTRIFUGE)) {
+                        // LV processors: furnace-style GUI (input / byproduct / output).
                         trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
-                        com.minecraftclone.world.ElectricMaceratorEntity em = world.getOrCreateElectricMacerator(
+                        com.minecraftclone.world.ElectricMachineEntity em = world.getOrCreateElectricMachine(
                                 hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, em);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);

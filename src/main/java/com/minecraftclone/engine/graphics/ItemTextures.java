@@ -37,8 +37,8 @@ public class ItemTextures {
         }
     }
 
-    /** Paints the 16x16 texture for an item. */
-    private static BufferedImage paint(BlockType type, Random rnd) {
+    /** Paints the 16x16 texture for an item (package-visible so tests can cover every item). */
+    static BufferedImage paint(BlockType type, Random rnd) {
         return switch (type) {
             case STICK -> paintStick();
             case APPLE -> paintApple();
@@ -388,8 +388,35 @@ public class ItemTextures {
             // ----------------------------------------------------------------
             case GUNPOWDER -> paintGunpowder();
 
-            default -> throw new IllegalArgumentException("No item texture generator for " + type);
+            default -> {
+                // Purified ores reuse their crushed-ore icon with a washed sheen.
+                BlockType crushed = com.minecraftclone.world.PurifiedOre.crushedOf(type);
+                if (crushed != null) yield paintPurified(paint(crushed, rnd));
+                throw new IllegalArgumentException("No item texture generator for " + type);
+            }
         };
+    }
+
+    /**
+     * Purified ore: the crushed-ore chunks brightened toward white (washed of
+     * gangue) with a few clean highlight glints, so the two read as a pair.
+     */
+    private static BufferedImage paintPurified(BufferedImage crushed) {
+        BufferedImage img = blank();
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                int argb = crushed.getRGB(x, y);
+                if ((argb >>> 24) == 0) continue;
+                int r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+                r += (255 - r) / 3; g += (255 - g) / 3; b += (255 - b) / 3;
+                img.setRGB(x, y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        int[][] glints = {{6, 5}, {8, 8}, {6, 10}};
+        for (int[] p : glints) {
+            if ((img.getRGB(p[0], p[1]) >>> 24) != 0) img.setRGB(p[0], p[1], 0xFFFFFFFF);
+        }
+        return img;
     }
 
     /** A clay bowl with a wooden pestle resting in it. */

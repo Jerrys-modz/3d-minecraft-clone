@@ -115,6 +115,8 @@ public final class Mortar {
         String metal;
         if (name.startsWith("CRUSHED_")) {
             metal = name.substring("CRUSHED_".length());
+        } else if (name.startsWith("PURIFIED_")) {
+            metal = name.substring("PURIFIED_".length());
         } else if (name.startsWith("IMPURE_")) {
             metal = name.substring("IMPURE_".length());
         } else if (name.startsWith("SMALL_") && name.endsWith("_ORE")) {

@@ -674,9 +674,8 @@ public class InventoryController {
             return com.minecraftclone.world.Furnace.isFuel(t)
                     ? start + com.minecraftclone.world.CoalGeneratorEntity.SLOT_FUEL : -1;
         }
-        if (machine instanceof com.minecraftclone.world.ElectricMaceratorEntity) {
-            return com.minecraftclone.world.ElectricMaceratorEntity.outputFor(t) != null
-                    ? start + com.minecraftclone.world.ElectricMaceratorEntity.SLOT_INPUT : -1;
+        if (machine instanceof com.minecraftclone.world.ElectricMachineEntity em) {
+            return em.acceptsInput(t) ? start + com.minecraftclone.world.ElectricMachineEntity.SLOT_INPUT : -1;
         }
         boolean inputOnly = machine instanceof com.minecraftclone.world.SteamFurnaceEntity
                 || machine instanceof com.minecraftclone.world.SteamMaceratorEntity
