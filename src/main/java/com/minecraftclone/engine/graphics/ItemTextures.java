@@ -393,6 +393,7 @@ public class ItemTextures {
             case TIN_CELL -> paintCell(0);
             case WATER_CELL -> paintCell(0xFF3A70C0);
             case LAVA_CELL -> paintCell(0xFFE86A10);
+            case SULFURIC_ACID_CELL -> paintCell(0xFFD8E030);
 
             // Phase 3 alloys: invar (cool greenish grey), electrum (pale gold), stainless (bright blue-grey).
             case INVAR_DUST -> paintDustOre(0xB4B8A0);

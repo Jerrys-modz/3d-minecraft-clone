@@ -1183,7 +1183,16 @@ public enum BlockType {
     /** Tin cell holding 1000 mB of water. */
     WATER_CELL(624, 0),
     /** Tin cell holding 1000 mB of lava. */
-    LAVA_CELL(625, 0);
+    LAVA_CELL(625, 0),
+    /** Tin cell holding 1000 mB of sulfuric acid. */
+    SULFURIC_ACID_CELL(626, 0),
+
+    /**
+     * Chemical Reactor — the first MV machine (runs on gold-cable MV power
+     * without a transformer). Dust + fluid from tanks → fluid or item.
+     * MV casing sides (tile 310); front 314 idle / 315 reacting.
+     */
+    CHEMICAL_REACTOR(627, true, false, 310, 310, 310, 314, 315, 0, 0);
 
     public final short id;
     public final boolean solid;

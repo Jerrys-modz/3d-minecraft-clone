@@ -6,7 +6,9 @@ package com.minecraftclone.world;
  */
 public enum Fluid {
     WATER("Water"),
-    LAVA("Lava");
+    LAVA("Lava"),
+    /** H2SO4 — made in the Chemical Reactor from sulfur + water; used for acid ore leaching. */
+    SULFURIC_ACID("Sulfuric Acid");
 
     public final String displayName;
 
@@ -22,6 +24,7 @@ public enum Fluid {
         return switch (fluid) {
             case WATER -> BlockType.WATER_CELL;
             case LAVA -> BlockType.LAVA_CELL;
+            case SULFURIC_ACID -> BlockType.SULFURIC_ACID_CELL;
         };
     }
 
@@ -29,6 +32,7 @@ public enum Fluid {
     public static Fluid inCell(BlockType item) {
         if (item == BlockType.WATER_CELL) return WATER;
         if (item == BlockType.LAVA_CELL) return LAVA;
+        if (item == BlockType.SULFURIC_ACID_CELL) return SULFURIC_ACID;
         return null;
     }
 

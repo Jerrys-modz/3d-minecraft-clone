@@ -825,7 +825,7 @@ public class Main {
                 || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
                 || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR
                 || block == BlockType.ELECTRIC_EXTRACTOR || block == BlockType.BATTERY_BLOCK
-                || block == BlockType.ELECTROLYZER;
+                || block == BlockType.ELECTROLYZER || block == BlockType.CHEMICAL_REACTOR;
     }
 
     /** True if the block-entity type name matches the block at the cell. */
@@ -848,6 +848,7 @@ public class Main {
             case com.minecraftclone.world.ElectricExtractorEntity.TYPE -> block == BlockType.ELECTRIC_EXTRACTOR;
             case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
             case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
+            case com.minecraftclone.world.ChemicalReactorEntity.TYPE -> block == BlockType.CHEMICAL_REACTOR;
             case com.minecraftclone.world.BatteryBlockEntity.TYPE -> block == BlockType.BATTERY_BLOCK;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
@@ -3789,7 +3790,7 @@ public class Main {
                     } else if (noMob && (targeted == BlockType.ELECTRIC_MACERATOR
                             || targeted == BlockType.ELECTRIC_ORE_WASHER || targeted == BlockType.THERMAL_CENTRIFUGE
                             || targeted == BlockType.ELECTRIC_COMPRESSOR || targeted == BlockType.ELECTRIC_EXTRACTOR
-                            || targeted == BlockType.ELECTROLYZER)) {
+                            || targeted == BlockType.ELECTROLYZER || targeted == BlockType.CHEMICAL_REACTOR)) {
                         // LV processors: furnace-style GUI (input / byproduct / output).
                         trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         com.minecraftclone.world.ElectricMachineEntity em = world.getOrCreateElectricMachine(

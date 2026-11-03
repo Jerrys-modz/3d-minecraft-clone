@@ -87,9 +87,24 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
     /** Extra world precondition (e.g. adjacent water). Default: always ready. */
     protected boolean environmentReady() { return true; }
 
+    /**
+     * True if this machine has a recipe for {@code input}. Defaults to "has an
+     * item output"; machines whose recipes only produce fluid (the Chemical
+     * Reactor making acid) override it.
+     */
+    protected boolean hasRecipe(BlockType input) {
+        return primaryOutput(input) != null;
+    }
+
+    /**
+     * True for MV-rated machines, which run safely on MV (gold) power without
+     * a transformer. LV machines return false and are overvolted there.
+     */
+    protected boolean mvRated() { return false; }
+
     /** True if {@code item} belongs in this machine's input slot. */
     public boolean acceptsInput(BlockType item) {
-        return primaryOutput(item) != null;
+        return item != null && hasRecipe(item);
     }
 
     // ------------------------------------------------------------------
@@ -110,8 +125,9 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
     /** True if the input can be processed into the empty/matching output slot without overflow. */
     public boolean canProcess() {
         BlockType input = types[SLOT_INPUT];
+        if (input == null || !hasRecipe(input)) return false;
         BlockType output = primaryOutput(input);
-        if (output == null) return false;
+        if (output == null) return true;   // fluid-only recipe: nothing to fit in the output slot
         BlockType held = types[SLOT_OUTPUT];
         return held == null
                 || (held == output && counts[SLOT_OUTPUT] + primaryYield(input) <= Inventory.maxStack(output));
@@ -137,7 +153,7 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
             lastEuFraction = 0f;
             return;
         }
-        if (overvoltage) {
+        if (overvoltage && !mvRated()) {
             // MV straight into an LV machine: it blows (or, where explosions are off, refuses to run).
             lastEuFraction = 0f;
             if (world != null) world.reportOverload(posX, posY, posZ);
@@ -154,7 +170,7 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
         lastEuFraction = Math.max(0.05f, Math.min(1f, euSource.euStored() / EuNetwork.capacityOf(euSource)));
 
         progress += drawn * efficiency / euPerSecond;
-        while (progress >= seconds && canProcess()) {
+        while (progress >= seconds && canProcess() && environmentReady()) {
             progress -= seconds;
             completeOperation();
         }
@@ -168,11 +184,13 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
         BlockType by = byproductOf(input);
         counts[SLOT_INPUT]--;
         if (counts[SLOT_INPUT] == 0) types[SLOT_INPUT] = null;
-        if (types[SLOT_OUTPUT] == output) {
-            counts[SLOT_OUTPUT] += yield;
-        } else {
-            types[SLOT_OUTPUT] = output;
-            counts[SLOT_OUTPUT] = yield;
+        if (output != null) {
+            if (types[SLOT_OUTPUT] == output) {
+                counts[SLOT_OUTPUT] += yield;
+            } else {
+                types[SLOT_OUTPUT] = output;
+                counts[SLOT_OUTPUT] = yield;
+            }
         }
         onOperationComplete(input);
         if (by == null || byproductChance() <= 0f) return;

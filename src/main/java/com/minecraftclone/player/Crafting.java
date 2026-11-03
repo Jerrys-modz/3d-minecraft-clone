@@ -106,6 +106,7 @@ public final class Crafting {
         CHARS.put('7', BlockType.CRUSHED_SULFUR);     // 7 = sulfur (battery electrolyte)
         CHARS.put('8', BlockType.TIN_PLATE);          // 8 = tin plate (battery casing)
         CHARS.put('9', BlockType.STAINLESS_STEEL_PLATE); // 9 = stainless plate (MV hull)
+        CHARS.put('0', BlockType.MV_CASING);          // 0 = MV casing
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -402,6 +403,8 @@ public final class Crafting {
         shaped3x3("...", "EGE", "...", BlockType.FLUID_PIPE, 4);
         // Tin Cell: four tin plates around a glass liner -> 2.
         shaped3x3(".8.", "8G8", ".8.", BlockType.TIN_CELL, 2);
+        // Chemical Reactor: glass vessel on an MV casing, vacuum-tube control, stainless shell.
+        shaped3x3("9G9", "606", "999", BlockType.CHEMICAL_REACTOR, 1);
         // LV Battery: copper-cable terminal over a tin-plate cell filled with sulfur electrolyte.
         shaped3x3(".5.", "878", "878", BlockType.LV_BATTERY, 1);
 

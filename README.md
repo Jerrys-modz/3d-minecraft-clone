@@ -417,8 +417,8 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Chemical Reactor (MV)** | ❌ Todo | Combines dust + fluid → compound; required for acid production |
-| **Sulfuric Acid** | ❌ Todo | Sulfur dust + water → H₂SO₄; enables wet ore processing (3× yield) |
+| **Chemical Reactor (MV)** | ✅ Done | `CHEMICAL_REACTOR` (`9G9/606/999`: stainless plates, glass, vacuum tubes, MV casing). The first **MV-rated** machine: runs on gold-cable MV power with no transformer (and on LV). Item in, fluids from Steel Tanks that are adjacent or piped; 400 EU per operation. |
+| **Sulfuric Acid** | ✅ Done | Crushed sulfur + 1000 mB water → 1000 mB sulfuric acid, pumped into a separate tank (empty or already acid). **Acid leaching:** crushed ore + 250 mB acid → purified ore **plus its byproduct dust every time** (the water washer manages one in four); then the Thermal Centrifuge's 3× dust. `SULFURIC_ACID_CELL` carries it by hand. |
 | **Hydrochloric Acid** | ❌ Todo | Salt + electrolysis → HCl + sodium; needed for titanium chain |
 | **Oil & Distillation** | ❌ Todo | Oil pools underground; pump → distillation tower → diesel, light/heavy fuel, lubricant |
 
@@ -440,9 +440,9 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 
 > **Survival interlock:** Chemical spills (acid tank damage) if pipes burst from overpressure. Oil extraction near lava creates fire spread danger. Working in chemical areas requires rubber hazmat suit.
 
-**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL`.
+**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL` · `SULFURIC_ACID_CELL` · `CHEMICAL_REACTOR`.
 
-**Still open:** `FLUID_PIPE (steel/stainless tiers)` · `STEEL_DRUM` · `CHEMICAL_REACTOR_MV` · `DISTILLATION_TOWER (multi-block)` · `OIL_PUMP` · `SILICON_WAFER` · `MV_BATTERY (lithium)` · `MV_TRANSFORMER` · MV machines
+**Still open:** `FLUID_PIPE (steel/stainless tiers)` · `STEEL_DRUM` · `DISTILLATION_TOWER (multi-block)` · `OIL_PUMP` · `SILICON_WAFER` · `MV_BATTERY (lithium)` · `MV_TRANSFORMER` · MV machines
 
 ---
 

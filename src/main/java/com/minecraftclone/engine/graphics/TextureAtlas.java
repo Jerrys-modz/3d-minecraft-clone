@@ -433,6 +433,8 @@ public class TextureAtlas {
         paintSteelTank(image, 311, rnd, true);                    // STEEL_TANK sides (sight glass)
         paintSteelTank(image, 312, rnd, false);                   // STEEL_TANK top/bottom (lid)
         paintFluidPipe(image, 313, rnd);                          // FLUID_PIPE
+        paintChemicalReactor(image, 314, rnd, false);             // CHEMICAL_REACTOR front idle
+        paintChemicalReactor(image, 315, rnd, true);              // CHEMICAL_REACTOR front reacting
 
         return image;
     }
@@ -2580,6 +2582,29 @@ public class TextureAtlas {
                     color = working ? (rnd.nextInt(3) == 0 ? 0xFFFFE080 : 0xFFE07020) : 0xFFC8C8D0;     // plate
                 } else color = 0xFF14141C;
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * CHEMICAL_REACTOR front (tiles 314 idle / 315 reacting): stainless MV
+     * casing with a round glass vessel and a stirrer; the contents turn
+     * acid-yellow and fizz while reacting.
+     */
+    private void paintChemicalReactor(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 2; y < 14; y++) {
+            for (int x = 2; x < 14; x++) {
+                int dx = x * 2 - 15, dy = y * 2 - 15, d2 = dx * dx + dy * dy;
+                if (d2 > 130) continue;
+                int color;
+                if (d2 > 100) color = 0xFF9EC8D8;                                  // glass vessel
+                else if (x == 7 || x == 8) color = y < 5 ? 0xFF6A6A7A : 0xFF8A8A9A; // stirrer shaft
+                else if (y < 6) color = 0xFF1A2228;                                // headspace
+                else if (working) color = rnd.nextInt(5) == 0 ? 0xFFF8FFE0 : 0xFFC8D028; // fizzing acid
+                else color = 0xFF2A3A40;
+                img.setRGB(ox + x, oy + y, color);
             }
         }
     }
