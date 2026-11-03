@@ -37,8 +37,8 @@ public class ItemTextures {
         }
     }
 
-    /** Paints the 16x16 texture for an item. */
-    private static BufferedImage paint(BlockType type, Random rnd) {
+    /** Paints the 16x16 texture for an item (package-visible so tests can cover every item). */
+    static BufferedImage paint(BlockType type, Random rnd) {
         return switch (type) {
             case STICK -> paintStick();
             case APPLE -> paintApple();
@@ -335,6 +335,7 @@ public class ItemTextures {
             case BRASS_INGOT -> paintIngot(0xB5A642);
             case IRON_DUST -> paintDustOre(0xC8C8C8);
             case GOLD_DUST -> paintDustOre(0xE8C93A);
+            case ALUMINUM_DUST -> paintDustOre(0xC8D4E0);
             case WROUGHT_IRON_INGOT -> paintIngot(0xC4B8A8);
 
             case BRONZE_PICKAXE -> paintPickaxe(0xCD7F32);
@@ -387,9 +388,56 @@ public class ItemTextures {
             // Phase 0: Explosives
             // ----------------------------------------------------------------
             case GUNPOWDER -> paintGunpowder();
+            case VACUUM_TUBE -> paintVacuumTube();
+            case LV_BATTERY -> paintLvBattery();
+            case TIN_CELL -> paintCell(0);
+            case WATER_CELL -> paintCell(0xFF3A70C0);
+            case LAVA_CELL -> paintCell(0xFFE86A10);
+            case SULFURIC_ACID_CELL -> paintCell(0xFFD8E030);
 
-            default -> throw new IllegalArgumentException("No item texture generator for " + type);
+            // Phase 3 alloys: invar (cool greenish grey), electrum (pale gold), stainless (bright blue-grey).
+            case INVAR_DUST -> paintDustOre(0xB4B8A0);
+            case INVAR_INGOT -> paintIngot(0xB4B8A0);
+            case INVAR_PLATE -> paintPlate(0xB4B8A0);
+            case INVAR_ROD -> paintRod(0xB4B8A0);
+            case ELECTRUM_DUST -> paintDustOre(0xE8E080);
+            case ELECTRUM_INGOT -> paintIngot(0xE8E080);
+            case ELECTRUM_PLATE -> paintPlate(0xE8E080);
+            case ELECTRUM_ROD -> paintRod(0xE8E080);
+            case STAINLESS_STEEL_DUST -> paintDustOre(0xD4DCE6);
+            case STAINLESS_STEEL_INGOT -> paintIngot(0xD4DCE6);
+            case STAINLESS_STEEL_PLATE -> paintPlate(0xD4DCE6);
+            case STAINLESS_STEEL_ROD -> paintRod(0xD4DCE6);
+
+            default -> {
+                // Purified ores reuse their crushed-ore icon with a washed sheen.
+                BlockType crushed = com.minecraftclone.world.PurifiedOre.crushedOf(type);
+                if (crushed != null) yield paintPurified(paint(crushed, rnd));
+                throw new IllegalArgumentException("No item texture generator for " + type);
+            }
         };
+    }
+
+    /**
+     * Purified ore: the crushed-ore chunks brightened toward white (washed of
+     * gangue) with a few clean highlight glints, so the two read as a pair.
+     */
+    private static BufferedImage paintPurified(BufferedImage crushed) {
+        BufferedImage img = blank();
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                int argb = crushed.getRGB(x, y);
+                if ((argb >>> 24) == 0) continue;
+                int r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+                r += (255 - r) / 3; g += (255 - g) / 3; b += (255 - b) / 3;
+                img.setRGB(x, y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+        int[][] glints = {{6, 5}, {8, 8}, {6, 10}};
+        for (int[] p : glints) {
+            if ((img.getRGB(p[0], p[1]) >>> 24) != 0) img.setRGB(p[0], p[1], 0xFFFFFFFF);
+        }
+        return img;
     }
 
     /** A clay bowl with a wooden pestle resting in it. */
@@ -1622,6 +1670,65 @@ public class ItemTextures {
     /**
      * Gunpowder: a small heap of dark grey-black powder granules.
      */
+    /** Tin cell: a tin capsule with a glass window, showing its fluid (0 = empty). */
+    private static BufferedImage paintCell(int fluid) {
+        BufferedImage img = blank();
+        for (int y = 2; y <= 13; y++) {
+            for (int x = 4; x <= 11; x++) {
+                boolean corner = (y == 2 || y == 13) && (x == 4 || x == 11);
+                if (corner) continue;
+                boolean rim = x == 4 || x == 11 || y == 2 || y == 13;
+                boolean window = x >= 6 && x <= 9 && y >= 5 && y <= 11;
+                int c = rim ? 0xFF6A7278 : window ? (fluid != 0 ? fluid : 0xFF20282C) : 0xFFAEB8BE;
+                img.setRGB(x, y, c);
+            }
+        }
+        if (fluid != 0) img.setRGB(7, 6, 0xFFFFFFFF);   // glint on the fluid
+        return img;
+    }
+
+    /** LV battery: a tin-grey cell with a copper terminal and a blue charge band. */
+    private static BufferedImage paintLvBattery() {
+        BufferedImage img = blank();
+        for (int y = 4; y <= 13; y++) {
+            for (int x = 5; x <= 10; x++) {
+                boolean rim = x == 5 || x == 10 || y == 4 || y == 13;
+                int c = rim ? 0xFF6A7278 : (y == 8 || y == 9) ? 0xFF3A6AD0 : 0xFFAEB8BE;
+                img.setRGB(x, y, c);
+            }
+        }
+        img.setRGB(7, 3, 0xFFB87333);
+        img.setRGB(8, 3, 0xFFB87333);
+        img.setRGB(7, 2, 0xFFDCA05A);
+        img.setRGB(8, 2, 0xFFDCA05A);
+        img.setRGB(6, 5, 0xFFFFFFFF);
+        return img;
+    }
+
+    /** Vacuum tube: a glass bulb with a glowing filament on a dark base with two copper pins. */
+    private static BufferedImage paintVacuumTube() {
+        BufferedImage img = blank();
+        for (int y = 2; y <= 10; y++) {
+            for (int x = 5; x <= 10; x++) {
+                boolean corner = y == 2 && (x == 5 || x == 10);
+                if (corner) continue;
+                boolean rim = x == 5 || x == 10 || y == 2;
+                img.setRGB(x, y, rim ? 0xFFB8D8E8 : 0xFF5A7888);   // glass
+            }
+        }
+        for (int y = 4; y <= 8; y++) img.setRGB(7, y, 0xFFFFC040);  // filament
+        for (int y = 4; y <= 8; y++) img.setRGB(8, y, 0xFFFF9020);
+        img.setRGB(6, 3, 0xFFFFFFFF);                               // glint
+        for (int y = 11; y <= 12; y++) {
+            for (int x = 5; x <= 10; x++) img.setRGB(x, y, 0xFF2A2A30);   // base
+        }
+        img.setRGB(6, 13, 0xFFB87333);
+        img.setRGB(9, 13, 0xFFB87333);
+        img.setRGB(6, 14, 0xFFB87333);
+        img.setRGB(9, 14, 0xFFB87333);
+        return img;
+    }
+
     private static BufferedImage paintGunpowder() {
         BufferedImage img = blank();
         // Pile shape — slightly wider at the bottom.

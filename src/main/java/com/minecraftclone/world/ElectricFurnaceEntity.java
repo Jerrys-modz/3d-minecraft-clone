@@ -99,14 +99,23 @@ public final class ElectricFurnaceEntity implements BlockEntity, StorageContaine
         if (sourceCheckTimer <= 0f) {
             sourceCheckTimer = 0.5f;
             if (attached && world != null) {
-                euSource  = findEuSource();
-                drawRate  = resolveDrawRate();
+                EuNetwork.Feed feed = EuNetwork.resolve(world, posX, posY, posZ);
+                euSource    = feed.source();
+                drawRate    = feed.throughput();
+                efficiency  = feed.efficiency();
+                overvoltage = feed.overvoltage();
             }
         }
 
         boolean powered = euSource != null && euSource.euStored() > 0f && canSmelt();
         if (!powered) {
             lastEuFraction = 0f;
+            return;
+        }
+        if (overvoltage) {
+            // MV straight into an LV machine: it blows (or, where explosions are off, refuses to run).
+            lastEuFraction = 0f;
+            if (world != null) world.reportOverload(posX, posY, posZ);
             return;
         }
 
@@ -116,86 +125,20 @@ public final class ElectricFurnaceEntity implements BlockEntity, StorageContaine
         if (drawn <= 0f) { lastEuFraction = 0f; return; }
 
         // Advance smelting proportionally to the EU actually drawn.
-        float effectiveDt = drawn / (EU_PER_SMELT / SMELT_SECONDS);
-        lastEuFraction    = Math.min(1f, euSource.euStored()
-                / (euSource instanceof CoalGeneratorEntity ? CoalGeneratorEntity.MAX_EU
-                 : BatteryBlockEntity.MAX_EU));
+        float effectiveDt = drawn * efficiency / (EU_PER_SMELT / SMELT_SECONDS);
+        lastEuFraction    = Math.min(1f, euSource.euStored() / EuNetwork.capacityOf(euSource));
         advance(effectiveDt);
     }
 
-    /** EU throughput multiplier from the cable network (weakest-link tier). */
+    /** EU throughput multiplier from the cable path (weakest-link tier). */
     private float drawRate = 1f;
+    /** Share of drawn EU that survives the cable run. */
+    private float efficiency = 1f;
+    /** True when MV power arrives without a transformer. */
+    private boolean overvoltage;
 
-    private float resolveDrawRate() {
-        if (!attached || world == null) return 1f;
-        com.minecraftclone.world.pipes.PipeNetwork net =
-                world.pipeNetworks().networkAt(
-                        com.minecraftclone.world.pipes.PipeType.ENERGY, posX, posY, posZ);
-        if (net == null) return 1f;
-        // minTier describes steam pipes and is null for ENERGY networks, so
-        // determine the cable network's weakest link from its member blocks.
-        CableTier weakest = null;
-        for (long key : net.cells) {
-            int cx = (int)(key & 0x1FFFFFL) << 21 >> 21;
-            int cy = (int)((key >> 21) & 0x1FFFFFL) << 21 >> 21;
-            int cz = (int)((key >> 42) & 0x1FFFFFL) << 21 >> 21;
-            CableTier t = CableTier.of(world.getBlock(cx, cy, cz));
-            if (t != null && (weakest == null || t.throughput < weakest.throughput)) weakest = t;
-        }
-        return weakest != null ? weakest.throughput : 1f;
-    }
-
-    private static final int[][] FACES = {
-        {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
-    };
-
-    /**
-     * Finds an EU source for this machine — generators first (highest EU/s),
-     * then batteries. Scans direct neighbours then the cable network perimeter.
-     */
-    private EuSource findEuSource() {
-        if (!attached || world == null) return null;
-        CoalGeneratorEntity emptyGenerator = null;
-        BatteryBlockEntity chargedBattery = null;
-        BatteryBlockEntity emptyBattery = null;
-
-        // Direct adjacency — prefer charged generators over batteries.
-        for (int[] d : FACES) {
-            BlockEntity e = world.blockEntityAt(posX+d[0], posY+d[1], posZ+d[2]);
-            if (e instanceof CoalGeneratorEntity g) {
-                if (g.euStored() > 0f) return g;
-                if (emptyGenerator == null) emptyGenerator = g;
-            } else if (e instanceof BatteryBlockEntity b) {
-                if (b.euStored() > 0f) {
-                    if (chargedBattery == null) chargedBattery = b;
-                } else if (emptyBattery == null) emptyBattery = b;
-            }
-        }
-        // Through cable network.
-        com.minecraftclone.world.pipes.PipeNetwork net =
-                world.pipeNetworks().networkAt(
-                        com.minecraftclone.world.pipes.PipeType.ENERGY, posX, posY, posZ);
-        if (net != null) {
-            for (long key : net.cells) {
-                int cx = (int)(key & 0x1FFFFFL) << 21 >> 21;
-                int cy = (int)((key >> 21) & 0x1FFFFFL) << 21 >> 21;
-                int cz = (int)((key >> 42) & 0x1FFFFFL) << 21 >> 21;
-                for (int[] d : FACES) {
-                    BlockEntity e = world.blockEntityAt(cx+d[0], cy+d[1], cz+d[2]);
-                    if (e instanceof CoalGeneratorEntity g) {
-                        if (g.euStored() > 0f) return g;
-                        if (emptyGenerator == null) emptyGenerator = g;
-                    } else if (e instanceof BatteryBlockEntity b) {
-                        if (b.euStored() > 0f) {
-                            if (chargedBattery == null) chargedBattery = b;
-                        } else if (emptyBattery == null) emptyBattery = b;
-                    }
-                }
-            }
-        }
-        if (chargedBattery != null) return chargedBattery;
-        return emptyGenerator != null ? emptyGenerator : emptyBattery;
-    }
+    /** True when this furnace is wired to MV power without a transformer (it won't run). */
+    public boolean isOvervolted() { return overvoltage; }
 
     private void advance(float dt) {
         progress += dt;

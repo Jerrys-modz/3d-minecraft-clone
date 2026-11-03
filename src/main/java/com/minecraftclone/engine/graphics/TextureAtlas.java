@@ -414,6 +414,27 @@ public class TextureAtlas {
         paintSteamOreWasher(image, 292, rnd, false);              // WASHER idle
         paintSteamOreWasher(image, 293, rnd, true);               // WASHER working
         paintSteelCasing(image, 294, rnd);                        // STEEL_CASING
+        paintElectricMacerator(image, 295, rnd, false);           // ELECTRIC_MACERATOR front idle
+        paintElectricMacerator(image, 296, rnd, true);            // ELECTRIC_MACERATOR front grinding
+        paintElectricOreWasher(image, 297, rnd, false);           // ELECTRIC_ORE_WASHER front idle
+        paintElectricOreWasher(image, 298, rnd, true);            // ELECTRIC_ORE_WASHER front washing
+        paintThermalCentrifuge(image, 299, rnd, false);           // THERMAL_CENTRIFUGE front idle
+        paintThermalCentrifuge(image, 300, rnd, true);            // THERMAL_CENTRIFUGE front spinning
+        paintTinCable(image, 301, rnd);                           // TIN_CABLE
+        paintElectricCompressor(image, 302, rnd, false);          // ELECTRIC_COMPRESSOR front idle
+        paintElectricCompressor(image, 303, rnd, true);           // ELECTRIC_COMPRESSOR front pressing
+        paintElectricExtractor(image, 304, rnd, false);           // ELECTRIC_EXTRACTOR front idle
+        paintElectricExtractor(image, 305, rnd, true);            // ELECTRIC_EXTRACTOR front extracting
+        paintElectrolyzer(image, 306, rnd, false);                // ELECTROLYZER front idle
+        paintElectrolyzer(image, 307, rnd, true);                 // ELECTROLYZER front working
+        paintTransformer(image, 308, rnd, false);                 // LV_TRANSFORMER sides
+        paintTransformer(image, 309, rnd, true);                  // LV_TRANSFORMER top/bottom (coil face)
+        paintMachineBox(image, 310, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8); // MV_CASING (stainless)
+        paintSteelTank(image, 311, rnd, true);                    // STEEL_TANK sides (sight glass)
+        paintSteelTank(image, 312, rnd, false);                   // STEEL_TANK top/bottom (lid)
+        paintFluidPipe(image, 313, rnd);                          // FLUID_PIPE
+        paintChemicalReactor(image, 314, rnd, false);             // CHEMICAL_REACTOR front idle
+        paintChemicalReactor(image, 315, rnd, true);              // CHEMICAL_REACTOR front reacting
 
         return image;
     }
@@ -2329,6 +2350,29 @@ public class TextureAtlas {
     }
 
     /**
+     * TIN_CABLE (tile 301): pale silver-grey wire with a dull grey sheath —
+     * same cross-section as copper cable, visibly the cheap tier.
+     */
+    private void paintTinCable(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int sheath = 0xFF4A4E52;
+        int core   = 0xFFAEB8BE;
+        int bright = 0xFFDCE6EC;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                int dx = x - 8, dy = y - 8;
+                int dist2 = dx * dx + dy * dy;
+                int base = dist2 > 42 ? sheath : dist2 > 20 ? core : bright;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
      * GOLD_CABLE (tile 270): golden yellow wire — same cross-section geometry
      * as copper cable but in a gold palette.
      */
@@ -2496,6 +2540,248 @@ public class TextureAtlas {
     /** STEEL_CASING (tile 294): riveted steel plates, the LV machine hull. */
     private void paintSteelCasing(BufferedImage img, int index, Random rnd) {
         paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+    }
+
+    /**
+     * ELECTRIC_ORE_WASHER front (tiles 297 idle / 298 washing): steel casing
+     * with a glass tank; the water inside churns with white foam while washing.
+     */
+    private void paintElectricOreWasher(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                int color;
+                if (edge) color = 0xFF9EC8D8;                 // glass rim
+                else if (y < 6) color = 0xFF1A2A3A;           // air gap above the water line
+                else if (working && rnd.nextInt(4) == 0) color = 0xFFE8F4FF;  // foam
+                else color = ((x + y) & 3) == 0 ? 0xFF3A78C8 : 0xFF2A5CA8;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * ELECTRIC_COMPRESSOR front (tiles 302 idle / 303 pressing): steel casing
+     * with a dark press chamber, a heavy ram on top and a plate on the anvil;
+     * the plate glows hot while pressing.
+     */
+    private void paintElectricCompressor(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        int ramBottom = working ? 8 : 6;
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                int color;
+                if (edge) color = 0xFF2A2A34;
+                else if (y < ramBottom && x >= 5 && x <= 10) color = (y == ramBottom - 1) ? 0xFFB8B8C4 : 0xFF6E6E7A; // ram
+                else if (y == 10 || y == 11) color = 0xFF505060;                                          // anvil
+                else if (y == 9 && x >= 5 && x <= 10) {
+                    color = working ? (rnd.nextInt(3) == 0 ? 0xFFFFE080 : 0xFFE07020) : 0xFFC8C8D0;     // plate
+                } else color = 0xFF14141C;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * CHEMICAL_REACTOR front (tiles 314 idle / 315 reacting): stainless MV
+     * casing with a round glass vessel and a stirrer; the contents turn
+     * acid-yellow and fizz while reacting.
+     */
+    private void paintChemicalReactor(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 2; y < 14; y++) {
+            for (int x = 2; x < 14; x++) {
+                int dx = x * 2 - 15, dy = y * 2 - 15, d2 = dx * dx + dy * dy;
+                if (d2 > 130) continue;
+                int color;
+                if (d2 > 100) color = 0xFF9EC8D8;                                  // glass vessel
+                else if (x == 7 || x == 8) color = y < 5 ? 0xFF6A6A7A : 0xFF8A8A9A; // stirrer shaft
+                else if (y < 6) color = 0xFF1A2228;                                // headspace
+                else if (working) color = rnd.nextInt(5) == 0 ? 0xFFF8FFE0 : 0xFFC8D028; // fizzing acid
+                else color = 0xFF2A3A40;
+                img.setRGB(ox + x, oy + y, color);
+            }
+        }
+    }
+
+    /**
+     * STEEL_TANK (tiles 311 side / 312 lid): a riveted steel frame. The sides
+     * carry a tall glass sight window with a water line; the lid is a plate
+     * with a central filler cap.
+     */
+    private void paintSteelTank(BufferedImage img, int index, Random rnd, boolean side) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        if (side) {
+            for (int y = 2; y < 14; y++) {
+                for (int x = 5; x < 11; x++) {
+                    boolean rim = x == 5 || x == 10 || y == 2 || y == 13;
+                    int color = rim ? 0xFF9EC8D8 : y < 6 ? 0xFF203038 : ((x + y) % 3 == 0 ? 0xFF4A8AD8 : 0xFF3A70C0);
+                    img.setRGB(ox + x, oy + y, color);
+                }
+            }
+        } else {
+            for (int y = 5; y < 11; y++) {
+                for (int x = 5; x < 11; x++) {
+                    int dx = x * 2 - 15, dy = y * 2 - 15;
+                    if (dx * dx + dy * dy <= 40) img.setRGB(ox + x, oy + y, dx * dx + dy * dy <= 12 ? 0xFF6A6A7A : 0xFF3A3A48);
+                }
+            }
+        }
+    }
+
+    /**
+     * FLUID_PIPE (tile 313): a bronze pipe end with a glass-lined bore showing
+     * blue fluid — the same cross-section idea as the steam pipes and cables.
+     */
+    private void paintFluidPipe(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                int dx = x - 8, dy = y - 8, d2 = dx * dx + dy * dy;
+                int base = d2 > 42 ? 0x6A4A1E : d2 > 30 ? 0xC08A3A : d2 > 20 ? 0xA8D0E0 : 0x3A70C0;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * LV_TRANSFORMER (tiles 308 side / 309 coil face): a dark laminated iron
+     * core. Sides show the gold MV winding above the copper LV winding; the
+     * top/bottom show the core's end with a ring of winding around it.
+     */
+    private void paintTransformer(BufferedImage img, int index, Random rnd, boolean coilFace) {
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                int base;
+                boolean frame = x == 0 || y == 0 || x == TILE_PX - 1 || y == TILE_PX - 1;
+                if (frame) {
+                    base = 0x2A2A30;
+                } else if (coilFace) {
+                    int dx = x - 8, dy = y - 8, d2 = dx * dx + dy * dy;
+                    base = d2 < 10 ? 0x3A3C44 : d2 < 30 ? ((d2 & 1) == 0 ? 0xD4A800 : 0xB87333) : 0x50525A;
+                } else if (y >= 3 && y <= 6) {
+                    base = (x & 1) == 0 ? 0xD4A800 : 0xFFD850;     // gold (MV) winding
+                } else if (y >= 9 && y <= 12) {
+                    base = (x & 1) == 0 ? 0xB87333 : 0xDCA05A;     // copper (LV) winding
+                } else {
+                    base = (y & 1) == 0 ? 0x3A3C44 : 0x4A4C54;     // laminated core
+                }
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
+     * ELECTROLYZER front (tiles 306 idle / 307 working): steel casing with a
+     * glass cell of green electrolyte and two gold electrodes; bubbles rise
+     * off the electrodes while it works.
+     */
+    private void paintElectrolyzer(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                boolean electrode = (x == 5 || x == 10) && y >= 4 && y <= 10;
+                int color;
+                if (edge) color = 0xFF9EC8D8;                                         // glass
+                else if (electrode) color = y == 4 ? 0xFFFFE070 : 0xFFD4A800;          // gold rods
+                else if (y < 6) color = 0xFF1A2A2A;                                   // headspace
+                else if (working && (x == 6 || x == 9) && rnd.nextInt(3) == 0) color = 0xFFE8FFF0; // bubbles
+                else color = ((x * 3 + y) & 3) == 0 ? 0xFF3C9A5C : 0xFF2E7E4A;        // electrolyte
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * ELECTRIC_EXTRACTOR front (tiles 304 idle / 305 extracting): steel casing
+     * with a wooden tap feeding a collection tank; latex drips and the tank
+     * fills pale cream while extracting.
+     */
+    private void paintElectricExtractor(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                int color;
+                if (edge) color = 0xFF2A2A34;
+                else if (y == 5 && x >= 4 && x <= 8) color = 0xFF8A5A2A;          // wooden tap
+                else if (x == 8 && y > 5 && y < 9) color = working ? 0xFFF0E8C8 : 0xFF14141C;  // drip
+                else if (y >= 9) color = working ? (rnd.nextInt(5) == 0 ? 0xFFFFFFF0 : 0xFFE0D6A8) : 0xFF3A3630; // tank
+                else color = 0xFF14141C;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * THERMAL_CENTRIFUGE front (tiles 299 idle / 300 spinning): steel casing
+     * with a round drum; four spokes, heated orange while spinning.
+     */
+    private void paintThermalCentrifuge(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        float c = 7.5f;
+        for (int y = 2; y < 14; y++) {
+            for (int x = 2; x < 14; x++) {
+                float dx = x - c, dy = y - c;
+                float d2 = dx * dx + dy * dy;
+                if (d2 > 30f) continue;
+                int color;
+                if (d2 > 22f) color = 0xFF2A2A34;                                  // drum rim
+                else if (d2 < 2.5f) color = 0xFFC8C8D8;                            // hub
+                else if (Math.abs(dx) < 0.6f || Math.abs(dy) < 0.6f) {
+                    color = working ? 0xFFFFB040 : 0xFF7A7A86;                    // spokes
+                } else color = working ? (rnd.nextInt(3) == 0 ? 0xFFE06018 : 0xFF6A2408) : 0xFF16161E;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * ELECTRIC_MACERATOR front (tiles 295 idle / 296 grinding): a steel casing
+     * with a dark grinder throat crossed by two toothed rollers; the throat
+     * flickers with blue-white sparks while grinding.
+     */
+    private void paintElectricMacerator(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                boolean roller = (y == 6 || y == 9) && x > 3 && x < 12;
+                int color;
+                if (edge) {
+                    color = 0xFF2A2A34;
+                } else if (roller) {
+                    // Toothed rollers: alternating light/dark teeth.
+                    color = ((x + (y == 9 ? 1 : 0)) & 1) == 0 ? 0xFFB0B0BC : 0xFF5A5A66;
+                } else if (working) {
+                    int r = rnd.nextInt(6);
+                    color = r == 0 ? 0xFFE8F0FF : r == 1 ? 0xFF6A8CFF : 0xFF181C2C;
+                } else {
+                    color = 0xFF14141C;
+                }
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
     }
 
     /**

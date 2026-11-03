@@ -91,9 +91,9 @@ public final class PipeNetworkManager {
         // at any enum position.
         SteamPipeTier minTier = null;
         for (long cellKey : cells) {
-            int cx = (int) (cellKey & 0x1FFFFFL) << 21 >> 21;
-            int cy = (int) ((cellKey >> 21) & 0x1FFFFFL) << 21 >> 21;
-            int cz = (int) ((cellKey >> 42) & 0x1FFFFFL) << 21 >> 21;
+            int cx = (int) (cellKey & 0x1FFFFFL) << 11 >> 11;
+            int cy = (int) ((cellKey >> 21) & 0x1FFFFFL) << 11 >> 11;
+            int cz = (int) ((cellKey >> 42) & 0x1FFFFFL) << 11 >> 11;
             BlockType cellBlock = world.getBlock(cx, cy, cz);
             SteamPipeTier t = SteamPipeTier.of(cellBlock);
             if (t != null && (minTier == null || t.throughput < minTier.throughput)) minTier = t;

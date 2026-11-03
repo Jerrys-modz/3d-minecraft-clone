@@ -26,12 +26,20 @@ public final class Smelting {
         smelt(BlockType.BRASS_DUST, BlockType.BRASS_INGOT);
         smelt(BlockType.IRON_DUST, BlockType.IRON_INGOT);
         smelt(BlockType.GOLD_DUST, BlockType.GOLD_INGOT);
+        smelt(BlockType.ALUMINUM_DUST, BlockType.ALUMINUM_INGOT);
+        // Phase 3 alloys. Stainless steel is deliberately absent: it needs the
+        // Primitive Blast Furnace's heat, like steel.
+        smelt(BlockType.INVAR_DUST, BlockType.INVAR_INGOT);
+        smelt(BlockType.ELECTRUM_DUST, BlockType.ELECTRUM_INGOT);
         smelt(BlockType.CLAY_BALL, BlockType.FIRE_BRICK);
         smelt(BlockType.CLAY, BlockType.FIRE_BRICK);
         smelt(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);
         smelt(BlockType.DIAMOND_ORE, BlockType.DIAMOND);
         smelt(BlockType.COAL_ORE, BlockType.COAL);
         smelt(BlockType.SAND, BlockType.GLASS);
+
+        // Purified ores (LV Ore Washer output) smelt exactly like their crushed form.
+        // Registered after the crushed recipes below - see smeltPurified().
 
         // GTNH ore chain: crushed ore → ingot (stage 2 of ore → crushed → ingot).
         // Vanilla-style ores with ingot counterparts.
@@ -135,9 +143,18 @@ public final class Smelting {
 
         // Fishing: raw fish cooked into cooked fish.
         smelt(BlockType.RAW_FISH, BlockType.COOKED_FISH);
+        smeltPurified();
     }
 
     private Smelting() {
+    }
+
+    /** Mirrors every crushed-ore recipe onto its {@code PURIFIED_*} counterpart. */
+    private static void smeltPurified() {
+        for (BlockType t : BlockType.values()) {
+            BlockType crushed = com.minecraftclone.world.PurifiedOre.crushedOf(t);
+            if (crushed != null && OUTPUTS.containsKey(crushed)) smelt(t, OUTPUTS.get(crushed));
+        }
     }
 
     /** Registers a smelting recipe: one {@code ore} (plus fuel) yields one {@code output}. */

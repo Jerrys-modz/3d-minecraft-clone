@@ -414,6 +414,25 @@ public final class Mining {
         put(BlockType.STEAM_FURNACE, 3.5f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.STEAM_MACERATOR, 3.5f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.STEEL_CASING, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+
+        // Electric Age machines and wiring.
+        put(BlockType.COAL_GENERATOR, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTRIC_FURNACE, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.BATTERY_BLOCK, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTRIC_MACERATOR, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTRIC_ORE_WASHER, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.THERMAL_CENTRIFUGE, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTRIC_COMPRESSOR, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTRIC_EXTRACTOR, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTROLYZER, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.LV_TRANSFORMER, 3.5f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.MV_CASING, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.STEEL_TANK, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.FLUID_PIPE, 1.0f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.CHEMICAL_REACTOR, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.TIN_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.COPPER_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
+        put(BlockType.GOLD_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
     }
 
     private static void put(BlockType type, float hardness, ToolKind effectiveTool, int requiredTier) {

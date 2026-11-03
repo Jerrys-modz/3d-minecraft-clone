@@ -1084,7 +1084,115 @@ public enum BlockType {
     WROUGHT_IRON_ROD(575, 0),
 
     /** Machine hull: eight steel plates in a ring. Tile 294. */
-    STEEL_CASING(576, true, false, 294, 294, 294);
+    STEEL_CASING(576, true, false, 294, 294, 294),
+
+    /**
+     * LV Macerator — electric ore grinder built around a steel casing. Grinds
+     * ore / crushed ore / impure piles into 2× dust on EU. Steel-casing sides
+     * (tile 294); directional front tile 295 idle / 296 grinding.
+     */
+    ELECTRIC_MACERATOR(577, true, false, 294, 294, 294, 295, 296, 0, 0),
+
+    // Purified ores: LV Ore Washer output (crushed → purified). Each smelts
+    // like its crushed form and spins into 3× dust in the Thermal Centrifuge.
+    PURIFIED_COPPER(578, 0),
+    PURIFIED_TIN(579, 0),
+    PURIFIED_BAUXITE(580, 0),
+    PURIFIED_ZINC(581, 0),
+    PURIFIED_LEAD(582, 0),
+    PURIFIED_SILVER(583, 0),
+    PURIFIED_NICKEL(584, 0),
+    PURIFIED_COBALT(585, 0),
+    PURIFIED_TUNGSTEN(586, 0),
+    PURIFIED_MOLYBDENUM(587, 0),
+    PURIFIED_PLATINUM(588, 0),
+    PURIFIED_CHROMIUM(589, 0),
+    PURIFIED_MANGANESE(590, 0),
+    PURIFIED_VANADIUM(591, 0),
+    PURIFIED_BERYLLIUM(592, 0),
+    PURIFIED_TITANIUM(593, 0),
+    PURIFIED_URANIUM(594, 0),
+    PURIFIED_THORIUM(595, 0),
+    PURIFIED_PLUTONIUM(596, 0),
+    PURIFIED_IRIDIUM(597, 0),
+
+    /** LV Ore Washer — crushed/impure → purified ore on EU + adjacent water. Front 297 idle / 298 washing. */
+    ELECTRIC_ORE_WASHER(598, true, false, 294, 294, 294, 297, 298, 0, 0),
+
+    /** LV Thermal Centrifuge — purified ore → 3× dust + byproduct. Front 299 idle / 300 spinning. */
+    THERMAL_CENTRIFUGE(599, true, false, 294, 294, 294, 299, 300, 0, 0),
+
+    /**
+     * Tin Cable — the cheap starter EU conductor (0.5× throughput, half of
+     * copper). Six per three tin ingots. Tile 301.
+     */
+    TIN_CABLE(600, true, false, 301, 301, 301),
+
+    /** Vacuum Tube — the primitive LV circuit; required by every LV processor recipe. */
+    VACUUM_TUBE(601, 0),
+
+    /** LV Compressor — presses ingots into plates on EU. Front 302 idle / 303 pressing. */
+    ELECTRIC_COMPRESSOR(602, true, false, 294, 294, 294, 302, 303, 0, 0),
+
+    /** LV Battery — tin-cased cell; each one in a Battery Block adds 10 000 EU capacity. */
+    LV_BATTERY(603, 0),
+
+    /** LV Extractor — jungle wood → rubber on EU. Front 304 idle / 305 extracting. */
+    ELECTRIC_EXTRACTOR(604, true, false, 294, 294, 294, 304, 305, 0, 0),
+
+    /** Aluminium dust — only from electrolysing bauxite; smelts to an aluminium ingot. */
+    ALUMINUM_DUST(605, 0),
+
+    /** LV Electrolyzer — splits compound ores into element dusts. Front 306 idle / 307 working. */
+    ELECTROLYZER(606, true, false, 294, 294, 294, 306, 307, 0, 0),
+
+    /**
+     * LV Transformer — steps MV (gold-cable) power down to LV. Not a cable:
+     * it separates the networks on either side, so an LV machine fed through
+     * it is safe from overvoltage. Tile 308 (sides) / 309 (coil face, top).
+     */
+    LV_TRANSFORMER(607, true, false, 309, 308, 309),
+
+    // ---- Phase 3: advanced alloys ------------------------------------
+    /** Invar blend: 2 iron dust + 1 nickel dust. Furnace-smeltable. */
+    INVAR_DUST(608, 0),
+    INVAR_INGOT(609, 0),
+    /** Electrum blend: gold dust + silver dust. Furnace-smeltable. */
+    ELECTRUM_DUST(610, 0),
+    ELECTRUM_INGOT(611, 0),
+    /** Stainless blend: 6 iron + nickel + manganese + chromium dust. Primitive Blast Furnace only. */
+    STAINLESS_STEEL_DUST(612, 0),
+    STAINLESS_STEEL_INGOT(613, 0),
+    INVAR_PLATE(614, 0),
+    ELECTRUM_PLATE(615, 0),
+    STAINLESS_STEEL_PLATE(616, 0),
+    INVAR_ROD(617, 0),
+    ELECTRUM_ROD(618, 0),
+    STAINLESS_STEEL_ROD(619, 0),
+
+    /** MV machine hull: eight stainless steel plates in a ring. Tile 310. */
+    MV_CASING(620, true, false, 310, 310, 310),
+
+    // ---- Phase 3: fluids ---------------------------------------------
+    /** Steel Tank — stores 32 000 mB of one fluid. Tile 311 (sides, glass window) / 312 (top/bottom). */
+    STEEL_TANK(621, true, false, 312, 311, 312),
+    /** Fluid Pipe (bronze) — connects tanks to machines that use fluids. Tile 313. */
+    FLUID_PIPE(622, true, false, 313, 313, 313),
+    /** Empty tin cell — scoops 1000 mB of water or still lava, or draws it from a tank. */
+    TIN_CELL(623, 0),
+    /** Tin cell holding 1000 mB of water. */
+    WATER_CELL(624, 0),
+    /** Tin cell holding 1000 mB of lava. */
+    LAVA_CELL(625, 0),
+    /** Tin cell holding 1000 mB of sulfuric acid. */
+    SULFURIC_ACID_CELL(626, 0),
+
+    /**
+     * Chemical Reactor — the first MV machine (runs on gold-cable MV power
+     * without a transformer). Dust + fluid from tanks → fluid or item.
+     * MV casing sides (tile 310); front 314 idle / 315 reacting.
+     */
+    CHEMICAL_REACTOR(627, true, false, 310, 310, 310, 314, 315, 0, 0);
 
     public final short id;
     public final boolean solid;

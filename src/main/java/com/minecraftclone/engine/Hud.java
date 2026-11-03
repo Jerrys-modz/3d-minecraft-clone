@@ -2155,6 +2155,16 @@ public class Hud {
                 }
                 return new float[]{FURNACE_INPUT_X, INV_TOP_ROW_Y};
             }
+            // Coal Generator / Battery Block: their only slot (fuel / batteries) is drawn where a furnace's fuel goes.
+            if (gui.container() instanceof com.minecraftclone.world.CoalGeneratorEntity
+                    || gui.container() instanceof com.minecraftclone.world.BatteryBlockEntity) {
+                return new float[]{FURNACE_INPUT_X, FURNACE_FUEL_Y};
+            }
+            // Steam Macerator: 2 slots (input, output) - slot 1 is the output.
+            if (gui.container() instanceof com.minecraftclone.world.SteamMaceratorEntity
+                    && cs == com.minecraftclone.world.SteamMaceratorEntity.SLOT_OUTPUT) {
+                return new float[]{FURNACE_OUTPUT_X, FURNACE_MID_Y};
+            }
             // Furnace: a 3-slot column - input, fuel, output.
             int fs = cs;
             if (fs == Furnace.SLOT_OUTPUT) return new float[]{FURNACE_OUTPUT_X, FURNACE_MID_Y};

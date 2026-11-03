@@ -99,6 +99,14 @@ public final class Crafting {
         CHARS.put('J', BlockType.RUBBER);             // J = rubber (unused; 'T' is taken by TORCH)
         CHARS.put('1', BlockType.FIRE_BRICK);         // 1 = fire brick (all A-Z taken)
         CHARS.put('2', BlockType.STEEL_PLATE);        // 2 = steel plate (casing hull)
+        CHARS.put('3', BlockType.STEEL_CASING);       // 3 = steel casing (LV machine hull)
+        CHARS.put('4', BlockType.TIN_INGOT);          // 4 = tin ingot
+        CHARS.put('5', BlockType.COPPER_CABLE);       // 5 = copper cable (circuit wiring)
+        CHARS.put('6', BlockType.VACUUM_TUBE);        // 6 = vacuum tube (LV circuit)
+        CHARS.put('7', BlockType.CRUSHED_SULFUR);     // 7 = sulfur (battery electrolyte)
+        CHARS.put('8', BlockType.TIN_PLATE);          // 8 = tin plate (battery casing)
+        CHARS.put('9', BlockType.STAINLESS_STEEL_PLATE); // 9 = stainless plate (MV hull)
+        CHARS.put('0', BlockType.MV_CASING);          // 0 = MV casing
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -353,6 +361,52 @@ public final class Crafting {
         shaped3x3("IXI", "XFX", "IXI", BlockType.ELECTRIC_FURNACE, 1);
         // Battery Block: alternating copper ingots and iron in a 3x3.
         shaped3x3("XIX", "IXI", "XIX", BlockType.BATTERY_BLOCK, 1);
+        // LV Macerator: copper windings around a steel casing, diamond grinder on top.
+        // Tin Cable: three vertical tin ingots -> 6 cables (half copper's throughput).
+        shaped3x3(".4.", ".4.", ".4.", BlockType.TIN_CABLE, 6);
+        // Vacuum Tube: a glass bulb wired between two copper cables -> 2 tubes.
+        shaped3x3("...", "5G5", "...", BlockType.VACUUM_TUBE, 2);
+        // LV processors: copper windings around a steel casing, a vacuum-tube
+        // circuit in the base, and the machine's working part on top.
+        shaped3x3("XDX", "X3X", "X6X", BlockType.ELECTRIC_MACERATOR, 1);
+        // LV Ore Washer: copper windings around a steel casing, glass wash tank on top.
+        shaped3x3("XGX", "X3X", "X6X", BlockType.ELECTRIC_ORE_WASHER, 1);
+        // LV Thermal Centrifuge: copper windings around a steel casing, furnace heater on top.
+        shaped3x3("XFX", "X3X", "X6X", BlockType.THERMAL_CENTRIFUGE, 1);
+        // LV Compressor: a steel-plate press over the casing.
+        shaped3x3("X2X", "X3X", "X6X", BlockType.ELECTRIC_COMPRESSOR, 1);
+        // LV Extractor: a wooden tree-tap (planks) over the casing.
+        shaped3x3("XPX", "X3X", "X6X", BlockType.ELECTRIC_EXTRACTOR, 1);
+        // LV Electrolyzer: gold electrodes over a glass cell on the casing.
+        shaped3x3("AGA", "X3X", "X6X", BlockType.ELECTROLYZER, 1);
+        // LV Transformer: a gold (MV) winding over an iron core, copper (LV) winding below.
+        shaped3x3("AAA", "III", "XXX", BlockType.LV_TRANSFORMER, 1);
+
+        // ---- Phase 3: advanced alloys (mix dusts, then smelt) ---------------
+        // Invar: 2 iron + 1 nickel -> 3.
+        shapeless3x3(BlockType.INVAR_DUST, 3, BlockType.IRON_DUST, BlockType.IRON_DUST, BlockType.NICKEL_DUST);
+        // Electrum: 1 gold + 1 silver -> 2.
+        shapeless2x2(BlockType.ELECTRUM_DUST, 2, BlockType.GOLD_DUST, BlockType.SILVER_DUST);
+        shapeless3x3(BlockType.ELECTRUM_DUST, 2, BlockType.GOLD_DUST, BlockType.SILVER_DUST);
+        // Stainless steel: 6 iron + nickel + manganese + chromium -> 9 (PBF smelts it).
+        shapeless3x3(BlockType.STAINLESS_STEEL_DUST, 9,
+                BlockType.IRON_DUST, BlockType.IRON_DUST, BlockType.IRON_DUST,
+                BlockType.IRON_DUST, BlockType.IRON_DUST, BlockType.IRON_DUST,
+                BlockType.NICKEL_DUST, BlockType.MANGANESE_DUST, BlockType.CHROMIUM_DUST);
+        // MV casing: eight stainless plates in a ring.
+        shaped3x3("999", "9.9", "999", BlockType.MV_CASING, 1);
+
+        // ---- Phase 3: fluids ------------------------------------------------
+        // Steel Tank: steel plates around a glass sight window.
+        shaped3x3("222", "2G2", "222", BlockType.STEEL_TANK, 1);
+        // Fluid Pipe: a glass-lined bronze run -> 4.
+        shaped3x3("...", "EGE", "...", BlockType.FLUID_PIPE, 4);
+        // Tin Cell: four tin plates around a glass liner -> 2.
+        shaped3x3(".8.", "8G8", ".8.", BlockType.TIN_CELL, 2);
+        // Chemical Reactor: glass vessel on an MV casing, vacuum-tube control, stainless shell.
+        shaped3x3("9G9", "606", "999", BlockType.CHEMICAL_REACTOR, 1);
+        // LV Battery: copper-cable terminal over a tin-plate cell filled with sulfur electrolyte.
+        shaped3x3(".5.", "878", "878", BlockType.LV_BATTERY, 1);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.

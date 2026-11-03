@@ -389,6 +389,8 @@ public class World implements BlockAccessor {
                         wash.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
                         ef.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof ElectricMachineEntity em) {
+                        em.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
                     }
@@ -488,6 +490,7 @@ public class World implements BlockAccessor {
         multiBlockManager.onBlockChanged(this, worldX, worldY, worldZ);
         // A pipe placed or broken changes network topology: drop stale runs.
         pipeNetworkManager.onBlockChanged(worldX, worldY, worldZ);
+        if (type != old) ensureElectricEntity(worldX, worldY, worldZ, type);
 
         // Placing/removing a light source (e.g. a torch) can change the baked glow
         // in every chunk within its radius, not just literal boundary columns - the
@@ -569,15 +572,15 @@ public class World implements BlockAccessor {
     }
 
     private static int keyX(long key) {
-        return (int) (key & 0x1FFFFFL) << 21 >> 21;
+        return (int) (key & 0x1FFFFFL) << 11 >> 11;
     }
 
     private static int keyY(long key) {
-        return (int) ((key >> 21) & 0x1FFFFFL) << 21 >> 21;
+        return (int) ((key >> 21) & 0x1FFFFFL) << 11 >> 11;
     }
 
     private static int keyZ(long key) {
-        return (int) ((key >> 42) & 0x1FFFFFL) << 21 >> 21;
+        return (int) ((key >> 42) & 0x1FFFFFL) << 11 >> 11;
     }
 
     /** The block entity at a block position, or null if none. */
@@ -775,6 +778,80 @@ public class World implements BlockAccessor {
         return ef;
     }
 
+    /** Returns the Steel Tank entity at a position, creating it on first use. */
+    public FluidTankEntity getOrCreateSteelTank(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing instanceof FluidTankEntity t) return t;
+        FluidTankEntity t = new FluidTankEntity();
+        blockEntities.put(blockKey(x, y, z), t);
+        return t;
+    }
+
+    /** Returns the LV Macerator entity at a position, creating + attaching it on first use. */
+    public ElectricMaceratorEntity getOrCreateElectricMacerator(int x, int y, int z) {
+        return getOrCreateElectricMachine(x, y, z, ElectricMaceratorEntity.class, ElectricMaceratorEntity::new);
+    }
+
+    /** Returns the LV Ore Washer entity at a position, creating + attaching it on first use. */
+    public ElectricOreWasherEntity getOrCreateElectricOreWasher(int x, int y, int z) {
+        return getOrCreateElectricMachine(x, y, z, ElectricOreWasherEntity.class, ElectricOreWasherEntity::new);
+    }
+
+    /** Returns the Thermal Centrifuge entity at a position, creating + attaching it on first use. */
+    public ThermalCentrifugeEntity getOrCreateThermalCentrifuge(int x, int y, int z) {
+        return getOrCreateElectricMachine(x, y, z, ThermalCentrifugeEntity.class, ThermalCentrifugeEntity::new);
+    }
+
+    /**
+     * The LV processor at a position for whichever electric processor block
+     * (macerator, ore washer, thermal centrifuge, compressor, extractor, electrolyzer, chemical reactor) is there, creating it on first use; null for any other block.
+     */
+    public ElectricMachineEntity getOrCreateElectricMachine(int x, int y, int z) {
+        return switch (getBlock(x, y, z)) {
+            case ELECTRIC_MACERATOR -> getOrCreateElectricMacerator(x, y, z);
+            case ELECTRIC_ORE_WASHER -> getOrCreateElectricOreWasher(x, y, z);
+            case THERMAL_CENTRIFUGE -> getOrCreateThermalCentrifuge(x, y, z);
+            case ELECTRIC_COMPRESSOR -> getOrCreateElectricMachine(x, y, z,
+                    ElectricCompressorEntity.class, ElectricCompressorEntity::new);
+            case ELECTRIC_EXTRACTOR -> getOrCreateElectricMachine(x, y, z,
+                    ElectricExtractorEntity.class, ElectricExtractorEntity::new);
+            case ELECTROLYZER -> getOrCreateElectricMachine(x, y, z,
+                    ElectrolyzerEntity.class, ElectrolyzerEntity::new);
+            case CHEMICAL_REACTOR -> getOrCreateElectricMachine(x, y, z,
+                    ChemicalReactorEntity.class, ChemicalReactorEntity::new);
+            default -> null;
+        };
+    }
+
+    private <T extends ElectricMachineEntity> T getOrCreateElectricMachine(
+            int x, int y, int z, Class<T> kind, java.util.function.Supplier<T> factory) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        T machine = kind.isInstance(existing) ? kind.cast(existing) : factory.get();
+        machine.attach(x, y, z, this);
+        if (machine != existing) blockEntities.put(blockKey(x, y, z), machine);
+        return machine;
+    }
+
+    /**
+     * Creates the block entity for a freshly placed Electric Age block or
+     * Steel Tank. EU sources/consumers and tanks are found by scanning for
+     * <em>entities</em>, so a battery, generator or tank that was placed but
+     * never right-clicked would otherwise be invisible to the machines wired to it.
+     */
+    private void ensureElectricEntity(int x, int y, int z, BlockType type) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        if (existing != null && existing.blockType() == type) return;
+        switch (type) {
+            case COAL_GENERATOR -> getOrCreateCoalGenerator(x, y, z);
+            case BATTERY_BLOCK -> getOrCreateBatteryBlock(x, y, z);
+            case ELECTRIC_FURNACE -> getOrCreateElectricFurnace(x, y, z);
+            case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR,
+                 ELECTRIC_EXTRACTOR, ELECTROLYZER, CHEMICAL_REACTOR -> getOrCreateElectricMachine(x, y, z);
+            case STEEL_TANK -> getOrCreateSteelTank(x, y, z);
+            default -> { }
+        }
+    }
+
     /** Returns the Battery Block entity at a position, creating + attaching it on first use. */
     public BatteryBlockEntity getOrCreateBatteryBlock(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
@@ -819,6 +896,8 @@ public class World implements BlockAccessor {
             wash.attach(x, y, z, this);
         } else if (entity instanceof ElectricFurnaceEntity ef) {
             ef.attach(x, y, z, this);
+        } else if (entity instanceof ElectricMachineEntity em) {
+            em.attach(x, y, z, this);
         } else if (entity instanceof BatteryBlockEntity bat) {
             bat.attach(x, y, z, this);
         }
@@ -880,6 +959,69 @@ public class World implements BlockAccessor {
                     }
                 }
             }
+        }
+        detonateOverloads();
+    }
+
+    // ------------------------------------------------------------------
+    // Overvoltage: LV machines fed MV power without a transformer
+    // ------------------------------------------------------------------
+
+    /** Blast radius of an overvolted machine. */
+    public static final float OVERLOAD_RADIUS = 2f;
+    /** Damage at the centre of an overvolted machine's blast. */
+    public static final float OVERLOAD_CENTER_DAMAGE = 6f;
+
+    /** Machines that reported overvoltage during the current tick (block keys). */
+    private final java.util.Set<Long> pendingOverloads = new java.util.LinkedHashSet<>();
+    /** Blast centres since the last {@link #takeOverloadBlasts()}, for player damage/sound. */
+    private final List<float[]> overloadBlasts = new ArrayList<>();
+    private boolean machineExplosions = true;
+    private final java.util.Random overloadRnd = new java.util.Random();
+
+    /**
+     * Whether overvolted machines explode. The multiplayer server and clients
+     * turn this off (block blasts aren't synced), so there an overvolted
+     * machine simply refuses to run.
+     */
+    public void setMachineExplosions(boolean enabled) {
+        machineExplosions = enabled;
+    }
+
+    /**
+     * Called by an electric machine that is drawing MV power without a
+     * transformer. Deferred: the blast happens after the block-entity tick
+     * loop, since destroying blocks mid-iteration would corrupt it.
+     */
+    public void reportOverload(int x, int y, int z) {
+        if (machineExplosions) pendingOverloads.add(blockKey(x, y, z));
+    }
+
+    /** Blast centres of machines that exploded since the last call; clears the list. */
+    public List<float[]> takeOverloadBlasts() {
+        List<float[]> out = new ArrayList<>(overloadBlasts);
+        overloadBlasts.clear();
+        return out;
+    }
+
+    private void detonateOverloads() {
+        if (pendingOverloads.isEmpty()) return;
+        List<Long> keys = new ArrayList<>(pendingOverloads);
+        pendingOverloads.clear();
+        for (long k : keys) {
+            int x = keyX(k), y = keyY(k), z = keyZ(k);
+            BlockEntity e = blockEntities.get(k);
+            if (e == null || getBlock(x, y, z) != e.blockType()) continue;   // already gone
+            blockEntities.remove(k);
+            setBlock(x, y, z, BlockType.AIR);   // the machine itself is destroyed, contents and all
+            float cx = x + 0.5f, cy = y + 0.5f, cz = z + 0.5f;
+            Explosion.blastBlocks(this, cx, cy, cz, OVERLOAD_RADIUS, overloadRnd);
+            for (Mob mob : mobs) {
+                float dmg = Explosion.damageAt(cx, cy, cz, OVERLOAD_RADIUS, OVERLOAD_CENTER_DAMAGE,
+                        mob.position.x, mob.position.y, mob.position.z);
+                if (dmg > 0f) mob.damage(dmg, cx, cz);
+            }
+            overloadBlasts.add(new float[]{cx, cy, cz});
         }
     }
 
@@ -1225,6 +1367,8 @@ public class World implements BlockAccessor {
                         wash.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricFurnaceEntity ef) {
                         ef.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof ElectricMachineEntity em) {
+                        em.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
                     }

@@ -20,8 +20,8 @@ public enum PipeType {
         }
     },
 
-    /** Fluids (water, lava, molten metals) - planned. */
-    FLUID(null),
+    /** Fluids (water, lava) between tanks and machines — bronze fluid pipe. */
+    FLUID(BlockType.FLUID_PIPE),
 
     /** Items between inventories and machines - planned. */
     ITEM(null),

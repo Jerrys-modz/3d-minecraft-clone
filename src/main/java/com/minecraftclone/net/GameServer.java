@@ -204,6 +204,7 @@ public class GameServer implements AutoCloseable {
         this.worlds = new World[DimensionType.values().length];
         for (DimensionType dim : DimensionType.values()) {
             World w = new World(seed, settings, null, saveDir, dim, true);
+            w.setMachineExplosions(false);   // block blasts aren't synced; overvolted machines just idle
             w.setKeepChunks(true);
             w.setRenderDistance(8);
             worlds[dim.ordinal()] = w;
@@ -1008,7 +1009,13 @@ public class GameServer implements AutoCloseable {
                 || block == BlockType.SMELTERY_CONTROLLER
                 || block == BlockType.CASTING_TABLE || block == BlockType.CASTING_BASIN
                 || block == BlockType.STEAM_BOILER || block == BlockType.STEAM_FURNACE || block == BlockType.STEAM_MACERATOR
-                || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE;
+                || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE
+                || block == BlockType.COAL_GENERATOR || block == BlockType.ELECTRIC_FURNACE
+                || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
+                || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR
+                || block == BlockType.ELECTRIC_EXTRACTOR || block == BlockType.BATTERY_BLOCK
+                || block == BlockType.ELECTROLYZER || block == BlockType.STEEL_TANK
+                || block == BlockType.CHEMICAL_REACTOR;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -1027,6 +1034,17 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.SteamMaceratorEntity.TYPE -> block == BlockType.STEAM_MACERATOR;
             case com.minecraftclone.world.SteamOreWasherEntity.TYPE -> block == BlockType.STEAM_ORE_WASHER;
             case com.minecraftclone.world.PrimitiveBlastFurnaceEntity.TYPE -> block == BlockType.PRIMITIVE_BLAST_FURNACE;
+            case com.minecraftclone.world.CoalGeneratorEntity.TYPE -> block == BlockType.COAL_GENERATOR;
+            case com.minecraftclone.world.ElectricFurnaceEntity.TYPE -> block == BlockType.ELECTRIC_FURNACE;
+            case com.minecraftclone.world.ElectricMaceratorEntity.TYPE -> block == BlockType.ELECTRIC_MACERATOR;
+            case com.minecraftclone.world.ElectricOreWasherEntity.TYPE -> block == BlockType.ELECTRIC_ORE_WASHER;
+            case com.minecraftclone.world.ThermalCentrifugeEntity.TYPE -> block == BlockType.THERMAL_CENTRIFUGE;
+            case com.minecraftclone.world.ElectricCompressorEntity.TYPE -> block == BlockType.ELECTRIC_COMPRESSOR;
+            case com.minecraftclone.world.ElectricExtractorEntity.TYPE -> block == BlockType.ELECTRIC_EXTRACTOR;
+            case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
+            case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
+            case com.minecraftclone.world.ChemicalReactorEntity.TYPE -> block == BlockType.CHEMICAL_REACTOR;
+            case com.minecraftclone.world.BatteryBlockEntity.TYPE -> block == BlockType.BATTERY_BLOCK;
             default -> false;
         };
     }
@@ -1089,6 +1107,16 @@ public class GameServer implements AutoCloseable {
             case CASTING_TABLE, CASTING_BASIN -> world.getOrCreateCasting(open.x(), open.y(), open.z());
             case STEAM_BOILER -> world.getOrCreateSteamBoiler(open.x(), open.y(), open.z());
             case STEAM_FURNACE -> world.getOrCreateSteamFurnace(open.x(), open.y(), open.z());
+            case STEAM_MACERATOR -> world.getOrCreateSteamMacerator(open.x(), open.y(), open.z());
+            case STEAM_ORE_WASHER -> world.getOrCreateSteamOreWasher(open.x(), open.y(), open.z());
+            case PRIMITIVE_BLAST_FURNACE -> world.getOrCreatePrimitiveBlastFurnace(open.x(), open.y(), open.z());
+            case COAL_GENERATOR -> world.getOrCreateCoalGenerator(open.x(), open.y(), open.z());
+            case ELECTRIC_FURNACE -> world.getOrCreateElectricFurnace(open.x(), open.y(), open.z());
+            case BATTERY_BLOCK -> world.getOrCreateBatteryBlock(open.x(), open.y(), open.z());
+            case STEEL_TANK -> world.getOrCreateSteelTank(open.x(), open.y(), open.z());
+            case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR, ELECTRIC_EXTRACTOR,
+                 ELECTROLYZER, CHEMICAL_REACTOR ->
+                    world.getOrCreateElectricMachine(open.x(), open.y(), open.z());
             default -> null;
         };
         if (entity == null) return;

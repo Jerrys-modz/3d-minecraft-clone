@@ -6,27 +6,45 @@ package com.minecraftclone.world;
  * just like steam pipes — one copper segment in an otherwise gold run
  * limits the whole line to copper rate.
  *
- * <p>Ordering is by ascending throughput (COPPER first, GOLD last);
+ * <p>Ordering is by ascending throughput (TIN first, GOLD last);
  * the weakest-link check compares {@code throughput} values rather than
  * ordinals so new tiers can be inserted freely in future.
  */
 public enum CableTier {
 
-    /** Low-voltage tier: base EU/s rate. Crafted from copper ingots. */
-    COPPER(1.0f),
+    /** Starter tier: half the copper rate, lossiest. Crafted from tin ingots. */
+    TIN(0.5f, Voltage.LV, 0.010f),
 
-    /** Medium-voltage tier: 2× EU/s rate. Crafted from gold ingots. */
-    GOLD(2.0f);
+    /** Low-voltage tier: base EU/s rate. Crafted from copper ingots. */
+    COPPER(1.0f, Voltage.LV, 0.005f),
+
+    /**
+     * Medium-voltage tier: 2× EU/s rate and the lowest loss, but MV — LV
+     * machines on a gold network need an LV Transformer. Crafted from gold ingots.
+     */
+    GOLD(2.0f, Voltage.MV, 0.001f);
+
+    /** Voltage class a cable carries; any MV cable makes its whole network MV. */
+    public enum Voltage { LV, MV }
 
     /** Fraction of base EU throughput this cable conducts (>0). */
     public final float throughput;
 
-    CableTier(float throughput) {
+    /** Voltage class of this cable. */
+    public final Voltage voltage;
+
+    /** Fraction of energy lost per cable block travelled (see {@link EuNetwork}). */
+    public final float lossPerBlock;
+
+    CableTier(float throughput, Voltage voltage, float lossPerBlock) {
         this.throughput = throughput;
+        this.voltage = voltage;
+        this.lossPerBlock = lossPerBlock;
     }
 
     /** Returns the cable tier for a given block, or null if it is not a cable. */
     public static CableTier of(BlockType type) {
+        if (type == BlockType.TIN_CABLE)    return TIN;
         if (type == BlockType.COPPER_CABLE) return COPPER;
         if (type == BlockType.GOLD_CABLE)   return GOLD;
         return null;

@@ -817,6 +817,17 @@ public class Main {
         return buf.toByteArray();
     }
 
+    /** Machine blocks (other than the plain furnace) whose slots drop when the block is broken. */
+    private static boolean spillsMachineContents(BlockType block) {
+        return block == BlockType.STEAM_FURNACE || block == BlockType.STEAM_MACERATOR
+                || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE
+                || block == BlockType.COAL_GENERATOR || block == BlockType.ELECTRIC_FURNACE
+                || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
+                || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR
+                || block == BlockType.ELECTRIC_EXTRACTOR || block == BlockType.BATTERY_BLOCK
+                || block == BlockType.ELECTROLYZER || block == BlockType.CHEMICAL_REACTOR;
+    }
+
     /** True if the block-entity type name matches the block at the cell. */
     private static boolean typeMatchesBlock(String type, BlockType block) {
         return switch (type) {
@@ -825,6 +836,20 @@ public class Main {
             case Furnace.TYPE -> block == BlockType.FURNACE;
             case com.minecraftclone.world.SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
             case com.minecraftclone.world.SteamFurnaceEntity.TYPE -> block == BlockType.STEAM_FURNACE;
+            case com.minecraftclone.world.SteamMaceratorEntity.TYPE -> block == BlockType.STEAM_MACERATOR;
+            case com.minecraftclone.world.SteamOreWasherEntity.TYPE -> block == BlockType.STEAM_ORE_WASHER;
+            case com.minecraftclone.world.PrimitiveBlastFurnaceEntity.TYPE -> block == BlockType.PRIMITIVE_BLAST_FURNACE;
+            case com.minecraftclone.world.CoalGeneratorEntity.TYPE -> block == BlockType.COAL_GENERATOR;
+            case com.minecraftclone.world.ElectricFurnaceEntity.TYPE -> block == BlockType.ELECTRIC_FURNACE;
+            case com.minecraftclone.world.ElectricMaceratorEntity.TYPE -> block == BlockType.ELECTRIC_MACERATOR;
+            case com.minecraftclone.world.ElectricOreWasherEntity.TYPE -> block == BlockType.ELECTRIC_ORE_WASHER;
+            case com.minecraftclone.world.ThermalCentrifugeEntity.TYPE -> block == BlockType.THERMAL_CENTRIFUGE;
+            case com.minecraftclone.world.ElectricCompressorEntity.TYPE -> block == BlockType.ELECTRIC_COMPRESSOR;
+            case com.minecraftclone.world.ElectricExtractorEntity.TYPE -> block == BlockType.ELECTRIC_EXTRACTOR;
+            case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
+            case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
+            case com.minecraftclone.world.ChemicalReactorEntity.TYPE -> block == BlockType.CHEMICAL_REACTOR;
+            case com.minecraftclone.world.BatteryBlockEntity.TYPE -> block == BlockType.BATTERY_BLOCK;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
@@ -1048,6 +1073,7 @@ public class Main {
                 World[] mirrorWorlds = new World[DimensionType.values().length];
                 for (DimensionType dim : DimensionType.values()) {
                     World w = new World(welcome.seed(), remoteSettings, atlas, clientSaveDir, dim);
+                    w.setMachineExplosions(false);   // the server owns the world; don't blow up local copies
                     w.setRenderDistance(settings.getRenderDistance());
                     w.setLeavesTransparent(settings.isLeavesTransparent());
                     byte dimId = (byte) dim.ordinal();
@@ -1354,6 +1380,16 @@ public class Main {
                             }
                         }
                     }
+                }
+                if (spillsMachineContents(targetType)
+                        && world.blockEntityAt(bx, by, bz) instanceof com.minecraftclone.player.StorageContainer machine) {
+                    // Steam/electric machines and the PBF spill their slots like a furnace.
+                    for (int s = 0; s < machine.size(); s++) {
+                        if (machine.typeOf(s) != null && machine.countOf(s) > 0) {
+                            world.spawnItem(bx, by, bz, machine.typeOf(s), machine.countOf(s), loot);
+                        }
+                    }
+                    world.removeBlockEntity(bx, by, bz);
                 }
                 if (targetType == BlockType.CHEST || targetType == BlockType.BARREL) {
                     // A broken chest/barrel spills its contents.
@@ -3324,6 +3360,18 @@ public class Main {
             // Furnaces (and any other block entities) work in the background,
             // ticking forward with world time.
             world.tickBlockEntities(dt);
+            for (float[] blast : world.takeOverloadBlasts()) {
+                // An LV machine wired straight to MV (gold) power exploded.
+                org.joml.Vector3f pp = player.getPosition();
+                float dmg = com.minecraftclone.world.Explosion.damageAt(blast[0], blast[1], blast[2],
+                        World.OVERLOAD_RADIUS, World.OVERLOAD_CENTER_DAMAGE, pp.x, pp.y, pp.z);
+                if (dmg > 0f) {
+                    player.takeDamage(dmg * settings.getDifficulty().mobDamageMultiplier());
+                }
+                audio.playAt(SoundEvent.THUNDER, blast[0], blast[1], blast[2], 1f);
+                showMessage(messages, "Overvoltage! Gold cable is MV - put an LV Transformer before LV machines.",
+                        new Vector4f(1f, 0.5f, 0.2f, 1f), 4f);
+            }
 
             // Boats: float un-mounted boats passively on the water surface.
             // The mounted boat (if any) is already ticked with steering input
@@ -3722,6 +3770,44 @@ public class Main {
                                 hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, pbf);
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.COAL_GENERATOR) {
+                        // Coal Generator: furnace-style GUI with a single fuel slot;
+                        // the flame shows the burn, the arrow shows the EU buffer.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.CoalGeneratorEntity gen = world.getOrCreateCoalGenerator(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, gen);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                        showMessage(messages, "Generator: " + Math.round(gen.euStored()) + " / "
+                                        + Math.round(com.minecraftclone.world.CoalGeneratorEntity.MAX_EU) + " EU",
+                                new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
+                    } else if (noMob && targeted == BlockType.ELECTRIC_FURNACE) {
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.ElectricFurnaceEntity ef = world.getOrCreateElectricFurnace(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, ef);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && (targeted == BlockType.ELECTRIC_MACERATOR
+                            || targeted == BlockType.ELECTRIC_ORE_WASHER || targeted == BlockType.THERMAL_CENTRIFUGE
+                            || targeted == BlockType.ELECTRIC_COMPRESSOR || targeted == BlockType.ELECTRIC_EXTRACTOR
+                            || targeted == BlockType.ELECTROLYZER || targeted == BlockType.CHEMICAL_REACTOR)) {
+                        // LV processors: furnace-style GUI (input / byproduct / output).
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.ElectricMachineEntity em = world.getOrCreateElectricMachine(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, em);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.BATTERY_BLOCK) {
+                        // Battery Block: one slot for LV batteries (each adds capacity);
+                        // the arrow shows charge, and a message reads it out.
+                        trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.BatteryBlockEntity bat = world.getOrCreateBatteryBlock(
+                                hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, bat);
+                        openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                        showMessage(messages, "Battery: " + Math.round(bat.euStored()) + " / "
+                                        + Math.round(bat.capacity()) + " EU (" + bat.batteryCount() + " LV batteries)",
+                                new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
                     } else if (noMob && targeted == BlockType.CRAFTING_TABLE) {
                         // Right-click a crafting table to open the 3x3 crafting gui.
                         activeGui[0] = new ContainerGui(ContainerGui.Kind.CRAFTING_TABLE, player.getInventory(), craftingGrid, null);
@@ -4026,6 +4112,69 @@ public class Main {
                             handRenderer.triggerSwing();
                             audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
                                     px + 0.5f, py + 0.5f, pz + 0.5f, 0.8f);
+                        }
+                    } else if (noMob && hit != null && targeted == BlockType.STEEL_TANK) {
+                        // Steel Tank: pour a filled cell in, draw into an empty cell, or read the gauge.
+                        com.minecraftclone.world.FluidTankEntity tank =
+                                world.getOrCreateSteelTank(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        com.minecraftclone.world.Fluid cellFluid = com.minecraftclone.world.Fluid.inCell(heldItem);
+                        int cell = com.minecraftclone.world.Fluid.CELL_MB;
+                        boolean changed = false;
+                        if (cellFluid != null) {
+                            if (tank.canFill(cellFluid, cell)) {
+                                tank.fill(cellFluid, cell);
+                                player.getInventory().remove(heldItem, 1);
+                                player.getInventory().add(BlockType.TIN_CELL, 1);
+                                changed = true;
+                            } else {
+                                showMessage(messages, tank.fluid() != null && tank.fluid() != cellFluid
+                                                ? "The tank holds " + tank.fluid().displayName + " - fluids don't mix."
+                                                : "The tank is full.",
+                                        new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else if (heldItem == BlockType.TIN_CELL) {
+                            com.minecraftclone.world.Fluid f = tank.fluid();
+                            if (f != null && tank.has(f, cell)) {
+                                tank.drain(f, cell);
+                                player.getInventory().remove(BlockType.TIN_CELL, 1);
+                                player.getInventory().add(com.minecraftclone.world.Fluid.cellFor(f), 1);
+                                changed = true;
+                            } else {
+                                showMessage(messages, "Not enough fluid in the tank to fill a cell (1000 mB).",
+                                        new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                            }
+                        } else {
+                            showMessage(messages, tank.fluid() == null ? "Steel Tank: empty (0 / "
+                                            + com.minecraftclone.world.FluidTankEntity.CAPACITY_MB + " mB)"
+                                            : "Steel Tank: " + tank.fluid().displayName + " " + tank.amount() + " / "
+                                            + com.minecraftclone.world.FluidTankEntity.CAPACITY_MB + " mB",
+                                    new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
+                        }
+                        if (changed) {
+                            audio.play(SoundEvent.SPLASH);
+                            handRenderer.triggerSwing();
+                            pushContainerSnapshot(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            world.markChunkModifiedByPlayer(World.worldToChunk(hit.blockPos.x),
+                                    World.worldToChunk(hit.blockPos.z));
+                        }
+                    } else if (noMob && hit != null && heldItem == BlockType.TIN_CELL
+                            && com.minecraftclone.world.Fluid.ofBlock(targeted) != null) {
+                        // Empty cell on water (any - like the canteen) or still lava (consumed, like a bucket).
+                        com.minecraftclone.world.Fluid f = com.minecraftclone.world.Fluid.ofBlock(targeted);
+                        if (f == com.minecraftclone.world.Fluid.LAVA && targeted == BlockType.LAVA_FLOW) {
+                            showMessage(messages, "Only still lava can be scooped.", new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
+                        } else {
+                            player.getInventory().remove(BlockType.TIN_CELL, 1);
+                            player.getInventory().add(com.minecraftclone.world.Fluid.cellFor(f), 1);
+                            if (f == com.minecraftclone.world.Fluid.LAVA) {
+                                world.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, BlockType.AIR);
+                                syncBlockToServer((byte) currentDim[0].ordinal(), world,
+                                        hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, true);
+                            }
+                            audio.play(SoundEvent.SPLASH);
+                            handRenderer.triggerSwing();
+                            showMessage(messages, "Filled a " + f.displayName.toLowerCase() + " cell.",
+                                    new Vector4f(0.4f, 0.7f, 1f, 1f), 1.5f);
                         }
                     } else if (noMob && heldItem == BlockType.CLAY_CANTEEN
                             && (targeted == BlockType.WATER_SOURCE || targeted == BlockType.WATER)) {
