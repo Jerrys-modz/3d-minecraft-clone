@@ -46,6 +46,10 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
     protected boolean attached;
     private float sourceCheckTimer;
     private float drawRate = 1f;
+    /** Share of drawn EU that survives the cable run (see {@link EuNetwork}). */
+    private float efficiency = 1f;
+    /** True when the last scan found MV power arriving without a transformer. */
+    private boolean overvoltage;
     /** EU source found on the last scan (package-visible for test injection). */
     EuSource euSource;
 
@@ -118,13 +122,22 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
         if (sourceCheckTimer <= 0f) {
             sourceCheckTimer = 0.5f;
             if (attached && world != null) {
-                euSource = EuNetwork.findSource(world, posX, posY, posZ);
-                drawRate = EuNetwork.drawRate(world, posX, posY, posZ);
+                EuNetwork.Feed feed = EuNetwork.resolve(world, posX, posY, posZ);
+                euSource = feed.source();
+                drawRate = feed.throughput();
+                efficiency = feed.efficiency();
+                overvoltage = feed.overvoltage();
             }
         }
 
         if (euSource == null || euSource.euStored() <= 0f || !canProcess() || !environmentReady()) {
             lastEuFraction = 0f;
+            return;
+        }
+        if (overvoltage) {
+            // MV straight into an LV machine: it blows (or, where explosions are off, refuses to run).
+            lastEuFraction = 0f;
+            if (world != null) world.reportOverload(posX, posY, posZ);
             return;
         }
 
@@ -137,7 +150,7 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
         }
         lastEuFraction = Math.max(0.05f, Math.min(1f, euSource.euStored() / EuNetwork.capacityOf(euSource)));
 
-        progress += drawn / euPerSecond;
+        progress += drawn * efficiency / euPerSecond;
         while (progress >= seconds && canProcess()) {
             progress -= seconds;
             completeOperation();
@@ -170,6 +183,12 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
             counts[SLOT_BYPRODUCT]++;
         }
     }
+
+    /** True when this machine is wired to MV power without a transformer (it won't run). */
+    public boolean isOvervolted() { return overvoltage; }
+
+    /** Share of drawn EU reaching this machine after cable loss (1 = lossless). */
+    public float efficiency() { return efficiency; }
 
     /** True if any face-adjacent block is (unfrozen) water. */
     protected boolean hasAdjacentWater() {

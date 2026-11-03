@@ -12,20 +12,34 @@ package com.minecraftclone.world;
  */
 public enum CableTier {
 
-    /** Starter tier: half the copper rate. Crafted from tin ingots. */
-    TIN(0.5f),
+    /** Starter tier: half the copper rate, lossiest. Crafted from tin ingots. */
+    TIN(0.5f, Voltage.LV, 0.010f),
 
     /** Low-voltage tier: base EU/s rate. Crafted from copper ingots. */
-    COPPER(1.0f),
+    COPPER(1.0f, Voltage.LV, 0.005f),
 
-    /** Medium-voltage tier: 2× EU/s rate. Crafted from gold ingots. */
-    GOLD(2.0f);
+    /**
+     * Medium-voltage tier: 2× EU/s rate and the lowest loss, but MV — LV
+     * machines on a gold network need an LV Transformer. Crafted from gold ingots.
+     */
+    GOLD(2.0f, Voltage.MV, 0.001f);
+
+    /** Voltage class a cable carries; any MV cable makes its whole network MV. */
+    public enum Voltage { LV, MV }
 
     /** Fraction of base EU throughput this cable conducts (>0). */
     public final float throughput;
 
-    CableTier(float throughput) {
+    /** Voltage class of this cable. */
+    public final Voltage voltage;
+
+    /** Fraction of energy lost per cable block travelled (see {@link EuNetwork}). */
+    public final float lossPerBlock;
+
+    CableTier(float throughput, Voltage voltage, float lossPerBlock) {
         this.throughput = throughput;
+        this.voltage = voltage;
+        this.lossPerBlock = lossPerBlock;
     }
 
     /** Returns the cable tier for a given block, or null if it is not a cable. */

@@ -111,8 +111,10 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
     private boolean attached;
     private float scanTimer;
 
-    /** A CoalGenerator or BatteryBlock found on the last scan, used to charge this battery. */
+    /** The Coal Generator found on the last scan, used to charge this battery. */
     private CoalGeneratorEntity chargeSource;
+    /** Share of generator EU that survives the cable run into this battery. */
+    private float chargeEfficiency = 1f;
 
     /** Called by the World when this entity is placed/loaded. */
     public void attach(int x, int y, int z, World world) {
@@ -128,48 +130,18 @@ public final class BatteryBlockEntity implements BlockEntity, ProgressMachine, E
         scanTimer -= dt;
         if (scanTimer <= 0f) {
             scanTimer = 0.5f;
-            if (attached && world != null) chargeSource = findGenerator();
+            if (attached && world != null) {
+                EuNetwork.Feed feed = EuNetwork.resolve(world, posX, posY, posZ, true);
+                chargeSource = (CoalGeneratorEntity) feed.source();
+                chargeEfficiency = feed.efficiency();
+            }
         }
 
         if (chargeSource == null || chargeSource.euStored() <= 0f) return;
         float want   = Math.min(dt * CoalGeneratorEntity.EU_PER_BURN_SECOND, capacity() - eu);
         float drawn  = chargeSource.drainEU(want);
-        eu += drawn;
+        eu = Math.min(capacity(), eu + drawn * chargeEfficiency);   // cable loss on the way in
     }
-
-    private static final int[][] FACES = {
-        {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
-    };
-
-    /**
-     * Finds a Coal Generator to charge from — direct adjacency first,
-     * then via the energy cable network.
-     */
-    private CoalGeneratorEntity findGenerator() {
-        if (!attached || world == null) return null;
-        for (int[] d : FACES) {
-            BlockEntity e = world.blockEntityAt(posX+d[0], posY+d[1], posZ+d[2]);
-            if (e instanceof CoalGeneratorEntity g) return g;
-        }
-        com.minecraftclone.world.pipes.PipeNetwork net =
-                world.pipeNetworks().networkAt(
-                        com.minecraftclone.world.pipes.PipeType.ENERGY, posX, posY, posZ);
-        if (net == null) return null;
-        for (long key : net.cells) {
-            int cx = (int)(key & 0x1FFFFFL) << 11 >> 11;
-            int cy = (int)((key >> 21) & 0x1FFFFFL) << 11 >> 11;
-            int cz = (int)((key >> 42) & 0x1FFFFFL) << 11 >> 11;
-            for (int[] d : FACES) {
-                BlockEntity e = world.blockEntityAt(cx+d[0], cy+d[1], cz+d[2]);
-                if (e instanceof CoalGeneratorEntity g) return g;
-            }
-        }
-        return null;
-    }
-
-    // ------------------------------------------------------------------
-    // Persistence
-    // ------------------------------------------------------------------
 
     // ------------------------------------------------------------------
     // StorageContainer — the battery slot

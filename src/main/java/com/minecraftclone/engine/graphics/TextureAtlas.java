@@ -427,6 +427,8 @@ public class TextureAtlas {
         paintElectricExtractor(image, 305, rnd, true);            // ELECTRIC_EXTRACTOR front extracting
         paintElectrolyzer(image, 306, rnd, false);                // ELECTROLYZER front idle
         paintElectrolyzer(image, 307, rnd, true);                 // ELECTROLYZER front working
+        paintTransformer(image, 308, rnd, false);                 // LV_TRANSFORMER sides
+        paintTransformer(image, 309, rnd, true);                  // LV_TRANSFORMER top/bottom (coil face)
 
         return image;
     }
@@ -2574,6 +2576,38 @@ public class TextureAtlas {
                     color = working ? (rnd.nextInt(3) == 0 ? 0xFFFFE080 : 0xFFE07020) : 0xFFC8C8D0;     // plate
                 } else color = 0xFF14141C;
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * LV_TRANSFORMER (tiles 308 side / 309 coil face): a dark laminated iron
+     * core. Sides show the gold MV winding above the copper LV winding; the
+     * top/bottom show the core's end with a ring of winding around it.
+     */
+    private void paintTransformer(BufferedImage img, int index, Random rnd, boolean coilFace) {
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                int base;
+                boolean frame = x == 0 || y == 0 || x == TILE_PX - 1 || y == TILE_PX - 1;
+                if (frame) {
+                    base = 0x2A2A30;
+                } else if (coilFace) {
+                    int dx = x - 8, dy = y - 8, d2 = dx * dx + dy * dy;
+                    base = d2 < 10 ? 0x3A3C44 : d2 < 30 ? ((d2 & 1) == 0 ? 0xD4A800 : 0xB87333) : 0x50525A;
+                } else if (y >= 3 && y <= 6) {
+                    base = (x & 1) == 0 ? 0xD4A800 : 0xFFD850;     // gold (MV) winding
+                } else if (y >= 9 && y <= 12) {
+                    base = (x & 1) == 0 ? 0xB87333 : 0xDCA05A;     // copper (LV) winding
+                } else {
+                    base = (y & 1) == 0 ? 0x3A3C44 : 0x4A4C54;     // laminated core
+                }
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
             }
         }
     }

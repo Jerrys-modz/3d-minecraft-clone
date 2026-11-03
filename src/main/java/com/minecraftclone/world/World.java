@@ -948,6 +948,69 @@ public class World implements BlockAccessor {
                 }
             }
         }
+        detonateOverloads();
+    }
+
+    // ------------------------------------------------------------------
+    // Overvoltage: LV machines fed MV power without a transformer
+    // ------------------------------------------------------------------
+
+    /** Blast radius of an overvolted machine. */
+    public static final float OVERLOAD_RADIUS = 2f;
+    /** Damage at the centre of an overvolted machine's blast. */
+    public static final float OVERLOAD_CENTER_DAMAGE = 6f;
+
+    /** Machines that reported overvoltage during the current tick (block keys). */
+    private final java.util.Set<Long> pendingOverloads = new java.util.LinkedHashSet<>();
+    /** Blast centres since the last {@link #takeOverloadBlasts()}, for player damage/sound. */
+    private final List<float[]> overloadBlasts = new ArrayList<>();
+    private boolean machineExplosions = true;
+    private final java.util.Random overloadRnd = new java.util.Random();
+
+    /**
+     * Whether overvolted machines explode. The multiplayer server and clients
+     * turn this off (block blasts aren't synced), so there an overvolted
+     * machine simply refuses to run.
+     */
+    public void setMachineExplosions(boolean enabled) {
+        machineExplosions = enabled;
+    }
+
+    /**
+     * Called by an electric machine that is drawing MV power without a
+     * transformer. Deferred: the blast happens after the block-entity tick
+     * loop, since destroying blocks mid-iteration would corrupt it.
+     */
+    public void reportOverload(int x, int y, int z) {
+        if (machineExplosions) pendingOverloads.add(blockKey(x, y, z));
+    }
+
+    /** Blast centres of machines that exploded since the last call; clears the list. */
+    public List<float[]> takeOverloadBlasts() {
+        List<float[]> out = new ArrayList<>(overloadBlasts);
+        overloadBlasts.clear();
+        return out;
+    }
+
+    private void detonateOverloads() {
+        if (pendingOverloads.isEmpty()) return;
+        List<Long> keys = new ArrayList<>(pendingOverloads);
+        pendingOverloads.clear();
+        for (long k : keys) {
+            int x = keyX(k), y = keyY(k), z = keyZ(k);
+            BlockEntity e = blockEntities.get(k);
+            if (e == null || getBlock(x, y, z) != e.blockType()) continue;   // already gone
+            blockEntities.remove(k);
+            setBlock(x, y, z, BlockType.AIR);   // the machine itself is destroyed, contents and all
+            float cx = x + 0.5f, cy = y + 0.5f, cz = z + 0.5f;
+            Explosion.blastBlocks(this, cx, cy, cz, OVERLOAD_RADIUS, overloadRnd);
+            for (Mob mob : mobs) {
+                float dmg = Explosion.damageAt(cx, cy, cz, OVERLOAD_RADIUS, OVERLOAD_CENTER_DAMAGE,
+                        mob.position.x, mob.position.y, mob.position.z);
+                if (dmg > 0f) mob.damage(dmg, cx, cz);
+            }
+            overloadBlasts.add(new float[]{cx, cy, cz});
+        }
     }
 
     /** The block entities living inside chunk {@code c}, excluding any whose block has since been removed. */

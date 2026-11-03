@@ -377,6 +377,8 @@ public final class Crafting {
         shaped3x3("XPX", "X3X", "X6X", BlockType.ELECTRIC_EXTRACTOR, 1);
         // LV Electrolyzer: gold electrodes over a glass cell on the casing.
         shaped3x3("AGA", "X3X", "X6X", BlockType.ELECTROLYZER, 1);
+        // LV Transformer: a gold (MV) winding over an iron core, copper (LV) winding below.
+        shaped3x3("AAA", "III", "XXX", BlockType.LV_TRANSFORMER, 1);
         // LV Battery: copper-cable terminal over a tin-plate cell filled with sulfur electrolyte.
         shaped3x3(".5.", "878", "878", BlockType.LV_BATTERY, 1);
 

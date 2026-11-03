@@ -1071,6 +1071,7 @@ public class Main {
                 World[] mirrorWorlds = new World[DimensionType.values().length];
                 for (DimensionType dim : DimensionType.values()) {
                     World w = new World(welcome.seed(), remoteSettings, atlas, clientSaveDir, dim);
+                    w.setMachineExplosions(false);   // the server owns the world; don't blow up local copies
                     w.setRenderDistance(settings.getRenderDistance());
                     w.setLeavesTransparent(settings.isLeavesTransparent());
                     byte dimId = (byte) dim.ordinal();
@@ -3357,6 +3358,18 @@ public class Main {
             // Furnaces (and any other block entities) work in the background,
             // ticking forward with world time.
             world.tickBlockEntities(dt);
+            for (float[] blast : world.takeOverloadBlasts()) {
+                // An LV machine wired straight to MV (gold) power exploded.
+                org.joml.Vector3f pp = player.getPosition();
+                float dmg = com.minecraftclone.world.Explosion.damageAt(blast[0], blast[1], blast[2],
+                        World.OVERLOAD_RADIUS, World.OVERLOAD_CENTER_DAMAGE, pp.x, pp.y, pp.z);
+                if (dmg > 0f) {
+                    player.takeDamage(dmg * settings.getDifficulty().mobDamageMultiplier());
+                }
+                audio.playAt(SoundEvent.THUNDER, blast[0], blast[1], blast[2], 1f);
+                showMessage(messages, "Overvoltage! Gold cable is MV - put an LV Transformer before LV machines.",
+                        new Vector4f(1f, 0.5f, 0.2f, 1f), 4f);
+            }
 
             // Boats: float un-mounted boats passively on the water surface.
             // The mounted boat (if any) is already ticked with steering input

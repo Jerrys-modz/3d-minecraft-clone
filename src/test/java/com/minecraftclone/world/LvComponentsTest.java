@@ -48,6 +48,8 @@ class LvComponentsTest {
         world.setBlock(0, 64, 1, BlockType.COPPER_CABLE);
         world.setBlock(0, 64, 2, BlockType.TIN_CABLE);
         world.setBlock(0, 64, 3, BlockType.COPPER_CABLE);
+        world.setBlock(0, 64, 4, BlockType.BATTERY_BLOCK);
+        world.getOrCreateBatteryBlock(0, 64, 4).chargeEU(100f);
         assertEquals(CableTier.TIN.throughput, EuNetwork.drawRate(world, 0, 64, 0));
     }
 

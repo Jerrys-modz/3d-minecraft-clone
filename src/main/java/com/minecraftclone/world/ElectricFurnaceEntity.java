@@ -99,14 +99,23 @@ public final class ElectricFurnaceEntity implements BlockEntity, StorageContaine
         if (sourceCheckTimer <= 0f) {
             sourceCheckTimer = 0.5f;
             if (attached && world != null) {
-                euSource  = findEuSource();
-                drawRate  = resolveDrawRate();
+                EuNetwork.Feed feed = EuNetwork.resolve(world, posX, posY, posZ);
+                euSource    = feed.source();
+                drawRate    = feed.throughput();
+                efficiency  = feed.efficiency();
+                overvoltage = feed.overvoltage();
             }
         }
 
         boolean powered = euSource != null && euSource.euStored() > 0f && canSmelt();
         if (!powered) {
             lastEuFraction = 0f;
+            return;
+        }
+        if (overvoltage) {
+            // MV straight into an LV machine: it blows (or, where explosions are off, refuses to run).
+            lastEuFraction = 0f;
+            if (world != null) world.reportOverload(posX, posY, posZ);
             return;
         }
 
@@ -116,22 +125,20 @@ public final class ElectricFurnaceEntity implements BlockEntity, StorageContaine
         if (drawn <= 0f) { lastEuFraction = 0f; return; }
 
         // Advance smelting proportionally to the EU actually drawn.
-        float effectiveDt = drawn / (EU_PER_SMELT / SMELT_SECONDS);
+        float effectiveDt = drawn * efficiency / (EU_PER_SMELT / SMELT_SECONDS);
         lastEuFraction    = Math.min(1f, euSource.euStored() / EuNetwork.capacityOf(euSource));
         advance(effectiveDt);
     }
 
-    /** EU throughput multiplier from the cable network (weakest-link tier). */
+    /** EU throughput multiplier from the cable path (weakest-link tier). */
     private float drawRate = 1f;
+    /** Share of drawn EU that survives the cable run. */
+    private float efficiency = 1f;
+    /** True when MV power arrives without a transformer. */
+    private boolean overvoltage;
 
-    private float resolveDrawRate() {
-        return attached ? EuNetwork.drawRate(world, posX, posY, posZ) : 1f;
-    }
-
-    /** Finds an EU source for this machine (see {@link EuNetwork#findSource}). */
-    private EuSource findEuSource() {
-        return attached ? EuNetwork.findSource(world, posX, posY, posZ) : null;
-    }
+    /** True when this furnace is wired to MV power without a transformer (it won't run). */
+    public boolean isOvervolted() { return overvoltage; }
 
     private void advance(float dt) {
         progress += dt;

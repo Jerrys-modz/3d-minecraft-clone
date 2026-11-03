@@ -204,6 +204,7 @@ public class GameServer implements AutoCloseable {
         this.worlds = new World[DimensionType.values().length];
         for (DimensionType dim : DimensionType.values()) {
             World w = new World(seed, settings, null, saveDir, dim, true);
+            w.setMachineExplosions(false);   // block blasts aren't synced; overvolted machines just idle
             w.setKeepChunks(true);
             w.setRenderDistance(8);
             worlds[dim.ordinal()] = w;

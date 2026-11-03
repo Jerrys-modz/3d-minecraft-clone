@@ -1144,7 +1144,14 @@ public enum BlockType {
     ALUMINUM_DUST(605, 0),
 
     /** LV Electrolyzer — splits compound ores into element dusts. Front 306 idle / 307 working. */
-    ELECTROLYZER(606, true, false, 294, 294, 294, 306, 307, 0, 0);
+    ELECTROLYZER(606, true, false, 294, 294, 294, 306, 307, 0, 0),
+
+    /**
+     * LV Transformer — steps MV (gold-cable) power down to LV. Not a cable:
+     * it separates the networks on either side, so an LV machine fed through
+     * it is safe from overvoltage. Tile 308 (sides) / 309 (coil face, top).
+     */
+    LV_TRANSFORMER(607, true, false, 309, 308, 309);
 
     public final short id;
     public final boolean solid;

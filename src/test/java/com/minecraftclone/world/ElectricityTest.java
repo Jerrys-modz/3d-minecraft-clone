@@ -336,11 +336,13 @@ class ElectricityTest {
     }
 
     @Test
-    void goldCableAppliesItsThroughputWhenNetworkHasNoSteamTier() {
+    void goldCableAppliesItsThroughputThroughATransformer() {
+        // Gold cable is MV: an LV machine needs a transformer between it and the line.
         World world = newWorld();
-        world.setBlock(0, 64, 1, BlockType.GOLD_CABLE);
-        world.setBlock(0, 64, 2, BlockType.BATTERY_BLOCK);
-        BatteryBlockEntity battery = world.getOrCreateBatteryBlock(0, 64, 2);
+        world.setBlock(0, 64, 1, BlockType.LV_TRANSFORMER);
+        world.setBlock(0, 64, 2, BlockType.GOLD_CABLE);
+        world.setBlock(0, 64, 3, BlockType.BATTERY_BLOCK);
+        BatteryBlockEntity battery = world.getOrCreateBatteryBlock(0, 64, 3);
         battery.chargeEU(1000f);
 
         ElectricFurnaceEntity furnace = world.getOrCreateElectricFurnace(0, 64, 0);

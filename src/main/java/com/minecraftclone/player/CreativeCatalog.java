@@ -31,7 +31,7 @@ public final class CreativeCatalog {
                     BlockType.FIRE_BRICK, BlockType.PRIMITIVE_BLAST_FURNACE, BlockType.STEEL_CASING,
                     BlockType.STEAM_BOILER, BlockType.STEAM_FURNACE, BlockType.STEAM_MACERATOR, BlockType.STEAM_ORE_WASHER,
                     BlockType.COAL_GENERATOR, BlockType.BATTERY_BLOCK,
-                    BlockType.TIN_CABLE, BlockType.COPPER_CABLE, BlockType.GOLD_CABLE,
+                    BlockType.TIN_CABLE, BlockType.COPPER_CABLE, BlockType.GOLD_CABLE, BlockType.LV_TRANSFORMER,
                     BlockType.ELECTRIC_FURNACE, BlockType.ELECTRIC_MACERATOR,
                     BlockType.ELECTRIC_ORE_WASHER, BlockType.THERMAL_CENTRIFUGE, BlockType.ELECTRIC_COMPRESSOR,
                     BlockType.ELECTRIC_EXTRACTOR, BlockType.ELECTROLYZER,
