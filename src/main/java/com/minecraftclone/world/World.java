@@ -794,14 +794,16 @@ public class World implements BlockAccessor {
     }
 
     /**
-     * The LV processor at a position for whichever of the three electric
-     * processor blocks is there, creating it on first use; null for any other block.
+     * The LV processor at a position for whichever electric processor block
+     * (macerator, ore washer, thermal centrifuge, compressor) is there, creating it on first use; null for any other block.
      */
     public ElectricMachineEntity getOrCreateElectricMachine(int x, int y, int z) {
         return switch (getBlock(x, y, z)) {
             case ELECTRIC_MACERATOR -> getOrCreateElectricMacerator(x, y, z);
             case ELECTRIC_ORE_WASHER -> getOrCreateElectricOreWasher(x, y, z);
             case THERMAL_CENTRIFUGE -> getOrCreateThermalCentrifuge(x, y, z);
+            case ELECTRIC_COMPRESSOR -> getOrCreateElectricMachine(x, y, z,
+                    ElectricCompressorEntity.class, ElectricCompressorEntity::new);
             default -> null;
         };
     }
@@ -828,7 +830,8 @@ public class World implements BlockAccessor {
             case COAL_GENERATOR -> getOrCreateCoalGenerator(x, y, z);
             case BATTERY_BLOCK -> getOrCreateBatteryBlock(x, y, z);
             case ELECTRIC_FURNACE -> getOrCreateElectricFurnace(x, y, z);
-            case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE -> getOrCreateElectricMachine(x, y, z);
+            case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR ->
+                    getOrCreateElectricMachine(x, y, z);
             default -> { }
         }
     }

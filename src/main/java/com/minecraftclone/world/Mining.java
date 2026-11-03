@@ -422,6 +422,8 @@ public final class Mining {
         put(BlockType.ELECTRIC_MACERATOR, 4.0f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.ELECTRIC_ORE_WASHER, 4.0f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.THERMAL_CENTRIFUGE, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.ELECTRIC_COMPRESSOR, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.TIN_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.COPPER_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.GOLD_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
     }

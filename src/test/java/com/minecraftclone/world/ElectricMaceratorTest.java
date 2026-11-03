@@ -69,10 +69,11 @@ class ElectricMaceratorTest {
     @Test
     void craftingRecipeUsesSteelCasing() {
         BlockType X = BlockType.COPPER_INGOT, D = BlockType.DIAMOND, C = BlockType.STEEL_CASING;
+        BlockType V = BlockType.VACUUM_TUBE;
         var result = Crafting.match3x3(new BlockType[]{
                 X, D, X,
                 X, C, X,
-                X, X, X});
+                X, V, X});
         assertNotNull(result);
         assertEquals(BlockType.ELECTRIC_MACERATOR, result.output());
     }

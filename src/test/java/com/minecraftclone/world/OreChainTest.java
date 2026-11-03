@@ -186,9 +186,9 @@ class OreChainTest {
     void machinesAreRegisteredAndCraftable() {
         assertTrue(BlockEntities.isRegistered(ElectricOreWasherEntity.TYPE));
         assertTrue(BlockEntities.isRegistered(ThermalCentrifugeEntity.TYPE));
-        BlockType X = BlockType.COPPER_INGOT, C = BlockType.STEEL_CASING;
-        var washer = Crafting.match3x3(new BlockType[]{X, BlockType.GLASS, X, X, C, X, X, X, X});
-        var centrifuge = Crafting.match3x3(new BlockType[]{X, BlockType.FURNACE, X, X, C, X, X, X, X});
+        BlockType X = BlockType.COPPER_INGOT, C = BlockType.STEEL_CASING, V = BlockType.VACUUM_TUBE;
+        var washer = Crafting.match3x3(new BlockType[]{X, BlockType.GLASS, X, X, C, X, X, V, X});
+        var centrifuge = Crafting.match3x3(new BlockType[]{X, BlockType.FURNACE, X, X, C, X, X, V, X});
         assertNotNull(washer);
         assertNotNull(centrifuge);
         assertEquals(BlockType.ELECTRIC_ORE_WASHER, washer.output());

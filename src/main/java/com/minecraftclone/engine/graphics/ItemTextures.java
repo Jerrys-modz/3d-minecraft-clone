@@ -387,6 +387,7 @@ public class ItemTextures {
             // Phase 0: Explosives
             // ----------------------------------------------------------------
             case GUNPOWDER -> paintGunpowder();
+            case VACUUM_TUBE -> paintVacuumTube();
 
             default -> {
                 // Purified ores reuse their crushed-ore icon with a washed sheen.
@@ -1649,6 +1650,30 @@ public class ItemTextures {
     /**
      * Gunpowder: a small heap of dark grey-black powder granules.
      */
+    /** Vacuum tube: a glass bulb with a glowing filament on a dark base with two copper pins. */
+    private static BufferedImage paintVacuumTube() {
+        BufferedImage img = blank();
+        for (int y = 2; y <= 10; y++) {
+            for (int x = 5; x <= 10; x++) {
+                boolean corner = y == 2 && (x == 5 || x == 10);
+                if (corner) continue;
+                boolean rim = x == 5 || x == 10 || y == 2;
+                img.setRGB(x, y, rim ? 0xFFB8D8E8 : 0xFF5A7888);   // glass
+            }
+        }
+        for (int y = 4; y <= 8; y++) img.setRGB(7, y, 0xFFFFC040);  // filament
+        for (int y = 4; y <= 8; y++) img.setRGB(8, y, 0xFFFF9020);
+        img.setRGB(6, 3, 0xFFFFFFFF);                               // glint
+        for (int y = 11; y <= 12; y++) {
+            for (int x = 5; x <= 10; x++) img.setRGB(x, y, 0xFF2A2A30);   // base
+        }
+        img.setRGB(6, 13, 0xFFB87333);
+        img.setRGB(9, 13, 0xFFB87333);
+        img.setRGB(6, 14, 0xFFB87333);
+        img.setRGB(9, 14, 0xFFB87333);
+        return img;
+    }
+
     private static BufferedImage paintGunpowder() {
         BufferedImage img = blank();
         // Pile shape — slightly wider at the bottom.

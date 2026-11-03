@@ -100,6 +100,9 @@ public final class Crafting {
         CHARS.put('1', BlockType.FIRE_BRICK);         // 1 = fire brick (all A-Z taken)
         CHARS.put('2', BlockType.STEEL_PLATE);        // 2 = steel plate (casing hull)
         CHARS.put('3', BlockType.STEEL_CASING);       // 3 = steel casing (LV machine hull)
+        CHARS.put('4', BlockType.TIN_INGOT);          // 4 = tin ingot
+        CHARS.put('5', BlockType.COPPER_CABLE);       // 5 = copper cable (circuit wiring)
+        CHARS.put('6', BlockType.VACUUM_TUBE);        // 6 = vacuum tube (LV circuit)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -355,11 +358,19 @@ public final class Crafting {
         // Battery Block: alternating copper ingots and iron in a 3x3.
         shaped3x3("XIX", "IXI", "XIX", BlockType.BATTERY_BLOCK, 1);
         // LV Macerator: copper windings around a steel casing, diamond grinder on top.
-        shaped3x3("XDX", "X3X", "XXX", BlockType.ELECTRIC_MACERATOR, 1);
+        // Tin Cable: three vertical tin ingots -> 6 cables (half copper's throughput).
+        shaped3x3(".4.", ".4.", ".4.", BlockType.TIN_CABLE, 6);
+        // Vacuum Tube: a glass bulb wired between two copper cables -> 2 tubes.
+        shaped3x3("...", "5G5", "...", BlockType.VACUUM_TUBE, 2);
+        // LV processors: copper windings around a steel casing, a vacuum-tube
+        // circuit in the base, and the machine's working part on top.
+        shaped3x3("XDX", "X3X", "X6X", BlockType.ELECTRIC_MACERATOR, 1);
         // LV Ore Washer: copper windings around a steel casing, glass wash tank on top.
-        shaped3x3("XGX", "X3X", "XXX", BlockType.ELECTRIC_ORE_WASHER, 1);
+        shaped3x3("XGX", "X3X", "X6X", BlockType.ELECTRIC_ORE_WASHER, 1);
         // LV Thermal Centrifuge: copper windings around a steel casing, furnace heater on top.
-        shaped3x3("XFX", "X3X", "XXX", BlockType.THERMAL_CENTRIFUGE, 1);
+        shaped3x3("XFX", "X3X", "X6X", BlockType.THERMAL_CENTRIFUGE, 1);
+        // LV Compressor: a steel-plate press over the casing.
+        shaped3x3("X2X", "X3X", "X6X", BlockType.ELECTRIC_COMPRESSOR, 1);
 
         // Note: Tinkers' tool parts are shaped at the Part Builder and assembled at
         // the Tool Station — there are no crafting-table recipes for them.

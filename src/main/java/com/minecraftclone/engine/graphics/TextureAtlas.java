@@ -420,6 +420,9 @@ public class TextureAtlas {
         paintElectricOreWasher(image, 298, rnd, true);            // ELECTRIC_ORE_WASHER front washing
         paintThermalCentrifuge(image, 299, rnd, false);           // THERMAL_CENTRIFUGE front idle
         paintThermalCentrifuge(image, 300, rnd, true);            // THERMAL_CENTRIFUGE front spinning
+        paintTinCable(image, 301, rnd);                           // TIN_CABLE
+        paintElectricCompressor(image, 302, rnd, false);          // ELECTRIC_COMPRESSOR front idle
+        paintElectricCompressor(image, 303, rnd, true);           // ELECTRIC_COMPRESSOR front pressing
 
         return image;
     }
@@ -2335,6 +2338,29 @@ public class TextureAtlas {
     }
 
     /**
+     * TIN_CABLE (tile 301): pale silver-grey wire with a dull grey sheath —
+     * same cross-section as copper cable, visibly the cheap tier.
+     */
+    private void paintTinCable(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        int sheath = 0xFF4A4E52;
+        int core   = 0xFFAEB8BE;
+        int bright = 0xFFDCE6EC;
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(6) - 3;
+                int dx = x - 8, dy = y - 8;
+                int dist2 = dx * dx + dy * dy;
+                int base = dist2 > 42 ? sheath : dist2 > 20 ? core : bright;
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /**
      * GOLD_CABLE (tile 270): golden yellow wire — same cross-section geometry
      * as copper cable but in a gold palette.
      */
@@ -2519,6 +2545,30 @@ public class TextureAtlas {
                 else if (y < 6) color = 0xFF1A2A3A;           // air gap above the water line
                 else if (working && rnd.nextInt(4) == 0) color = 0xFFE8F4FF;  // foam
                 else color = ((x + y) & 3) == 0 ? 0xFF3A78C8 : 0xFF2A5CA8;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * ELECTRIC_COMPRESSOR front (tiles 302 idle / 303 pressing): steel casing
+     * with a dark press chamber, a heavy ram on top and a plate on the anvil;
+     * the plate glows hot while pressing.
+     */
+    private void paintElectricCompressor(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        int ramBottom = working ? 8 : 6;
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                int color;
+                if (edge) color = 0xFF2A2A34;
+                else if (y < ramBottom && x >= 5 && x <= 10) color = (y == ramBottom - 1) ? 0xFFB8B8C4 : 0xFF6E6E7A; // ram
+                else if (y == 10 || y == 11) color = 0xFF505060;                                          // anvil
+                else if (y == 9 && x >= 5 && x <= 10) {
+                    color = working ? (rnd.nextInt(3) == 0 ? 0xFFFFE080 : 0xFFE07020) : 0xFFC8C8D0;     // plate
+                } else color = 0xFF14141C;
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }

@@ -6,11 +6,14 @@ package com.minecraftclone.world;
  * just like steam pipes — one copper segment in an otherwise gold run
  * limits the whole line to copper rate.
  *
- * <p>Ordering is by ascending throughput (COPPER first, GOLD last);
+ * <p>Ordering is by ascending throughput (TIN first, GOLD last);
  * the weakest-link check compares {@code throughput} values rather than
  * ordinals so new tiers can be inserted freely in future.
  */
 public enum CableTier {
+
+    /** Starter tier: half the copper rate. Crafted from tin ingots. */
+    TIN(0.5f),
 
     /** Low-voltage tier: base EU/s rate. Crafted from copper ingots. */
     COPPER(1.0f),
@@ -27,6 +30,7 @@ public enum CableTier {
 
     /** Returns the cable tier for a given block, or null if it is not a cable. */
     public static CableTier of(BlockType type) {
+        if (type == BlockType.TIN_CABLE)    return TIN;
         if (type == BlockType.COPPER_CABLE) return COPPER;
         if (type == BlockType.GOLD_CABLE)   return GOLD;
         return null;

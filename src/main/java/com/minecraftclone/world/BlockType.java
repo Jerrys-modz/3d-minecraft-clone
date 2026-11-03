@@ -1120,7 +1120,19 @@ public enum BlockType {
     ELECTRIC_ORE_WASHER(598, true, false, 294, 294, 294, 297, 298, 0, 0),
 
     /** LV Thermal Centrifuge — purified ore → 3× dust + byproduct. Front 299 idle / 300 spinning. */
-    THERMAL_CENTRIFUGE(599, true, false, 294, 294, 294, 299, 300, 0, 0);
+    THERMAL_CENTRIFUGE(599, true, false, 294, 294, 294, 299, 300, 0, 0),
+
+    /**
+     * Tin Cable — the cheap starter EU conductor (0.5× throughput, half of
+     * copper). Six per three tin ingots. Tile 301.
+     */
+    TIN_CABLE(600, true, false, 301, 301, 301),
+
+    /** Vacuum Tube — the primitive LV circuit; required by every LV processor recipe. */
+    VACUUM_TUBE(601, 0),
+
+    /** LV Compressor — presses ingots into plates on EU. Front 302 idle / 303 pressing. */
+    ELECTRIC_COMPRESSOR(602, true, false, 294, 294, 294, 302, 303, 0, 0);
 
     public final short id;
     public final boolean solid;

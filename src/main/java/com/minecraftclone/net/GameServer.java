@@ -1011,7 +1011,7 @@ public class GameServer implements AutoCloseable {
                 || block == BlockType.STEAM_ORE_WASHER || block == BlockType.PRIMITIVE_BLAST_FURNACE
                 || block == BlockType.COAL_GENERATOR || block == BlockType.ELECTRIC_FURNACE
                 || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
-                || block == BlockType.THERMAL_CENTRIFUGE;
+                || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -1035,6 +1035,7 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.ElectricMaceratorEntity.TYPE -> block == BlockType.ELECTRIC_MACERATOR;
             case com.minecraftclone.world.ElectricOreWasherEntity.TYPE -> block == BlockType.ELECTRIC_ORE_WASHER;
             case com.minecraftclone.world.ThermalCentrifugeEntity.TYPE -> block == BlockType.THERMAL_CENTRIFUGE;
+            case com.minecraftclone.world.ElectricCompressorEntity.TYPE -> block == BlockType.ELECTRIC_COMPRESSOR;
             default -> false;
         };
     }
@@ -1102,7 +1103,7 @@ public class GameServer implements AutoCloseable {
             case PRIMITIVE_BLAST_FURNACE -> world.getOrCreatePrimitiveBlastFurnace(open.x(), open.y(), open.z());
             case COAL_GENERATOR -> world.getOrCreateCoalGenerator(open.x(), open.y(), open.z());
             case ELECTRIC_FURNACE -> world.getOrCreateElectricFurnace(open.x(), open.y(), open.z());
-            case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE ->
+            case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR ->
                     world.getOrCreateElectricMachine(open.x(), open.y(), open.z());
             default -> null;
         };
