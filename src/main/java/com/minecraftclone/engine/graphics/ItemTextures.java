@@ -335,6 +335,7 @@ public class ItemTextures {
             case BRASS_INGOT -> paintIngot(0xB5A642);
             case IRON_DUST -> paintDustOre(0xC8C8C8);
             case GOLD_DUST -> paintDustOre(0xE8C93A);
+            case ALUMINUM_DUST -> paintDustOre(0xC8D4E0);
             case WROUGHT_IRON_INGOT -> paintIngot(0xC4B8A8);
 
             case BRONZE_PICKAXE -> paintPickaxe(0xCD7F32);

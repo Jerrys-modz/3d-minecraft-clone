@@ -34,7 +34,7 @@ public final class CreativeCatalog {
                     BlockType.TIN_CABLE, BlockType.COPPER_CABLE, BlockType.GOLD_CABLE,
                     BlockType.ELECTRIC_FURNACE, BlockType.ELECTRIC_MACERATOR,
                     BlockType.ELECTRIC_ORE_WASHER, BlockType.THERMAL_CENTRIFUGE, BlockType.ELECTRIC_COMPRESSOR,
-                    BlockType.ELECTRIC_EXTRACTOR,
+                    BlockType.ELECTRIC_EXTRACTOR, BlockType.ELECTROLYZER,
                     BlockType.CRAFTING_TABLE, BlockType.CHEST, BlockType.BARREL,
                     BlockType.STONE_STAIRS, BlockType.PLANKS_STAIRS, BlockType.WOODEN_FENCE,
                     BlockType.CACTUS, BlockType.WATER_SOURCE, BlockType.LAVA_SOURCE,
@@ -80,7 +80,7 @@ public final class CreativeCatalog {
                     BlockType.COPPER_ORE, BlockType.CRUSHED_COPPER, BlockType.PURIFIED_COPPER, BlockType.COPPER_DUST, BlockType.COPPER_INGOT,
                     BlockType.TIN_ORE, BlockType.CRUSHED_TIN, BlockType.PURIFIED_TIN, BlockType.TIN_DUST, BlockType.TIN_INGOT,
                     BlockType.BAUXITE_ORE, BlockType.CRUSHED_BAUXITE, BlockType.PURIFIED_BAUXITE, BlockType.BAUXITE_DUST, BlockType.ALUMINUM_INGOT,
-                    BlockType.ZINC_ORE, BlockType.CRUSHED_ZINC, BlockType.PURIFIED_ZINC, BlockType.ZINC_DUST, BlockType.ZINC_INGOT,
+                    BlockType.ALUMINUM_DUST, BlockType.ZINC_ORE, BlockType.CRUSHED_ZINC, BlockType.PURIFIED_ZINC, BlockType.ZINC_DUST, BlockType.ZINC_INGOT,
                     BlockType.LEAD_ORE, BlockType.CRUSHED_LEAD, BlockType.PURIFIED_LEAD, BlockType.LEAD_DUST, BlockType.LEAD_INGOT,
                     BlockType.SILVER_ORE, BlockType.CRUSHED_SILVER, BlockType.PURIFIED_SILVER, BlockType.SILVER_DUST, BlockType.SILVER_INGOT,
                     // GTNH Ores - mid-game

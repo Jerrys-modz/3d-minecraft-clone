@@ -26,6 +26,7 @@ public final class Smelting {
         smelt(BlockType.BRASS_DUST, BlockType.BRASS_INGOT);
         smelt(BlockType.IRON_DUST, BlockType.IRON_INGOT);
         smelt(BlockType.GOLD_DUST, BlockType.GOLD_INGOT);
+        smelt(BlockType.ALUMINUM_DUST, BlockType.ALUMINUM_INGOT);
         smelt(BlockType.CLAY_BALL, BlockType.FIRE_BRICK);
         smelt(BlockType.CLAY, BlockType.FIRE_BRICK);
         smelt(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);

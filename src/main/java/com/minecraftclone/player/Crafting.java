@@ -375,6 +375,8 @@ public final class Crafting {
         shaped3x3("X2X", "X3X", "X6X", BlockType.ELECTRIC_COMPRESSOR, 1);
         // LV Extractor: a wooden tree-tap (planks) over the casing.
         shaped3x3("XPX", "X3X", "X6X", BlockType.ELECTRIC_EXTRACTOR, 1);
+        // LV Electrolyzer: gold electrodes over a glass cell on the casing.
+        shaped3x3("AGA", "X3X", "X6X", BlockType.ELECTROLYZER, 1);
         // LV Battery: copper-cable terminal over a tin-plate cell filled with sulfur electrolyte.
         shaped3x3(".5.", "878", "878", BlockType.LV_BATTERY, 1);
 

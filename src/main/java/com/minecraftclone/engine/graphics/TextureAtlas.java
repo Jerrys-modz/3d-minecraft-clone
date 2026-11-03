@@ -425,6 +425,8 @@ public class TextureAtlas {
         paintElectricCompressor(image, 303, rnd, true);           // ELECTRIC_COMPRESSOR front pressing
         paintElectricExtractor(image, 304, rnd, false);           // ELECTRIC_EXTRACTOR front idle
         paintElectricExtractor(image, 305, rnd, true);            // ELECTRIC_EXTRACTOR front extracting
+        paintElectrolyzer(image, 306, rnd, false);                // ELECTROLYZER front idle
+        paintElectrolyzer(image, 307, rnd, true);                 // ELECTROLYZER front working
 
         return image;
     }
@@ -2571,6 +2573,29 @@ public class TextureAtlas {
                 else if (y == 9 && x >= 5 && x <= 10) {
                     color = working ? (rnd.nextInt(3) == 0 ? 0xFFFFE080 : 0xFFE07020) : 0xFFC8C8D0;     // plate
                 } else color = 0xFF14141C;
+                img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /**
+     * ELECTROLYZER front (tiles 306 idle / 307 working): steel casing with a
+     * glass cell of green electrolyte and two gold electrodes; bubbles rise
+     * off the electrodes while it works.
+     */
+    private void paintElectrolyzer(BufferedImage img, int index, Random rnd, boolean working) {
+        paintMachineBox(img, index, rnd, 0x8A8A9A, 0x404050, 0xC8C8D8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 13; y++) {
+            for (int x = 3; x < 13; x++) {
+                boolean edge = y == 3 || y == 12 || x == 3 || x == 12;
+                boolean electrode = (x == 5 || x == 10) && y >= 4 && y <= 10;
+                int color;
+                if (edge) color = 0xFF9EC8D8;                                         // glass
+                else if (electrode) color = y == 4 ? 0xFFFFE070 : 0xFFD4A800;          // gold rods
+                else if (y < 6) color = 0xFF1A2A2A;                                   // headspace
+                else if (working && (x == 6 || x == 9) && rnd.nextInt(3) == 0) color = 0xFFE8FFF0; // bubbles
+                else color = ((x * 3 + y) & 3) == 0 ? 0xFF3C9A5C : 0xFF2E7E4A;        // electrolyte
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }

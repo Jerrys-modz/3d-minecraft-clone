@@ -51,6 +51,7 @@ public final class BlockEntities {
         register(ThermalCentrifugeEntity.TYPE, ThermalCentrifugeEntity::new);
         register(ElectricCompressorEntity.TYPE, ElectricCompressorEntity::new);
         register(ElectricExtractorEntity.TYPE, ElectricExtractorEntity::new);
+        register(ElectrolyzerEntity.TYPE, ElectrolyzerEntity::new);
         register(BatteryBlockEntity.TYPE, BatteryBlockEntity::new);
     }
 

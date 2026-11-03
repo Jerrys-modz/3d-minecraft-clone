@@ -1138,7 +1138,13 @@ public enum BlockType {
     LV_BATTERY(603, 0),
 
     /** LV Extractor — jungle wood → rubber on EU. Front 304 idle / 305 extracting. */
-    ELECTRIC_EXTRACTOR(604, true, false, 294, 294, 294, 304, 305, 0, 0);
+    ELECTRIC_EXTRACTOR(604, true, false, 294, 294, 294, 304, 305, 0, 0),
+
+    /** Aluminium dust — only from electrolysing bauxite; smelts to an aluminium ingot. */
+    ALUMINUM_DUST(605, 0),
+
+    /** LV Electrolyzer — splits compound ores into element dusts. Front 306 idle / 307 working. */
+    ELECTROLYZER(606, true, false, 294, 294, 294, 306, 307, 0, 0);
 
     public final short id;
     public final boolean solid;
