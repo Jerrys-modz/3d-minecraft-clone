@@ -105,6 +105,7 @@ public final class Crafting {
         CHARS.put('6', BlockType.VACUUM_TUBE);        // 6 = vacuum tube (LV circuit)
         CHARS.put('7', BlockType.CRUSHED_SULFUR);     // 7 = sulfur (battery electrolyte)
         CHARS.put('8', BlockType.TIN_PLATE);          // 8 = tin plate (battery casing)
+        CHARS.put('9', BlockType.STAINLESS_STEEL_PLATE); // 9 = stainless plate (MV hull)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -379,6 +380,20 @@ public final class Crafting {
         shaped3x3("AGA", "X3X", "X6X", BlockType.ELECTROLYZER, 1);
         // LV Transformer: a gold (MV) winding over an iron core, copper (LV) winding below.
         shaped3x3("AAA", "III", "XXX", BlockType.LV_TRANSFORMER, 1);
+
+        // ---- Phase 3: advanced alloys (mix dusts, then smelt) ---------------
+        // Invar: 2 iron + 1 nickel -> 3.
+        shapeless3x3(BlockType.INVAR_DUST, 3, BlockType.IRON_DUST, BlockType.IRON_DUST, BlockType.NICKEL_DUST);
+        // Electrum: 1 gold + 1 silver -> 2.
+        shapeless2x2(BlockType.ELECTRUM_DUST, 2, BlockType.GOLD_DUST, BlockType.SILVER_DUST);
+        shapeless3x3(BlockType.ELECTRUM_DUST, 2, BlockType.GOLD_DUST, BlockType.SILVER_DUST);
+        // Stainless steel: 6 iron + nickel + manganese + chromium -> 9 (PBF smelts it).
+        shapeless3x3(BlockType.STAINLESS_STEEL_DUST, 9,
+                BlockType.IRON_DUST, BlockType.IRON_DUST, BlockType.IRON_DUST,
+                BlockType.IRON_DUST, BlockType.IRON_DUST, BlockType.IRON_DUST,
+                BlockType.NICKEL_DUST, BlockType.MANGANESE_DUST, BlockType.CHROMIUM_DUST);
+        // MV casing: eight stainless plates in a ring.
+        shaped3x3("999", "9.9", "999", BlockType.MV_CASING, 1);
         // LV Battery: copper-cable terminal over a tin-plate cell filled with sulfur electrolyte.
         shaped3x3(".5.", "878", "878", BlockType.LV_BATTERY, 1);
 

@@ -429,6 +429,7 @@ public class TextureAtlas {
         paintElectrolyzer(image, 307, rnd, true);                 // ELECTROLYZER front working
         paintTransformer(image, 308, rnd, false);                 // LV_TRANSFORMER sides
         paintTransformer(image, 309, rnd, true);                  // LV_TRANSFORMER top/bottom (coil face)
+        paintMachineBox(image, 310, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8); // MV_CASING (stainless)
 
         return image;
     }

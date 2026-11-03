@@ -27,6 +27,10 @@ public final class Smelting {
         smelt(BlockType.IRON_DUST, BlockType.IRON_INGOT);
         smelt(BlockType.GOLD_DUST, BlockType.GOLD_INGOT);
         smelt(BlockType.ALUMINUM_DUST, BlockType.ALUMINUM_INGOT);
+        // Phase 3 alloys. Stainless steel is deliberately absent: it needs the
+        // Primitive Blast Furnace's heat, like steel.
+        smelt(BlockType.INVAR_DUST, BlockType.INVAR_INGOT);
+        smelt(BlockType.ELECTRUM_DUST, BlockType.ELECTRUM_INGOT);
         smelt(BlockType.CLAY_BALL, BlockType.FIRE_BRICK);
         smelt(BlockType.CLAY, BlockType.FIRE_BRICK);
         smelt(BlockType.GOLD_ORE, BlockType.GOLD_INGOT);

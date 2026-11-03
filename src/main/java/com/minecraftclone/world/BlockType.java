@@ -1151,7 +1151,27 @@ public enum BlockType {
      * it separates the networks on either side, so an LV machine fed through
      * it is safe from overvoltage. Tile 308 (sides) / 309 (coil face, top).
      */
-    LV_TRANSFORMER(607, true, false, 309, 308, 309);
+    LV_TRANSFORMER(607, true, false, 309, 308, 309),
+
+    // ---- Phase 3: advanced alloys ------------------------------------
+    /** Invar blend: 2 iron dust + 1 nickel dust. Furnace-smeltable. */
+    INVAR_DUST(608, 0),
+    INVAR_INGOT(609, 0),
+    /** Electrum blend: gold dust + silver dust. Furnace-smeltable. */
+    ELECTRUM_DUST(610, 0),
+    ELECTRUM_INGOT(611, 0),
+    /** Stainless blend: 6 iron + nickel + manganese + chromium dust. Primitive Blast Furnace only. */
+    STAINLESS_STEEL_DUST(612, 0),
+    STAINLESS_STEEL_INGOT(613, 0),
+    INVAR_PLATE(614, 0),
+    ELECTRUM_PLATE(615, 0),
+    STAINLESS_STEEL_PLATE(616, 0),
+    INVAR_ROD(617, 0),
+    ELECTRUM_ROD(618, 0),
+    STAINLESS_STEEL_ROD(619, 0),
+
+    /** MV machine hull: eight stainless steel plates in a ring. Tile 310. */
+    MV_CASING(620, true, false, 310, 310, 310);
 
     public final short id;
     public final boolean solid;

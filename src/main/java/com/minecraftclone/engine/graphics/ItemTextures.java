@@ -391,6 +391,20 @@ public class ItemTextures {
             case VACUUM_TUBE -> paintVacuumTube();
             case LV_BATTERY -> paintLvBattery();
 
+            // Phase 3 alloys: invar (cool greenish grey), electrum (pale gold), stainless (bright blue-grey).
+            case INVAR_DUST -> paintDustOre(0xB4B8A0);
+            case INVAR_INGOT -> paintIngot(0xB4B8A0);
+            case INVAR_PLATE -> paintPlate(0xB4B8A0);
+            case INVAR_ROD -> paintRod(0xB4B8A0);
+            case ELECTRUM_DUST -> paintDustOre(0xE8E080);
+            case ELECTRUM_INGOT -> paintIngot(0xE8E080);
+            case ELECTRUM_PLATE -> paintPlate(0xE8E080);
+            case ELECTRUM_ROD -> paintRod(0xE8E080);
+            case STAINLESS_STEEL_DUST -> paintDustOre(0xD4DCE6);
+            case STAINLESS_STEEL_INGOT -> paintIngot(0xD4DCE6);
+            case STAINLESS_STEEL_PLATE -> paintPlate(0xD4DCE6);
+            case STAINLESS_STEEL_ROD -> paintRod(0xD4DCE6);
+
             default -> {
                 // Purified ores reuse their crushed-ore icon with a washed sheen.
                 BlockType crushed = com.minecraftclone.world.PurifiedOre.crushedOf(type);

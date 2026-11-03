@@ -426,9 +426,9 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Invar** | ❌ Todo | Iron + nickel (2:1); low thermal expansion; required for pipes and reactor components |
-| **Electrum** | ❌ Todo | Gold + silver (1:1); good conductor; used in MV circuits and cables |
-| **Stainless Steel** | ❌ Todo | Iron + chrome + manganese + nickel; required for MV casings and tanks |
+| **Invar** | ✅ Done | 2 iron dust + 1 nickel dust → 3 invar dust (crafting grid); smelts in any furnace. Plates/rods via hammer, file or LV Compressor. |
+| **Electrum** | ✅ Done | Gold dust + silver dust → 2 electrum dust; smelts in any furnace. Plates/rods as above. |
+| **Stainless Steel** | ✅ Done | 6 iron + nickel + manganese + chromium dust → 9 stainless dust. **Primitive Blast Furnace only** (like steel). Eight stainless plates ring into an **MV Casing** (`999/9.9/999`), the future MV machine hull. Chromium and manganese come from the electrolyzer (chromite, wolframite) or their own ores. |
 | **MV Machines** | ❌ Todo | All LV machines upgraded to MV tier; 4× speed, 4× EU cost; stainless casing |
 
 ### Circuits

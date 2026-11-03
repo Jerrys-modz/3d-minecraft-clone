@@ -674,6 +674,14 @@ public class InventoryController {
             return com.minecraftclone.world.Furnace.isFuel(t)
                     ? start + com.minecraftclone.world.CoalGeneratorEntity.SLOT_FUEL : -1;
         }
+        if (machine instanceof com.minecraftclone.world.PrimitiveBlastFurnaceEntity) {
+            // The PBF smelts its own recipe set (iron chain, steel, stainless), not the furnace's.
+            if (com.minecraftclone.world.PrimitiveBlastFurnaceEntity.isInput(t)) {
+                return start + com.minecraftclone.world.PrimitiveBlastFurnaceEntity.SLOT_INPUT;
+            }
+            return com.minecraftclone.world.Furnace.isFuel(t)
+                    ? start + com.minecraftclone.world.PrimitiveBlastFurnaceEntity.SLOT_FUEL : -1;
+        }
         if (machine instanceof com.minecraftclone.world.BatteryBlockEntity) {
             return t == BlockType.LV_BATTERY ? start + com.minecraftclone.world.BatteryBlockEntity.SLOT_BATTERIES : -1;
         }
