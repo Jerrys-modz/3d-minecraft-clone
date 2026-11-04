@@ -79,7 +79,7 @@ public final class CreativeCatalog {
                     BlockType.TIN_CELL, BlockType.WATER_CELL, BlockType.LAVA_CELL, BlockType.SULFURIC_ACID_CELL,
                     BlockType.OIL_CELL, BlockType.DIESEL_CELL, BlockType.HEAVY_FUEL_CELL,
                     BlockType.TUNGSTENSTEEL_DUST, BlockType.TUNGSTENSTEEL_INGOT,
-                    BlockType.SODIUM_DUST, BlockType.HYDROCHLORIC_ACID_CELL,
+                    BlockType.SODIUM_DUST, BlockType.HYDROCHLORIC_ACID_CELL, BlockType.LUBRICANT_CELL,
                     BlockType.SILICON_DUST, BlockType.SILICON_BOULE, BlockType.SILICON_WAFER,
                     BlockType.INTEGRATED_CIRCUIT, BlockType.LITHIUM_DUST, BlockType.MV_BATTERY, BlockType.MV_UPGRADE,
                     BlockType.INVAR_DUST, BlockType.INVAR_INGOT, BlockType.INVAR_PLATE, BlockType.INVAR_ROD,

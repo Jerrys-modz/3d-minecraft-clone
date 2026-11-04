@@ -14,10 +14,11 @@ import java.util.Set;
 public enum FluidPipeTier {
 
     /** Cold fluids: water, crude oil and the fuels — lava is too hot and acid corrodes it. */
-    BRONZE(BlockType.FLUID_PIPE, EnumSet.of(Fluid.WATER, Fluid.OIL, Fluid.DIESEL, Fluid.HEAVY_FUEL)),
+    BRONZE(BlockType.FLUID_PIPE, EnumSet.of(Fluid.WATER, Fluid.OIL, Fluid.DIESEL, Fluid.HEAVY_FUEL, Fluid.LUBRICANT)),
 
     /** Cold fluids and lava. */
-    STEEL(BlockType.FLUID_PIPE_STEEL, EnumSet.of(Fluid.WATER, Fluid.OIL, Fluid.DIESEL, Fluid.HEAVY_FUEL, Fluid.LAVA)),
+    STEEL(BlockType.FLUID_PIPE_STEEL,
+            EnumSet.of(Fluid.WATER, Fluid.OIL, Fluid.DIESEL, Fluid.HEAVY_FUEL, Fluid.LUBRICANT, Fluid.LAVA)),
 
     /** Everything, including sulfuric acid. */
     STAINLESS(BlockType.FLUID_PIPE_STAINLESS, EnumSet.allOf(Fluid.class));

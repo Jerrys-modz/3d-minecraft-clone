@@ -1245,7 +1245,9 @@ public enum BlockType {
     /** Sodium dust — from electrolysing salt brine (alongside hydrochloric acid). */
     SODIUM_DUST(650, 0),
     /** Tin cell holding 1000 mB of hydrochloric acid. */
-    HYDROCHLORIC_ACID_CELL(651, 0);
+    HYDROCHLORIC_ACID_CELL(651, 0),
+    /** Tin cell holding 1000 mB of lubricant. */
+    LUBRICANT_CELL(652, 0);
 
     public final short id;
     public final boolean solid;

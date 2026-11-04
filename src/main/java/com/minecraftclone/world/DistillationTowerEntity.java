@@ -6,8 +6,9 @@ import java.io.IOException;
 
 /**
  * A placed Distillation Tower (MV): refines {@value #OIL_PER_BATCH} mB of
- * crude oil into {@value #DIESEL_PER_BATCH} mB of diesel and
- * {@value #HEAVY_PER_BATCH} mB of heavy fuel. Every fluid comes from or goes
+ * crude oil into {@value #DIESEL_PER_BATCH} mB of diesel,
+ * {@value #HEAVY_PER_BATCH} mB of heavy fuel and — if a third tank can take
+ * it — {@value #LUBRICANT_PER_BATCH} mB of lubricant (otherwise vented). Every fluid comes from or goes
  * to Steel Tanks that are adjacent or piped, one tank per fluid; it waits
  * until there is room for both products. MV-rated: safe on gold cable.
  *
@@ -20,6 +21,8 @@ public final class DistillationTowerEntity implements BlockEntity, ProgressMachi
     public static final int OIL_PER_BATCH = 1000;
     public static final int DIESEL_PER_BATCH = 600;
     public static final int HEAVY_PER_BATCH = 300;
+    /** Optional third fraction; vented if no tank can take it. */
+    public static final int LUBRICANT_PER_BATCH = 100;
     public static final float BATCH_SECONDS = 10f;
     public static final float EU_PER_BATCH = 600f;
 
@@ -70,6 +73,9 @@ public final class DistillationTowerEntity implements BlockEntity, ProgressMachi
         oil.drain(Fluid.OIL, OIL_PER_BATCH);
         diesel.fill(Fluid.DIESEL, DIESEL_PER_BATCH);
         heavy.fill(Fluid.HEAVY_FUEL, HEAVY_PER_BATCH);
+        FluidTankEntity lube = FluidNetwork.findTankFor(world, posX, posY, posZ, Fluid.LUBRICANT,
+                LUBRICANT_PER_BATCH, diesel, heavy, oil);
+        if (lube != null) lube.fill(Fluid.LUBRICANT, LUBRICANT_PER_BATCH);
     }
 
     @Override

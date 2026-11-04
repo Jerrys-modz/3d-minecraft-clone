@@ -127,8 +127,20 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
 
     /** Seconds per operation after any MV upgrade. */
     private float effectiveSeconds() {
-        return mvUpgraded ? operationSeconds() / MV_SPEED : operationSeconds();
+        float s = mvUpgraded ? operationSeconds() / MV_SPEED : operationSeconds();
+        return lubricated ? s / LUBRICANT_SPEED : s;
     }
+
+    /** Speed multiplier while lubricant is available. */
+    public static final float LUBRICANT_SPEED = 1.25f;
+    /** Lubricant used per completed operation. */
+    public static final int LUBRICANT_PER_OPERATION = 10;
+
+    /** True when the last scan found a lubricant tank (adjacent or piped). */
+    private boolean lubricated;
+
+    /** True while this machine is running lubricated (25% faster). */
+    public boolean isLubricated() { return lubricated; }
 
     /** True if {@code item} belongs in this machine's input slot. */
     public boolean acceptsInput(BlockType item) {
@@ -174,6 +186,8 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
                 drawRate = feed.throughput();
                 efficiency = feed.efficiency();
                 overvoltage = feed.overvoltage();
+                lubricated = FluidNetwork.findTankWith(world, posX, posY, posZ,
+                        Fluid.LUBRICANT, LUBRICANT_PER_OPERATION) != null;
             }
         }
 
@@ -221,6 +235,12 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
             }
         }
         onOperationComplete(input);
+        if (lubricated && attached) {
+            FluidTankEntity lube = FluidNetwork.findTankWith(world, posX, posY, posZ,
+                    Fluid.LUBRICANT, LUBRICANT_PER_OPERATION);
+            if (lube != null) lube.drain(Fluid.LUBRICANT, LUBRICANT_PER_OPERATION);
+            else lubricated = false;
+        }
         if (by == null || byproductChance() <= 0f) return;
         byproductCredit += byproductChance();
         if (byproductCredit < 1f - 1e-4f) return;
