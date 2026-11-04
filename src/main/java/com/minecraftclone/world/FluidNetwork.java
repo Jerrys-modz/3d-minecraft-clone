@@ -28,6 +28,15 @@ public final class FluidNetwork {
         return find(world, x, y, z, fluid, t -> t.canFill(fluid, mB));
     }
 
+    /**
+     * Like {@link #findTankFor} but never returns {@code exclude} — for machines
+     * with two outputs, so two products don't both pick the same empty tank.
+     */
+    public static FluidTankEntity findTankFor(World world, int x, int y, int z, Fluid fluid, int mB,
+                                              FluidTankEntity exclude) {
+        return find(world, x, y, z, fluid, t -> t != exclude && t.canFill(fluid, mB));
+    }
+
     private static FluidTankEntity find(World world, int x, int y, int z, Fluid fluid,
                                         java.util.function.Predicate<FluidTankEntity> ok) {
         if (world == null) return null;

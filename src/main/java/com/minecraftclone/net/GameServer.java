@@ -1044,6 +1044,8 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
             case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
             case com.minecraftclone.world.ChemicalReactorEntity.TYPE -> block == BlockType.CHEMICAL_REACTOR;
+            case com.minecraftclone.world.OilPumpEntity.TYPE -> block == BlockType.OIL_PUMP;
+            case com.minecraftclone.world.DistillationTowerEntity.TYPE -> block == BlockType.DISTILLATION_TOWER;
             case com.minecraftclone.world.BatteryBlockEntity.TYPE -> block == BlockType.BATTERY_BLOCK;
             default -> false;
         };

@@ -54,6 +54,8 @@ public final class BlockEntities {
         register(ElectrolyzerEntity.TYPE, ElectrolyzerEntity::new);
         register(FluidTankEntity.TYPE, FluidTankEntity::new);
         register(ChemicalReactorEntity.TYPE, ChemicalReactorEntity::new);
+        register(OilPumpEntity.TYPE, OilPumpEntity::new);
+        register(DistillationTowerEntity.TYPE, DistillationTowerEntity::new);
         register(BatteryBlockEntity.TYPE, BatteryBlockEntity::new);
     }
 

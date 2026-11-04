@@ -16,8 +16,9 @@ import java.io.IOException;
  * <h3>How it works</h3>
  * <ul>
  *   <li><b>Fuel slot</b> (slot 0): any item that burns in a furnace. When it's
- *       empty, the generator burns {@value #LAVA_MB_PER_BURN} mB of lava at a time
- *       from a Steel Tank that is adjacent or connected by steel/stainless fluid pipe.</li>
+ *       empty, the generator burns {@value #LAVA_MB_PER_BURN} mB at a time of a fluid
+ *       fuel (diesel, heavy fuel, crude oil, then lava) from a Steel Tank that is
+ *       adjacent or piped.</li>
  *   <li><b>EU production</b>: {@value #EU_PER_BURN_SECOND} EU/s while burning,
  *       capped at {@value #MAX_EU} EU in the buffer.</li>
  *   <li><b>Output</b>: EU drawn by adjacent {@link ElectricFurnaceEntity} or
@@ -49,8 +50,11 @@ public final class CoalGeneratorEntity implements BlockEntity, StorageContainer,
     /** EU stored in the internal buffer. */
     private float eu;
 
-    /** Lava drawn from a tank per burn when the fuel slot is empty. */
+    /** Fluid fuel drawn from a tank per burn when the fuel slot is empty. */
     public static final int LAVA_MB_PER_BURN = 100;
+
+    /** Fluid fuels in the order the generator prefers them (see {@link Fluid#burnSecondsPer100mB}). */
+    private static final Fluid[] FLUID_FUELS = {Fluid.DIESEL, Fluid.HEAVY_FUEL, Fluid.OIL, Fluid.LAVA};
     /** Burn seconds from {@link #LAVA_MB_PER_BURN} mB of lava (a bucket smelts 100 items). */
     public static final float LAVA_BURN_SECONDS = 10 * Furnace.SMELT_TIME;
 
@@ -130,13 +134,15 @@ public final class CoalGeneratorEntity implements BlockEntity, StorageContainer,
                 if (fuelCount == 0) fuelType = null;
             }
         }
-        // No solid fuel: burn lava from an adjacent or piped (steel+) tank.
+        // No solid fuel: burn a fluid fuel from an adjacent or piped tank, best first.
         if (burnTime <= 0f && eu < MAX_EU && attached) {
-            FluidTankEntity lava = FluidNetwork.findTankWith(world, posX, posY, posZ, Fluid.LAVA, LAVA_MB_PER_BURN);
-            if (lava != null) {
-                lava.drain(Fluid.LAVA, LAVA_MB_PER_BURN);
-                burnTime     = LAVA_BURN_SECONDS;
-                burnDuration = LAVA_BURN_SECONDS;
+            for (Fluid f : FLUID_FUELS) {
+                FluidTankEntity tank = FluidNetwork.findTankWith(world, posX, posY, posZ, f, LAVA_MB_PER_BURN);
+                if (tank == null) continue;
+                tank.drain(f, LAVA_MB_PER_BURN);
+                burnTime     = f.burnSecondsPer100mB();
+                burnDuration = burnTime;
+                break;
             }
         }
 

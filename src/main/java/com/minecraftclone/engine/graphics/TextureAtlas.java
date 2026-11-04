@@ -435,6 +435,12 @@ public class TextureAtlas {
         paintFluidPipe(image, 313, rnd, 0x6A4A1E, 0xC08A3A);      // FLUID_PIPE (bronze)
         paintFluidPipe(image, 316, rnd, 0x3A3A44, 0x8A8A9A);      // FLUID_PIPE_STEEL
         paintFluidPipe(image, 317, rnd, 0x5A6470, 0xD4DCE6);      // FLUID_PIPE_STAINLESS
+        paintOilDeposit(image, 318, rnd);                         // OIL_DEPOSIT
+        paintOilPump(image, 319, rnd, true);                      // OIL_PUMP top (drill head)
+        paintOilPump(image, 320, rnd, false);                     // OIL_PUMP sides (pump jack)
+        paintDistillationTower(image, 321, rnd, false, false);    // DISTILLATION_TOWER sides
+        paintDistillationTower(image, 322, rnd, true, false);     // DISTILLATION_TOWER front idle
+        paintDistillationTower(image, 323, rnd, true, true);      // DISTILLATION_TOWER front working
         paintChemicalReactor(image, 314, rnd, false);             // CHEMICAL_REACTOR front idle
         paintChemicalReactor(image, 315, rnd, true);              // CHEMICAL_REACTOR front reacting
 
@@ -2584,6 +2590,69 @@ public class TextureAtlas {
                     color = working ? (rnd.nextInt(3) == 0 ? 0xFFFFE080 : 0xFFE07020) : 0xFFC8C8D0;     // plate
                 } else color = 0xFF14141C;
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
+            }
+        }
+    }
+
+    /** OIL_DEPOSIT (tile 318): dark stone with glossy black oil seams. */
+    private void paintOilDeposit(BufferedImage img, int index, Random rnd) {
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(14) - 7;
+                boolean seam = ((x + 2 * y) % 7 == 0 || (3 * x - y + 40) % 9 == 0) && rnd.nextInt(4) != 0;
+                int base = seam ? 0x0E0C0A : 0x55524E;
+                if (seam && rnd.nextInt(6) == 0) base = 0x4A4038;                 // oily sheen
+                int c = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (c << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    /** OIL_PUMP (tiles 319 top / 320 sides): stainless casing; a drill head on top, a pump jack on the sides. */
+    private void paintOilPump(BufferedImage img, int index, Random rnd, boolean top) {
+        paintMachineBox(img, index, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8);
+        int ox = tileX(index), oy = tileY(index);
+        if (top) {
+            for (int y = 4; y < 12; y++) {
+                for (int x = 4; x < 12; x++) {
+                    int dx = x * 2 - 15, dy = y * 2 - 15, d2 = dx * dx + dy * dy;
+                    if (d2 > 60) continue;
+                    img.setRGB(ox + x, oy + y, d2 < 10 ? 0xFF1A1410 : ((x + y) & 1) == 0 ? 0xFF6A6A7A : 0xFF3A3A48);
+                }
+            }
+        } else {
+            for (int x = 2; x < 14; x++) img.setRGB(ox + x, oy + 5, 0xFF2A2A34);       // walking beam
+            for (int y = 5; y < 13; y++) img.setRGB(ox + 8, oy + y, 0xFF4A4A56);       // post
+            for (int y = 3; y < 8; y++) img.setRGB(ox + 2, oy + y, 0xFFE8B040);        // horse head
+            for (int y = 11; y < 14; y++) for (int x = 3; x < 6; x++) img.setRGB(ox + x, oy + y, 0xFF1A1410); // wellhead
+        }
+    }
+
+    /**
+     * DISTILLATION_TOWER (tiles 321 side / 322 front idle / 323 front working):
+     * stainless casing banded with distillation trays; the front shows a sight
+     * column whose layers glow amber (diesel) over brown (heavy fuel) while it works.
+     */
+    private void paintDistillationTower(BufferedImage img, int index, Random rnd, boolean front, boolean working) {
+        paintMachineBox(img, index, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 3; y < 14; y += 3) {
+            for (int x = 1; x < 15; x++) img.setRGB(ox + x, oy + y, 0xFF5A6470);      // trays
+        }
+        if (!front) return;
+        for (int y = 2; y < 14; y++) {
+            for (int x = 6; x < 10; x++) {
+                boolean rim = x == 6 || x == 9;
+                int c;
+                if (rim) c = 0xFF9EC8D8;
+                else if (!working) c = 0xFF1A2228;
+                else if (y < 6) c = 0xFFF0E0A0;            // light vapour
+                else if (y < 10) c = 0xFFE8B040;           // diesel
+                else c = 0xFF5A3A1A;                       // heavy fuel
+                img.setRGB(ox + x, oy + y, c);
             }
         }
     }

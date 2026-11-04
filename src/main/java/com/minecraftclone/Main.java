@@ -849,6 +849,8 @@ public class Main {
             case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
             case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
             case com.minecraftclone.world.ChemicalReactorEntity.TYPE -> block == BlockType.CHEMICAL_REACTOR;
+            case com.minecraftclone.world.OilPumpEntity.TYPE -> block == BlockType.OIL_PUMP;
+            case com.minecraftclone.world.DistillationTowerEntity.TYPE -> block == BlockType.DISTILLATION_TOWER;
             case com.minecraftclone.world.BatteryBlockEntity.TYPE -> block == BlockType.BATTERY_BLOCK;
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
@@ -4137,6 +4139,22 @@ public class Main {
                             audio.playBlockSound(SoundMaterial.of(BlockType.GRASS), BlockAction.PLACE,
                                     px + 0.5f, py + 0.5f, pz + 0.5f, 0.8f);
                         }
+                    } else if (noMob && hit != null && targeted == BlockType.OIL_PUMP) {
+                        com.minecraftclone.world.OilPumpEntity pump =
+                                world.getOrCreateOilPump(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        showMessage(messages, pump.hasDeposit()
+                                        ? "Oil Pump: drawing from a deposit at y=" + pump.targetY()
+                                                + (pump.isActive() ? "." : " (needs power and a tank with room).")
+                                        : "Oil Pump: no oil within " + com.minecraftclone.world.OilPumpEntity.RADIUS
+                                                + " blocks below. Deposits sit at y 8-30.",
+                                new Vector4f(0.6f, 0.8f, 1f, 1f), 3f);
+                    } else if (noMob && hit != null && targeted == BlockType.DISTILLATION_TOWER) {
+                        com.minecraftclone.world.DistillationTowerEntity tower =
+                                world.getOrCreateDistillationTower(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                        showMessage(messages, tower.isActive()
+                                        ? "Distilling: " + Math.round(tower.progressFraction() * 100) + "%"
+                                        : "Distillation Tower: needs power, 1000 mB crude oil, and a tank each for diesel and heavy fuel.",
+                                new Vector4f(0.6f, 0.8f, 1f, 1f), 3f);
                     } else if (noMob && hit != null && targeted == BlockType.STEEL_TANK) {
                         // Steel Tank: pour a filled cell in, draw into an empty cell, or read the gauge.
                         com.minecraftclone.world.FluidTankEntity tank =

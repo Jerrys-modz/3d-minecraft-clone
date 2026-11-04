@@ -393,6 +393,8 @@ public class World implements BlockAccessor {
                         em.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof CoalGeneratorEntity gen) {
                         gen.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof WorldAttached wa) {
+                        wa.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
                     }
@@ -784,6 +786,24 @@ public class World implements BlockAccessor {
         return ef;
     }
 
+    /** Returns the Oil Pump entity at a position, creating + attaching it on first use. */
+    public OilPumpEntity getOrCreateOilPump(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        OilPumpEntity p = existing instanceof OilPumpEntity e ? e : new OilPumpEntity();
+        p.attach(x, y, z, this);
+        if (p != existing) blockEntities.put(blockKey(x, y, z), p);
+        return p;
+    }
+
+    /** Returns the Distillation Tower entity at a position, creating + attaching it on first use. */
+    public DistillationTowerEntity getOrCreateDistillationTower(int x, int y, int z) {
+        BlockEntity existing = blockEntities.get(blockKey(x, y, z));
+        DistillationTowerEntity t = existing instanceof DistillationTowerEntity e ? e : new DistillationTowerEntity();
+        t.attach(x, y, z, this);
+        if (t != existing) blockEntities.put(blockKey(x, y, z), t);
+        return t;
+    }
+
     /** Returns the Steel Tank entity at a position, creating it on first use. */
     public FluidTankEntity getOrCreateSteelTank(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
@@ -854,6 +874,8 @@ public class World implements BlockAccessor {
             case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR,
                  ELECTRIC_EXTRACTOR, ELECTROLYZER, CHEMICAL_REACTOR -> getOrCreateElectricMachine(x, y, z);
             case STEEL_TANK -> getOrCreateSteelTank(x, y, z);
+            case OIL_PUMP -> getOrCreateOilPump(x, y, z);
+            case DISTILLATION_TOWER -> getOrCreateDistillationTower(x, y, z);
             default -> { }
         }
     }
@@ -906,6 +928,8 @@ public class World implements BlockAccessor {
             em.attach(x, y, z, this);
         } else if (entity instanceof CoalGeneratorEntity gen) {
             gen.attach(x, y, z, this);
+        } else if (entity instanceof WorldAttached wa) {
+            wa.attach(x, y, z, this);
         } else if (entity instanceof BatteryBlockEntity bat) {
             bat.attach(x, y, z, this);
         }
@@ -969,6 +993,30 @@ public class World implements BlockAccessor {
             }
         }
         detonateOverloads();
+        applyDeferredBlocks();
+    }
+
+    /** Block changes requested by block entities during a tick (x, y, z, type). */
+    private final List<Object[]> deferredBlocks = new ArrayList<>();
+
+    /**
+     * Sets a block once the current block-entity tick finishes. Entities call
+     * this instead of {@link #setBlock} because a block change can create or
+     * drop block entities, which would corrupt the tick loop.
+     */
+    public void setBlockAfterTick(int x, int y, int z, BlockType type) {
+        deferredBlocks.add(new Object[]{x, y, z, type});
+    }
+
+    private void applyDeferredBlocks() {
+        if (deferredBlocks.isEmpty()) return;
+        List<Object[]> pending = new ArrayList<>(deferredBlocks);
+        deferredBlocks.clear();
+        for (Object[] b : pending) {
+            int x = (Integer) b[0], y = (Integer) b[1], z = (Integer) b[2];
+            setBlock(x, y, z, (BlockType) b[3]);
+            markChunkModifiedByPlayer(worldToChunk(x), worldToChunk(z));
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1379,6 +1427,8 @@ public class World implements BlockAccessor {
                         em.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof CoalGeneratorEntity gen) {
                         gen.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof WorldAttached wa) {
+                        wa.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
                     }

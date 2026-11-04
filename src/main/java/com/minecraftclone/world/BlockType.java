@@ -1213,7 +1213,19 @@ public enum BlockType {
     /** Steel Fluid Pipe — carries water and lava. Tile 316. */
     FLUID_PIPE_STEEL(635, true, false, 316, 316, 316),
     /** Stainless Fluid Pipe — carries water, lava and sulfuric acid. Tile 317. */
-    FLUID_PIPE_STAINLESS(636, true, false, 317, 317, 317);
+    FLUID_PIPE_STAINLESS(636, true, false, 317, 317, 317),
+
+    // ---- Phase 3: oil ------------------------------------------------
+    /** Oil-bearing rock deep underground (1000 mB each); turns to stone once pumped dry. Tile 318. */
+    OIL_DEPOSIT(637, true, false, 318, 318, 318),
+    /** Oil Pump (MV) — pumps crude oil from deposits below it into a tank. Top 319, sides 320, base 310. */
+    OIL_PUMP(638, true, false, 319, 320, 310),
+    /** Distillation Tower (MV) — crude oil → diesel + heavy fuel. Sides 321, front 322 idle / 323 working. */
+    DISTILLATION_TOWER(639, true, false, 310, 321, 310, 322, 323, 0, 0),
+    /** Tin cells holding 1000 mB of crude oil / diesel / heavy fuel. */
+    OIL_CELL(640, 0),
+    DIESEL_CELL(641, 0),
+    HEAVY_FUEL_CELL(642, 0);
 
     public final short id;
     public final boolean solid;

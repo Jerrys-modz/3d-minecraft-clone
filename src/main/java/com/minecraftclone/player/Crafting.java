@@ -411,6 +411,10 @@ public final class Crafting {
         // Steel and stainless fluid pipes: same glass-lined run in tougher metal.
         shaped3x3("...", "QGQ", "...", BlockType.FLUID_PIPE_STEEL, 4);
         shaped3x3("...", "sGs", "...", BlockType.FLUID_PIPE_STAINLESS, 4);
+        // Oil Pump: MV casing on steel drill legs, circuit-controlled, stainless shell.
+        shaped3x3("9i9", "Q0Q", "Q.Q", BlockType.OIL_PUMP, 1);
+        // Distillation Tower: MV casing between glass sight columns and circuits.
+        shaped3x3("9G9", "i0i", "9G9", BlockType.DISTILLATION_TOWER, 1);
         // Tin Cell: four tin plates around a glass liner -> 2.
         shaped3x3(".8.", "8G8", ".8.", BlockType.TIN_CELL, 2);
         // Chemical Reactor: glass vessel on an MV casing, vacuum-tube control, stainless shell.

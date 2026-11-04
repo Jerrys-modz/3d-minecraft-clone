@@ -109,6 +109,7 @@ public class TerrainGenerator implements WorldGenerator {
     private final Noise riverNoise;
     private final Noise oreNoise;
     private final GthnOreGenerator gthnOreGenerator;
+    private final OilDeposits oilDeposits;
     private final long seed;
     private final int seaLevel;
     private final boolean structures;
@@ -131,6 +132,7 @@ public class TerrainGenerator implements WorldGenerator {
         this.riverNoise = new Noise(seed ^ 0x27D4EB2F165667C5L);
         this.oreNoise = new Noise(seed ^ 0x6A09E667F3BCC909L);
         this.gthnOreGenerator = new GthnOreGenerator(seed, seaLevel);
+        this.oilDeposits = new OilDeposits(seed);
     }
 
     @Override
@@ -726,6 +728,8 @@ public class TerrainGenerator implements WorldGenerator {
         if (y >= 5 && y <= 100 && oreNoise.fbm3(wx * 0.09 + 4000, y * 0.09, wz * 0.09 + 4000, 1, 0.5, 2.0) > 0.460) {
             return BlockType.COAL_ORE;
         }
+        // Oil pockets only replace plain stone, so every ore stays where it was.
+        if (oilDeposits.oilAt(wx, y, wz)) return BlockType.OIL_DEPOSIT;
         return BlockType.STONE;
     }
 
