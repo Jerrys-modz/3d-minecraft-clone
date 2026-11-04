@@ -411,7 +411,7 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 |---------|--------|-------|
 | **Fluid Tanks** | ✅ Done | `STEEL_TANK` (`222/2G2/222`): 32 000 mB of one fluid (water or lava). Right-click with a filled cell to pour, an empty cell to draw, or anything else to read the gauge. Stainless tanks still todo. |
 | **Fluid Pipes** | ✅ Done | Three tiers, each a glass-lined run of 4: **bronze** (`EGE`) carries the cold fluids (water, oil, diesel, heavy fuel), **steel** (`QGQ`) water and lava, **stainless** (`sGs`) water, lava and sulfuric acid. A network carries only what its weakest pipe can. Both ore washers run on 100 mB of tank water per wash (adjacent or piped) when no water block is next to them; the Chemical Reactor pipes its water/acid; the **Coal Generator burns fluid fuels** (lava, oil, diesel, heavy fuel) from tanks when its fuel slot is empty. |
-| **Fluid Cells & Drums** | 🟡 Partial | `TIN_CELL` (`.8./8G8/.8.` → 2) holds 1000 mB: fill from any water (not consumed, like the canteen) or still lava (consumed, like a bucket), or from a tank; `WATER_CELL` / `LAVA_CELL`. Steel drum still todo. |
+| **Fluid Cells & Drums** | ✅ Done | `TIN_CELL` (`.8./8G8/.8.` → 2) holds 1000 mB: fill from any water (not consumed, like the canteen), still lava (consumed, like a bucket), or a tank; a cell for every fluid. **Steel Drum** (`Q2Q/Q.Q/Q2Q`): a cheaper 16 000 mB tank. Breaking a tank or drum **drops its fluid as filled cells** (whole cells; a part-cell remainder is lost), so fluid is portable without the block keeping item data. |
 
 ### Chemistry
 
@@ -440,9 +440,9 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 
 > **Survival interlock:** Chemical spills (acid tank damage) if pipes burst from overpressure. Oil extraction near lava creates fire spread danger. Working in chemical areas requires rubber hazmat suit.
 
-**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL` · `SULFURIC_ACID_CELL` · `CHEMICAL_REACTOR` · `SILICON_DUST` · `SILICON_BOULE` · `SILICON_WAFER` · `INTEGRATED_CIRCUIT` · `LITHIUM_DUST` · `MV_BATTERY` · `MV_UPGRADE` · `FLUID_PIPE_STEEL` · `FLUID_PIPE_STAINLESS` · `OIL_DEPOSIT` · `OIL_PUMP` · `DISTILLATION_TOWER` · `OIL_CELL` · `DIESEL_CELL` · `HEAVY_FUEL_CELL`.
+**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL` · `SULFURIC_ACID_CELL` · `CHEMICAL_REACTOR` · `SILICON_DUST` · `SILICON_BOULE` · `SILICON_WAFER` · `INTEGRATED_CIRCUIT` · `LITHIUM_DUST` · `MV_BATTERY` · `MV_UPGRADE` · `FLUID_PIPE_STEEL` · `FLUID_PIPE_STAINLESS` · `OIL_DEPOSIT` · `OIL_PUMP` · `DISTILLATION_TOWER` · `OIL_CELL` · `DIESEL_CELL` · `HEAVY_FUEL_CELL` · `HYDROCHLORIC_ACID_CELL` · `SODIUM_DUST` · `LUBRICANT_CELL` · `STEEL_DRUM`.
 
-**Still open:** `STEEL_DRUM` · `DISTILLATION_TOWER (multi-block form)` · `MV_TRANSFORMER`
+**Still open:** `DISTILLATION_TOWER (multi-block form)` · `MV_TRANSFORMER`
 
 ---
 

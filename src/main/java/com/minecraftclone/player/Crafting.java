@@ -410,6 +410,8 @@ public final class Crafting {
         // ---- Phase 3: fluids ------------------------------------------------
         // Steel Tank: steel plates around a glass sight window.
         shaped3x3("222", "2G2", "222", BlockType.STEEL_TANK, 1);
+        // Steel Drum: a smaller tank - steel ingots and two plates, hollow.
+        shaped3x3("Q2Q", "Q.Q", "Q2Q", BlockType.STEEL_DRUM, 1);
         // Fluid Pipe: a glass-lined bronze run -> 4.
         shaped3x3("...", "EGE", "...", BlockType.FLUID_PIPE, 4);
         // Steel and stainless fluid pipes: same glass-lined run in tougher metal.

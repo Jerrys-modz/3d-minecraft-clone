@@ -805,11 +805,12 @@ public class World implements BlockAccessor {
         return t;
     }
 
-    /** Returns the Steel Tank entity at a position, creating it on first use. */
+    /** Returns the Steel Tank or Steel Drum entity at a position (by the block there), creating it on first use. */
     public FluidTankEntity getOrCreateSteelTank(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
-        if (existing instanceof FluidTankEntity t) return t;
-        FluidTankEntity t = new FluidTankEntity();
+        boolean drum = getBlock(x, y, z) == BlockType.STEEL_DRUM;
+        if (existing instanceof FluidTankEntity t && t.blockType() == getBlock(x, y, z)) return t;
+        FluidTankEntity t = new FluidTankEntity(drum);
         blockEntities.put(blockKey(x, y, z), t);
         return t;
     }
@@ -874,7 +875,7 @@ public class World implements BlockAccessor {
             case ELECTRIC_FURNACE -> getOrCreateElectricFurnace(x, y, z);
             case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR,
                  ELECTRIC_EXTRACTOR, ELECTROLYZER, CHEMICAL_REACTOR -> getOrCreateElectricMachine(x, y, z);
-            case STEEL_TANK -> getOrCreateSteelTank(x, y, z);
+            case STEEL_TANK, STEEL_DRUM -> getOrCreateSteelTank(x, y, z);
             case OIL_PUMP -> getOrCreateOilPump(x, y, z);
             case DISTILLATION_TOWER -> getOrCreateDistillationTower(x, y, z);
             default -> { }

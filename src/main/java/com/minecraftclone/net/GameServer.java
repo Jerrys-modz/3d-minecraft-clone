@@ -1014,7 +1014,7 @@ public class GameServer implements AutoCloseable {
                 || block == BlockType.ELECTRIC_MACERATOR || block == BlockType.ELECTRIC_ORE_WASHER
                 || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR
                 || block == BlockType.ELECTRIC_EXTRACTOR || block == BlockType.BATTERY_BLOCK
-                || block == BlockType.ELECTROLYZER || block == BlockType.STEEL_TANK
+                || block == BlockType.ELECTROLYZER || block == BlockType.STEEL_TANK || block == BlockType.STEEL_DRUM
                 || block == BlockType.CHEMICAL_REACTOR || block == BlockType.EBF_CONTROLLER;
     }
 
@@ -1044,6 +1044,7 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.ElectricExtractorEntity.TYPE -> block == BlockType.ELECTRIC_EXTRACTOR;
             case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
             case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
+            case com.minecraftclone.world.FluidTankEntity.DRUM_TYPE -> block == BlockType.STEEL_DRUM;
             case com.minecraftclone.world.ChemicalReactorEntity.TYPE -> block == BlockType.CHEMICAL_REACTOR;
             case com.minecraftclone.world.OilPumpEntity.TYPE -> block == BlockType.OIL_PUMP;
             case com.minecraftclone.world.DistillationTowerEntity.TYPE -> block == BlockType.DISTILLATION_TOWER;
@@ -1119,7 +1120,7 @@ public class GameServer implements AutoCloseable {
             case COAL_GENERATOR -> world.getOrCreateCoalGenerator(open.x(), open.y(), open.z());
             case ELECTRIC_FURNACE -> world.getOrCreateElectricFurnace(open.x(), open.y(), open.z());
             case BATTERY_BLOCK -> world.getOrCreateBatteryBlock(open.x(), open.y(), open.z());
-            case STEEL_TANK -> world.getOrCreateSteelTank(open.x(), open.y(), open.z());
+            case STEEL_TANK, STEEL_DRUM -> world.getOrCreateSteelTank(open.x(), open.y(), open.z());
             case ELECTRIC_MACERATOR, ELECTRIC_ORE_WASHER, THERMAL_CENTRIFUGE, ELECTRIC_COMPRESSOR, ELECTRIC_EXTRACTOR,
                  ELECTROLYZER, CHEMICAL_REACTOR ->
                     world.getOrCreateElectricMachine(open.x(), open.y(), open.z());

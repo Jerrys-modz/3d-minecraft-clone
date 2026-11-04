@@ -29,7 +29,7 @@ public final class CreativeCatalog {
                     BlockType.GRAVEL, BlockType.SNOW,
                     BlockType.GLASS, BlockType.STONE_SLAB, BlockType.PLANKS_SLAB, BlockType.LAMP, BlockType.FURNACE,
                     BlockType.FIRE_BRICK, BlockType.PRIMITIVE_BLAST_FURNACE, BlockType.STEEL_CASING, BlockType.MV_CASING,
-                    BlockType.STEEL_TANK, BlockType.FLUID_PIPE, BlockType.FLUID_PIPE_STEEL,
+                    BlockType.STEEL_TANK, BlockType.STEEL_DRUM, BlockType.FLUID_PIPE, BlockType.FLUID_PIPE_STEEL,
                     BlockType.FLUID_PIPE_STAINLESS, BlockType.CHEMICAL_REACTOR,
                     BlockType.OIL_PUMP, BlockType.DISTILLATION_TOWER, BlockType.OIL_DEPOSIT,
                     BlockType.EBF_CONTROLLER, BlockType.HEATPROOF_CASING,

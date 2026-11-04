@@ -848,6 +848,7 @@ public class Main {
             case com.minecraftclone.world.ElectricExtractorEntity.TYPE -> block == BlockType.ELECTRIC_EXTRACTOR;
             case com.minecraftclone.world.ElectrolyzerEntity.TYPE -> block == BlockType.ELECTROLYZER;
             case com.minecraftclone.world.FluidTankEntity.TYPE -> block == BlockType.STEEL_TANK;
+            case com.minecraftclone.world.FluidTankEntity.DRUM_TYPE -> block == BlockType.STEEL_DRUM;
             case com.minecraftclone.world.ChemicalReactorEntity.TYPE -> block == BlockType.CHEMICAL_REACTOR;
             case com.minecraftclone.world.OilPumpEntity.TYPE -> block == BlockType.OIL_PUMP;
             case com.minecraftclone.world.DistillationTowerEntity.TYPE -> block == BlockType.DISTILLATION_TOWER;
@@ -1383,6 +1384,17 @@ public class Main {
                             }
                         }
                     }
+                }
+                if ((targetType == BlockType.STEEL_TANK || targetType == BlockType.STEEL_DRUM)
+                        && world.blockEntityAt(bx, by, bz) instanceof com.minecraftclone.world.FluidTankEntity broken
+                        && broken.fluid() != null) {
+                    // A broken tank or drum gives its fluid back as filled cells
+                    // (whole cells only - a part-cell remainder is lost).
+                    int cells = broken.wholeCells();
+                    if (cells > 0) {
+                        world.spawnItem(bx, by, bz, com.minecraftclone.world.Fluid.cellFor(broken.fluid()), cells, loot);
+                    }
+                    world.removeBlockEntity(bx, by, bz);
                 }
                 if (spillsMachineContents(targetType)
                         && world.blockEntityAt(bx, by, bz) instanceof com.minecraftclone.player.StorageContainer machine) {
@@ -4173,7 +4185,7 @@ public class Main {
                                         ? "Distilling: " + Math.round(tower.progressFraction() * 100) + "%"
                                         : "Distillation Tower: needs power, 1000 mB crude oil, and a tank each for diesel and heavy fuel.",
                                 new Vector4f(0.6f, 0.8f, 1f, 1f), 3f);
-                    } else if (noMob && hit != null && targeted == BlockType.STEEL_TANK) {
+                    } else if (noMob && hit != null && (targeted == BlockType.STEEL_TANK || targeted == BlockType.STEEL_DRUM)) {
                         // Steel Tank: pour a filled cell in, draw into an empty cell, or read the gauge.
                         com.minecraftclone.world.FluidTankEntity tank =
                                 world.getOrCreateSteelTank(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
@@ -4204,10 +4216,10 @@ public class Main {
                                         new Vector4f(0.9f, 0.6f, 0.3f, 1f), 2f);
                             }
                         } else {
-                            showMessage(messages, tank.fluid() == null ? "Steel Tank: empty (0 / "
-                                            + com.minecraftclone.world.FluidTankEntity.CAPACITY_MB + " mB)"
-                                            : "Steel Tank: " + tank.fluid().displayName + " " + tank.amount() + " / "
-                                            + com.minecraftclone.world.FluidTankEntity.CAPACITY_MB + " mB",
+                            String label = targeted == BlockType.STEEL_DRUM ? "Steel Drum: " : "Steel Tank: ";
+                            showMessage(messages, tank.fluid() == null ? label + "empty (0 / " + tank.capacity() + " mB)"
+                                            : label + tank.fluid().displayName + " " + tank.amount() + " / "
+                                            + tank.capacity() + " mB",
                                     new Vector4f(0.6f, 0.8f, 1f, 1f), 2.5f);
                         }
                         if (changed) {

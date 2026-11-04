@@ -1247,7 +1247,10 @@ public enum BlockType {
     /** Tin cell holding 1000 mB of hydrochloric acid. */
     HYDROCHLORIC_ACID_CELL(651, 0),
     /** Tin cell holding 1000 mB of lubricant. */
-    LUBRICANT_CELL(652, 0);
+    LUBRICANT_CELL(652, 0),
+
+    /** Steel Drum — a smaller (16 000 mB), cheaper tank. Tile 330 (sides) / 331 (lid). */
+    STEEL_DRUM(653, true, false, 331, 330, 331);
 
     public final short id;
     public final boolean solid;

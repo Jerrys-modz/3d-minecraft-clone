@@ -432,6 +432,8 @@ public class TextureAtlas {
         paintMachineBox(image, 310, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8); // MV_CASING (stainless)
         paintSteelTank(image, 311, rnd, true);                    // STEEL_TANK sides (sight glass)
         paintSteelTank(image, 312, rnd, false);                   // STEEL_TANK top/bottom (lid)
+        paintSteelDrum(image, 330, rnd, true);                    // STEEL_DRUM sides (hoops)
+        paintSteelDrum(image, 331, rnd, false);                   // STEEL_DRUM lid (bung)
         paintFluidPipe(image, 313, rnd, 0x6A4A1E, 0xC08A3A);      // FLUID_PIPE (bronze)
         paintFluidPipe(image, 316, rnd, 0x3A3A44, 0x8A8A9A);      // FLUID_PIPE_STEEL
         paintFluidPipe(image, 317, rnd, 0x5A6470, 0xD4DCE6);      // FLUID_PIPE_STAINLESS
@@ -2720,6 +2722,26 @@ public class TextureAtlas {
                 else if (working) color = rnd.nextInt(5) == 0 ? 0xFFF8FFE0 : 0xFFC8D028; // fizzing acid
                 else color = 0xFF2A3A40;
                 img.setRGB(ox + x, oy + y, color);
+            }
+        }
+    }
+
+    /** STEEL_DRUM (tiles 330 side / 331 lid): a dark-blue painted drum with steel hoops and a bung. */
+    private void paintSteelDrum(BufferedImage img, int index, Random rnd, boolean side) {
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(8) - 4;
+                int base;
+                if (side) base = (y == 1 || y == 7 || y == 8 || y == 14) ? 0x9A9AA8 : 0x2A4A78;
+                else {
+                    int dx = x - 8, dy = y - 8, d2 = dx * dx + dy * dy;
+                    base = d2 > 49 ? 0x9A9AA8 : (Math.abs(x - 11) <= 1 && Math.abs(y - 5) <= 1) ? 0x4A4A56 : 0x2A4A78;
+                }
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
             }
         }
     }
