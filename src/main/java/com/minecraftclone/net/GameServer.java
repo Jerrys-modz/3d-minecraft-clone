@@ -1015,7 +1015,7 @@ public class GameServer implements AutoCloseable {
                 || block == BlockType.THERMAL_CENTRIFUGE || block == BlockType.ELECTRIC_COMPRESSOR
                 || block == BlockType.ELECTRIC_EXTRACTOR || block == BlockType.BATTERY_BLOCK
                 || block == BlockType.ELECTROLYZER || block == BlockType.STEEL_TANK
-                || block == BlockType.CHEMICAL_REACTOR;
+                || block == BlockType.CHEMICAL_REACTOR || block == BlockType.EBF_CONTROLLER;
     }
 
     /** True if the block-entity type name matches the block actually at the cell. */
@@ -1027,6 +1027,7 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
+            case com.minecraftclone.world.multiblock.EbfEntity.TYPE -> block == BlockType.EBF_CONTROLLER;
             case com.minecraftclone.world.CastingEntity.TABLE_TYPE -> block == BlockType.CASTING_TABLE;
             case com.minecraftclone.world.CastingEntity.BASIN_TYPE -> block == BlockType.CASTING_BASIN;
             case SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
@@ -1067,7 +1068,8 @@ public class GameServer implements AutoCloseable {
         // A smeltery entity only exists while its structure is formed - never
         // create one from the wire at a bare controller block, or a ghost
         // unformed entity would squat on the position.
-        if (existing == null && com.minecraftclone.world.multiblock.SmelteryEntity.TYPE.equals(type)) {
+        if (existing == null && (com.minecraftclone.world.multiblock.SmelteryEntity.TYPE.equals(type)
+                || com.minecraftclone.world.multiblock.EbfEntity.TYPE.equals(type))) {
             return null;
         }
         if (existing != null && existing.type().equals(type)) {
@@ -1106,6 +1108,8 @@ public class GameServer implements AutoCloseable {
                 // the shell is broken or hasn't been detected yet.
                 yield world.blockEntityAt(open.x(), open.y(), open.z()) instanceof com.minecraftclone.world.multiblock.SmelteryEntity se ? se : null;
             }
+            case EBF_CONTROLLER -> world.blockEntityAt(open.x(), open.y(), open.z())
+                    instanceof com.minecraftclone.world.multiblock.EbfEntity ebf ? ebf : null;
             case CASTING_TABLE, CASTING_BASIN -> world.getOrCreateCasting(open.x(), open.y(), open.z());
             case STEAM_BOILER -> world.getOrCreateSteamBoiler(open.x(), open.y(), open.z());
             case STEAM_FURNACE -> world.getOrCreateSteamFurnace(open.x(), open.y(), open.z());

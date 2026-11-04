@@ -48,7 +48,7 @@ public final class Mortar {
 
         // Crushed/impure minerals whose smelting output is an ingot: grind to
         // that metal's dust when the dust item exists (magnetite → iron dust).
-        BlockType smelted = Smelting.outputFor(input);
+        BlockType smelted = Smelting.refinedOutputFor(input);
         if (smelted != null) {
             String smeltName = smelted.name();
             if (smeltName.endsWith("_INGOT")) {

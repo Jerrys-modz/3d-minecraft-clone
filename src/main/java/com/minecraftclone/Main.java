@@ -855,6 +855,7 @@ public class Main {
             case com.minecraftclone.world.tinkers.PartBuilderEntity.TYPE -> block == BlockType.PART_BUILDER;
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
+            case com.minecraftclone.world.multiblock.EbfEntity.TYPE -> block == BlockType.EBF_CONTROLLER;
             case com.minecraftclone.world.CastingEntity.TABLE_TYPE -> block == BlockType.CASTING_TABLE;
             case com.minecraftclone.world.CastingEntity.BASIN_TYPE -> block == BlockType.CASTING_BASIN;
             default -> false;
@@ -3867,6 +3868,23 @@ public class Main {
                                 world.getOrCreateToolStation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.EBF_CONTROLLER) {
+                        // Electric Blast Furnace: open its furnace-style GUI once formed.
+                        com.minecraftclone.world.multiblock.EbfEntity ebf =
+                                world.blockEntityAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z)
+                                instanceof com.minecraftclone.world.multiblock.EbfEntity e ? e : null;
+                        if (ebf == null || ebf.heatK() == 0) {
+                            showMessage(messages, "EBF not formed: 3x4x3 - heat-proof casing top and bottom, "
+                                            + "two rings of one coil type around a hollow 1x2 core, controller in a coil ring.",
+                                    new Vector4f(0.9f, 0.6f, 0.3f, 1f), 4f);
+                        } else {
+                            trackMultiplayerContainer(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+                            activeGui[0] = new ContainerGui(ContainerGui.Kind.FURNACE, player.getInventory(), craftingGrid, ebf);
+                            openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                            showMessage(messages, "Electric Blast Furnace: " + ebf.heatK() + " K"
+                                            + (ebf.tooCold() ? " - too cold for this input!" : ""),
+                                    new Vector4f(1f, 0.7f, 0.3f, 1f), 2.5f);
+                        }
                     } else if (noMob && targeted == BlockType.SMELTERY_CONTROLLER) {
                         // Right-click a formed Smeltery controller to open its gui
                         // (input slot, heat flame, melt arrow, output). An unformed

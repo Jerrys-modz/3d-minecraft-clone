@@ -456,10 +456,10 @@ The EBF is the defining multi-block of GTNH: it's the gate to titanium, tungsten
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Electric Blast Furnace** | ❌ Todo | Multi-block controller + heat coils (kanthal, nichrome, tungstensteel) + hatches; reaches 2700–9000K |
-| **Titanium** | ❌ Todo | Rutile dust in EBF at 1700K; required for HV casings and next-tier pipes |
-| **Tungstensteel** | ❌ Todo | Tungsten + steel in EBF at 3000K; required for HV machines and EV coils |
-| **Chrome & Iridium** | ❌ Todo | Chromite → chrome at 1700K; Iridium from platinum group processing at 2700K |
+| **Electric Blast Furnace** | ✅ Done | 3×4×3 multi-block: **heat-proof casing** (`vvv/v3v/vvv`: invar plates round a steel casing → 2) on the top and bottom layers, two rings of one **coil** type around a hollow 1×2 core, and the **EBF controller** (`iFi/909/iFi`) in a coil ring facing the core. Coils set the heat: **cupronickel** 1800 K (`XnX/n.n/XnX`), **kanthal** 2700 K (`IaI/c.c/IaI`), **nichrome** 3600 K (`ncn/c.c/ncn`), 2 per craft; mixed coils don't form. Powered at the controller like any MV machine; 1000 EU and 10 s per ingot; furnace-style GUI. Right-click an unformed controller for the layout. Hatches and higher-tier coils still todo. |
+| **Titanium** | ✅ Done | Titanium dust and crushed/purified titanium, rutile and ilmenite → titanium ingot at 1700 K. These no longer smelt in a plain furnace (grinding still works). |
+| **Tungstensteel** | ✅ Done | Tungsten dust + steel dust → 2 tungstensteel dust; EBF at 3000 K (nichrome coils). Tungsten itself (dust, scheelite, wolframite, ferberite, pyrochlore) also needs 3000 K. HV casings still todo. |
+| **Chrome & Iridium** | ✅ Done | Chromium (dust, chromite, crushed/purified chromium) at 1700 K; iridium (dust, crushed iridium, osmium and the naquadah/trinium placeholders) at 2700 K (kanthal coils). Neither smelts in a plain furnace any more. |
 
 ### Other Multi-blocks
 
@@ -479,7 +479,9 @@ The EBF is the defining multi-block of GTNH: it's the gate to titanium, tungsten
 
 > **Survival interlock:** EBF emits heat in a radius — base layout must account for it. Implosion compressor is literally explosive; a miscalculation destroys nearby structure. Radiation from iridium and plutonium processing requires full hazmat.
 
-**New blocks/items needed:** `EBF_CONTROLLER` · `KANTHAL_COIL` · `NICHROME_COIL` · `HV_CASING (tungstensteel)` · `TITANIUM_INGOT` · `TUNGSTENSTEEL_INGOT` · `HOT_TUNGSTEN_INGOT` · `VACUUM_FREEZER` · `IMPLOSION_COMPRESSOR` · `LARGE_CHEM_REACTOR` · `STEAM_TURBINE` · `HV_BATTERY` · `HV_TRANSFORMER`
+**Added this phase:** `EBF_CONTROLLER` · `HEATPROOF_CASING` · `CUPRONICKEL_COIL` · `KANTHAL_COIL` · `NICHROME_COIL` · `TUNGSTENSTEEL_DUST` · `TUNGSTENSTEEL_INGOT`.
+
+**Still open:** `HV_CASING (tungstensteel)` · `HOT_TUNGSTEN_INGOT` · `VACUUM_FREEZER` · `IMPLOSION_COMPRESSOR` · `LARGE_CHEM_REACTOR` · `STEAM_TURBINE` · `HV_BATTERY` · `HV_TRANSFORMER` · EBF hatches
 
 ---
 

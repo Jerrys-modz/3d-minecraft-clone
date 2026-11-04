@@ -1225,7 +1225,22 @@ public enum BlockType {
     /** Tin cells holding 1000 mB of crude oil / diesel / heavy fuel. */
     OIL_CELL(640, 0),
     DIESEL_CELL(641, 0),
-    HEAVY_FUEL_CELL(642, 0);
+    HEAVY_FUEL_CELL(642, 0),
+
+    // ---- Phase 4: Electric Blast Furnace -------------------------------
+    /** EBF controller — the front face of the multi-block. Sides 324, front 325 idle / 326 lit. */
+    EBF_CONTROLLER(643, true, false, 324, 324, 324, 325, 326, 0, 0),
+    /** Heat-proof machine casing — the EBF's top and bottom layers. Tile 324. */
+    HEATPROOF_CASING(644, true, false, 324, 324, 324),
+    /** Cupronickel heating coil — EBF reaches 1800 K. Tile 327. */
+    CUPRONICKEL_COIL(645, true, false, 327, 327, 327),
+    /** Kanthal heating coil — EBF reaches 2700 K. Tile 328. */
+    KANTHAL_COIL(646, true, false, 328, 328, 328),
+    /** Nichrome heating coil — EBF reaches 3600 K. Tile 329. */
+    NICHROME_COIL(647, true, false, 329, 329, 329),
+    /** Tungstensteel blend: tungsten dust + steel dust. EBF at 3000 K. */
+    TUNGSTENSTEEL_DUST(648, 0),
+    TUNGSTENSTEEL_INGOT(649, 0);
 
     public final short id;
     public final boolean solid;

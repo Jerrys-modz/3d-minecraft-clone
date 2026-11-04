@@ -53,7 +53,8 @@ class OreChainTest {
             if (!PurifiedOre.isPurified(t)) continue;
             assertNotNull(PurifiedOre.crushedOf(t), t.name());
             assertNotNull(ThermalCentrifugeEntity.outputFor(t), t + " must spin into dust");
-            assertNotNull(Smelting.outputFor(t), t + " must smelt");
+            assertTrue(Smelting.outputFor(t) != null || BlastRecipes.outputFor(t) != null,
+                    t + " must smelt in a furnace or the EBF");
         }
     }
 

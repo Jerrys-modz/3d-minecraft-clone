@@ -114,6 +114,10 @@ public final class Crafting {
         CHARS.put('g', BlockType.GOLD_CABLE);         // g = gold (MV) cable
         CHARS.put('l', BlockType.LITHIUM_DUST);       // l = lithium dust
         CHARS.put('s', BlockType.STAINLESS_STEEL_INGOT); // s = stainless steel ingot
+        CHARS.put('n', BlockType.NICKEL_INGOT);       // n = nickel ingot
+        CHARS.put('a', BlockType.ALUMINUM_INGOT);     // a = aluminium ingot
+        CHARS.put('c', BlockType.CHROMIUM_INGOT);     // c = chromium ingot
+        CHARS.put('v', BlockType.INVAR_PLATE);        // v = invar plate (heat-proof)
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -415,6 +419,20 @@ public final class Crafting {
         shaped3x3("9i9", "Q0Q", "Q.Q", BlockType.OIL_PUMP, 1);
         // Distillation Tower: MV casing between glass sight columns and circuits.
         shaped3x3("9G9", "i0i", "9G9", BlockType.DISTILLATION_TOWER, 1);
+
+        // ---- Phase 4: Electric Blast Furnace ------------------------------
+        // Heat-proof casing: invar plates around a steel casing -> 2.
+        shaped3x3("vvv", "v3v", "vvv", BlockType.HEATPROOF_CASING, 2);
+        // Heating coils, 2 per craft: cupronickel (copper + nickel), kanthal
+        // (iron + aluminium + chromium), nichrome (nickel + chromium).
+        shaped3x3("XnX", "n.n", "XnX", BlockType.CUPRONICKEL_COIL, 2);
+        shaped3x3("IaI", "c.c", "IaI", BlockType.KANTHAL_COIL, 2);
+        shaped3x3("ncn", "c.c", "ncn", BlockType.NICHROME_COIL, 2);
+        // EBF controller: furnaces and circuits on an MV casing.
+        shaped3x3("iFi", "909", "iFi", BlockType.EBF_CONTROLLER, 1);
+        // Tungstensteel: tungsten dust + steel dust -> 2.
+        shapeless2x2(BlockType.TUNGSTENSTEEL_DUST, 2, BlockType.TUNGSTEN_DUST, BlockType.STEEL_DUST);
+        shapeless3x3(BlockType.TUNGSTENSTEEL_DUST, 2, BlockType.TUNGSTEN_DUST, BlockType.STEEL_DUST);
         // Tin Cell: four tin plates around a glass liner -> 2.
         shaped3x3(".8.", "8G8", ".8.", BlockType.TIN_CELL, 2);
         // Chemical Reactor: glass vessel on an MV casing, vacuum-tube control, stainless shell.

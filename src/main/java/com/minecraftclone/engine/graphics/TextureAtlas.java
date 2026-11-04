@@ -441,6 +441,12 @@ public class TextureAtlas {
         paintDistillationTower(image, 321, rnd, false, false);    // DISTILLATION_TOWER sides
         paintDistillationTower(image, 322, rnd, true, false);     // DISTILLATION_TOWER front idle
         paintDistillationTower(image, 323, rnd, true, true);      // DISTILLATION_TOWER front working
+        paintMachineBox(image, 324, rnd, 0x8A8070, 0x3A342C, 0xC8BCA8);  // HEATPROOF_CASING / EBF sides
+        paintEbfFront(image, 325, rnd, false);                    // EBF_CONTROLLER front idle
+        paintEbfFront(image, 326, rnd, true);                     // EBF_CONTROLLER front lit
+        paintCoil(image, 327, rnd, 0xB87333, 0xD8D0B8);           // CUPRONICKEL_COIL
+        paintCoil(image, 328, rnd, 0x7A8A6A, 0xC8D0B0);           // KANTHAL_COIL
+        paintCoil(image, 329, rnd, 0x6A6A7A, 0xD8C8C8);           // NICHROME_COIL
         paintChemicalReactor(image, 314, rnd, false);             // CHEMICAL_REACTOR front idle
         paintChemicalReactor(image, 315, rnd, true);              // CHEMICAL_REACTOR front reacting
 
@@ -2592,6 +2598,44 @@ public class TextureAtlas {
                 img.setRGB(ox + x, oy + y, 0xFF000000 | color);
             }
         }
+    }
+
+    /** EBF_CONTROLLER front (325 idle / 326 lit): heat-proof casing with a furnace port that glows white-hot. */
+    private void paintEbfFront(BufferedImage img, int index, Random rnd, boolean lit) {
+        paintMachineBox(img, index, rnd, 0x8A8070, 0x3A342C, 0xC8BCA8);
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 4; y < 13; y++) {
+            for (int x = 4; x < 12; x++) {
+                boolean edge = y == 4 || y == 12 || x == 4 || x == 11;
+                int c = edge ? 0xFF2A2420
+                        : !lit ? 0xFF14100C
+                        : y < 7 ? 0xFFFFF0C0 : rnd.nextInt(3) == 0 ? 0xFFFFC040 : 0xFFF07010;
+                img.setRGB(ox + x, oy + y, c);
+            }
+        }
+    }
+
+    /** Heating coil (tiles 327-329): tightly wound wire of the alloy's colour on a ceramic former. */
+    private void paintCoil(BufferedImage img, int index, Random rnd, int wire, int former) {
+        int ox = tileX(index), oy = tileY(index);
+        for (int y = 0; y < TILE_PX; y++) {
+            for (int x = 0; x < TILE_PX; x++) {
+                int noise = rnd.nextInt(8) - 4;
+                boolean frame = x == 0 || x == TILE_PX - 1 || y == 0 || y == TILE_PX - 1;
+                int base = frame ? former : (y % 3 == 0 ? shadeInt(wire, 0.6f) : (y % 3 == 1 ? wire : shadeInt(wire, 1.2f)));
+                int r = clamp(((base >> 16) & 0xFF) + noise);
+                int g = clamp(((base >> 8) & 0xFF) + noise);
+                int b = clamp((base & 0xFF) + noise);
+                img.setRGB(ox + x, oy + y, 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+    }
+
+    private static int shadeInt(int rgb, float f) {
+        int r = Math.min(255, (int) (((rgb >> 16) & 0xFF) * f));
+        int g = Math.min(255, (int) (((rgb >> 8) & 0xFF) * f));
+        int b = Math.min(255, (int) ((rgb & 0xFF) * f));
+        return (r << 16) | (g << 8) | b;
     }
 
     /** OIL_DEPOSIT (tile 318): dark stone with glossy black oil seams. */

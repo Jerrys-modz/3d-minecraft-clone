@@ -56,6 +56,7 @@ public final class BlockEntities {
         register(ChemicalReactorEntity.TYPE, ChemicalReactorEntity::new);
         register(OilPumpEntity.TYPE, OilPumpEntity::new);
         register(DistillationTowerEntity.TYPE, DistillationTowerEntity::new);
+        register(com.minecraftclone.world.multiblock.EbfEntity.TYPE, com.minecraftclone.world.multiblock.EbfEntity::new);
         register(BatteryBlockEntity.TYPE, BatteryBlockEntity::new);
     }
 

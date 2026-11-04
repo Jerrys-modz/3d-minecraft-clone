@@ -435,6 +435,11 @@ public final class Mining {
         put(BlockType.OIL_PUMP, 5.0f, ToolKind.PICKAXE, TIER_IRON);
         put(BlockType.DISTILLATION_TOWER, 5.0f, ToolKind.PICKAXE, TIER_IRON);
         put(BlockType.OIL_DEPOSIT, 2.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.EBF_CONTROLLER, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.HEATPROOF_CASING, 5.0f, ToolKind.PICKAXE, TIER_IRON);
+        put(BlockType.CUPRONICKEL_COIL, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.KANTHAL_COIL, 4.0f, ToolKind.PICKAXE, TIER_STONE);
+        put(BlockType.NICHROME_COIL, 4.0f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.TIN_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.COPPER_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.GOLD_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);

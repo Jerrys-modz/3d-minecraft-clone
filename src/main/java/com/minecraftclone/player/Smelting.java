@@ -19,6 +19,17 @@ public final class Smelting {
 
     private static final Map<BlockType, BlockType> OUTPUTS = new EnumMap<>(BlockType.class);
 
+    /**
+     * Refractory metals a plain furnace can't reach: their ore recipes move
+     * out of the furnace table and are handled by the Electric Blast Furnace
+     * (see {@code com.minecraftclone.world.BlastRecipes}).
+     */
+    private static final java.util.Set<BlockType> BLAST_ONLY_OUTPUTS = java.util.EnumSet.of(
+            BlockType.TITANIUM_INGOT, BlockType.CHROMIUM_INGOT, BlockType.TUNGSTEN_INGOT, BlockType.IRIDIUM_INGOT);
+
+    /** Ore → ingot recipes that need the Electric Blast Furnace. */
+    private static final Map<BlockType, BlockType> BLAST_GATED = new EnumMap<>(BlockType.class);
+
     static {
         // Add a smelting recipe with one line: ore -> refined output.
         smelt(BlockType.IRON_ORE, BlockType.IRON_INGOT);
@@ -143,7 +154,31 @@ public final class Smelting {
 
         // Fishing: raw fish cooked into cooked fish.
         smelt(BlockType.RAW_FISH, BlockType.COOKED_FISH);
+        gateBlastMetals();
         smeltPurified();
+    }
+
+    private static void gateBlastMetals() {
+        OUTPUTS.entrySet().removeIf(e -> {
+            if (!BLAST_ONLY_OUTPUTS.contains(e.getValue())) return false;
+            BLAST_GATED.put(e.getKey(), e.getValue());
+            return true;
+        });
+    }
+
+    /** The ingot an ore yields in the Electric Blast Furnace only, or null. */
+    public static BlockType blastGatedOutputFor(BlockType ore) {
+        return ore == null ? null : BLAST_GATED.get(ore);
+    }
+
+    /**
+     * What an ore refines into by any heat source — the furnace table or the
+     * blast-furnace-only table. Used where the identity of the metal matters
+     * rather than which machine smelts it (e.g. which dust a mineral grinds to).
+     */
+    public static BlockType refinedOutputFor(BlockType ore) {
+        BlockType out = outputFor(ore);
+        return out != null ? out : blastGatedOutputFor(ore);
     }
 
     private Smelting() {

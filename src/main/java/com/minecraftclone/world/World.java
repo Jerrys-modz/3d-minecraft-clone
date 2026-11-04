@@ -211,6 +211,7 @@ public class World implements BlockAccessor {
         // Register all multi-block definitions.
         // Add new definitions here as the game grows; order doesn't matter.
         multiBlockManager.register(com.minecraftclone.world.multiblock.SmelteryDefinition.INSTANCE);
+        multiBlockManager.register(com.minecraftclone.world.multiblock.EbfDefinition.INSTANCE);
     }
 
     public DimensionType getDimension() {
@@ -1109,7 +1110,7 @@ public class World implements BlockAccessor {
     }
 
     /**
-     * After a chunk is inserted, try to form any smeltery whose controller is
+     * After a chunk is inserted, try to form any smeltery or EBF whose controller is
      * in this chunk, and retry already-loaded controllers now that a neighbor
      * may have arrived (PatternValidator aborts when a neighbor isn't generated).
      */
@@ -1117,9 +1118,10 @@ public class World implements BlockAccessor {
         int originX = chunk.getOriginX();
         int originZ = chunk.getOriginZ();
         short[] raw = chunk.getRawBlocks();
-        short controllerId = BlockType.SMELTERY_CONTROLLER.id;
+        short smelteryId = BlockType.SMELTERY_CONTROLLER.id;
+        short ebfId = BlockType.EBF_CONTROLLER.id;
         for (int i = 0; i < raw.length; i++) {
-            if (raw[i] != controllerId) continue;
+            if (raw[i] != smelteryId && raw[i] != ebfId) continue;
             int lx = i % Chunk.SIZE;
             int tmp = i / Chunk.SIZE;
             int lz = tmp % Chunk.SIZE;
@@ -1132,7 +1134,8 @@ public class World implements BlockAccessor {
         int minZ = originZ - pad;
         int maxZ = originZ + Chunk.SIZE + pad;
         for (Map.Entry<Long, BlockEntity> e : blockEntities.entrySet()) {
-            if (e.getValue().blockType() != BlockType.SMELTERY_CONTROLLER) continue;
+            BlockType controller = e.getValue().blockType();
+            if (controller != BlockType.SMELTERY_CONTROLLER && controller != BlockType.EBF_CONTROLLER) continue;
             int x = keyX(e.getKey());
             int z = keyZ(e.getKey());
             if (x >= minX && x < maxX && z >= minZ && z < maxZ) {
