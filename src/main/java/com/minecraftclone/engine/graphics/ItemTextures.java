@@ -402,6 +402,8 @@ public class ItemTextures {
             case LAVA_CELL -> paintCell(0xFFE86A10);
             case SULFURIC_ACID_CELL -> paintCell(0xFFD8E030);
             case OIL_CELL -> paintCell(0xFF1A1410);
+            case HYDROCHLORIC_ACID_CELL -> paintCell(0xFFB8E8C8);
+            case SODIUM_DUST -> paintDustOre(0xE8E4D8);
             case TUNGSTENSTEEL_DUST -> paintDustOre(0x8A8AB0);
             case TUNGSTENSTEEL_INGOT -> paintIngot(0x5A5A7E);
             case DIESEL_CELL -> paintCell(0xFFE8B040);

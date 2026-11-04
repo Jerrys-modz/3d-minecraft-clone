@@ -14,7 +14,9 @@ public enum Fluid {
     /** Diesel — the light fraction from the Distillation Tower; the best generator fuel. */
     DIESEL("Diesel"),
     /** Heavy fuel — the heavy fraction from the Distillation Tower. */
-    HEAVY_FUEL("Heavy Fuel");
+    HEAVY_FUEL("Heavy Fuel"),
+    /** HCl — electrolysed from salt brine; the chloride route to titanium. Stainless pipe only. */
+    HYDROCHLORIC_ACID("Hydrochloric Acid");
 
     public final String displayName;
 
@@ -34,6 +36,7 @@ public enum Fluid {
             case OIL -> BlockType.OIL_CELL;
             case DIESEL -> BlockType.DIESEL_CELL;
             case HEAVY_FUEL -> BlockType.HEAVY_FUEL_CELL;
+            case HYDROCHLORIC_ACID -> BlockType.HYDROCHLORIC_ACID_CELL;
         };
     }
 
@@ -45,6 +48,7 @@ public enum Fluid {
         if (item == BlockType.OIL_CELL) return OIL;
         if (item == BlockType.DIESEL_CELL) return DIESEL;
         if (item == BlockType.HEAVY_FUEL_CELL) return HEAVY_FUEL;
+        if (item == BlockType.HYDROCHLORIC_ACID_CELL) return HYDROCHLORIC_ACID;
         return null;
     }
 

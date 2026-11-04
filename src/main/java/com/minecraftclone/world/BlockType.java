@@ -1240,7 +1240,12 @@ public enum BlockType {
     NICHROME_COIL(647, true, false, 329, 329, 329),
     /** Tungstensteel blend: tungsten dust + steel dust. EBF at 3000 K. */
     TUNGSTENSTEEL_DUST(648, 0),
-    TUNGSTENSTEEL_INGOT(649, 0);
+    TUNGSTENSTEEL_INGOT(649, 0),
+
+    /** Sodium dust — from electrolysing salt brine (alongside hydrochloric acid). */
+    SODIUM_DUST(650, 0),
+    /** Tin cell holding 1000 mB of hydrochloric acid. */
+    HYDROCHLORIC_ACID_CELL(651, 0);
 
     public final short id;
     public final boolean solid;

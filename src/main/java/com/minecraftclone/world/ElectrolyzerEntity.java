@@ -61,6 +61,9 @@ public final class ElectrolyzerEntity extends ElectricMachineEntity {
         split(BlockType.CRUSHED_BAUXITE, BlockType.ALUMINUM_DUST, BlockType.TITANIUM_DUST);      // TiO2 impurity
         split(BlockType.BAUXITE_DUST, BlockType.ALUMINUM_DUST, null);
         split(BlockType.SAND, BlockType.SILICON_DUST, null);                                    // SiO2
+        // Salt brine: NaCl + water -> sodium + hydrochloric acid (the acid goes to a tank).
+        split(BlockType.CRUSHED_SALT, BlockType.SODIUM_DUST, null);
+        split(BlockType.CRUSHED_ROCK_SALT, BlockType.SODIUM_DUST, null);
         split(BlockType.CRUSHED_LITHIUM, BlockType.LITHIUM_DUST, null);
         split(BlockType.CRUSHED_LEPIDOLITE, BlockType.LITHIUM_DUST, BlockType.ALUMINUM_DUST);   // Li-Al mica
     }
@@ -87,6 +90,44 @@ public final class ElectrolyzerEntity extends ElectricMachineEntity {
         return s == null ? null : s.secondary();
     }
     @Override protected float byproductChance()                { return 1f; }
+
+    /** Water consumed and hydrochloric acid produced per salt electrolysis. */
+    public static final int BRINE_WATER_MB = 1000;
+    public static final int HCL_PER_SALT_MB = 1000;
+
+    /** Test hooks: stand-in tanks instead of looking around the world. */
+    FluidTankEntity waterOverride, acidOverride;
+
+    /** True for salts, which electrolyse as brine (water in, HCl out). */
+    public static boolean isBrine(BlockType input) {
+        return input == BlockType.CRUSHED_SALT || input == BlockType.CRUSHED_ROCK_SALT;
+    }
+
+    @Override
+    protected boolean environmentReady() {
+        if (!isBrine(typeOf(SLOT_INPUT))) return true;
+        FluidTankEntity water = brineWater(), acid = acidOut();
+        return water != null && acid != null && water != acid;
+    }
+
+    @Override
+    protected void onOperationComplete(BlockType input) {
+        if (!isBrine(input)) return;
+        FluidTankEntity water = brineWater(), acid = acidOut();
+        if (water == null || acid == null || water == acid) return;
+        water.drain(Fluid.WATER, BRINE_WATER_MB);
+        acid.fill(Fluid.HYDROCHLORIC_ACID, HCL_PER_SALT_MB);
+    }
+
+    private FluidTankEntity brineWater() {
+        if (waterOverride != null) return waterOverride.has(Fluid.WATER, BRINE_WATER_MB) ? waterOverride : null;
+        return attached ? FluidNetwork.findTankWith(world, posX, posY, posZ, Fluid.WATER, BRINE_WATER_MB) : null;
+    }
+
+    private FluidTankEntity acidOut() {
+        if (acidOverride != null) return acidOverride.canFill(Fluid.HYDROCHLORIC_ACID, HCL_PER_SALT_MB) ? acidOverride : null;
+        return attached ? FluidNetwork.findTankFor(world, posX, posY, posZ, Fluid.HYDROCHLORIC_ACID, HCL_PER_SALT_MB) : null;
+    }
     @Override protected float euPerOperation()                 { return EU_PER_OPERATION; }
     @Override protected float operationSeconds()               { return SPLIT_SECONDS; }
 }

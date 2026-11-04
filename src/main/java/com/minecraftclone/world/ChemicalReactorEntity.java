@@ -15,6 +15,10 @@ import com.minecraftclone.player.Mortar;
  *   <li><b>Acid leaching</b>: crushed ore + {@value #ACID_PER_LEACH} mB
  *       sulfuric acid → purified ore plus its byproduct dust <em>every</em>
  *       time (the water washer only manages one in four).</li>
+ *   <li><b>Chloride titanium</b>: crushed rutile or ilmenite +
+ *       {@value #HCL_PER_TITANIUM} mB hydrochloric acid →
+ *       {@value #TITANIUM_YIELD} titanium dust (ilmenite also gives iron dust).
+ *       Grinding gives one.</li>
  * </ul>
  * Tanks are found adjacent to the reactor or on its fluid-pipe network
  * ({@link FluidNetwork}). The acid destination must be a different tank from
@@ -30,6 +34,8 @@ public final class ChemicalReactorEntity extends ElectricMachineEntity {
     public static final int WATER_PER_ACID = 1000;
     public static final int ACID_PER_BATCH = 1000;
     public static final int ACID_PER_LEACH = 250;
+    public static final int HCL_PER_TITANIUM = 250;
+    public static final int TITANIUM_YIELD = 3;
 
     /** Test hooks: stand-in tanks instead of looking around the world. */
     FluidTankEntity sourceOverride, destinationOverride;
@@ -37,6 +43,11 @@ public final class ChemicalReactorEntity extends ElectricMachineEntity {
     /** True for the sulfur → acid recipe. */
     public static boolean makesAcid(BlockType input) {
         return input == BlockType.CRUSHED_SULFUR;
+    }
+
+    /** True for the HCl titanium recipe's ores. */
+    public static boolean chloridesToTitanium(BlockType input) {
+        return input == BlockType.CRUSHED_RUTILE || input == BlockType.CRUSHED_ILMENITE;
     }
 
     /** The purified ore acid leaching produces from {@code input}, or null. */
@@ -51,18 +62,31 @@ public final class ChemicalReactorEntity extends ElectricMachineEntity {
 
     @Override
     protected boolean hasRecipe(BlockType input) {
-        return makesAcid(input) || leachOutput(input) != null;
+        return makesAcid(input) || chloridesToTitanium(input) || leachOutput(input) != null;
     }
 
-    @Override protected BlockType primaryOutput(BlockType input) { return leachOutput(input); }
-    @Override protected int primaryYield(BlockType input)        { return 1; }
-    @Override protected BlockType byproductOf(BlockType input) {
+    @Override
+    protected BlockType primaryOutput(BlockType input) {
+        if (chloridesToTitanium(input)) return BlockType.TITANIUM_DUST;
+        return leachOutput(input);
+    }
+
+    @Override
+    protected int primaryYield(BlockType input) {
+        return chloridesToTitanium(input) ? TITANIUM_YIELD : 1;
+    }
+
+    @Override
+    protected BlockType byproductOf(BlockType input) {
+        if (input == BlockType.CRUSHED_ILMENITE) return BlockType.IRON_DUST;   // FeTiO3
+        if (chloridesToTitanium(input)) return null;
         BlockType purified = leachOutput(input);
         return purified == null ? null : SteamOreWasherEntity.byproductOf(Mortar.dustFor(input));
     }
-    @Override protected float byproductChance()                  { return 1f; }
-    @Override protected float euPerOperation()                   { return EU_PER_OPERATION; }
-    @Override protected float operationSeconds()                 { return REACT_SECONDS; }
+
+    @Override protected float byproductChance()  { return 1f; }
+    @Override protected float euPerOperation()   { return EU_PER_OPERATION; }
+    @Override protected float operationSeconds() { return REACT_SECONDS; }
 
     @Override
     protected boolean environmentReady() {
@@ -72,6 +96,7 @@ public final class ChemicalReactorEntity extends ElectricMachineEntity {
             FluidTankEntity out = destination(Fluid.SULFURIC_ACID, ACID_PER_BATCH);
             return water != null && out != null && water != out;
         }
+        if (chloridesToTitanium(input)) return source(Fluid.HYDROCHLORIC_ACID, HCL_PER_TITANIUM) != null;
         if (leachOutput(input) != null) return source(Fluid.SULFURIC_ACID, ACID_PER_LEACH) != null;
         return false;
     }
@@ -85,6 +110,9 @@ public final class ChemicalReactorEntity extends ElectricMachineEntity {
                 water.drain(Fluid.WATER, WATER_PER_ACID);
                 out.fill(Fluid.SULFURIC_ACID, ACID_PER_BATCH);
             }
+        } else if (chloridesToTitanium(input)) {
+            FluidTankEntity hcl = source(Fluid.HYDROCHLORIC_ACID, HCL_PER_TITANIUM);
+            if (hcl != null) hcl.drain(Fluid.HYDROCHLORIC_ACID, HCL_PER_TITANIUM);
         } else {
             FluidTankEntity acid = source(Fluid.SULFURIC_ACID, ACID_PER_LEACH);
             if (acid != null) acid.drain(Fluid.SULFURIC_ACID, ACID_PER_LEACH);
