@@ -67,6 +67,10 @@ public final class DistillationColumnEntity extends MultiBlockEntity implements 
             if (feed.source() == null) feed = EuNetwork.resolve(world, x, y - 1, z);
         }
         if (feed.source() == null || feed.source().euStored() <= 0f) return;
+        if (feed.voltage().exceeds(com.minecraftclone.world.CableTier.Voltage.MV)) {   // MV-rated
+            world.reportOverload(x, y, z);
+            return;
+        }
         int ioY = DistillationTowerEntity.canRunBatch(world, x, y, z) ? y
                 : DistillationTowerEntity.canRunBatch(world, x, y - 1, z) ? y - 1 : Integer.MIN_VALUE;
         if (ioY == Integer.MIN_VALUE) return;

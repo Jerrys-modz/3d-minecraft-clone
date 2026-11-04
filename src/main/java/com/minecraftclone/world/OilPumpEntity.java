@@ -76,6 +76,10 @@ public final class OilPumpEntity implements BlockEntity, ProgressMachine, WorldA
             feed = EuNetwork.resolve(world, posX, posY, posZ);
         }
         if (!hasTarget || feed.source() == null || feed.source().euStored() <= 0f) return;
+        if (feed.voltage().exceeds(CableTier.Voltage.MV)) {   // MV-rated: HV without an MV Transformer blows it
+            world.reportOverload(posX, posY, posZ);
+            return;
+        }
         FluidTankEntity tank = FluidNetwork.findTankFor(world, posX, posY, posZ, Fluid.OIL, MB_PER_CYCLE);
         if (tank == null) return;
 

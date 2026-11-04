@@ -22,10 +22,27 @@ public enum CableTier {
      * Medium-voltage tier: 2× EU/s rate and the lowest loss, but MV — LV
      * machines on a gold network need an LV Transformer. Crafted from gold ingots.
      */
-    GOLD(2.0f, Voltage.MV, 0.001f);
+    GOLD(2.0f, Voltage.MV, 0.001f),
 
-    /** Voltage class a cable carries; any MV cable makes its whole network MV. */
-    public enum Voltage { LV, MV }
+    /**
+     * High-voltage tier: 4× EU/s rate and the lowest loss, but HV — MV machines
+     * need an MV Transformer and LV machines an LV Transformer. Crafted from
+     * aluminium ingots.
+     */
+    ALUMINIUM(4.0f, Voltage.HV, 0.0005f);
+
+    /**
+     * Voltage class a cable carries, in ascending order; a network runs at the
+     * highest voltage of any cable in it.
+     */
+    public enum Voltage {
+        LV, MV, HV;
+
+        /** True if this voltage is above {@code rating}. */
+        public boolean exceeds(Voltage rating) {
+            return ordinal() > rating.ordinal();
+        }
+    }
 
     /** Fraction of base EU throughput this cable conducts (>0). */
     public final float throughput;
@@ -47,6 +64,7 @@ public enum CableTier {
         if (type == BlockType.TIN_CABLE)    return TIN;
         if (type == BlockType.COPPER_CABLE) return COPPER;
         if (type == BlockType.GOLD_CABLE)   return GOLD;
+        if (type == BlockType.ALUMINIUM_CABLE) return ALUMINIUM;
         return null;
     }
 

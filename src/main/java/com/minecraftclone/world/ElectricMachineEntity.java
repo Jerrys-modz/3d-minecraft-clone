@@ -48,8 +48,8 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
     private float drawRate = 1f;
     /** Share of drawn EU that survives the cable run (see {@link EuNetwork}). */
     private float efficiency = 1f;
-    /** True when the last scan found MV power arriving without a transformer. */
-    private boolean overvoltage;
+    /** Highest voltage a charged source delivered on the last scan (see {@link EuNetwork.Feed#voltage}). */
+    private CableTier.Voltage deliveredVoltage = CableTier.Voltage.LV;
     /** EU source found on the last scan (package-visible for test injection). */
     EuSource euSource;
 
@@ -185,7 +185,7 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
                 euSource = feed.source();
                 drawRate = feed.throughput();
                 efficiency = feed.efficiency();
-                overvoltage = feed.overvoltage();
+                deliveredVoltage = feed.voltage();
                 lubricated = FluidNetwork.findTankWith(world, posX, posY, posZ,
                         Fluid.LUBRICANT, LUBRICANT_PER_OPERATION) != null;
             }
@@ -195,7 +195,7 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
             lastEuFraction = 0f;
             return;
         }
-        if (overvoltage && !isMv()) {
+        if (isOvervolted()) {
             // MV straight into an LV machine: it blows (or, where explosions are off, refuses to run).
             lastEuFraction = 0f;
             if (world != null) world.reportOverload(posX, posY, posZ);
@@ -254,8 +254,10 @@ public abstract class ElectricMachineEntity implements BlockEntity, StorageConta
         }
     }
 
-    /** True when this machine is wired to MV power without a transformer (it won't run). */
-    public boolean isOvervolted() { return overvoltage; }
+    /** True when this machine receives more than its rating (LV, or MV once built/upgraded MV). */
+    public boolean isOvervolted() {
+        return deliveredVoltage.exceeds(isMv() ? CableTier.Voltage.MV : CableTier.Voltage.LV);
+    }
 
     /** Share of drawn EU reaching this machine after cable loss (1 = lossless). */
     public float efficiency() { return efficiency; }

@@ -392,6 +392,10 @@ public final class Crafting {
         shaped3x3("AGA", "X3X", "X6X", BlockType.ELECTROLYZER, 1);
         // LV Transformer: a gold (MV) winding over an iron core, copper (LV) winding below.
         shaped3x3("AAA", "III", "XXX", BlockType.LV_TRANSFORMER, 1);
+        // MV Transformer: an aluminium (HV) winding over an iron core, gold (MV) winding below.
+        shaped3x3("aaa", "III", "AAA", BlockType.MV_TRANSFORMER, 1);
+        // Aluminium Cable: three vertical aluminium ingots -> 6 (HV).
+        shaped3x3(".a.", ".a.", ".a.", BlockType.ALUMINIUM_CABLE, 6);
 
         // ---- Phase 3: advanced alloys (mix dusts, then smelt) ---------------
         // Invar: 2 iron + 1 nickel -> 3.

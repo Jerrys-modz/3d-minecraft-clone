@@ -13,13 +13,16 @@ import java.util.PriorityQueue;
  * throughput along the way, distance loss, and voltage.
  *
  * <h3>Voltage</h3>
- * Tin and copper cable are LV; gold cable is <b>MV</b>. Cables of any tier
- * join into one network, and a network containing any gold cable is an MV
- * network. An LV machine that draws power through an MV network without an
- * {@link BlockType#LV_TRANSFORMER} in between is <em>overvolted</em> — see
- * {@link Feed#overvoltage}. A transformer is not a cable: it splits two
- * networks, and anything reached through it is stepped down to LV, still at
- * the throughput of the cables on the path.
+ * Tin and copper cable are LV, gold is <b>MV</b>, aluminium is <b>HV</b>.
+ * Cables of any tier join into one network, which runs at the highest
+ * voltage of any cable in it. Transformers are not cables: they split
+ * networks and step what passes through them down — the
+ * {@link BlockType#LV_TRANSFORMER} to LV, the {@link BlockType#MV_TRANSFORMER}
+ * to MV. A machine receives the output of the transformer nearest it on the
+ * path, or its own network's voltage when there is none (direct adjacency is
+ * LV). {@link Feed#voltage} is the highest voltage any charged source pushes
+ * at the machine; a machine rated below it is overvolted. Power reached
+ * through a transformer keeps the throughput of the cables on the path.
  *
  * <h3>Distance loss</h3>
  * Every cable block on the cheapest path to the source loses a fraction of
@@ -50,23 +53,28 @@ public final class EuNetwork {
      * @param source      the chosen supply, or null when nothing is wired up
      * @param efficiency  share (0..1] of drawn EU that survives the cable run
      * @param throughput  cable throughput multiplier (weakest cable on the path; 1 when direct)
-     * @param overvoltage true when the machine's own cable network is MV (gold) and a charged
-     *                    source reaches it through that network without a transformer
+     * @param voltage     the highest voltage any charged source delivers to the machine
      * @param cableBlocks number of cable blocks on the chosen path
      */
-    public record Feed(EuSource source, float efficiency, float throughput, boolean overvoltage, int cableBlocks) {
-        public static final Feed NONE = new Feed(null, 1f, 1f, false, 0);
+    public record Feed(EuSource source, float efficiency, float throughput, CableTier.Voltage voltage,
+                       int cableBlocks) {
+        public static final Feed NONE = new Feed(null, 1f, 1f, CableTier.Voltage.LV, 0);
+
+        /** True when the delivered voltage would overvolt an LV machine. */
+        public boolean overvoltage() {
+            return voltage.exceeds(CableTier.Voltage.LV);
+        }
     }
 
     /** A search frontier node: a cable or transformer cell. */
-    private record Node(int x, int y, int z, float loss, float throughput, boolean viaTransformer, int cables)
+    /** {@code stepped} is the output voltage of the transformer nearest the machine, or null if none yet. */
+    private record Node(int x, int y, int z, float loss, float throughput, CableTier.Voltage stepped, int cables)
             implements Comparable<Node> {
         @Override public int compareTo(Node o) { return Float.compare(loss, o.loss); }
     }
 
     /** A reachable source and the path that reaches it. */
-    private record Candidate(EuSource source, float loss, float throughput, boolean viaTransformer,
-                             boolean direct, int cables) { }
+    private record Candidate(EuSource source, float loss, float throughput, int cables) { }
 
     /** Finds the supply for the machine at {@code (x, y, z)} (see the class doc for the rules). */
     public static Feed resolve(World world, int x, int y, int z) {
@@ -85,25 +93,27 @@ public final class EuNetwork {
         Map<Long, Float> best = new HashMap<>();
         PriorityQueue<Node> queue = new PriorityQueue<>();
         Candidate[] picks = new Candidate[4];
-        boolean[] chargedThroughOwnNetwork = {false};
+        CableTier.Voltage ownVoltage = networkVoltage(world, x, y, z);
+        CableTier.Voltage[] delivered = {null};
 
         for (int[] d : FACES) {
             int nx = x + d[0], ny = y + d[1], nz = z + d[2];
-            offerSource(world.blockEntityAt(nx, ny, nz), self, 0f, 1f, false, true, 0, generatorsOnly, picks,
-                    chargedThroughOwnNetwork);
-            enqueue(world, queue, best, nx, ny, nz, 0f, Float.MAX_VALUE, false, 0);
+            offerSource(world.blockEntityAt(nx, ny, nz), 0f, 1f, CableTier.Voltage.LV, 0, generatorsOnly, picks,
+                    delivered);
+            enqueue(world, queue, best, nx, ny, nz, 0f, Float.MAX_VALUE, null, 0);
         }
         int expanded = 0;
         while (!queue.isEmpty() && expanded++ < MAX_NODES) {
             Node n = queue.poll();
             Float known = best.get(key(n.x, n.y, n.z));
             if (known != null && known < n.loss - 1e-6f) continue;   // stale entry
+            CableTier.Voltage arriving = n.stepped != null ? n.stepped : ownVoltage;
             for (int[] d : FACES) {
                 int nx = n.x + d[0], ny = n.y + d[1], nz = n.z + d[2];
                 if (key(nx, ny, nz) == self) continue;
-                offerSource(world.blockEntityAt(nx, ny, nz), self, n.loss, n.throughput, n.viaTransformer, false,
-                        n.cables, generatorsOnly, picks, chargedThroughOwnNetwork);
-                enqueue(world, queue, best, nx, ny, nz, n.loss, n.throughput, n.viaTransformer, n.cables);
+                offerSource(world.blockEntityAt(nx, ny, nz), n.loss, n.throughput, arriving, n.cables,
+                        generatorsOnly, picks, delivered);
+                enqueue(world, queue, best, nx, ny, nz, n.loss, n.throughput, n.stepped, n.cables);
             }
         }
 
@@ -112,31 +122,43 @@ public final class EuNetwork {
             if (c != null) { pick = c; break; }
         }
         if (pick == null) return Feed.NONE;
-        boolean overvoltage = chargedThroughOwnNetwork[0] && isMv(world, x, y, z);
-        float throughput = pick.direct || pick.throughput == Float.MAX_VALUE ? 1f : pick.throughput;
+        float throughput = pick.throughput == Float.MAX_VALUE ? 1f : pick.throughput;
         float efficiency = Math.max(MIN_EFFICIENCY, 1f - pick.loss);
-        return new Feed(pick.source, efficiency, throughput, overvoltage, pick.cables);
+        CableTier.Voltage voltage = delivered[0] != null ? delivered[0] : CableTier.Voltage.LV;
+        return new Feed(pick.source, efficiency, throughput, voltage, pick.cables);
     }
 
     private static void enqueue(World world, PriorityQueue<Node> queue, Map<Long, Float> best,
-                                int x, int y, int z, float loss, float throughput, boolean via, int cables) {
+                                int x, int y, int z, float loss, float throughput, CableTier.Voltage stepped,
+                                int cables) {
         BlockType b = world.getBlock(x, y, z);
         CableTier tier = CableTier.of(b);
-        boolean transformer = b == BlockType.LV_TRANSFORMER;
-        if (tier == null && !transformer) return;
+        CableTier.Voltage transformerOut = transformerOutput(b);
+        if (tier == null && transformerOut == null) return;
         float newLoss = tier != null ? loss + tier.lossPerBlock : loss;
         float newThroughput = tier != null ? Math.min(throughput, tier.throughput) : throughput;
         long k = key(x, y, z);
         Float known = best.get(k);
         if (known != null && known <= newLoss) return;
         best.put(k, newLoss);
-        queue.add(new Node(x, y, z, newLoss, newThroughput, via || transformer, cables + (tier != null ? 1 : 0)));
+        CableTier.Voltage newStepped = stepped != null ? stepped : transformerOut;   // nearest transformer wins
+        queue.add(new Node(x, y, z, newLoss, newThroughput, newStepped, cables + (tier != null ? 1 : 0)));
     }
 
-    /** Ranks {@code e} into {@code picks}: [charged gen, charged battery, empty gen, empty battery]. */
-    private static void offerSource(BlockEntity e, long self, float loss, float throughput, boolean via,
-                                    boolean direct, int cables, boolean generatorsOnly, Candidate[] picks,
-                                    boolean[] chargedThroughOwnNetwork) {
+    /** The voltage a transformer block outputs, or null if {@code b} isn't one. */
+    public static CableTier.Voltage transformerOutput(BlockType b) {
+        if (b == BlockType.LV_TRANSFORMER) return CableTier.Voltage.LV;
+        if (b == BlockType.MV_TRANSFORMER) return CableTier.Voltage.MV;
+        return null;
+    }
+
+    /**
+     * Ranks {@code e} into {@code picks}: [charged gen, charged battery, empty gen, empty battery],
+     * and raises {@code delivered[0]} to the voltage a charged source pushes at the machine.
+     */
+    private static void offerSource(BlockEntity e, float loss, float throughput, CableTier.Voltage voltage,
+                                    int cables, boolean generatorsOnly, Candidate[] picks,
+                                    CableTier.Voltage[] delivered) {
         int slot;
         if (e instanceof CoalGeneratorEntity g) {
             slot = g.euStored() > 0f ? 0 : 2;
@@ -145,20 +167,26 @@ public final class EuNetwork {
         } else {
             return;
         }
-        if (slot <= 1 && !via && !direct) chargedThroughOwnNetwork[0] = true;
-        Candidate c = new Candidate((EuSource) e, loss, throughput, via, direct, cables);
+        if (slot <= 1 && (delivered[0] == null || voltage.exceeds(delivered[0]))) delivered[0] = voltage;
+        Candidate c = new Candidate((EuSource) e, loss, throughput, cables);
         if (picks[slot] == null || loss < picks[slot].loss) picks[slot] = c;
     }
 
-    /** True when the cable network(s) touching {@code (x, y, z)} contain MV (gold) cable. */
-    public static boolean isMv(World world, int x, int y, int z) {
+    /** The voltage of the cable network(s) touching {@code (x, y, z)}: their highest cable tier (LV if none). */
+    public static CableTier.Voltage networkVoltage(World world, int x, int y, int z) {
         PipeNetwork net = world.pipeNetworks().networkAt(PipeType.ENERGY, x, y, z);
-        if (net == null) return false;
+        CableTier.Voltage v = CableTier.Voltage.LV;
+        if (net == null) return v;
         for (long k : net.cells) {
             CableTier t = CableTier.of(world.getBlock(unpackX(k), unpackY(k), unpackZ(k)));
-            if (t != null && t.voltage == CableTier.Voltage.MV) return true;
+            if (t != null && t.voltage.exceeds(v)) v = t.voltage;
         }
-        return false;
+        return v;
+    }
+
+    /** True when the cable network(s) touching {@code (x, y, z)} run above LV. */
+    public static boolean isMv(World world, int x, int y, int z) {
+        return networkVoltage(world, x, y, z).exceeds(CableTier.Voltage.LV);
     }
 
     // ------------------------------------------------------------------

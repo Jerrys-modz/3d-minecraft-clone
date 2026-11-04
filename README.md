@@ -305,7 +305,7 @@ The active development phase. All eight items must be done before Phase 1 (Bronz
 | 7 | **Radiation** | ✅ Done | Uranium/plutonium ore emits radiation within 5 blocks; radiation accumulates (decays over 10 min); damage starts at 60 % exposure; hazmat suit (rubber + steel, 4 pieces = full block); yellow-green → orange-red HUD bar; rubber crafted from 3 crushed sulfur |
 | 8 | **More Hostile Mobs** | ✅ Done | Zombies, skeletons (arrows), creepers (fuse + explosion, gunpowder drop, TNT), spiders (string drop), wolves, polar bears |
 
-> **Phase 0 complete! ✅** All 8 Deep Survival Foundation features are implemented. Phase 1 (Bronze Age & Steam) primitive processing is in, and Phase 2 (Steel Age & Basic Electricity) is complete — steel production, the EU network with LV/MV voltage, cable loss and the LV Transformer, batteries, and every LV machine from the generator to the electrolyzer.
+> **Phase 0 complete! ✅** All 8 Deep Survival Foundation features are implemented. Phase 1 (Bronze Age & Steam) primitive processing is in. **Phase 2** (Steel Age & Basic Electricity) is complete — steel, the EU network with voltage tiers, cable loss and transformers, batteries, and every LV machine. **Phase 3** (Chemistry & Fluids) is complete — alloys, tanks/drums/cells/pipes, sulfuric and hydrochloric acid, oil and distillation, the silicon chain and the MV tier. **Phase 4** has begun with the Electric Blast Furnace.
 
 ---
 
@@ -371,8 +371,9 @@ Introduces the EU power system and the first electric machines. Steel enables ma
 | **EU System** | ✅ Done | EU produced by generators, buffered in batteries, carried by cables, drawn by machines (`EuNetwork`): cheapest-path routing, weakest-link throughput, LV/MV voltage and per-block distance loss. |
 | **Coal Generator** | ✅ Done | Burns any furnace fuel → 200 EU/s into a 10 000 EU buffer. Furnace-style GUI (one fuel slot). |
 | **Battery Buffer** | ✅ Done | **Battery Block** (5 000 EU base) charges from a generator and feeds machines. Right-click opens a one-slot GUI for **LV Batteries** (`.5./878/878`: copper cable, tin plates, crushed sulfur) — each adds 10 000 EU capacity, up to 16. Pulling batteries out loses the charge above the new capacity. |
-| **Cables** | ✅ Done | Tin (LV, 0.5×, 1 %/block loss; `.4.` ×3 tin ingots → 6), Copper (LV, 1×, 0.5 %/block) and Gold (**MV**, 2×, 0.1 %/block). Throughput is the weakest cable on the path; loss is summed along the cheapest path to the source (capped so ≥ 10 % always arrives). Machines pay the full EU drawn but only progress with what arrives. |
-| **LV Transformer** | ✅ Done | `LV_TRANSFORMER` (`AAA/III/XXX`): steps MV down to LV. Any network containing gold cable is MV; an LV machine that draws power through it **without** a transformer in between **explodes** (radius 2, destroys the machine and its contents). The transformer splits the networks, so the machine runs safely — still at the cable path's throughput, so gold + transformer keeps the 2× speed. Gold's low loss makes it the long-distance line. In multiplayer, overvolted machines just refuse to run (blasts aren't synced yet). |
+| **Cables** | ✅ Done | Tin (LV, 0.5×, 1 %/block; `.4.` ×3 → 6), Copper (LV, 1×, 0.5 %/block), Gold (**MV**, 2×, 0.1 %/block) and Aluminium (**HV**, 4×, 0.05 %/block; `.a.` ×3 → 6). Throughput is the weakest cable on the path; loss is summed along the cheapest path to the source (capped so ≥ 10 % always arrives). Machines pay the full EU drawn but only progress with what arrives. |
+| **LV Transformer** | ✅ Done | `LV_TRANSFORMER` (`AAA/III/XXX`): steps MV or HV down to LV. A network runs at its highest cable voltage (gold MV, aluminium HV); an LV machine that draws power through it **without** a transformer in between **explodes** (radius 2, destroys the machine and its contents). The transformer splits the networks, so the machine runs safely — still at the cable path's throughput, so gold + transformer keeps the 2× speed. Gold's low loss makes it the long-distance line. In multiplayer, overvolted machines just refuse to run (blasts aren't synced yet). |
+| **MV Transformer** | ✅ Done | `MV_TRANSFORMER` (`aaa/III/AAA`): steps HV down to MV. A machine receives the output of the transformer nearest it on the path. MV machines (Chemical Reactor, Oil Pump, Distillation Tower/Column, EBF, MV-upgraded processors) run on gold directly but explode on HV without one; LV machines need an LV Transformer for either. |
 
 ### LV Machines
 
@@ -440,9 +441,9 @@ Fluids become first-class objects: tanks, pipes, cells, and drums route them bet
 
 > **Survival interlock:** Chemical spills (acid tank damage) if pipes burst from overpressure. Oil extraction near lava creates fire spread danger. Working in chemical areas requires rubber hazmat suit.
 
-**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL` · `SULFURIC_ACID_CELL` · `CHEMICAL_REACTOR` · `SILICON_DUST` · `SILICON_BOULE` · `SILICON_WAFER` · `INTEGRATED_CIRCUIT` · `LITHIUM_DUST` · `MV_BATTERY` · `MV_UPGRADE` · `FLUID_PIPE_STEEL` · `FLUID_PIPE_STAINLESS` · `OIL_DEPOSIT` · `OIL_PUMP` · `DISTILLATION_TOWER` · `OIL_CELL` · `DIESEL_CELL` · `HEAVY_FUEL_CELL` · `HYDROCHLORIC_ACID_CELL` · `SODIUM_DUST` · `LUBRICANT_CELL` · `STEEL_DRUM` · `DISTILLATION_CONTROLLER` · `DISTILLATION_CASING`.
+**Added this phase:** `INVAR_*` · `ELECTRUM_*` · `STAINLESS_STEEL_*` (dust/ingot/plate/rod) · `MV_CASING` · `STEEL_TANK` · `FLUID_PIPE` · `TIN_CELL` · `WATER_CELL` · `LAVA_CELL` · `SULFURIC_ACID_CELL` · `CHEMICAL_REACTOR` · `SILICON_DUST` · `SILICON_BOULE` · `SILICON_WAFER` · `INTEGRATED_CIRCUIT` · `LITHIUM_DUST` · `MV_BATTERY` · `MV_UPGRADE` · `FLUID_PIPE_STEEL` · `FLUID_PIPE_STAINLESS` · `OIL_DEPOSIT` · `OIL_PUMP` · `DISTILLATION_TOWER` · `OIL_CELL` · `DIESEL_CELL` · `HEAVY_FUEL_CELL` · `HYDROCHLORIC_ACID_CELL` · `SODIUM_DUST` · `LUBRICANT_CELL` · `STEEL_DRUM` · `DISTILLATION_CONTROLLER` · `DISTILLATION_CASING` · `ALUMINIUM_CABLE` · `MV_TRANSFORMER`.
 
-**Still open:** `MV_TRANSFORMER`
+**Phase 3 complete:** every Chemistry & Fluids item above is in.
 
 ---
 

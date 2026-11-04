@@ -57,6 +57,10 @@ public final class DistillationTowerEntity implements BlockEntity, ProgressMachi
             feed = EuNetwork.resolve(world, posX, posY, posZ);
         }
         if (feed.source() == null || feed.source().euStored() <= 0f) return;
+        if (feed.voltage().exceeds(CableTier.Voltage.MV)) {   // MV-rated: HV without an MV Transformer blows it
+            world.reportOverload(posX, posY, posZ);
+            return;
+        }
         if (!canRunBatch(world, posX, posY, posZ)) return;
 
         float euPerSecond = EU_PER_BATCH / BATCH_SECONDS;

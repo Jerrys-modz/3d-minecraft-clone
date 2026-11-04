@@ -1147,7 +1147,7 @@ public enum BlockType {
     ELECTROLYZER(606, true, false, 294, 294, 294, 306, 307, 0, 0),
 
     /**
-     * LV Transformer — steps MV (gold-cable) power down to LV. Not a cable:
+     * LV Transformer — steps MV or HV power down to LV. Not a cable:
      * it separates the networks on either side, so an LV machine fed through
      * it is safe from overvoltage. Tile 308 (sides) / 309 (coil face, top).
      */
@@ -1255,7 +1255,12 @@ public enum BlockType {
     /** Distillation column controller (multi-block). Sides 332, front 333 idle / 334 working. */
     DISTILLATION_CONTROLLER(654, true, false, 332, 332, 332, 333, 334, 0, 0),
     /** Distillation casing — the column's shell. Tile 332. */
-    DISTILLATION_CASING(655, true, false, 332, 332, 332);
+    DISTILLATION_CASING(655, true, false, 332, 332, 332),
+
+    /** Aluminium Cable — HV EU conductor (4× throughput, lowest loss). Tile 335. */
+    ALUMINIUM_CABLE(656, true, false, 335, 335, 335),
+    /** MV Transformer — steps HV down to MV. Tile 336 (sides) / 337 (coil face). */
+    MV_TRANSFORMER(657, true, false, 337, 336, 337);
 
     public final short id;
     public final boolean solid;

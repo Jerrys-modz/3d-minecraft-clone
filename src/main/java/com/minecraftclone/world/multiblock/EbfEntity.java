@@ -86,6 +86,10 @@ public final class EbfEntity extends MultiBlockEntity implements StorageContaine
             feed = EuNetwork.resolve(world, instance.controllerX, instance.controllerY, instance.controllerZ);
         }
         if (!canBlast() || feed.source() == null || feed.source().euStored() <= 0f) return;
+        if (feed.voltage().exceeds(com.minecraftclone.world.CableTier.Voltage.MV)) {   // MV-rated
+            world.reportOverload(instance.controllerX, instance.controllerY, instance.controllerZ);
+            return;
+        }
         float euPerSecond = EU_PER_ITEM / BLAST_SECONDS;
         float drawn = feed.source().drainEU(Math.min(euPerSecond * dt * feed.throughput(), feed.source().euStored()));
         if (drawn <= 0f) return;
