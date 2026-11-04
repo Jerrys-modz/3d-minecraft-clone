@@ -32,6 +32,7 @@ public final class CreativeCatalog {
                     BlockType.STEEL_TANK, BlockType.STEEL_DRUM, BlockType.FLUID_PIPE, BlockType.FLUID_PIPE_STEEL,
                     BlockType.FLUID_PIPE_STAINLESS, BlockType.CHEMICAL_REACTOR,
                     BlockType.OIL_PUMP, BlockType.DISTILLATION_TOWER, BlockType.OIL_DEPOSIT,
+                    BlockType.DISTILLATION_CONTROLLER, BlockType.DISTILLATION_CASING,
                     BlockType.EBF_CONTROLLER, BlockType.HEATPROOF_CASING,
                     BlockType.CUPRONICKEL_COIL, BlockType.KANTHAL_COIL, BlockType.NICHROME_COIL,
                     BlockType.STEAM_BOILER, BlockType.STEAM_FURNACE, BlockType.STEAM_MACERATOR, BlockType.STEAM_ORE_WASHER,

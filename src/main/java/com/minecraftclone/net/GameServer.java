@@ -1028,6 +1028,7 @@ public class GameServer implements AutoCloseable {
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
             case com.minecraftclone.world.multiblock.EbfEntity.TYPE -> block == BlockType.EBF_CONTROLLER;
+            case com.minecraftclone.world.multiblock.DistillationColumnEntity.TYPE -> block == BlockType.DISTILLATION_CONTROLLER;
             case com.minecraftclone.world.CastingEntity.TABLE_TYPE -> block == BlockType.CASTING_TABLE;
             case com.minecraftclone.world.CastingEntity.BASIN_TYPE -> block == BlockType.CASTING_BASIN;
             case SteamBoilerEntity.TYPE -> block == BlockType.STEAM_BOILER;
@@ -1070,7 +1071,8 @@ public class GameServer implements AutoCloseable {
         // create one from the wire at a bare controller block, or a ghost
         // unformed entity would squat on the position.
         if (existing == null && (com.minecraftclone.world.multiblock.SmelteryEntity.TYPE.equals(type)
-                || com.minecraftclone.world.multiblock.EbfEntity.TYPE.equals(type))) {
+                || com.minecraftclone.world.multiblock.EbfEntity.TYPE.equals(type)
+                || com.minecraftclone.world.multiblock.DistillationColumnEntity.TYPE.equals(type))) {
             return null;
         }
         if (existing != null && existing.type().equals(type)) {

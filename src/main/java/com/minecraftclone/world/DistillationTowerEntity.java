@@ -57,11 +57,7 @@ public final class DistillationTowerEntity implements BlockEntity, ProgressMachi
             feed = EuNetwork.resolve(world, posX, posY, posZ);
         }
         if (feed.source() == null || feed.source().euStored() <= 0f) return;
-        FluidTankEntity oil = FluidNetwork.findTankWith(world, posX, posY, posZ, Fluid.OIL, OIL_PER_BATCH);
-        FluidTankEntity diesel = FluidNetwork.findTankFor(world, posX, posY, posZ, Fluid.DIESEL, DIESEL_PER_BATCH);
-        FluidTankEntity heavy = FluidNetwork.findTankFor(world, posX, posY, posZ, Fluid.HEAVY_FUEL, HEAVY_PER_BATCH,
-                diesel);
-        if (oil == null || diesel == null || heavy == null) return;
+        if (!canRunBatch(world, posX, posY, posZ)) return;
 
         float euPerSecond = EU_PER_BATCH / BATCH_SECONDS;
         float drawn = feed.source().drainEU(Math.min(euPerSecond * dt * feed.throughput(), feed.source().euStored()));
@@ -70,12 +66,33 @@ public final class DistillationTowerEntity implements BlockEntity, ProgressMachi
         progress += drawn * feed.efficiency() / euPerSecond;
         if (progress < BATCH_SECONDS) return;
         progress -= BATCH_SECONDS;
+        runBatch(world, posX, posY, posZ);
+    }
+
+    /** True if the tanks around {@code (x, y, z)} can take one batch: oil in, room for diesel and heavy fuel. */
+    public static boolean canRunBatch(World world, int x, int y, int z) {
+        FluidTankEntity oil = FluidNetwork.findTankWith(world, x, y, z, Fluid.OIL, OIL_PER_BATCH);
+        FluidTankEntity diesel = FluidNetwork.findTankFor(world, x, y, z, Fluid.DIESEL, DIESEL_PER_BATCH);
+        FluidTankEntity heavy = FluidNetwork.findTankFor(world, x, y, z, Fluid.HEAVY_FUEL, HEAVY_PER_BATCH, diesel);
+        return oil != null && diesel != null && heavy != null;
+    }
+
+    /**
+     * Distils one batch through the tanks around {@code (x, y, z)} (shared with
+     * the multi-block tower). Returns false, changing nothing, if it can't run.
+     */
+    public static boolean runBatch(World world, int x, int y, int z) {
+        FluidTankEntity oil = FluidNetwork.findTankWith(world, x, y, z, Fluid.OIL, OIL_PER_BATCH);
+        FluidTankEntity diesel = FluidNetwork.findTankFor(world, x, y, z, Fluid.DIESEL, DIESEL_PER_BATCH);
+        FluidTankEntity heavy = FluidNetwork.findTankFor(world, x, y, z, Fluid.HEAVY_FUEL, HEAVY_PER_BATCH, diesel);
+        if (oil == null || diesel == null || heavy == null) return false;
         oil.drain(Fluid.OIL, OIL_PER_BATCH);
         diesel.fill(Fluid.DIESEL, DIESEL_PER_BATCH);
         heavy.fill(Fluid.HEAVY_FUEL, HEAVY_PER_BATCH);
-        FluidTankEntity lube = FluidNetwork.findTankFor(world, posX, posY, posZ, Fluid.LUBRICANT,
+        FluidTankEntity lube = FluidNetwork.findTankFor(world, x, y, z, Fluid.LUBRICANT,
                 LUBRICANT_PER_BATCH, diesel, heavy, oil);
         if (lube != null) lube.fill(Fluid.LUBRICANT, LUBRICANT_PER_BATCH);
+        return true;
     }
 
     @Override

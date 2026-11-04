@@ -432,6 +432,9 @@ public final class Crafting {
         shaped3x3("ncn", "c.c", "ncn", BlockType.NICHROME_COIL, 2);
         // EBF controller: furnaces and circuits on an MV casing.
         shaped3x3("iFi", "909", "iFi", BlockType.EBF_CONTROLLER, 1);
+        // Distillation column: stainless casing with sight glass (-> 4), and its controller.
+        shaped3x3("s9s", "9G9", "s9s", BlockType.DISTILLATION_CASING, 4);
+        shaped3x3("iGi", "909", "iGi", BlockType.DISTILLATION_CONTROLLER, 1);
         // Tungstensteel: tungsten dust + steel dust -> 2.
         shapeless2x2(BlockType.TUNGSTENSTEEL_DUST, 2, BlockType.TUNGSTEN_DUST, BlockType.STEEL_DUST);
         shapeless3x3(BlockType.TUNGSTENSTEEL_DUST, 2, BlockType.TUNGSTEN_DUST, BlockType.STEEL_DUST);

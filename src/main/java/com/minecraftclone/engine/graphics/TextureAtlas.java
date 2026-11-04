@@ -434,6 +434,9 @@ public class TextureAtlas {
         paintSteelTank(image, 312, rnd, false);                   // STEEL_TANK top/bottom (lid)
         paintSteelDrum(image, 330, rnd, true);                    // STEEL_DRUM sides (hoops)
         paintSteelDrum(image, 331, rnd, false);                   // STEEL_DRUM lid (bung)
+        paintDistillationTower(image, 332, rnd, false, false);    // DISTILLATION_CASING / column sides
+        paintDistillationTower(image, 333, rnd, true, false);     // DISTILLATION_CONTROLLER front idle
+        paintDistillationTower(image, 334, rnd, true, true);      // DISTILLATION_CONTROLLER front working
         paintFluidPipe(image, 313, rnd, 0x6A4A1E, 0xC08A3A);      // FLUID_PIPE (bronze)
         paintFluidPipe(image, 316, rnd, 0x3A3A44, 0x8A8A9A);      // FLUID_PIPE_STEEL
         paintFluidPipe(image, 317, rnd, 0x5A6470, 0xD4DCE6);      // FLUID_PIPE_STAINLESS

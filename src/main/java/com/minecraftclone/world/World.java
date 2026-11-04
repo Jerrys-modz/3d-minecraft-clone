@@ -212,6 +212,7 @@ public class World implements BlockAccessor {
         // Add new definitions here as the game grows; order doesn't matter.
         multiBlockManager.register(com.minecraftclone.world.multiblock.SmelteryDefinition.INSTANCE);
         multiBlockManager.register(com.minecraftclone.world.multiblock.EbfDefinition.INSTANCE);
+        multiBlockManager.register(com.minecraftclone.world.multiblock.DistillationColumnDefinition.INSTANCE);
     }
 
     public DimensionType getDimension() {
@@ -1121,8 +1122,9 @@ public class World implements BlockAccessor {
         short[] raw = chunk.getRawBlocks();
         short smelteryId = BlockType.SMELTERY_CONTROLLER.id;
         short ebfId = BlockType.EBF_CONTROLLER.id;
+        short columnId = BlockType.DISTILLATION_CONTROLLER.id;
         for (int i = 0; i < raw.length; i++) {
-            if (raw[i] != smelteryId && raw[i] != ebfId) continue;
+            if (raw[i] != smelteryId && raw[i] != ebfId && raw[i] != columnId) continue;
             int lx = i % Chunk.SIZE;
             int tmp = i / Chunk.SIZE;
             int lz = tmp % Chunk.SIZE;
@@ -1136,7 +1138,8 @@ public class World implements BlockAccessor {
         int maxZ = originZ + Chunk.SIZE + pad;
         for (Map.Entry<Long, BlockEntity> e : blockEntities.entrySet()) {
             BlockType controller = e.getValue().blockType();
-            if (controller != BlockType.SMELTERY_CONTROLLER && controller != BlockType.EBF_CONTROLLER) continue;
+            if (controller != BlockType.SMELTERY_CONTROLLER && controller != BlockType.EBF_CONTROLLER
+                    && controller != BlockType.DISTILLATION_CONTROLLER) continue;
             int x = keyX(e.getKey());
             int z = keyZ(e.getKey());
             if (x >= minX && x < maxX && z >= minZ && z < maxZ) {

@@ -857,6 +857,7 @@ public class Main {
             case com.minecraftclone.world.tinkers.ToolStationEntity.TYPE -> block == BlockType.TOOL_STATION;
             case com.minecraftclone.world.multiblock.SmelteryEntity.TYPE -> block == BlockType.SMELTERY_CONTROLLER;
             case com.minecraftclone.world.multiblock.EbfEntity.TYPE -> block == BlockType.EBF_CONTROLLER;
+            case com.minecraftclone.world.multiblock.DistillationColumnEntity.TYPE -> block == BlockType.DISTILLATION_CONTROLLER;
             case com.minecraftclone.world.CastingEntity.TABLE_TYPE -> block == BlockType.CASTING_TABLE;
             case com.minecraftclone.world.CastingEntity.BASIN_TYPE -> block == BlockType.CASTING_BASIN;
             default -> false;
@@ -3880,6 +3881,16 @@ public class Main {
                                 world.getOrCreateToolStation(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
                         activeGui[0] = ContainerGui.forToolStation(player.getInventory(), tsEntity.gui());
                         openGui(inventoryController, activeGui, window, input, inventoryOpen, audio);
+                    } else if (noMob && targeted == BlockType.DISTILLATION_CONTROLLER) {
+                        com.minecraftclone.world.multiblock.DistillationColumnEntity column =
+                                world.blockEntityAt(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z)
+                                instanceof com.minecraftclone.world.multiblock.DistillationColumnEntity c ? c : null;
+                        showMessage(messages, column == null || column.storeys() == 0
+                                        ? "Distillation column not formed: 3x3 distillation casing around a hollow 1x1 core, "
+                                                + "1-8 storeys tall, controller in a side wall."
+                                        : "Distillation column: " + column.storeys() + " storeys = " + column.storeys()
+                                                + " batches per cycle" + (column.isActive() ? " (running)." : "."),
+                                new Vector4f(0.6f, 0.8f, 1f, 1f), 3.5f);
                     } else if (noMob && targeted == BlockType.EBF_CONTROLLER) {
                         // Electric Blast Furnace: open its furnace-style GUI once formed.
                         com.minecraftclone.world.multiblock.EbfEntity ebf =

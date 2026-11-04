@@ -1250,7 +1250,12 @@ public enum BlockType {
     LUBRICANT_CELL(652, 0),
 
     /** Steel Drum — a smaller (16 000 mB), cheaper tank. Tile 330 (sides) / 331 (lid). */
-    STEEL_DRUM(653, true, false, 331, 330, 331);
+    STEEL_DRUM(653, true, false, 331, 330, 331),
+
+    /** Distillation column controller (multi-block). Sides 332, front 333 idle / 334 working. */
+    DISTILLATION_CONTROLLER(654, true, false, 332, 332, 332, 333, 334, 0, 0),
+    /** Distillation casing — the column's shell. Tile 332. */
+    DISTILLATION_CASING(655, true, false, 332, 332, 332);
 
     public final short id;
     public final boolean solid;
