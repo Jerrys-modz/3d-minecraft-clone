@@ -113,6 +113,7 @@ public final class Crafting {
         CHARS.put('i', BlockType.INTEGRATED_CIRCUIT); // i = integrated logic circuit
         CHARS.put('g', BlockType.GOLD_CABLE);         // g = gold (MV) cable
         CHARS.put('l', BlockType.LITHIUM_DUST);       // l = lithium dust
+        CHARS.put('s', BlockType.STAINLESS_STEEL_INGOT); // s = stainless steel ingot
 
         // --- Shaped recipes: two 2-character rows ('.' = empty). ---
         // Simple 2x2 recipes for the player inventory crafting grid
@@ -407,6 +408,9 @@ public final class Crafting {
         shaped3x3("222", "2G2", "222", BlockType.STEEL_TANK, 1);
         // Fluid Pipe: a glass-lined bronze run -> 4.
         shaped3x3("...", "EGE", "...", BlockType.FLUID_PIPE, 4);
+        // Steel and stainless fluid pipes: same glass-lined run in tougher metal.
+        shaped3x3("...", "QGQ", "...", BlockType.FLUID_PIPE_STEEL, 4);
+        shaped3x3("...", "sGs", "...", BlockType.FLUID_PIPE_STAINLESS, 4);
         // Tin Cell: four tin plates around a glass liner -> 2.
         shaped3x3(".8.", "8G8", ".8.", BlockType.TIN_CELL, 2);
         // Chemical Reactor: glass vessel on an MV casing, vacuum-tube control, stainless shell.

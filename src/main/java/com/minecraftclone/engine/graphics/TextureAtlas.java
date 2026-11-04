@@ -432,7 +432,9 @@ public class TextureAtlas {
         paintMachineBox(image, 310, rnd, 0xB8C2CE, 0x5A6470, 0xEEF2F8); // MV_CASING (stainless)
         paintSteelTank(image, 311, rnd, true);                    // STEEL_TANK sides (sight glass)
         paintSteelTank(image, 312, rnd, false);                   // STEEL_TANK top/bottom (lid)
-        paintFluidPipe(image, 313, rnd);                          // FLUID_PIPE
+        paintFluidPipe(image, 313, rnd, 0x6A4A1E, 0xC08A3A);      // FLUID_PIPE (bronze)
+        paintFluidPipe(image, 316, rnd, 0x3A3A44, 0x8A8A9A);      // FLUID_PIPE_STEEL
+        paintFluidPipe(image, 317, rnd, 0x5A6470, 0xD4DCE6);      // FLUID_PIPE_STAINLESS
         paintChemicalReactor(image, 314, rnd, false);             // CHEMICAL_REACTOR front idle
         paintChemicalReactor(image, 315, rnd, true);              // CHEMICAL_REACTOR front reacting
 
@@ -2636,16 +2638,17 @@ public class TextureAtlas {
     }
 
     /**
-     * FLUID_PIPE (tile 313): a bronze pipe end with a glass-lined bore showing
-     * blue fluid — the same cross-section idea as the steam pipes and cables.
+     * FLUID_PIPE tiers (tiles 313 bronze / 316 steel / 317 stainless): a metal
+     * pipe end in the tier's colours with a glass-lined bore showing blue fluid
+     * — the same cross-section idea as the steam pipes and cables.
      */
-    private void paintFluidPipe(BufferedImage img, int index, Random rnd) {
+    private void paintFluidPipe(BufferedImage img, int index, Random rnd, int sheath, int wall) {
         int ox = tileX(index), oy = tileY(index);
         for (int y = 0; y < TILE_PX; y++) {
             for (int x = 0; x < TILE_PX; x++) {
                 int noise = rnd.nextInt(6) - 3;
                 int dx = x - 8, dy = y - 8, d2 = dx * dx + dy * dy;
-                int base = d2 > 42 ? 0x6A4A1E : d2 > 30 ? 0xC08A3A : d2 > 20 ? 0xA8D0E0 : 0x3A70C0;
+                int base = d2 > 42 ? sheath : d2 > 30 ? wall : d2 > 20 ? 0xA8D0E0 : 0x3A70C0;
                 int r = clamp(((base >> 16) & 0xFF) + noise);
                 int g = clamp(((base >> 8) & 0xFF) + noise);
                 int b = clamp((base & 0xFF) + noise);

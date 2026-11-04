@@ -391,6 +391,8 @@ public class World implements BlockAccessor {
                         ef.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricMachineEntity em) {
                         em.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof CoalGeneratorEntity gen) {
+                        gen.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
                     }
@@ -759,8 +761,12 @@ public class World implements BlockAccessor {
     /** Returns the Coal Generator entity at a position, creating it on first use. */
     public CoalGeneratorEntity getOrCreateCoalGenerator(int x, int y, int z) {
         BlockEntity existing = blockEntities.get(blockKey(x, y, z));
-        if (existing instanceof CoalGeneratorEntity g) return g;
+        if (existing instanceof CoalGeneratorEntity g) {
+            g.attach(x, y, z, this);
+            return g;
+        }
         CoalGeneratorEntity g = new CoalGeneratorEntity();
+        g.attach(x, y, z, this);
         blockEntities.put(blockKey(x, y, z), g);
         return g;
     }
@@ -898,6 +904,8 @@ public class World implements BlockAccessor {
             ef.attach(x, y, z, this);
         } else if (entity instanceof ElectricMachineEntity em) {
             em.attach(x, y, z, this);
+        } else if (entity instanceof CoalGeneratorEntity gen) {
+            gen.attach(x, y, z, this);
         } else if (entity instanceof BatteryBlockEntity bat) {
             bat.attach(x, y, z, this);
         }
@@ -1369,6 +1377,8 @@ public class World implements BlockAccessor {
                         ef.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof ElectricMachineEntity em) {
                         em.attach(es.x(), es.y(), es.z(), this);
+                    } else if (es.entity() instanceof CoalGeneratorEntity gen) {
+                        gen.attach(es.x(), es.y(), es.z(), this);
                     } else if (es.entity() instanceof BatteryBlockEntity bat) {
                         bat.attach(es.x(), es.y(), es.z(), this);
                     }

@@ -429,6 +429,8 @@ public final class Mining {
         put(BlockType.MV_CASING, 5.0f, ToolKind.PICKAXE, TIER_IRON);
         put(BlockType.STEEL_TANK, 4.0f, ToolKind.PICKAXE, TIER_STONE);
         put(BlockType.FLUID_PIPE, 1.0f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.FLUID_PIPE_STEEL, 1.5f, ToolKind.PICKAXE, TIER_HAND);
+        put(BlockType.FLUID_PIPE_STAINLESS, 2.0f, ToolKind.PICKAXE, TIER_HAND);
         put(BlockType.CHEMICAL_REACTOR, 5.0f, ToolKind.PICKAXE, TIER_IRON);
         put(BlockType.TIN_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);
         put(BlockType.COPPER_CABLE, 0.5f, ToolKind.NONE, TIER_HAND);

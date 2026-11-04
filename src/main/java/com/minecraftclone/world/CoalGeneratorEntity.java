@@ -15,7 +15,9 @@ import java.io.IOException;
  *
  * <h3>How it works</h3>
  * <ul>
- *   <li><b>Fuel slot</b> (slot 0): any item that burns in a furnace.</li>
+ *   <li><b>Fuel slot</b> (slot 0): any item that burns in a furnace. When it's
+ *       empty, the generator burns {@value #LAVA_MB_PER_BURN} mB of lava at a time
+ *       from a Steel Tank that is adjacent or connected by steel/stainless fluid pipe.</li>
  *   <li><b>EU production</b>: {@value #EU_PER_BURN_SECOND} EU/s while burning,
  *       capped at {@value #MAX_EU} EU in the buffer.</li>
  *   <li><b>Output</b>: EU drawn by adjacent {@link ElectricFurnaceEntity} or
@@ -46,6 +48,21 @@ public final class CoalGeneratorEntity implements BlockEntity, StorageContainer,
     private float burnDuration;
     /** EU stored in the internal buffer. */
     private float eu;
+
+    /** Lava drawn from a tank per burn when the fuel slot is empty. */
+    public static final int LAVA_MB_PER_BURN = 100;
+    /** Burn seconds from {@link #LAVA_MB_PER_BURN} mB of lava (a bucket smelts 100 items). */
+    public static final float LAVA_BURN_SECONDS = 10 * Furnace.SMELT_TIME;
+
+    private World world;
+    private int posX, posY, posZ;
+    private boolean attached;
+
+    /** Called by the World so the generator can find lava tanks. */
+    public void attach(int x, int y, int z, World world) {
+        this.posX = x; this.posY = y; this.posZ = z;
+        this.attached = true; this.world = world;
+    }
 
     // ------------------------------------------------------------------
     // BlockEntity
@@ -111,6 +128,15 @@ public final class CoalGeneratorEntity implements BlockEntity, StorageContainer,
                 burnDuration = duration;
                 fuelCount--;
                 if (fuelCount == 0) fuelType = null;
+            }
+        }
+        // No solid fuel: burn lava from an adjacent or piped (steel+) tank.
+        if (burnTime <= 0f && eu < MAX_EU && attached) {
+            FluidTankEntity lava = FluidNetwork.findTankWith(world, posX, posY, posZ, Fluid.LAVA, LAVA_MB_PER_BURN);
+            if (lava != null) {
+                lava.drain(Fluid.LAVA, LAVA_MB_PER_BURN);
+                burnTime     = LAVA_BURN_SECONDS;
+                burnDuration = LAVA_BURN_SECONDS;
             }
         }
 

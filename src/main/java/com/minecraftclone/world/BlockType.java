@@ -1176,7 +1176,7 @@ public enum BlockType {
     // ---- Phase 3: fluids ---------------------------------------------
     /** Steel Tank — stores 32 000 mB of one fluid. Tile 311 (sides, glass window) / 312 (top/bottom). */
     STEEL_TANK(621, true, false, 312, 311, 312),
-    /** Fluid Pipe (bronze) — connects tanks to machines that use fluids. Tile 313. */
+    /** Fluid Pipe (bronze) — connects tanks to machines; carries water only. Tile 313. */
     FLUID_PIPE(622, true, false, 313, 313, 313),
     /** Empty tin cell — scoops 1000 mB of water or still lava, or draws it from a tank. */
     TIN_CELL(623, 0),
@@ -1208,7 +1208,12 @@ public enum BlockType {
     /** MV Battery — lithium cell; each one in a Battery Block adds 40 000 EU capacity. */
     MV_BATTERY(633, 0),
     /** MV Upgrade — right-click an LV processor to make it MV: 2× speed, safe on gold cable. */
-    MV_UPGRADE(634, 0);
+    MV_UPGRADE(634, 0),
+
+    /** Steel Fluid Pipe — carries water and lava. Tile 316. */
+    FLUID_PIPE_STEEL(635, true, false, 316, 316, 316),
+    /** Stainless Fluid Pipe — carries water, lava and sulfuric acid. Tile 317. */
+    FLUID_PIPE_STAINLESS(636, true, false, 317, 317, 317);
 
     public final short id;
     public final boolean solid;

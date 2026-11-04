@@ -2,6 +2,7 @@ package com.minecraftclone.world.pipes;
 
 import com.minecraftclone.world.BlockType;
 import com.minecraftclone.world.CableTier;
+import com.minecraftclone.world.FluidPipeTier;
 import com.minecraftclone.world.SteamPipeTier;
 
 /**
@@ -20,8 +21,13 @@ public enum PipeType {
         }
     },
 
-    /** Fluids (water, lava) between tanks and machines — bronze fluid pipe. */
-    FLUID(BlockType.FLUID_PIPE),
+    /** Fluids between tanks and machines — bronze, steel and stainless fluid pipes. */
+    FLUID(BlockType.FLUID_PIPE) {
+        @Override
+        public boolean matches(BlockType block) {
+            return FluidPipeTier.isFluidPipe(block);
+        }
+    },
 
     /** Items between inventories and machines - planned. */
     ITEM(null),
